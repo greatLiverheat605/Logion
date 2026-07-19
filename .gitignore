@@ -1,0 +1,42 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+.pnpm-store/
+
+# Runtime data
+.data/
+attachments/
+backups/
+tmp/
+
+# Test and build artifacts
+artifacts/
+playwright-report/
+test-results/
+reports/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

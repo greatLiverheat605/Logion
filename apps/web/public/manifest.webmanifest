@@ -1,0 +1,18 @@
+{
+  "name": "Logion",
+  "short_name": "Logion",
+  "description": "让学习、研究与长期成长形成可验证的闭环。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

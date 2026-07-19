@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+node_modules
+**/node_modules
+**/.next
+archive
+prototype
+backups
+attachments
+reports
+artifacts
+*.md
+!README.md
+!LOGION_EXECUTION_PLAN.md
+!LOGION_AI_DEVELOPMENT_CONSTRAINTS.md

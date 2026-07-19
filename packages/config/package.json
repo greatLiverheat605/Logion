@@ -1,0 +1,11 @@
+{
+  "name": "@logion/config",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "tsconfig.base.json"
+  ],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json"
+  }
+}

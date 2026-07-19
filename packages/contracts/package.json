@@ -1,0 +1,20 @@
+{
+  "name": "@logion/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./permissions": "./permissions/permissions.json",
+    "./schemas/*": "./schemas/*"
+  },
+  "scripts": {
+    "generate:types": "openapi-typescript openapi/openapi.json -o src/openapi.d.ts",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "@logion/config": "workspace:*",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

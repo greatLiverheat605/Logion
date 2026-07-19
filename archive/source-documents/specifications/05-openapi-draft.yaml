@@ -1,0 +1,1585 @@
+openapi: 3.1.0
+info:
+  title: 研途 Lab API
+  version: 0.1.0
+  description: |
+    单用户、云端同步、离线优先的学习与科研系统 API 草案。
+    核心同步协议版本为 sync-v1。所有时间使用 RFC 3339。
+servers:
+  - url: https://study.example.com/api/v1
+    description: Production placeholder
+tags:
+  - name: Auth
+  - name: Devices
+  - name: Sync
+  - name: Plans
+  - name: Topics
+  - name: Tasks
+  - name: Sessions
+  - name: Notes
+  - name: Resources
+  - name: Attachments
+  - name: Evidence
+  - name: Reviews
+  - name: Research
+  - name: AI
+  - name: Export
+  - name: Backup
+
+security:
+  - cookieAuth: []
+
+paths:
+  /auth/bootstrap/status:
+    get:
+      tags: [Auth]
+      security: []
+      operationId: getBootstrapStatus
+      responses:
+        '200':
+          description: Bootstrap status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [initialized]
+                properties:
+                  initialized: { type: boolean }
+
+  /auth/bootstrap:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: bootstrapOwner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapRequest'
+      responses:
+        '201':
+          description: Owner created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /auth/login/password:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: loginWithPasswordTotp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, totp_code, device]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                totp_code: { type: string, pattern: '^[0-9]{6,8}$' }
+                device: { $ref: '#/components/schemas/DeviceRegistration' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: refreshSession
+      responses:
+        '200':
+          description: Session rotated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      responses:
+        '204': { description: Logged out }
+
+  /auth/passkeys/register/options:
+    post:
+      tags: [Auth]
+      operationId: beginPasskeyRegistration
+      responses:
+        '200':
+          description: WebAuthn creation options
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /auth/passkeys/register/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyPasskeyRegistration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201': { description: Passkey registered }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth/passkeys/login/options:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: beginPasskeyLogin
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: WebAuthn request options
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /auth/passkeys/login/verify:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: verifyPasskeyLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential, device]
+              properties:
+                credential: { type: object, additionalProperties: true }
+                device: { $ref: '#/components/schemas/DeviceRegistration' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/totp/setup:
+    post:
+      tags: [Auth]
+      operationId: setupTotp
+      responses:
+        '200':
+          description: Unverified TOTP setup
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpauth_uri]
+                properties:
+                  otpauth_uri: { type: string }
+                  manual_key: { type: string }
+
+  /auth/totp/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyTotp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200': { description: TOTP enabled }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth/recovery-codes/regenerate:
+    post:
+      tags: [Auth]
+      operationId: regenerateRecoveryCodes
+      responses:
+        '200':
+          description: Codes returned once
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [codes]
+                properties:
+                  codes:
+                    type: array
+                    items: { type: string }
+
+  /devices:
+    get:
+      tags: [Devices]
+      operationId: listDevices
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Device' }
+
+  /devices/{device_id}:
+    delete:
+      tags: [Devices]
+      operationId: revokeDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '204': { description: Device revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sync/bootstrap:
+    get:
+      tags: [Sync]
+      operationId: getSyncBootstrap
+      responses:
+        '200':
+          description: Sync bootstrap metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncBootstrap' }
+
+  /sync/snapshot/{snapshot_token}:
+    get:
+      tags: [Sync]
+      operationId: getSnapshotPage
+      parameters:
+        - name: snapshot_token
+          in: path
+          required: true
+          schema: { type: string }
+        - name: page_token
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Snapshot page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotPage' }
+
+  /sync/push:
+    post:
+      tags: [Sync]
+      operationId: pushSyncOperations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncPushRequest' }
+      responses:
+        '200':
+          description: Per-operation results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncPushResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /sync/pull:
+    get:
+      tags: [Sync]
+      operationId: pullSyncChanges
+      parameters:
+        - name: cursor
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
+      responses:
+        '200':
+          description: Incremental changes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncPullResponse' }
+        '410':
+          description: Snapshot required
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /sync/conflicts:
+    get:
+      tags: [Sync]
+      operationId: listSyncConflicts
+      responses:
+        '200':
+          description: Open conflicts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SyncConflict' }
+
+  /sync/conflicts/{conflict_id}/resolve:
+    post:
+      tags: [Sync]
+      operationId: resolveSyncConflict
+      parameters:
+        - name: conflict_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConflictResolution'
+      responses:
+        '200':
+          description: Conflict resolved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncConflict' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /plans:
+    get:
+      tags: [Plans]
+      operationId: listPlans
+      responses:
+        '200':
+          description: Plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LearningPlan' }
+    post:
+      tags: [Plans]
+      operationId: createPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LearningPlanCreate' }
+      responses:
+        '201':
+          description: Plan created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LearningPlan' }
+
+  /plans/{plan_id}:
+    get:
+      tags: [Plans]
+      operationId: getPlan
+      parameters: [{ $ref: '#/components/parameters/PlanId' }]
+      responses:
+        '200':
+          description: Plan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LearningPlan' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Plans]
+      operationId: updatePlan
+      parameters: [{ $ref: '#/components/parameters/PlanId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionedPatch' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LearningPlan' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topics:
+    get:
+      tags: [Topics]
+      operationId: listTopics
+      responses:
+        '200':
+          description: Topics
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Topic' }
+    post:
+      tags: [Topics]
+      operationId: createTopic
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TopicCreate' }
+      responses:
+        '201':
+          description: Topic created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Topic' }
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      operationId: listTasks
+      parameters:
+        - name: scheduled_date
+          in: query
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaskStatus' }
+      responses:
+        '200':
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Task' }
+    post:
+      tags: [Tasks]
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+
+  /tasks/{task_id}:
+    get:
+      tags: [Tasks]
+      operationId: getTask
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      responses:
+        '200':
+          description: Task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Tasks]
+      operationId: updateTask
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionedPatch' }
+      responses:
+        '200':
+          description: Updated task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /tasks/{task_id}/status-events:
+    post:
+      tags: [Tasks]
+      operationId: changeTaskStatus
+      parameters: [{ $ref: '#/components/parameters/TaskId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_status, base_version]
+              properties:
+                to_status: { $ref: '#/components/schemas/TaskStatus' }
+                base_version: { type: integer, format: int64 }
+                reason_md: { type: string }
+      responses:
+        '200':
+          description: Status changed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /today:
+    get:
+      tags: [Tasks]
+      operationId: getTodayAgenda
+      parameters:
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Aggregated agenda
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, tasks, due_reviews]
+                properties:
+                  date: { type: string, format: date }
+                  tasks:
+                    type: array
+                    items: { $ref: '#/components/schemas/Task' }
+                  due_reviews:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewSchedule' }
+
+  /study-sessions:
+    post:
+      tags: [Sessions]
+      operationId: createStudySession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StudySessionCreate' }
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudySession' }
+
+  /study-sessions/{session_id}/events:
+    post:
+      tags: [Sessions]
+      operationId: appendStudySessionEvent
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SessionEventCreate' }
+      responses:
+        '201': { description: Event appended }
+
+  /notes:
+    get:
+      tags: [Notes]
+      operationId: listNotes
+      responses:
+        '200':
+          description: Notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Note' }
+    post:
+      tags: [Notes]
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NoteCreate' }
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Note' }
+
+  /notes/{note_id}/snapshot:
+    get:
+      tags: [Notes]
+      operationId: getNoteSnapshot
+      parameters: [{ $ref: '#/components/parameters/NoteId' }]
+      responses:
+        '200':
+          description: CRDT snapshot and Markdown projection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NoteSnapshot' }
+
+  /notes/{note_id}/updates:
+    get:
+      tags: [Notes]
+      operationId: getNoteUpdates
+      parameters:
+        - $ref: '#/components/parameters/NoteId'
+        - name: after_clock
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+      responses:
+        '200':
+          description: CRDT updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NoteUpdate' }
+    post:
+      tags: [Notes]
+      operationId: appendNoteUpdates
+      parameters: [{ $ref: '#/components/parameters/NoteId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [updates]
+              properties:
+                updates:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: '#/components/schemas/NoteUpdate' }
+      responses:
+        '200': { description: Updates applied or deduplicated }
+
+  /resources:
+    get:
+      tags: [Resources]
+      operationId: listResources
+      responses:
+        '200':
+          description: Resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Resource' }
+    post:
+      tags: [Resources]
+      operationId: createResource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResourceCreate' }
+      responses:
+        '201':
+          description: Resource created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resource' }
+
+  /attachments/init:
+    post:
+      tags: [Attachments]
+      operationId: initializeAttachment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentInit' }
+      responses:
+        '200':
+          description: Upload initialized or deduplicated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentInitResult' }
+        '413':
+          description: Too large
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /attachments/{attachment_id}/content:
+    put:
+      tags: [Attachments]
+      operationId: uploadAttachmentContent
+      parameters:
+        - $ref: '#/components/parameters/AttachmentId'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '204': { description: Content stored temporarily }
+
+  /attachments/{attachment_id}/complete:
+    post:
+      tags: [Attachments]
+      operationId: completeAttachment
+      parameters:
+        - $ref: '#/components/parameters/AttachmentId'
+      responses:
+        '200':
+          description: Attachment verified
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /reviews/due:
+    get:
+      tags: [Reviews]
+      operationId: listDueReviews
+      responses:
+        '200':
+          description: Due reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReviewSchedule' }
+
+  /audit-reviews:
+    post:
+      tags: [Reviews]
+      operationId: createAuditReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuditReviewCreate' }
+      responses:
+        '201': { description: Review created }
+
+  /papers:
+    get:
+      tags: [Research]
+      operationId: listPapers
+      responses:
+        '200':
+          description: Papers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Paper' }
+    post:
+      tags: [Research]
+      operationId: createPaper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaperCreate' }
+      responses:
+        '201':
+          description: Paper created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Paper' }
+
+  /experiments:
+    post:
+      tags: [Research]
+      operationId: createExperiment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExperimentCreate' }
+      responses:
+        '201': { description: Experiment created }
+
+  /ai/providers:
+    get:
+      tags: [AI]
+      operationId: listAIProviders
+      responses:
+        '200':
+          description: Providers without secret values
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AIProvider' }
+    post:
+      tags: [AI]
+      operationId: createAIProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AIProviderCreate' }
+      responses:
+        '201':
+          description: Provider created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIProvider' }
+
+  /ai/providers/{provider_id}/test:
+    post:
+      tags: [AI]
+      operationId: testAIProvider
+      parameters:
+        - $ref: '#/components/parameters/ProviderId'
+      responses:
+        '200':
+          description: Health result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIHealthResult' }
+
+  /ai/providers/{provider_id}/discover-models:
+    post:
+      tags: [AI]
+      operationId: discoverAIModels
+      parameters:
+        - $ref: '#/components/parameters/ProviderId'
+      responses:
+        '200':
+          description: Discovered models
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AIModel' }
+
+  /ai/routes:
+    get:
+      tags: [AI]
+      operationId: listAITaskRoutes
+      responses:
+        '200':
+          description: AI routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AITaskRoute' }
+    put:
+      tags: [AI]
+      operationId: replaceAITaskRoutes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/AITaskRouteCreate' }
+      responses:
+        '200': { description: Routes updated }
+
+  /ai/tasks/{task_type}/run:
+    post:
+      tags: [AI]
+      operationId: runAITask
+      parameters:
+        - name: task_type
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AITaskRunRequest' }
+      responses:
+        '202':
+          description: AI run queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AIRun' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /export/json:
+    get:
+      tags: [Export]
+      operationId: exportJSON
+      responses:
+        '200':
+          description: Versioned JSON export
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /backups:
+    get:
+      tags: [Backup]
+      operationId: listBackups
+      responses:
+        '200':
+          description: Backups
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BackupRecord' }
+    post:
+      tags: [Backup]
+      operationId: createBackup
+      responses:
+        '202': { description: Backup queued }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: study_session
+
+  parameters:
+    DeviceId:
+      name: device_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PlanId:
+      name: plan_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    NoteId:
+      name: note_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AttachmentId:
+      name: attachment_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ProviderId:
+      name: provider_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Not found
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Version or business conflict
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Validation or policy failure
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    UUID:
+      type: string
+      format: uuid
+
+    Problem:
+      type: object
+      required: [type, title, status, code, request_id]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        request_id: { type: string, format: uuid }
+        retryable: { type: boolean, default: false }
+        fields: { type: object, additionalProperties: true }
+
+    BootstrapRequest:
+      type: object
+      required: [email, display_name, password, timezone]
+      properties:
+        email: { type: string, format: email }
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        password: { type: string, format: password, minLength: 12 }
+        timezone: { type: string, default: Asia/Shanghai }
+
+    DeviceRegistration:
+      type: object
+      required: [device_id, name, device_type]
+      properties:
+        device_id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string, maxLength: 120 }
+        device_type:
+          type: string
+          enum: [desktop, mobile, tablet, browser]
+        metadata: { type: object, additionalProperties: true }
+
+    Device:
+      allOf:
+        - $ref: '#/components/schemas/DeviceRegistration'
+        - type: object
+          properties:
+            registered_at: { type: string, format: date-time }
+            last_seen_at: { type: [string, 'null'], format: date-time }
+            last_sync_at: { type: [string, 'null'], format: date-time }
+            revoked_at: { type: [string, 'null'], format: date-time }
+
+    AuthSession:
+      type: object
+      required: [user_id, workspace_id, device_id, expires_at]
+      properties:
+        user_id: { $ref: '#/components/schemas/UUID' }
+        workspace_id: { $ref: '#/components/schemas/UUID' }
+        device_id: { $ref: '#/components/schemas/UUID' }
+        expires_at: { type: string, format: date-time }
+
+    SyncBootstrap:
+      type: object
+      required: [protocol_version, schema_version, current_cursor, snapshot_token, minimum_client_version]
+      properties:
+        protocol_version: { type: string, const: sync-v1 }
+        schema_version: { type: integer }
+        current_cursor: { type: integer, format: int64 }
+        snapshot_token: { type: string }
+        minimum_client_version: { type: string }
+        capabilities:
+          type: array
+          items: { type: string }
+
+    SnapshotPage:
+      type: object
+      required: [items, has_more, snapshot_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EntityEnvelope' }
+        next_page_token: { type: [string, 'null'] }
+        has_more: { type: boolean }
+        snapshot_cursor: { type: integer, format: int64 }
+
+    SyncOperation:
+      type: object
+      required: [operation_id, protocol_version, workspace_id, device_id, entity_type, entity_id, operation_type, client_occurred_at, payload_hash]
+      properties:
+        operation_id: { $ref: '#/components/schemas/UUID' }
+        protocol_version: { type: string, const: sync-v1 }
+        workspace_id: { $ref: '#/components/schemas/UUID' }
+        device_id: { $ref: '#/components/schemas/UUID' }
+        entity_type: { type: string }
+        entity_id: { $ref: '#/components/schemas/UUID' }
+        operation_type:
+          type: string
+          enum: [create, update, delete, restore, append_event, crdt_update]
+        base_version: { type: [integer, 'null'], format: int64 }
+        client_occurred_at: { type: string, format: date-time }
+        dependencies:
+          type: array
+          items: { $ref: '#/components/schemas/UUID' }
+        payload: { type: object, additionalProperties: true }
+        payload_hash: { type: string, minLength: 64, maxLength: 64 }
+
+    SyncPushRequest:
+      type: object
+      required: [protocol_version, device_id, operations]
+      properties:
+        protocol_version: { type: string, const: sync-v1 }
+        device_id: { $ref: '#/components/schemas/UUID' }
+        client_cursor: { type: integer, format: int64, minimum: 0 }
+        operations:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SyncOperation' }
+
+    SyncOperationResult:
+      type: object
+      required: [operation_id, status]
+      properties:
+        operation_id: { $ref: '#/components/schemas/UUID' }
+        status:
+          type: string
+          enum: [applied, duplicate, conflict, rejected, retryable_error, permanent_error]
+        entity_id: { $ref: '#/components/schemas/UUID' }
+        entity_version: { type: [integer, 'null'], format: int64 }
+        change_sequence: { type: [integer, 'null'], format: int64 }
+        conflict_id: { type: [string, 'null'], format: uuid }
+        error: { anyOf: [{ $ref: '#/components/schemas/Problem' }, { type: 'null' }] }
+
+    SyncPushResponse:
+      type: object
+      required: [server_time, results]
+      properties:
+        server_time: { type: string, format: date-time }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/SyncOperationResult' }
+        next_pull_cursor_hint: { type: integer, format: int64 }
+
+    SyncChange:
+      type: object
+      required: [sequence, entity_type, entity_id, operation_type, entity_version, changed_at]
+      properties:
+        sequence: { type: integer, format: int64 }
+        entity_type: { type: string }
+        entity_id: { $ref: '#/components/schemas/UUID' }
+        operation_type: { type: string }
+        entity_version: { type: integer, format: int64 }
+        origin_device_id: { type: [string, 'null'], format: uuid }
+        changed_at: { type: string, format: date-time }
+        entity: { type: [object, 'null'], additionalProperties: true }
+
+    SyncPullResponse:
+      type: object
+      required: [from_cursor, next_cursor, has_more, changes]
+      properties:
+        from_cursor: { type: integer, format: int64 }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+        changes:
+          type: array
+          items: { $ref: '#/components/schemas/SyncChange' }
+
+    SyncConflict:
+      type: object
+      required: [id, entity_type, entity_id, base_version, server_version, local_payload, server_payload, status]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        entity_type: { type: string }
+        entity_id: { $ref: '#/components/schemas/UUID' }
+        base_version: { type: integer, format: int64 }
+        server_version: { type: integer, format: int64 }
+        local_payload: { type: object, additionalProperties: true }
+        server_payload: { type: object, additionalProperties: true }
+        auto_merge_payload: { type: [object, 'null'], additionalProperties: true }
+        conflicting_fields:
+          type: array
+          items: { type: string }
+        status:
+          type: string
+          enum: [open, resolved_local, resolved_server, resolved_merged, dismissed]
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: [string, 'null'], format: date-time }
+
+    ConflictResolution:
+      type: object
+      required: [resolution, expected_server_version]
+      properties:
+        resolution:
+          type: string
+          enum: [use_local, use_server, merge_manual, cancel_local_operation]
+        expected_server_version: { type: integer, format: int64 }
+        merged_payload: { type: [object, 'null'], additionalProperties: true }
+        reason_md: { type: string }
+
+    EntityEnvelope:
+      type: object
+      required: [entity_type, entity_id, version, payload]
+      properties:
+        entity_type: { type: string }
+        entity_id: { $ref: '#/components/schemas/UUID' }
+        version: { type: integer, format: int64 }
+        payload: { type: object, additionalProperties: true }
+
+    SyncEntity:
+      type: object
+      required: [id, workspace_id, version, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        workspace_id: { $ref: '#/components/schemas/UUID' }
+        version: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: [string, 'null'], format: date-time }
+        origin_device_id: { type: [string, 'null'], format: uuid }
+
+    LearningPlanCreate:
+      type: object
+      required: [id, title]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        title: { type: string, maxLength: 200 }
+        description_md: { type: string }
+        start_date: { type: [string, 'null'], format: date }
+        end_date: { type: [string, 'null'], format: date }
+        daily_budget_minutes: { type: integer, minimum: 0 }
+
+    LearningPlan:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/LearningPlanCreate'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [draft, active, paused, completed, archived, cancelled]
+
+    TopicCreate:
+      type: object
+      required: [id, title]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        parent_topic_id: { type: [string, 'null'], format: uuid }
+        title: { type: string, maxLength: 200 }
+        description_md: { type: string }
+        domain: { type: string, maxLength: 80 }
+
+    Topic:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/TopicCreate'
+
+    TaskStatus:
+      type: string
+      enum: [draft, scheduled, in_progress, viewed, practiced, submitted, verified, blocked, deferred, skipped, cancelled]
+
+    TaskCreate:
+      type: object
+      required: [id, title, task_type]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        plan_id: { type: [string, 'null'], format: uuid }
+        phase_id: { type: [string, 'null'], format: uuid }
+        parent_task_id: { type: [string, 'null'], format: uuid }
+        title: { type: string, maxLength: 240 }
+        description_md: { type: string }
+        task_type: { type: string }
+        priority: { type: string, enum: [low, normal, high, critical], default: normal }
+        scheduled_date: { type: [string, 'null'], format: date }
+        due_at: { type: [string, 'null'], format: date-time }
+        estimated_minutes: { type: integer, minimum: 0 }
+        completion_policy: { type: object, additionalProperties: true }
+        review_policy: { type: object, additionalProperties: true }
+
+    Task:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/TaskCreate'
+        - type: object
+          required: [status]
+          properties:
+            status: { $ref: '#/components/schemas/TaskStatus' }
+            deferral_count: { type: integer, minimum: 0 }
+            verified_at: { type: [string, 'null'], format: date-time }
+
+    VersionedPatch:
+      type: object
+      required: [base_version, changes]
+      properties:
+        base_version: { type: integer, format: int64 }
+        changes: { type: object, additionalProperties: true }
+        reason_md: { type: string }
+
+    StudySessionCreate:
+      type: object
+      required: [id, started_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        task_id: { type: [string, 'null'], format: uuid }
+        started_at: { type: string, format: date-time }
+
+    StudySession:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/StudySessionCreate'
+        - type: object
+          properties:
+            status: { type: string, enum: [active, paused, completed, abandoned] }
+            ended_at: { type: [string, 'null'], format: date-time }
+            effective_seconds: { type: integer, minimum: 0 }
+            summary_md: { type: string }
+
+    SessionEventCreate:
+      type: object
+      required: [id, event_type, client_occurred_at, device_id]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        event_type: { type: string, enum: [started, paused, resumed, stopped, manual_adjustment, note_added, resource_opened] }
+        client_occurred_at: { type: string, format: date-time }
+        device_id: { $ref: '#/components/schemas/UUID' }
+        duration_adjustment_seconds: { type: integer }
+        metadata: { type: object, additionalProperties: true }
+
+    NoteCreate:
+      type: object
+      required: [id, title]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        title: { type: string, maxLength: 240 }
+        is_sensitive: { type: boolean, default: false }
+
+    Note:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/NoteCreate'
+        - type: object
+          properties:
+            current_snapshot_md: { type: string }
+            last_compacted_at: { type: [string, 'null'], format: date-time }
+
+    NoteSnapshot:
+      type: object
+      required: [note_id, snapshot_id, markdown, crdt_state_base64]
+      properties:
+        note_id: { $ref: '#/components/schemas/UUID' }
+        snapshot_id: { $ref: '#/components/schemas/UUID' }
+        markdown: { type: string }
+        crdt_state_base64: { type: string, contentEncoding: base64 }
+        state_vector_base64: { type: string, contentEncoding: base64 }
+        created_at: { type: string, format: date-time }
+
+    NoteUpdate:
+      type: object
+      required: [id, client_id, client_clock, update_base64]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        client_id: { type: string }
+        client_clock: { type: integer, format: int64, minimum: 0 }
+        update_base64: { type: string, contentEncoding: base64 }
+        created_at: { type: string, format: date-time }
+
+    ResourceCreate:
+      type: object
+      required: [id, title, resource_type]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        title: { type: string, maxLength: 300 }
+        resource_type: { type: string }
+        canonical_url: { type: [string, 'null'], format: uri }
+        language: { type: string, default: zh-CN }
+        description_md: { type: string }
+        personal_note_md: { type: string }
+
+    Resource:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/ResourceCreate'
+        - type: object
+          properties:
+            availability_status: { type: string }
+            last_health_check_at: { type: [string, 'null'], format: date-time }
+
+    AttachmentInit:
+      type: object
+      required: [attachment_id, filename, reported_media_type, size_bytes, sha256]
+      properties:
+        attachment_id: { $ref: '#/components/schemas/UUID' }
+        filename: { type: string, maxLength: 255 }
+        reported_media_type: { type: string }
+        size_bytes: { type: integer, format: int64, minimum: 1 }
+        sha256: { type: string, minLength: 64, maxLength: 64 }
+
+    AttachmentInitResult:
+      type: object
+      required: [attachment_id, status]
+      properties:
+        attachment_id: { $ref: '#/components/schemas/UUID' }
+        status: { type: string, enum: [upload_required, deduplicated, already_complete] }
+        upload_expires_at: { type: [string, 'null'], format: date-time }
+
+    Attachment:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - type: object
+          required: [filename, media_type, size_bytes, sha256, status]
+          properties:
+            filename: { type: string }
+            media_type: { type: string }
+            size_bytes: { type: integer, format: int64 }
+            sha256: { type: string }
+            status: { type: string }
+            uploaded_at: { type: [string, 'null'], format: date-time }
+            verified_at: { type: [string, 'null'], format: date-time }
+
+    ReviewSchedule:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - type: object
+          required: [topic_id, due_at, status]
+          properties:
+            topic_id: { $ref: '#/components/schemas/UUID' }
+            due_at: { type: string, format: date-time }
+            algorithm: { type: string }
+            status: { type: string }
+
+    AuditReviewCreate:
+      type: object
+      required: [id, review_type, period_start, period_end]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        review_type: { type: string }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        summary_md: { type: string }
+        decisions_md: { type: string }
+
+    PaperCreate:
+      type: object
+      required: [id, title, authors]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        title: { type: string }
+        authors:
+          type: array
+          items: { type: object, additionalProperties: true }
+        publication_year: { type: [integer, 'null'] }
+        venue: { type: string }
+        doi: { type: [string, 'null'] }
+        arxiv_id: { type: [string, 'null'] }
+        canonical_url: { type: [string, 'null'], format: uri }
+
+    Paper:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/PaperCreate'
+        - type: object
+          properties:
+            status: { type: string }
+            problem_md: { type: string }
+            method_md: { type: string }
+            experiments_md: { type: string }
+            limitations_md: { type: string }
+
+    ExperimentCreate:
+      type: object
+      required: [id, title, hypothesis_md]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        research_question_id: { type: [string, 'null'], format: uuid }
+        title: { type: string }
+        hypothesis_md: { type: string }
+        design_md: { type: string }
+
+    AIProviderCreate:
+      type: object
+      required: [id, name, provider_type, base_url]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string, maxLength: 120 }
+        provider_type: { type: string, enum: [openai_compatible, anthropic, ollama, vllm, custom] }
+        base_url: { type: string, format: uri }
+        api_key: { type: [string, 'null'], writeOnly: true }
+        enabled: { type: boolean, default: true }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 600, default: 60 }
+        max_retries: { type: integer, minimum: 0, maximum: 5, default: 2 }
+        tls_verify: { type: boolean, default: true }
+
+    AIProvider:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - type: object
+          required: [name, provider_type, base_url, enabled]
+          properties:
+            name: { type: string }
+            provider_type: { type: string }
+            base_url: { type: string, format: uri }
+            enabled: { type: boolean }
+            has_api_key: { type: boolean }
+            api_key_fingerprint: { type: [string, 'null'] }
+            last_health_status: { type: string }
+            last_health_check_at: { type: [string, 'null'], format: date-time }
+
+    AIModel:
+      type: object
+      required: [id, provider_id, model_id, display_name, enabled]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        provider_id: { $ref: '#/components/schemas/UUID' }
+        model_id: { type: string }
+        display_name: { type: string }
+        enabled: { type: boolean }
+        context_window: { type: [integer, 'null'] }
+        supports_json: { type: boolean }
+        supports_tools: { type: boolean }
+        supports_vision: { type: boolean }
+
+    AITaskRouteCreate:
+      type: object
+      required: [task_type, primary_model_id]
+      properties:
+        task_type: { type: string }
+        primary_model_id: { $ref: '#/components/schemas/UUID' }
+        fallback_model_ids:
+          type: array
+          items: { $ref: '#/components/schemas/UUID' }
+        max_cost: { type: [number, 'null'] }
+        allow_external: { type: boolean, default: true }
+        allow_sensitive: { type: boolean, default: false }
+        require_json: { type: boolean, default: false }
+
+    AITaskRoute:
+      allOf:
+        - $ref: '#/components/schemas/SyncEntity'
+        - $ref: '#/components/schemas/AITaskRouteCreate'
+
+    AITaskRunRequest:
+      type: object
+      required: [input_scope]
+      properties:
+        input_scope:
+          type: array
+          items:
+            type: object
+            required: [entity_type, entity_id, fields]
+            properties:
+              entity_type: { type: string }
+              entity_id: { $ref: '#/components/schemas/UUID' }
+              fields:
+                type: array
+                items: { type: string }
+        instructions: { type: string }
+        model_override_id: { type: [string, 'null'], format: uuid }
+        idempotency_key: { $ref: '#/components/schemas/UUID' }
+
+    AIRun:
+      type: object
+      required: [id, task_type, status, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        task_type: { type: string }
+        provider_id: { type: [string, 'null'], format: uuid }
+        model_id: { type: [string, 'null'], format: uuid }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
+        estimated_cost: { type: [number, 'null'] }
+
+    AIHealthResult:
+      type: object
+      required: [status, latency_ms]
+      properties:
+        status: { type: string, enum: [healthy, degraded, failed] }
+        latency_ms: { type: integer }
+        models_endpoint_supported: { type: boolean }
+        error_code: { type: [string, 'null'] }
+        detail_redacted: { type: [string, 'null'] }
+
+    BackupRecord:
+      type: object
+      required: [id, status, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        status: { type: string, enum: [queued, running, succeeded, failed, verified] }
+        size_bytes: { type: [integer, 'null'], format: int64 }
+        checksum: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }

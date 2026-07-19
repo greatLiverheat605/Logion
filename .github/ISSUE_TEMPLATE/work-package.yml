@@ -1,0 +1,41 @@
+name: Work package
+description: A bounded Logion implementation slice
+title: "[WP] "
+labels: ["work-package"]
+body:
+  - type: input
+    id: work_package_id
+    attributes:
+      label: Work package ID
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective and user story
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Allowed paths and forbidden paths
+    validations:
+      required: true
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Contract owner, input version and dependencies
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance scenarios and required tests
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Migration, offline, security, privacy and rollback impact
+    validations:
+      required: true

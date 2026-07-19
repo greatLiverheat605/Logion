@@ -1,0 +1,11 @@
+.next
+.venv
+archive
+prototype
+node_modules
+LOGION_EXECUTION_PLAN.md
+LOGION_AI_DEVELOPMENT_CONSTRAINTS.md
+pnpm-lock.yaml
+uv.lock
+packages/contracts/openapi/openapi.json
+packages/contracts/src/openapi.d.ts

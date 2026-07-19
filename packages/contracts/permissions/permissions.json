@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "roles": ["owner", "admin", "editor", "contributor", "reviewer", "viewer"],
+  "legacy_role_aliases": {
+    "member": "contributor"
+  },
+  "permissions": [
+    "workspace.manage",
+    "workspace.members.manage",
+    "space.create",
+    "space.read",
+    "space.write",
+    "content.read",
+    "content.write",
+    "evidence.submit",
+    "review.perform",
+    "ai.configure",
+    "data.export",
+    "share.create"
+  ]
+}

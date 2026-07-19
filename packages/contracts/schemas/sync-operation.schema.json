@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.logion.dev/sync-operation.schema.json",
+  "title": "SyncOperationV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation_id",
+    "protocol_version",
+    "workspace_id",
+    "device_id",
+    "entity_type",
+    "entity_id",
+    "operation_type",
+    "base_version",
+    "client_occurred_at",
+    "payload",
+    "payload_hash",
+    "dependencies"
+  ],
+  "properties": {
+    "operation_id": { "type": "string", "format": "uuid" },
+    "protocol_version": { "const": "sync-v1" },
+    "workspace_id": { "type": "string", "format": "uuid" },
+    "device_id": { "type": "string", "format": "uuid" },
+    "entity_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$"
+    },
+    "entity_id": { "type": "string", "format": "uuid" },
+    "operation_type": {
+      "enum": ["create", "update", "delete", "restore"]
+    },
+    "base_version": { "type": "integer", "minimum": 0 },
+    "client_occurred_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object", "maxProperties": 200 },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "dependencies": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "format": "uuid" }
+    }
+  }
+}

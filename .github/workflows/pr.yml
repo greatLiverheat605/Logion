@@ -1,0 +1,81 @@
+name: PR checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: 0.11.29
+          python-version: "3.12"
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages --group dev --frozen
+      - run: pnpm ci:fast
+      - name: OpenAPI compatibility
+        shell: bash
+        run: |
+          if git cat-file -e "origin/${{ github.base_ref }}:packages/contracts/openapi/openapi.json" 2>/dev/null; then
+            mkdir -p reports
+            git show "origin/${{ github.base_ref }}:packages/contracts/openapi/openapi.json" > reports/openapi-base.json
+            node scripts/check-openapi-breaking.mjs reports/openapi-base.json packages/contracts/openapi/openapi.json
+          fi
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.7-alpine
+        env:
+          POSTGRES_DB: logion_test
+          POSTGRES_USER: logion
+          POSTGRES_PASSWORD: logion_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U logion -d logion_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      LOGION_DATABASE_URL: postgresql+asyncpg://logion:logion_test@localhost:5432/logion_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: 0.11.29
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --all-packages --group dev --frozen
+      - name: Migration round trip
+        run: |
+          uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
+          uv run --package logion-api alembic -c apps/api/alembic.ini downgrade base
+          uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
+      - run: uv run --group dev pytest apps/api/tests apps/worker/tests

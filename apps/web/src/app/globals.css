@@ -1,0 +1,139 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background: #07111f;
+  color: #e7f1ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 80% 15%,
+      rgb(39 220 255 / 18%),
+      transparent 30rem
+    ),
+    radial-gradient(
+      circle at 15% 85%,
+      rgb(118 92 255 / 14%),
+      transparent 28rem
+    ),
+    #07111f;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10;
+  padding: 0.7rem 1rem;
+  border-radius: 0.5rem;
+  background: #e7f1ff;
+  color: #07111f;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+
+.hero {
+  width: min(100%, 62rem);
+  padding: clamp(1.5rem, 5vw, 4rem);
+  border: 1px solid rgb(114 203 255 / 25%);
+  border-radius: 1.5rem;
+  background: rgb(8 24 42 / 78%);
+  box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
+  backdrop-filter: blur(18px);
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  color: #69dbff;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+h1 {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(2.25rem, 8vw, 5.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.lede {
+  max-width: 46rem;
+  margin: 1.75rem 0;
+  color: #b8c9dc;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.75;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check-grid li {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid rgb(132 207 255 / 16%);
+  border-radius: 0.75rem;
+  background: rgb(14 41 67 / 62%);
+}
+
+.check-grid span {
+  color: #67f2c1;
+}
+
+.status {
+  display: inline-flex;
+  margin: 1.5rem 0 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  background: rgb(103 242 193 / 12%);
+  color: #8fffd8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero {
+    animation: reveal 500ms ease-out both;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+}

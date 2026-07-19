@@ -1,0 +1,72 @@
+name: Main candidate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+concurrency:
+  group: main-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: 0.11.29
+          python-version: "3.12"
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages --group dev --frozen
+      - run: pnpm ci:fast
+      - name: Validate Compose
+        env:
+          POSTGRES_PASSWORD: phase0-ci-only
+        run: docker compose config --quiet
+      - uses: docker/setup-buildx-action@v4
+      - name: Build immutable candidate images
+        env:
+          POSTGRES_PASSWORD: phase0-ci-only
+        run: docker compose build web api worker backup
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+      - uses: anchore/sbom-action@v0.22.1
+        with:
+          path: .
+          format: spdx-json
+          output-file: logion-sbom.spdx.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: phase0-candidate-evidence-${{ github.sha }}
+          path: |
+            logion-sbom.spdx.json
+            packages/contracts/openapi/openapi.json
+          retention-days: 30

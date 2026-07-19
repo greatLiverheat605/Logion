@@ -1,0 +1,10 @@
+# Default human owner for all production and documentation changes.
+* @greatLiverheat605
+
+# Shared contracts and migrations remain single-writer assets.
+/packages/contracts/ @greatLiverheat605
+/apps/api/migrations/ @greatLiverheat605
+/infra/ @greatLiverheat605
+/.github/workflows/ @greatLiverheat605
+/LOGION_EXECUTION_PLAN.md @greatLiverheat605
+/LOGION_AI_DEVELOPMENT_CONSTRAINTS.md @greatLiverheat605
