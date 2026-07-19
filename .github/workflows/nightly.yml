@@ -48,5 +48,29 @@ jobs:
           docker compose ps
           docker compose logs --no-color web api worker reverse-proxy
           exit 1
+      - name: Migration and empty-environment restore
+        run: |
+          docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
+          docker compose up --build -d backup
+          latest=""
+          for attempt in $(seq 1 12); do
+            latest="$(docker compose exec -T backup sh -c 'find /backups -type f -name "logion-*.dump" | sort | tail -n 1')"
+            if [ -n "$latest" ]; then
+              break
+            fi
+            sleep 5
+          done
+          test -n "$latest"
+          docker compose exec -T backup logion-verify-backup "$latest"
+          docker compose exec -T postgres createdb -U logion logion_restore
+          docker compose exec -T backup pg_restore \
+            --exit-on-error \
+            --no-owner \
+            --no-privileges \
+            --dbname=logion_restore \
+            "$latest"
+          restored_version="$(docker compose exec -T postgres \
+            psql -U logion -d logion_restore -Atc 'SELECT version_num FROM alembic_version')"
+          test "$restored_version" = "0001_phase0"
       - if: always()
         run: docker compose down --volumes
