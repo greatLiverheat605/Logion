@@ -39,8 +39,10 @@ services:
       LOGION_VERSION: ${LOGION_VERSION:-0.1.0}
       LOGION_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-logion}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-logion}
       LOGION_REDIS_URL: redis://redis:6379/0
-      LOGION_ALLOWED_ORIGINS: '["http://localhost:3000"]'
+      LOGION_ALLOWED_ORIGINS: ${LOGION_ALLOWED_ORIGINS:-["http://localhost:3000"]}
       LOGION_HEALTHCHECK_DEPENDENCIES: "true"
+      LOGION_SECRET_KEY: ${LOGION_SECRET_KEY:?set LOGION_SECRET_KEY in .env}
+      LOGION_COOKIE_SECURE: ${LOGION_COOKIE_SECURE:-false}
     depends_on:
       postgres:
         condition: service_healthy

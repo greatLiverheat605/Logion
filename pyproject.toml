@@ -20,9 +20,10 @@ package = false
 members = ["apps/api", "apps/worker"]
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-config --strict-markers"
+addopts = "-ra --strict-config --strict-markers -m 'not integration'"
 testpaths = ["apps/api/tests", "apps/worker/tests", "tests"]
 asyncio_mode = "auto"
+markers = ["integration: requires PostgreSQL and Redis services"]
 
 [tool.ruff]
 target-version = "py312"
