@@ -1,11 +1,25 @@
-from fastapi import FastAPI
+from typing import cast
+
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.types import ExceptionHandler
 
 from logion_api import __version__
+from logion_api.config import get_settings
+from logion_api.errors import (
+    APIError,
+    api_error_handler,
+    http_error_handler,
+    validation_error_handler,
+)
 from logion_api.health import router as health_router
+from logion_api.identity.routes import router as identity_router
 from logion_api.middleware import request_id_middleware
 
 
 def create_app() -> FastAPI:
+    settings = get_settings()
     application = FastAPI(
         title="Logion API",
         summary="Offline-first learning and research platform API",
@@ -14,8 +28,22 @@ def create_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
     )
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type", "X-CSRF-Token", "X-Request-ID"],
+    )
     application.middleware("http")(request_id_middleware)
+    application.add_exception_handler(APIError, cast(ExceptionHandler, api_error_handler))
+    application.add_exception_handler(
+        RequestValidationError,
+        cast(ExceptionHandler, validation_error_handler),
+    )
+    application.add_exception_handler(HTTPException, cast(ExceptionHandler, http_error_handler))
     application.include_router(health_router)
+    application.include_router(identity_router)
     return application
 
 

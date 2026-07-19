@@ -3,6 +3,8 @@ from logging.config import fileConfig
 
 from alembic import context
 from logion_api.config import get_settings
+from logion_api.db import Base
+from logion_api.identity import models as identity_models  # noqa: F401
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -11,7 +13,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

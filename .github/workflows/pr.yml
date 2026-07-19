@@ -63,8 +63,20 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:8.6.1-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       LOGION_DATABASE_URL: postgresql+asyncpg://logion:logion_test@localhost:5432/logion_test
+      LOGION_REDIS_URL: redis://localhost:6379/0
+      LOGION_ALLOWED_ORIGINS: '["http://test"]'
+      LOGION_SECRET_KEY: phase1-integration-secret-key-must-be-at-least-32
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -78,4 +90,4 @@ jobs:
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
           uv run --package logion-api alembic -c apps/api/alembic.ini downgrade base
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
-      - run: uv run --group dev pytest apps/api/tests apps/worker/tests
+      - run: uv run --group dev pytest -m integration apps/api/tests apps/worker/tests
