@@ -46,7 +46,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: phase0-ci-only
         run: docker compose build web api worker backup
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
