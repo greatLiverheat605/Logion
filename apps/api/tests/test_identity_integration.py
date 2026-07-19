@@ -51,10 +51,18 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
             transport=ASGITransport(app=app),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
-            cookies={
-                "logion_refresh": old_refresh,
-                "logion_csrf": csrf,
-            },
+        )
+        reuse_client.cookies.set(
+            "logion_refresh",
+            old_refresh,
+            domain="test.local",
+            path="/",
+        )
+        reuse_client.cookies.set(
+            "logion_csrf",
+            csrf,
+            domain="test.local",
+            path="/",
         )
         try:
             reused = await reuse_client.post("/api/v1/auth/refresh")
