@@ -20,7 +20,9 @@ RUN pnpm --filter @logion/web build
 
 FROM node:24.18.0-alpine AS runtime
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
 WORKDIR /app
 RUN addgroup --system --gid 10001 logion && adduser --system --uid 10001 --ingroup logion logion
 COPY --from=build --chown=logion:logion /app/apps/web/.next/standalone ./
