@@ -157,6 +157,86 @@ async def test_workspace_and_private_space_tenant_boundaries() -> None:
         assert viewer_private_create.status_code == 201, viewer_private_create.text
         assert UUID(viewer_private_create.json()["owner_user_id"]) == user_b_id
 
+        async with session_factory() as db:
+            membership_b = await db.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == workspace_a_id,
+                    WorkspaceMembership.user_id == user_b_id,
+                )
+            )
+            assert membership_b is not None
+            membership_b.role = "editor"
+            membership_b.version += 1
+            await db.commit()
+
+        editor_shared_create = await client_b.post(
+            f"/api/v1/workspaces/{workspace_a_id}/spaces",
+            headers={"X-CSRF-Token": csrf_b},
+            json={"name": "Allowed before downgrade", "visibility": "shared"},
+        )
+        assert editor_shared_create.status_code == 201, editor_shared_create.text
+
+        async with session_factory() as db:
+            membership_b = await db.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == workspace_a_id,
+                    WorkspaceMembership.user_id == user_b_id,
+                )
+            )
+            assert membership_b is not None
+            membership_b.role = "viewer"
+            membership_b.version += 1
+            await db.commit()
+
+        denied_after_downgrade = await client_b.post(
+            f"/api/v1/workspaces/{workspace_a_id}/spaces",
+            headers={"X-CSRF-Token": csrf_b},
+            json={"name": "Denied after downgrade", "visibility": "shared"},
+        )
+        assert denied_after_downgrade.status_code == 403
+        assert denied_after_downgrade.json()["code"] == "AUTHZ_PERMISSION_DENIED"
+
+        async with session_factory() as db:
+            membership_b = await db.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == workspace_a_id,
+                    WorkspaceMembership.user_id == user_b_id,
+                )
+            )
+            assert membership_b is not None
+            membership_b.status = "suspended"
+            membership_b.version += 1
+            await db.commit()
+
+        denied_after_suspension = await client_b.get(f"/api/v1/workspaces/{workspace_a_id}")
+        assert denied_after_suspension.status_code == 404
+        assert denied_after_suspension.json()["code"] == "RESOURCE_NOT_FOUND"
+
+        suspended_listing = await client_b.get("/api/v1/workspaces")
+        assert suspended_listing.status_code == 200
+        assert workspace_a_id not in {
+            UUID(workspace["id"]) for workspace in suspended_listing.json()["workspaces"]
+        }
+
+        async with session_factory() as db:
+            membership_b = await db.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == workspace_a_id,
+                    WorkspaceMembership.user_id == user_b_id,
+                )
+            )
+            assert membership_b is not None
+            membership_b.status = "revoked"
+            membership_b.version += 1
+            membership_b.revoked_at = datetime.now(UTC)
+            await db.commit()
+
+        denied_after_revocation = await client_b.get(
+            f"/api/v1/workspaces/{workspace_a_id}/spaces/{shared_id}"
+        )
+        assert denied_after_revocation.status_code == 404
+        assert denied_after_revocation.json()["code"] == "RESOURCE_NOT_FOUND"
+
         mismatched_workspace = await client_a.get(
             f"/api/v1/workspaces/{workspace_b_id}/spaces/{shared_id}"
         )

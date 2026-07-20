@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from logion_api.config import Settings
 from logion_api.main import app
@@ -8,6 +11,15 @@ from logion_api.workspaces.permissions import (
     role_has_permission,
 )
 from logion_api.workspaces.routes import _enforce_creation_rate_limit
+
+PERMISSION_CONTRACT_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "packages"
+    / "contracts"
+    / "permissions"
+    / "permissions.json"
+)
+PERMISSION_CONTRACT = json.loads(PERMISSION_CONTRACT_PATH.read_text(encoding="utf-8"))
 
 
 class RecordingRateLimiter:
@@ -55,6 +67,32 @@ def test_named_permission_matrix_matches_privacy_baseline() -> None:
     assert role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_CONTENT_READ)
     assert not role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_PLAN_WRITE)
     assert all(role_has_permission(role, Permission.SPACE_CREATE_PRIVATE) for role in WorkspaceRole)
+
+
+def test_permission_contract_v2_matches_server_registry_exactly() -> None:
+    assert PERMISSION_CONTRACT["schema_version"] == 2
+    assert PERMISSION_CONTRACT["roles"] == [role.value for role in WorkspaceRole]
+    assert PERMISSION_CONTRACT["legacy_role_aliases"] == {"member": "contributor"}
+    assert PERMISSION_CONTRACT["permissions"] == [permission.value for permission in Permission]
+    assert set(PERMISSION_CONTRACT["role_permissions"]) == {role.value for role in WorkspaceRole}
+
+    for role in WorkspaceRole:
+        assert PERMISSION_CONTRACT["role_permissions"][role.value] == [
+            permission.value for permission in Permission if permission in ROLE_PERMISSIONS[role]
+        ]
+
+
+@pytest.mark.parametrize(
+    ("role", "permission"),
+    [(role, permission) for role in WorkspaceRole for permission in Permission],
+)
+def test_every_role_permission_decision_is_explicit_in_contract(
+    role: WorkspaceRole,
+    permission: Permission,
+) -> None:
+    expected = permission.value in PERMISSION_CONTRACT["role_permissions"][role.value]
+
+    assert role_has_permission(role, permission) is expected
 
 
 def test_openapi_exposes_only_canonical_workspace_roles() -> None:
