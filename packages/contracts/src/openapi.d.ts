@@ -89,6 +89,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Passkeys */
+        get: operations["auth_passkey_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkeys/login/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authentication Options */
+        post: operations["auth_passkey_authentication_options"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkeys/login/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authentication Verify */
+        post: operations["auth_passkey_authentication_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkeys/register/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registration Options */
+        post: operations["auth_passkey_registration_options"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkeys/register/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registration Verify */
+        post: operations["auth_passkey_registration_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkeys/{credential_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Passkey */
+        delete: operations["auth_passkey_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/refresh": {
         parameters: {
             query?: never;
@@ -169,6 +271,36 @@ export interface components {
              */
             session_expires_at: string;
             user: components["schemas"]["UserResponse"];
+        };
+        /** AuthenticationAuthenticatorResponse */
+        AuthenticationAuthenticatorResponse: {
+            /** Authenticatordata */
+            authenticatorData: string;
+            /** Clientdatajson */
+            clientDataJSON: string;
+            /** Signature */
+            signature: string;
+            /** Userhandle */
+            userHandle?: string | null;
+        };
+        /** AuthenticationCredentialRequest */
+        AuthenticationCredentialRequest: {
+            /** Authenticatorattachment */
+            authenticatorAttachment?: ("platform" | "cross-platform") | null;
+            /** Clientextensionresults */
+            clientExtensionResults?: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Rawid */
+            rawId: string;
+            response: components["schemas"]["AuthenticationAuthenticatorResponse"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "public-key";
         };
         /** DeviceListResponse */
         DeviceListResponse: {
@@ -269,6 +401,120 @@ export interface components {
              */
             status: "ok";
         };
+        /** PasskeyAuthenticationOptionsResponse */
+        PasskeyAuthenticationOptionsResponse: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            public_key: components["schemas"]["PasskeyAuthenticationPublicKey"];
+        };
+        /** PasskeyAuthenticationPublicKey */
+        PasskeyAuthenticationPublicKey: {
+            /** Allowcredentials */
+            allowCredentials: components["schemas"]["WebAuthnCredentialDescriptor"][];
+            /** Challenge */
+            challenge: string;
+            /** Rpid */
+            rpId: string;
+            /** Timeout */
+            timeout: number;
+            /**
+             * Userverification
+             * @constant
+             */
+            userVerification: "required";
+        };
+        /** PasskeyAuthenticationVerifyRequest */
+        PasskeyAuthenticationVerifyRequest: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            credential: components["schemas"]["AuthenticationCredentialRequest"];
+            /** Device Name */
+            device_name: string;
+            /**
+             * Platform
+             * @default web
+             * @enum {string}
+             */
+            platform: "web" | "ios_pwa" | "android_pwa";
+        };
+        /** PasskeyCredentialListResponse */
+        PasskeyCredentialListResponse: {
+            /** Credentials */
+            credentials: components["schemas"]["PasskeyCredentialResponse"][];
+        };
+        /** PasskeyCredentialResponse */
+        PasskeyCredentialResponse: {
+            /** Backed Up */
+            backed_up: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Credential Device Type
+             * @enum {string}
+             */
+            credential_device_type: "single_device" | "multi_device";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Transports */
+            transports: ("usb" | "nfc" | "ble" | "smart-card" | "internal" | "cable" | "hybrid")[];
+        };
+        /** PasskeyRegistrationOptionsResponse */
+        PasskeyRegistrationOptionsResponse: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            public_key: components["schemas"]["PasskeyRegistrationPublicKey"];
+        };
+        /** PasskeyRegistrationPublicKey */
+        PasskeyRegistrationPublicKey: {
+            /**
+             * Attestation
+             * @constant
+             */
+            attestation: "none";
+            authenticatorSelection: components["schemas"]["WebAuthnAuthenticatorSelection"];
+            /** Challenge */
+            challenge: string;
+            /** Excludecredentials */
+            excludeCredentials: components["schemas"]["WebAuthnCredentialDescriptor"][];
+            /** Pubkeycredparams */
+            pubKeyCredParams: components["schemas"]["WebAuthnCredentialParameter"][];
+            rp: components["schemas"]["WebAuthnRpEntity"];
+            /** Timeout */
+            timeout: number;
+            user: components["schemas"]["WebAuthnUserEntity"];
+        };
+        /** PasskeyRegistrationVerifyRequest */
+        PasskeyRegistrationVerifyRequest: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            credential: components["schemas"]["RegistrationCredentialRequest"];
+            /** Name */
+            name: string;
+        };
         /** RegisterRequest */
         RegisterRequest: {
             /** Device Name */
@@ -286,6 +532,40 @@ export interface components {
              * @enum {string}
              */
             platform: "web" | "ios_pwa" | "android_pwa";
+        };
+        /** RegistrationAuthenticatorResponse */
+        RegistrationAuthenticatorResponse: {
+            /** Attestationobject */
+            attestationObject: string;
+            /** Authenticatordata */
+            authenticatorData?: string | null;
+            /** Clientdatajson */
+            clientDataJSON: string;
+            /** Publickey */
+            publicKey?: string | null;
+            /** Publickeyalgorithm */
+            publicKeyAlgorithm?: (-8 | -7 | -257) | null;
+            /** Transports */
+            transports?: ("usb" | "nfc" | "ble" | "smart-card" | "internal" | "cable" | "hybrid")[];
+        };
+        /** RegistrationCredentialRequest */
+        RegistrationCredentialRequest: {
+            /** Authenticatorattachment */
+            authenticatorAttachment?: ("platform" | "cross-platform") | null;
+            /** Clientextensionresults */
+            clientExtensionResults?: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            /** Rawid */
+            rawId: string;
+            response: components["schemas"]["RegistrationAuthenticatorResponse"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "public-key";
         };
         /** UserResponse */
         UserResponse: {
@@ -311,6 +591,62 @@ export interface components {
              * @enum {string}
              */
             status: "active" | "suspended" | "deleted";
+        };
+        /** WebAuthnAuthenticatorSelection */
+        WebAuthnAuthenticatorSelection: {
+            /** Requireresidentkey */
+            requireResidentKey: boolean;
+            /**
+             * Residentkey
+             * @constant
+             */
+            residentKey: "required";
+            /**
+             * Userverification
+             * @constant
+             */
+            userVerification: "required";
+        };
+        /** WebAuthnCredentialDescriptor */
+        WebAuthnCredentialDescriptor: {
+            /** Id */
+            id: string;
+            /** Transports */
+            transports?: ("usb" | "nfc" | "ble" | "smart-card" | "internal" | "cable" | "hybrid")[] | null;
+            /**
+             * Type
+             * @constant
+             */
+            type: "public-key";
+        };
+        /** WebAuthnCredentialParameter */
+        WebAuthnCredentialParameter: {
+            /**
+             * Alg
+             * @enum {integer}
+             */
+            alg: -8 | -7 | -257;
+            /**
+             * Type
+             * @constant
+             */
+            type: "public-key";
+        };
+        /** WebAuthnRpEntity */
+        WebAuthnRpEntity: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** WebAuthnUserEntity */
+        WebAuthnUserEntity: {
+            /** Displayname */
+            displayName: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
         };
     };
     responses: never;
@@ -548,6 +884,376 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_passkey_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyCredentialListResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_passkey_authentication_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyAuthenticationOptionsResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_passkey_authentication_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyAuthenticationVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_passkey_registration_options: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyRegistrationOptionsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_passkey_registration_verify: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyRegistrationVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyCredentialResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_passkey_revoke: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                credential_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,8 +1,14 @@
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import Settings
+from logion_api.errors import APIError
+from logion_api.identity.models import AuthSession, Device, User
 from logion_api.identity.routes import _enforce_login_rate_limits
 from logion_api.identity.security import IdentitySecurity
+from logion_api.identity.service import AuthContext, IdentityService
 from logion_api.main import app
 from pydantic import SecretStr, ValidationError
 
@@ -50,7 +56,7 @@ async def test_login_rate_limits_ip_and_account_independently() -> None:
     await _enforce_login_rate_limits(
         limiter,
         settings,
-        client_ip="203.0.113.10",
+        client_ip_value="203.0.113.10",
         normalized_email="user@example.com",
     )
 
@@ -69,7 +75,7 @@ async def test_changing_email_does_not_change_login_ip_bucket() -> None:
         await _enforce_login_rate_limits(
             limiter,
             settings,
-            client_ip="203.0.113.10",
+            client_ip_value="203.0.113.10",
             normalized_email=email,
         )
 
@@ -86,6 +92,8 @@ def test_production_identity_configuration_requires_secure_cookies() -> None:
             secret_key=SecretStr("production-test-secret-key-at-least-32"),
             cookie_secure=False,
             allowed_origins=["https://logion.example"],
+            webauthn_rp_id="logion.example",
+            webauthn_origins=["https://logion.example"],
         )
 
 
@@ -95,9 +103,72 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
         secret_key=SecretStr("production-test-secret-key-at-least-32"),
         cookie_secure=True,
         allowed_origins=["https://logion.example"],
+        webauthn_rp_id="logion.example",
+        webauthn_origins=["https://logion.example"],
     )
 
     assert settings.cookie_secure is True
+
+
+def test_webauthn_rp_id_must_match_every_origin() -> None:
+    with pytest.raises(ValidationError, match="LOGION_WEBAUTHN_RP_ID"):
+        Settings(
+            allowed_origins=["https://login.example.com"],
+            webauthn_rp_id="other.example.com",
+            webauthn_origins=["https://login.example.com"],
+        )
+
+
+def test_changing_authentication_methods_requires_recent_login() -> None:
+    settings = Settings(recent_auth_ttl_seconds=600)
+    service = IdentityService(settings, IdentitySecurity(settings.secret_key.get_secret_value()))
+    context = AuthContext(
+        user=User(email="user@example.com", email_normalized="user@example.com"),
+        device=Device(user_id=uuid4(), name="Browser"),
+        session=AuthSession(created_at=datetime.now(UTC) - timedelta(minutes=11)),
+    )
+
+    with pytest.raises(APIError) as raised:
+        service.require_recent_authentication(context)
+
+    assert raised.value.code == "AUTH_RECENT_LOGIN_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_passkey_options_require_explicit_origin() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/auth/passkeys/login/options")
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "AUTH_ORIGIN_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_passkey_validation_error_does_not_echo_signature() -> None:
+    sensitive_signature = "sensitive-passkey-signature"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/passkeys/login/verify",
+            headers={"Origin": "http://localhost:3000"},
+            json={
+                "challenge_id": str(uuid4()),
+                "device_name": "",
+                "credential": {
+                    "id": "credential",
+                    "rawId": "credential",
+                    "type": "public-key",
+                    "clientExtensionResults": {},
+                    "response": {
+                        "clientDataJSON": "client-data",
+                        "authenticatorData": "authenticator-data",
+                        "signature": sensitive_signature,
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 422
+    assert sensitive_signature not in response.text
 
 
 @pytest.mark.asyncio

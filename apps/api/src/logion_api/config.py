@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,12 +34,37 @@ class Settings(BaseSettings):
     registration_limit_per_hour: int = Field(default=5, ge=1, le=100)
     login_ip_limit_per_five_minutes: int = Field(default=30, ge=1, le=300)
     login_account_limit_per_five_minutes: int = Field(default=10, ge=1, le=100)
+    passkey_limit_per_five_minutes: int = Field(default=20, ge=1, le=200)
+    passkey_max_credentials: int = Field(default=20, ge=1, le=100)
+    recent_auth_ttl_seconds: int = Field(default=600, ge=60, le=1800)
+    webauthn_rp_id: str = Field(default="localhost", min_length=1, max_length=253)
+    webauthn_rp_name: str = Field(default="Logion", min_length=1, max_length=80)
+    webauthn_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    webauthn_challenge_ttl_seconds: int = Field(default=300, ge=60, le=600)
 
     @model_validator(mode="after")
-    def reject_development_secrets_in_production(self) -> "Settings":
+    def validate_security_configuration(self) -> "Settings":
         secret = self.secret_key.get_secret_value()
         if len(secret) < 32:
             raise ValueError("LOGION_SECRET_KEY must contain at least 32 characters")
+        if not set(self.webauthn_origins).issubset(self.allowed_origins):
+            raise ValueError("LOGION_WEBAUTHN_ORIGINS must be included in LOGION_ALLOWED_ORIGINS")
+        for origin in self.webauthn_origins:
+            parsed = urlparse(origin)
+            hostname = parsed.hostname or ""
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not hostname
+                or parsed.path not in {"", "/"}
+                or parsed.params
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("LOGION_WEBAUTHN_ORIGINS must contain valid origins only")
+            if hostname != self.webauthn_rp_id and not hostname.endswith(
+                f".{self.webauthn_rp_id}"
+            ):
+                raise ValueError("LOGION_WEBAUTHN_RP_ID must match every WebAuthn origin")
         if self.env == "production":
             if secret.startswith("development-only"):
                 raise ValueError("LOGION_SECRET_KEY must be replaced in production")
@@ -48,6 +74,8 @@ class Settings(BaseSettings):
                 raise ValueError("LOGION_REQUIRE_ORIGIN_HEADER must be enabled in production")
             if any(not origin.startswith("https://") for origin in self.allowed_origins):
                 raise ValueError("LOGION_ALLOWED_ORIGINS must use HTTPS in production")
+            if self.webauthn_rp_id == "localhost":
+                raise ValueError("LOGION_WEBAUTHN_RP_ID must be configured in production")
         return self
 
 

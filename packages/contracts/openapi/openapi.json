@@ -19,6 +19,103 @@
         "title": "AuthResponse",
         "type": "object"
       },
+      "AuthenticationAuthenticatorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "authenticatorData": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Authenticatordata",
+            "type": "string"
+          },
+          "clientDataJSON": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Clientdatajson",
+            "type": "string"
+          },
+          "signature": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Signature",
+            "type": "string"
+          },
+          "userHandle": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Userhandle"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "authenticatorData",
+          "signature"
+        ],
+        "title": "AuthenticationAuthenticatorResponse",
+        "type": "object"
+      },
+      "AuthenticationCredentialRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "authenticatorAttachment": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "cross-platform"
+                ],
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authenticatorattachment"
+          },
+          "clientExtensionResults": {
+            "additionalProperties": true,
+            "maxProperties": 0,
+            "title": "Clientextensionresults",
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "rawId": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Rawid",
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/AuthenticationAuthenticatorResponse"
+          },
+          "type": {
+            "const": "public-key",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rawId",
+          "response",
+          "type"
+        ],
+        "title": "AuthenticationCredentialRequest",
+        "type": "object"
+      },
       "DeviceListResponse": {
         "properties": {
           "devices": {
@@ -215,6 +312,289 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "PasskeyAuthenticationOptionsResponse": {
+        "properties": {
+          "challenge_id": {
+            "format": "uuid",
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "public_key": {
+            "$ref": "#/components/schemas/PasskeyAuthenticationPublicKey"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "public_key"
+        ],
+        "title": "PasskeyAuthenticationOptionsResponse",
+        "type": "object"
+      },
+      "PasskeyAuthenticationPublicKey": {
+        "properties": {
+          "allowCredentials": {
+            "items": {
+              "$ref": "#/components/schemas/WebAuthnCredentialDescriptor"
+            },
+            "title": "Allowcredentials",
+            "type": "array"
+          },
+          "challenge": {
+            "title": "Challenge",
+            "type": "string"
+          },
+          "rpId": {
+            "title": "Rpid",
+            "type": "string"
+          },
+          "timeout": {
+            "title": "Timeout",
+            "type": "integer"
+          },
+          "userVerification": {
+            "const": "required",
+            "title": "Userverification",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge",
+          "timeout",
+          "rpId",
+          "allowCredentials",
+          "userVerification"
+        ],
+        "title": "PasskeyAuthenticationPublicKey",
+        "type": "object"
+      },
+      "PasskeyAuthenticationVerifyRequest": {
+        "properties": {
+          "challenge_id": {
+            "format": "uuid",
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/AuthenticationCredentialRequest"
+          },
+          "device_name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Device Name",
+            "type": "string"
+          },
+          "platform": {
+            "default": "web",
+            "enum": [
+              "web",
+              "ios_pwa",
+              "android_pwa"
+            ],
+            "title": "Platform",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "device_name",
+          "credential"
+        ],
+        "title": "PasskeyAuthenticationVerifyRequest",
+        "type": "object"
+      },
+      "PasskeyCredentialListResponse": {
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/PasskeyCredentialResponse"
+            },
+            "title": "Credentials",
+            "type": "array"
+          }
+        },
+        "required": [
+          "credentials"
+        ],
+        "title": "PasskeyCredentialListResponse",
+        "type": "object"
+      },
+      "PasskeyCredentialResponse": {
+        "properties": {
+          "backed_up": {
+            "title": "Backed Up",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "credential_device_type": {
+            "enum": [
+              "single_device",
+              "multi_device"
+            ],
+            "title": "Credential Device Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "transports": {
+            "items": {
+              "enum": [
+                "usb",
+                "nfc",
+                "ble",
+                "smart-card",
+                "internal",
+                "cable",
+                "hybrid"
+              ],
+              "type": "string"
+            },
+            "title": "Transports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "transports",
+          "credential_device_type",
+          "backed_up",
+          "created_at",
+          "last_used_at",
+          "revoked_at"
+        ],
+        "title": "PasskeyCredentialResponse",
+        "type": "object"
+      },
+      "PasskeyRegistrationOptionsResponse": {
+        "properties": {
+          "challenge_id": {
+            "format": "uuid",
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "public_key": {
+            "$ref": "#/components/schemas/PasskeyRegistrationPublicKey"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "public_key"
+        ],
+        "title": "PasskeyRegistrationOptionsResponse",
+        "type": "object"
+      },
+      "PasskeyRegistrationPublicKey": {
+        "properties": {
+          "attestation": {
+            "const": "none",
+            "title": "Attestation",
+            "type": "string"
+          },
+          "authenticatorSelection": {
+            "$ref": "#/components/schemas/WebAuthnAuthenticatorSelection"
+          },
+          "challenge": {
+            "title": "Challenge",
+            "type": "string"
+          },
+          "excludeCredentials": {
+            "items": {
+              "$ref": "#/components/schemas/WebAuthnCredentialDescriptor"
+            },
+            "title": "Excludecredentials",
+            "type": "array"
+          },
+          "pubKeyCredParams": {
+            "items": {
+              "$ref": "#/components/schemas/WebAuthnCredentialParameter"
+            },
+            "title": "Pubkeycredparams",
+            "type": "array"
+          },
+          "rp": {
+            "$ref": "#/components/schemas/WebAuthnRpEntity"
+          },
+          "timeout": {
+            "title": "Timeout",
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/WebAuthnUserEntity"
+          }
+        },
+        "required": [
+          "rp",
+          "user",
+          "challenge",
+          "pubKeyCredParams",
+          "timeout",
+          "excludeCredentials",
+          "authenticatorSelection",
+          "attestation"
+        ],
+        "title": "PasskeyRegistrationPublicKey",
+        "type": "object"
+      },
+      "PasskeyRegistrationVerifyRequest": {
+        "properties": {
+          "challenge_id": {
+            "format": "uuid",
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/RegistrationCredentialRequest"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id",
+          "name",
+          "credential"
+        ],
+        "title": "PasskeyRegistrationVerifyRequest",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "device_name": {
@@ -251,6 +631,141 @@
           "device_name"
         ],
         "title": "RegisterRequest",
+        "type": "object"
+      },
+      "RegistrationAuthenticatorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attestationObject": {
+            "maxLength": 65536,
+            "minLength": 1,
+            "title": "Attestationobject",
+            "type": "string"
+          },
+          "authenticatorData": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authenticatordata"
+          },
+          "clientDataJSON": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Clientdatajson",
+            "type": "string"
+          },
+          "publicKey": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publickey"
+          },
+          "publicKeyAlgorithm": {
+            "anyOf": [
+              {
+                "enum": [
+                  -8,
+                  -7,
+                  -257
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publickeyalgorithm"
+          },
+          "transports": {
+            "items": {
+              "enum": [
+                "usb",
+                "nfc",
+                "ble",
+                "smart-card",
+                "internal",
+                "cable",
+                "hybrid"
+              ],
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Transports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "clientDataJSON",
+          "attestationObject"
+        ],
+        "title": "RegistrationAuthenticatorResponse",
+        "type": "object"
+      },
+      "RegistrationCredentialRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "authenticatorAttachment": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "cross-platform"
+                ],
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authenticatorattachment"
+          },
+          "clientExtensionResults": {
+            "additionalProperties": true,
+            "maxProperties": 0,
+            "title": "Clientextensionresults",
+            "type": "object"
+          },
+          "id": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "rawId": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Rawid",
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/RegistrationAuthenticatorResponse"
+          },
+          "type": {
+            "const": "public-key",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rawId",
+          "response",
+          "type"
+        ],
+        "title": "RegistrationCredentialRequest",
         "type": "object"
       },
       "UserResponse": {
@@ -300,6 +815,138 @@
           "created_at"
         ],
         "title": "UserResponse",
+        "type": "object"
+      },
+      "WebAuthnAuthenticatorSelection": {
+        "properties": {
+          "requireResidentKey": {
+            "title": "Requireresidentkey",
+            "type": "boolean"
+          },
+          "residentKey": {
+            "const": "required",
+            "title": "Residentkey",
+            "type": "string"
+          },
+          "userVerification": {
+            "const": "required",
+            "title": "Userverification",
+            "type": "string"
+          }
+        },
+        "required": [
+          "residentKey",
+          "requireResidentKey",
+          "userVerification"
+        ],
+        "title": "WebAuthnAuthenticatorSelection",
+        "type": "object"
+      },
+      "WebAuthnCredentialDescriptor": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "transports": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "usb",
+                    "nfc",
+                    "ble",
+                    "smart-card",
+                    "internal",
+                    "cable",
+                    "hybrid"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transports"
+          },
+          "type": {
+            "const": "public-key",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ],
+        "title": "WebAuthnCredentialDescriptor",
+        "type": "object"
+      },
+      "WebAuthnCredentialParameter": {
+        "properties": {
+          "alg": {
+            "enum": [
+              -8,
+              -7,
+              -257
+            ],
+            "title": "Alg",
+            "type": "integer"
+          },
+          "type": {
+            "const": "public-key",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "alg"
+        ],
+        "title": "WebAuthnCredentialParameter",
+        "type": "object"
+      },
+      "WebAuthnRpEntity": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "WebAuthnRpEntity",
+        "type": "object"
+      },
+      "WebAuthnUserEntity": {
+        "properties": {
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "displayName"
+        ],
+        "title": "WebAuthnUserEntity",
         "type": "object"
       }
     }
@@ -607,6 +1254,476 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/passkeys": {
+      "get": {
+        "operationId": "auth_passkey_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyCredentialListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "List Passkeys",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/passkeys/login/options": {
+      "post": {
+        "operationId": "auth_passkey_authentication_options",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyAuthenticationOptionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Authentication Options",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/passkeys/login/verify": {
+      "post": {
+        "operationId": "auth_passkey_authentication_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyAuthenticationVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Authentication Verify",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/passkeys/register/options": {
+      "post": {
+        "operationId": "auth_passkey_registration_options",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyRegistrationOptionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Registration Options",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/passkeys/register/verify": {
+      "post": {
+        "operationId": "auth_passkey_registration_verify",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyRegistrationVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyCredentialResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Registration Verify",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/passkeys/{credential_id}": {
+      "delete": {
+        "operationId": "auth_passkey_revoke",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Credential Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Revoke Passkey",
         "tags": [
           "identity"
         ]
