@@ -7,9 +7,13 @@ from logion_api.errors import APIError
 from logion_api.identity.email_verification import EmailDeliveryCipher
 from logion_api.identity.models import EmailOutbox, IdentityActionToken, User
 from logion_api.identity.passkeys import _authentication_credential_statement
+from logion_api.identity.schemas import PasswordRecoveryCompletionRequest
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import require_verified_email
-from logion_api.identity.verification_routes import _enforce_registration_rate_limits
+from logion_api.identity.verification_routes import (
+    _enforce_password_recovery_rate_limits,
+    _enforce_registration_rate_limits,
+)
 from logion_api.main import app
 from pydantic import SecretStr, ValidationError
 from sqlalchemy.dialects import postgresql
@@ -147,6 +151,10 @@ def test_email_verification_contract_is_additive_and_token_is_not_in_path() -> N
     assert "token" not in "/api/v1/auth/email-verification/confirmations"
     assert confirmation["requestBody"]["required"] is True
     assert "410" in openapi["paths"]["/api/v1/auth/register"]["post"]["responses"]
+    assert "202" in openapi["paths"]["/api/v1/auth/password-recovery/requests"]["post"][
+        "responses"
+    ]
+    assert "/api/v1/auth/password-recovery/completions" in openapi["paths"]
 
 
 def test_email_verification_tables_have_delivery_and_active_indexes() -> None:
@@ -170,3 +178,42 @@ def test_unverified_accounts_cannot_enroll_or_authenticate_with_passkeys() -> No
         )
     )
     assert "users.email_verified_at IS NOT NULL" in statement
+
+
+@pytest.mark.asyncio
+async def test_password_recovery_rate_limits_ip_and_account_independently() -> None:
+    limiter = RecordingRateLimiter()
+    settings = Settings(
+        password_recovery_ip_limit_per_hour=8,
+        password_recovery_account_limit_per_hour=2,
+    )
+
+    await _enforce_password_recovery_rate_limits(
+        limiter,  # type: ignore[arg-type]
+        settings,
+        client_ip_value="192.0.2.12",
+        normalized_email="person@example.com",
+    )
+
+    assert [call["scope"] for call in limiter.calls] == [
+        "password_recovery_ip",
+        "password_recovery_account",
+    ]
+    assert [call["limit"] for call in limiter.calls] == [8, 2]
+    assert all(call["window"] == 3600 for call in limiter.calls)
+
+
+def test_password_recovery_requires_complete_factor_shape() -> None:
+    value = "new-password-123"
+    with pytest.raises(ValidationError):
+        PasswordRecoveryCompletionRequest(
+            token="x" * 48,
+            new_password=value,
+            method="totp",
+        )
+    with pytest.raises(ValidationError):
+        PasswordRecoveryCompletionRequest(
+            token="x" * 48,
+            new_password=value,
+            code="123456",
+        )

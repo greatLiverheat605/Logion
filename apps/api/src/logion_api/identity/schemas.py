@@ -23,6 +23,31 @@ class EmailVerificationConfirmationRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
 
 
+class PasswordRecoveryStartRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordRecoveryCompletionRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+    method: Literal["totp", "recovery_code"] | None = None
+    code: str | None = Field(default=None, min_length=6, max_length=32)
+
+    @model_validator(mode="after")
+    def validate_factor_shape(self) -> "PasswordRecoveryCompletionRequest":
+        if (self.method is None) != (self.code is None):
+            raise ValueError("Recovery method and code must be provided together")
+        if self.method == "totp" and self.code is not None and (
+            len(self.code) != 6 or not self.code.isascii() or not self.code.isdigit()
+        ):
+            raise ValueError("TOTP codes must contain exactly six ASCII digits")
+        if self.method == "recovery_code" and self.code is not None:
+            normalized = self.code.replace("-", "")
+            if len(normalized) != 16 or not normalized.isascii() or not normalized.isalnum():
+                raise ValueError("Recovery codes must contain 16 ASCII letters or digits")
+        return self
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)

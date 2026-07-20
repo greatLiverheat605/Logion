@@ -323,6 +323,33 @@ class TotpService:
             )
         return enabled, remaining
 
+    async def verify_password_recovery_factor(
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+        method: str | None,
+        code: str | None,
+        *,
+        now: datetime,
+    ) -> str | None:
+        credential = await self._credential_for_update(db, user_id)
+        if credential is None or credential.verified_at is None:
+            return None
+        verified = False
+        if method == "totp" and code is not None:
+            step = self._match_totp_step(credential, code, now)
+            if step is not None and (
+                credential.last_used_step is None or step > credential.last_used_step
+            ):
+                credential.last_used_step = step
+                credential.updated_at = now
+                verified = True
+        elif method == "recovery_code" and code is not None:
+            verified = await self._consume_recovery_code(db, user_id, code, now)
+        if not verified:
+            raise self._invalid_code_error()
+        return method
+
     async def regenerate_recovery_codes(
         self,
         db: AsyncSession,

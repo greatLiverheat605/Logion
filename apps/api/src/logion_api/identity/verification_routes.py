@@ -2,12 +2,14 @@ from typing import Protocol
 
 from fastapi import APIRouter, Request, Response, status
 
-from logion_api.errors import ErrorResponse
+from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
     DatabaseSession,
     EmailVerificationServiceDependency,
     RateLimiterDependency,
     SettingsDependency,
+    TotpServiceDependency,
+    clear_auth_cookies,
     client_ip,
     get_security,
     request_id,
@@ -16,6 +18,8 @@ from logion_api.identity.dependencies import (
 from logion_api.identity.schemas import (
     EmailVerificationConfirmationRequest,
     MessageResponse,
+    PasswordRecoveryCompletionRequest,
+    PasswordRecoveryStartRequest,
     RegistrationStartRequest,
 )
 from logion_api.identity.service import normalize_email
@@ -47,6 +51,35 @@ async def _enforce_registration_rate_limits(
             "email_registration_account",
             normalized_email,
             settings.email_registration_account_limit_per_hour,
+        ),
+    )
+    for scope, identity, limit in subjects:
+        await limiter.enforce(
+            scope=scope,
+            subject_hash=security.privacy_hash(identity) or "unknown",
+            limit=limit,
+            window=3600,
+        )
+
+
+async def _enforce_password_recovery_rate_limits(
+    limiter: RateLimitEnforcer,
+    settings: SettingsDependency,
+    *,
+    client_ip_value: str | None,
+    normalized_email: str,
+) -> None:
+    security = get_security()
+    subjects = (
+        (
+            "password_recovery_ip",
+            client_ip_value or "unknown",
+            settings.password_recovery_ip_limit_per_hour,
+        ),
+        (
+            "password_recovery_account",
+            normalized_email,
+            settings.password_recovery_account_limit_per_hour,
         ),
     )
     for scope, identity, limit in subjects:
@@ -135,4 +168,86 @@ async def confirm_email_verification(
     )
     await db.commit()
     response.headers["Cache-Control"] = "no-store"
+    return MessageResponse()
+
+
+@router.post(
+    "/password-recovery/requests",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="auth_password_recovery_start",
+    responses={
+        403: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        429: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+async def start_password_recovery(
+    payload: PasswordRecoveryStartRequest,
+    request: Request,
+    response: Response,
+    db: DatabaseSession,
+    service: EmailVerificationServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+) -> MessageResponse:
+    require_trusted_origin(request, settings)
+    email = str(payload.email)
+    await _enforce_password_recovery_rate_limits(
+        limiter,
+        settings,
+        client_ip_value=client_ip(request),
+        normalized_email=normalize_email(email),
+    )
+    await service.start_password_recovery(db, email, request_id=request_id(request))
+    await db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return MessageResponse()
+
+
+@router.post(
+    "/password-recovery/completions",
+    response_model=MessageResponse,
+    operation_id="auth_password_recovery_complete",
+    responses={
+        400: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        429: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+async def complete_password_recovery(
+    payload: PasswordRecoveryCompletionRequest,
+    request: Request,
+    response: Response,
+    db: DatabaseSession,
+    service: EmailVerificationServiceDependency,
+    totp: TotpServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+) -> MessageResponse:
+    require_trusted_origin(request, settings)
+    await limiter.enforce(
+        scope="password_recovery_complete_ip",
+        subject_hash=get_security().privacy_hash(client_ip(request) or "unknown") or "unknown",
+        limit=settings.password_recovery_complete_limit_per_five_minutes,
+        window=300,
+    )
+    try:
+        await service.complete_password_recovery(
+            db,
+            totp,
+            payload.token,
+            payload.new_password,
+            payload.method,
+            payload.code,
+            request_id=request_id(request),
+        )
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    clear_auth_cookies(response, settings)
     return MessageResponse()
