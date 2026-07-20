@@ -69,8 +69,15 @@ jobs:
             --no-privileges \
             --dbname=logion_restore \
             "$latest"
+          source_version="$(docker compose exec -T postgres \
+            psql -U logion -d logion -Atc 'SELECT version_num FROM alembic_version')"
           restored_version="$(docker compose exec -T postgres \
             psql -U logion -d logion_restore -Atc 'SELECT version_num FROM alembic_version')"
-          test "$restored_version" = "0001_phase0"
+          test -n "$source_version"
+          test -n "$restored_version"
+          if [ "$restored_version" != "$source_version" ]; then
+            echo "::error title=Restore migration mismatch::Source is $source_version; restored is $restored_version"
+            exit 1
+          fi
       - if: always()
         run: docker compose down --volumes
