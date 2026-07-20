@@ -22,7 +22,7 @@
 | 用户未验证                   | 注册和登录均要求 WebAuthn UV；注册要求 discoverable credential                                            | options 契约和密码学测试验证 `userVerification=required`  |
 | 凭据枚举                     | 登录 options 不接收邮箱且不返回 allow list；未知 credential 返回统一错误                                  | 集成测试撤销后登录只返回 `AUTH_PASSKEY_INVALID`           |
 | 账户错绑                     | 注册 challenge 绑定当前用户；无用户名登录要求 userHandle 与 credential 所属用户 UUID 常量时间匹配         | 服务层校验和完整登录测试                                  |
-| Authenticator 克隆或计数回退 | 对有效签名执行计数器回退检测；非零计数未递增时自动撤销凭据并写安全审计                                    | 集成测试重复有效计数触发撤销                              |
+| Authenticator 克隆或计数回退 | 验证时锁定凭据行并执行计数器回退检测；非零计数未递增时自动撤销凭据并写安全审计                            | 集成测试重复有效计数触发撤销；代码审查确认凭据行锁        |
 | 恶意或超大响应               | Pydantic 限制 ID、clientData、attestation、signature、transport 数量；未请求扩展时要求空 extension result | OpenAPI schema、422 脱敏错误与单元测试                    |
 | 凭据管理 CSRF                | 注册、验证和撤销要求可信 WebAuthn Origin、会话绑定 CSRF 与最近登录                                        | 集成测试通过受保护流程，负向测试由 API 错误契约覆盖       |
 | 数据库泄漏                   | 数据库不保存 Passkey 私钥；challenge 短时有效；IP 只保存 HMAC 摘要                                        | 模型与迁移审查                                            |

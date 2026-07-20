@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 from webauthn import (
     generate_authentication_options,
     generate_registration_options,
@@ -53,6 +54,21 @@ class GeneratedPasskeyOptions:
 class AuthenticatedPasskey:
     user: User
     credential: PasskeyCredential
+
+
+def _authentication_credential_statement(
+    credential_id: bytes,
+) -> Select[tuple[PasskeyCredential, User]]:
+    return (
+        select(PasskeyCredential, User)
+        .join(User, User.id == PasskeyCredential.user_id)
+        .where(
+            PasskeyCredential.credential_id == credential_id,
+            PasskeyCredential.revoked_at.is_(None),
+            User.status == "active",
+        )
+        .with_for_update(of=PasskeyCredential)
+    )
 
 
 class PasskeyService:
@@ -285,15 +301,7 @@ class PasskeyService:
             )
             raise self._authentication_error() from exc
 
-        result = await db.execute(
-            select(PasskeyCredential, User)
-            .join(User, User.id == PasskeyCredential.user_id)
-            .where(
-                PasskeyCredential.credential_id == parsed.raw_id,
-                PasskeyCredential.revoked_at.is_(None),
-                User.status == "active",
-            )
-        )
+        result = await db.execute(_authentication_credential_statement(parsed.raw_id))
         row = result.one_or_none()
         if row is None:
             db.add(

@@ -6,11 +6,13 @@ from httpx import ASGITransport, AsyncClient
 from logion_api.config import Settings
 from logion_api.errors import APIError
 from logion_api.identity.models import AuthSession, Device, User
+from logion_api.identity.passkeys import _authentication_credential_statement
 from logion_api.identity.routes import _enforce_login_rate_limits
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext, IdentityService
 from logion_api.main import app
 from pydantic import SecretStr, ValidationError
+from sqlalchemy.dialects import postgresql
 
 
 class RecordingRateLimiter:
@@ -43,6 +45,13 @@ def test_token_hash_is_keyed_and_stable() -> None:
     assert security.token_hash("token") == security.token_hash("token")
     another_security = IdentitySecurity("another-secret-key-32-bytes")
     assert security.token_hash("token") != another_security.token_hash("token")
+
+
+def test_passkey_authentication_locks_credential_counter() -> None:
+    statement = _authentication_credential_statement(b"credential-id")
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
+
+    assert "FOR UPDATE OF passkey_credentials" in compiled
 
 
 @pytest.mark.asyncio
