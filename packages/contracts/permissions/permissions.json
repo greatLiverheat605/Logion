@@ -1,21 +1,70 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "roles": ["owner", "admin", "editor", "contributor", "reviewer", "viewer"],
   "legacy_role_aliases": {
     "member": "contributor"
   },
   "permissions": [
-    "workspace.manage",
-    "workspace.members.manage",
-    "space.create",
-    "space.read",
-    "space.write",
-    "content.read",
-    "content.write",
+    "workspace.read",
+    "workspace.manage_security",
+    "workspace.manage_members",
+    "space.create_private",
+    "space.create_shared",
+    "space.delete_shared",
+    "shared_content.read",
+    "shared_plan.write",
     "evidence.submit",
-    "review.perform",
-    "ai.configure",
-    "data.export",
+    "review.write",
     "share.create"
-  ]
+  ],
+  "role_permissions": {
+    "owner": [
+      "workspace.read",
+      "workspace.manage_security",
+      "workspace.manage_members",
+      "space.create_private",
+      "space.create_shared",
+      "space.delete_shared",
+      "shared_content.read",
+      "shared_plan.write",
+      "evidence.submit",
+      "review.write",
+      "share.create"
+    ],
+    "admin": [
+      "workspace.read",
+      "workspace.manage_members",
+      "space.create_private",
+      "space.create_shared",
+      "space.delete_shared",
+      "shared_content.read",
+      "shared_plan.write",
+      "evidence.submit",
+      "review.write",
+      "share.create"
+    ],
+    "editor": [
+      "workspace.read",
+      "space.create_private",
+      "space.create_shared",
+      "shared_content.read",
+      "shared_plan.write",
+      "evidence.submit",
+      "review.write",
+      "share.create"
+    ],
+    "contributor": [
+      "workspace.read",
+      "space.create_private",
+      "shared_content.read",
+      "evidence.submit"
+    ],
+    "reviewer": [
+      "workspace.read",
+      "space.create_private",
+      "shared_content.read",
+      "review.write"
+    ],
+    "viewer": ["workspace.read", "space.create_private", "shared_content.read"]
+  }
 }
