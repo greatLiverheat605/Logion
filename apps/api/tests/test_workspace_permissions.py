@@ -8,6 +8,7 @@ from logion_api.workspaces.permissions import (
     ROLE_PERMISSIONS,
     Permission,
     WorkspaceRole,
+    role_can_manage_membership,
     role_has_permission,
 )
 from logion_api.workspaces.routes import _enforce_creation_rate_limit
@@ -67,6 +68,54 @@ def test_named_permission_matrix_matches_privacy_baseline() -> None:
     assert role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_CONTENT_READ)
     assert not role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_PLAN_WRITE)
     assert all(role_has_permission(role, Permission.SPACE_CREATE_PRIVATE) for role in WorkspaceRole)
+
+
+@pytest.mark.parametrize(
+    "target_role",
+    [role for role in WorkspaceRole if role is not WorkspaceRole.OWNER],
+)
+def test_owner_can_manage_every_non_owner_role(target_role: WorkspaceRole) -> None:
+    assert role_can_manage_membership(WorkspaceRole.OWNER, target_role, WorkspaceRole.VIEWER)
+
+
+def test_admin_cannot_manage_owner_admin_or_grant_admin() -> None:
+    assert not role_can_manage_membership(
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.OWNER,
+        WorkspaceRole.VIEWER,
+    )
+    assert not role_can_manage_membership(
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.VIEWER,
+    )
+    assert not role_can_manage_membership(
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.VIEWER,
+        WorkspaceRole.ADMIN,
+    )
+    assert role_can_manage_membership(
+        WorkspaceRole.ADMIN,
+        WorkspaceRole.VIEWER,
+        WorkspaceRole.REVIEWER,
+    )
+
+
+@pytest.mark.parametrize(
+    "actor_role",
+    [
+        WorkspaceRole.EDITOR,
+        WorkspaceRole.CONTRIBUTOR,
+        WorkspaceRole.REVIEWER,
+        WorkspaceRole.VIEWER,
+    ],
+)
+def test_non_managers_cannot_change_memberships(actor_role: WorkspaceRole) -> None:
+    assert not role_can_manage_membership(
+        actor_role,
+        WorkspaceRole.VIEWER,
+        WorkspaceRole.VIEWER,
+    )
 
 
 def test_permission_contract_v2_matches_server_registry_exactly() -> None:
