@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ExceptionHandler
 
 from logion_api import __version__
+from logion_api.audit.routes import router as audit_router
+from logion_api.audit.routes import workspace_router as workspace_audit_router
 from logion_api.config import get_settings
 from logion_api.errors import (
     APIError,
@@ -53,6 +55,8 @@ def create_app() -> FastAPI:
     application.include_router(identity_router)
     application.include_router(passkey_router)
     application.include_router(totp_router)
+    application.include_router(audit_router)
+    application.include_router(workspace_audit_router)
     application.include_router(invitation_router)
     application.include_router(workspace_invitation_router)
     application.include_router(workspace_router)
