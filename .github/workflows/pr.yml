@@ -121,5 +121,11 @@ jobs:
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
           uv run --package logion-api alembic -c apps/api/alembic.ini check
           uv run --package logion-api alembic -c apps/api/alembic.ini downgrade base
+          uv run --package logion-api alembic -c apps/api/alembic.ini upgrade 0004_totp
+          uv run --package logion-api python scripts/verify-workspace-backfill.py seed
+          uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
+          uv run --package logion-api python scripts/verify-workspace-backfill.py verify
+          uv run --package logion-api alembic -c apps/api/alembic.ini check
+          uv run --package logion-api alembic -c apps/api/alembic.ini downgrade base
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
       - run: uv run --group dev pytest -m integration apps/api/tests apps/worker/tests

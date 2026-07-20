@@ -1,0 +1,213 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Header, Request, status
+
+from logion_api.errors import APIError, ErrorResponse
+from logion_api.identity.dependencies import (
+    AuthContextDependency,
+    DatabaseSession,
+    IdentityServiceDependency,
+    SettingsDependency,
+    request_id,
+    require_trusted_origin,
+)
+from logion_api.workspaces.dependencies import WorkspaceServiceDependency
+from logion_api.workspaces.schemas import (
+    SpaceCreateRequest,
+    SpaceListResponse,
+    SpaceResponse,
+    WorkspaceCreateRequest,
+    WorkspaceListResponse,
+    WorkspaceResponse,
+)
+from logion_api.workspaces.service import WorkspaceAccess
+
+router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
+
+ERROR_RESPONSE = {"model": ErrorResponse}
+
+
+def _csrf_cookie(request: Request, settings: SettingsDependency) -> str | None:
+    return request.cookies.get(settings.csrf_cookie_name)
+
+
+def _workspace_response(access: WorkspaceAccess) -> WorkspaceResponse:
+    return WorkspaceResponse.model_validate(
+        {
+            "id": access.workspace.id,
+            "name": access.workspace.name,
+            "status": access.workspace.status,
+            "version": access.workspace.version,
+            "role": access.membership.role,
+            "membership_status": access.membership.status,
+            "created_at": access.workspace.created_at,
+            "updated_at": access.workspace.updated_at,
+        }
+    )
+
+
+@router.get(
+    "",
+    response_model=WorkspaceListResponse,
+    operation_id="workspace_list",
+    responses={401: ERROR_RESPONSE},
+)
+async def list_workspaces(
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+) -> WorkspaceListResponse:
+    accessible = await workspaces.list_workspaces(db, context)
+    return WorkspaceListResponse(workspaces=[_workspace_response(access) for access in accessible])
+
+
+@router.post(
+    "",
+    response_model=WorkspaceResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="workspace_create",
+    responses={401: ERROR_RESPONSE, 403: ERROR_RESPONSE, 422: ERROR_RESPONSE},
+)
+async def create_workspace(
+    payload: WorkspaceCreateRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    workspaces: WorkspaceServiceDependency,
+    settings: SettingsDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> WorkspaceResponse:
+    require_trusted_origin(request, settings)
+    identity.validate_csrf(context.session, x_csrf_token, _csrf_cookie(request, settings))
+    identity.require_recent_authentication(context)
+    access = await workspaces.create_workspace(
+        db,
+        context,
+        payload.name,
+        request_id=request_id(request),
+    )
+    await db.commit()
+    return _workspace_response(access)
+
+
+@router.get(
+    "/{workspace_id}",
+    response_model=WorkspaceResponse,
+    operation_id="workspace_get",
+    responses={401: ERROR_RESPONSE, 404: ERROR_RESPONSE},
+)
+async def get_workspace(
+    workspace_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+) -> WorkspaceResponse:
+    try:
+        access = await workspaces.resolve_workspace(
+            db,
+            context,
+            workspace_id,
+            request_id=request_id(request),
+        )
+    except APIError:
+        await db.commit()
+        raise
+    return _workspace_response(access)
+
+
+@router.get(
+    "/{workspace_id}/spaces",
+    response_model=SpaceListResponse,
+    operation_id="space_list",
+    responses={401: ERROR_RESPONSE, 404: ERROR_RESPONSE},
+)
+async def list_spaces(
+    workspace_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+) -> SpaceListResponse:
+    try:
+        spaces = await workspaces.list_spaces(
+            db,
+            context,
+            workspace_id,
+            request_id=request_id(request),
+        )
+    except APIError:
+        await db.commit()
+        raise
+    return SpaceListResponse(spaces=[SpaceResponse.model_validate(space) for space in spaces])
+
+
+@router.post(
+    "/{workspace_id}/spaces",
+    response_model=SpaceResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="space_create",
+    responses={
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+    },
+)
+async def create_space(
+    workspace_id: UUID,
+    payload: SpaceCreateRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    workspaces: WorkspaceServiceDependency,
+    settings: SettingsDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> SpaceResponse:
+    require_trusted_origin(request, settings)
+    identity.validate_csrf(context.session, x_csrf_token, _csrf_cookie(request, settings))
+    identity.require_recent_authentication(context)
+    try:
+        space = await workspaces.create_space(
+            db,
+            context,
+            workspace_id,
+            name=payload.name,
+            visibility=payload.visibility,
+            request_id=request_id(request),
+        )
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    return SpaceResponse.model_validate(space)
+
+
+@router.get(
+    "/{workspace_id}/spaces/{space_id}",
+    response_model=SpaceResponse,
+    operation_id="space_get",
+    responses={401: ERROR_RESPONSE, 404: ERROR_RESPONSE},
+)
+async def get_space(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+) -> SpaceResponse:
+    try:
+        space = await workspaces.resolve_space(
+            db,
+            context,
+            workspace_id,
+            space_id,
+            request_id=request_id(request),
+        )
+    except APIError:
+        await db.commit()
+        raise
+    return SpaceResponse.model_validate(space)

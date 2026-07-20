@@ -10,6 +10,7 @@ def new_audit_event(
     event_type: str,
     result: str,
     actor_id: UUID | None = None,
+    workspace_id: UUID | None = None,
     target_type: str = "auth_session",
     target_id: UUID | None = None,
     metadata: dict[str, Any] | None = None,
@@ -20,6 +21,7 @@ def new_audit_event(
         target_type=target_type,
         target_id=target_id,
         actor_id=actor_id,
+        workspace_id=workspace_id,
         result=result,
         event_metadata=metadata or {},
     )
