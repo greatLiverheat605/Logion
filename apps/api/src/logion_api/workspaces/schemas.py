@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, model_validator
 
 from logion_api.workspaces.permissions import (
     MembershipStatus,
@@ -86,3 +86,32 @@ class WorkspaceInvitationCreatedResponse(WorkspaceInvitationResponse):
 
 class WorkspaceInvitationAcceptRequest(BaseModel):
     token: InvitationToken
+
+
+class WorkspaceMemberResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    email: str
+    role: WorkspaceRole
+    status: MembershipStatus
+    version: int = Field(ge=1)
+    joined_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    revoked_at: datetime | None
+
+
+class WorkspaceMemberListResponse(BaseModel):
+    members: list[WorkspaceMemberResponse]
+
+
+class WorkspaceMemberUpdateRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    role: InvitableWorkspaceRole | None = None
+    status: Literal["active", "suspended", "revoked"] | None = None
+
+    @model_validator(mode="after")
+    def require_change(self) -> "WorkspaceMemberUpdateRequest":
+        if self.role is None and self.status is None:
+            raise ValueError("At least one membership change is required")
+        return self

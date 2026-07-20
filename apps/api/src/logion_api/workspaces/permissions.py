@@ -104,3 +104,27 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
 
 def role_has_permission(role: WorkspaceRole, permission: Permission) -> bool:
     return permission in ROLE_PERMISSIONS[role]
+
+
+ADMIN_MANAGEABLE_ROLES = frozenset(
+    {
+        WorkspaceRole.EDITOR,
+        WorkspaceRole.CONTRIBUTOR,
+        WorkspaceRole.REVIEWER,
+        WorkspaceRole.VIEWER,
+    }
+)
+
+
+def role_can_manage_membership(
+    actor_role: WorkspaceRole,
+    target_role: WorkspaceRole,
+    desired_role: WorkspaceRole,
+) -> bool:
+    if target_role is WorkspaceRole.OWNER or desired_role is WorkspaceRole.OWNER:
+        return False
+    if actor_role is WorkspaceRole.OWNER:
+        return True
+    if actor_role is WorkspaceRole.ADMIN:
+        return target_role in ADMIN_MANAGEABLE_ROLES and desired_role in ADMIN_MANAGEABLE_ROLES
+    return False
