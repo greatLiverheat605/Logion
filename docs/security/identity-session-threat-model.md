@@ -35,8 +35,8 @@
 - `L1-002D` 新增邮箱优先、统一 `202` 的注册流程，验证前不设置密码或创建会话。旧 `/register`
   仅为开发和测试兼容保留，生产配置禁止启用；支持客户端迁移完成前不得删除旧 OpenAPI。
 - Passkey 与 TOTP/恢复码已经实现；邮件验证核心见
-  `email-verification-account-recovery-threat-model.md`。真实邮件投递、密码找回和安全通知仍待后续
-  工作包交付。
+  `email-verification-account-recovery-threat-model.md`。密码找回已按 MFA 边界实现，并在成功后原子
+  撤销全部 Session 与 Refresh Token、保留设备记录；真实邮件投递仍待后续工作包交付。
 
 ## 合并与运行要求
 

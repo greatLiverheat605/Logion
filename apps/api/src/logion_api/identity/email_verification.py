@@ -17,13 +17,16 @@ from logion_api.config import Settings
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import (
+    AuthSession,
     EmailOutbox,
     IdentityActionToken,
     PasswordCredential,
+    RefreshToken,
     User,
 )
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import normalize_email
+from logion_api.identity.totp import TotpService
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,7 @@ class EmailDeliveryCipher:
 
 class EmailVerificationService:
     _PURPOSE = "email_verification"
+    _RECOVERY_PURPOSE = "password_recovery"
 
     def __init__(self, settings: Settings, security: IdentitySecurity) -> None:
         self._settings = settings
@@ -278,10 +282,291 @@ class EmailVerificationService:
         )
         return user
 
+    async def start_password_recovery(
+        self,
+        db: AsyncSession,
+        email: str,
+        *,
+        request_id: str,
+    ) -> None:
+        normalized = normalize_email(email)
+        result = await db.execute(
+            select(User, PasswordCredential)
+            .join(PasswordCredential, PasswordCredential.user_id == User.id)
+            .where(User.email_normalized == normalized)
+            .with_for_update(of=User)
+        )
+        row = result.one_or_none()
+        if row is None:
+            self._security.privacy_hash(normalized)
+            return
+        user: User = row[0]
+        if user.status != "active" or user.email_verified_at is None:
+            self._security.privacy_hash(normalized)
+            return
+
+        now = datetime.now(UTC)
+        await self._terminate_active_actions(db, user.id, self._RECOVERY_PURPOSE, now)
+        raw_token = self._security.new_identity_action_token()
+        action = IdentityActionToken(
+            id=uuid7(),
+            user_id=user.id,
+            purpose=self._RECOVERY_PURPOSE,
+            token_hash=self._security.identity_action_token_hash(
+                self._RECOVERY_PURPOSE,
+                raw_token,
+            ),
+            expires_at=now + timedelta(minutes=self._settings.password_recovery_ttl_minutes),
+        )
+        db.add(action)
+        await db.flush()
+        await self._add_outbox(
+            db,
+            user=user,
+            action_token_id=action.id,
+            purpose=self._RECOVERY_PURPOSE,
+            payload={"recipient": user.email, "token": raw_token},
+        )
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="identity.password_recovery_requested",
+                result="pending",
+                target_type="user",
+                target_id=user.id,
+                metadata={"email_hash": self._security.privacy_hash(normalized)},
+            )
+        )
+
+    async def complete_password_recovery(
+        self,
+        db: AsyncSession,
+        totp: TotpService,
+        raw_token: str,
+        new_password: str,
+        method: str | None,
+        code: str | None,
+        *,
+        request_id: str,
+    ) -> User:
+        now = datetime.now(UTC)
+        candidate = await db.scalar(
+            select(IdentityActionToken)
+            .where(
+                IdentityActionToken.token_hash
+                == self._security.identity_action_token_hash(
+                    self._RECOVERY_PURPOSE,
+                    raw_token,
+                )
+            )
+        )
+        if candidate is None or candidate.purpose != self._RECOVERY_PURPOSE:
+            raise self._invalid_recovery()
+
+        # Keep the lock order consistent with recovery start: user, then action.
+        # Re-read and validate the action after both locks are held so a concurrent
+        # replacement cannot consume a superseded token.
+        user = await db.scalar(
+            select(User).where(User.id == candidate.user_id).with_for_update()
+        )
+        action = await db.scalar(
+            select(IdentityActionToken)
+            .where(IdentityActionToken.id == candidate.id)
+            .with_for_update()
+        )
+        if (
+            action is None
+            or action.purpose != self._RECOVERY_PURPOSE
+            or action.used_at is not None
+            or action.revoked_at is not None
+            or action.failed_attempts >= self._settings.password_recovery_max_failures
+        ):
+            raise self._invalid_recovery()
+        if action.expires_at <= now:
+            action.revoked_at = now
+            await self._terminate_outbox_for_action(db, action.id, now)
+            raise self._invalid_recovery()
+        if user is None or user.status != "active" or user.email_verified_at is None:
+            raise self._invalid_recovery()
+
+        try:
+            mfa_method = await totp.verify_password_recovery_factor(
+                db,
+                user.id,
+                method,
+                code,
+                now=now,
+            )
+        except APIError as exc:
+            if exc.status_code == 503:
+                raise
+            action.failed_attempts += 1
+            if action.failed_attempts >= self._settings.password_recovery_max_failures:
+                action.revoked_at = now
+                await self._terminate_outbox_for_action(db, action.id, now)
+                await self._add_outbox(
+                    db,
+                    user=user,
+                    action_token_id=None,
+                    purpose="security_notification",
+                    payload={
+                        "recipient": user.email,
+                        "event": "password_recovery_attempts_exhausted",
+                    },
+                )
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="identity.password_recovery_failed",
+                    result="denied",
+                    actor_id=user.id,
+                    target_type="identity_action_token",
+                    target_id=action.id,
+                    metadata={"method": method or "missing"},
+                )
+            )
+            raise self._invalid_recovery() from exc
+
+        credential = await db.scalar(
+            select(PasswordCredential)
+            .where(PasswordCredential.user_id == user.id)
+            .with_for_update()
+        )
+        if credential is None:
+            raise self._invalid_recovery()
+        credential.password_hash = self._security.hash_password(new_password)
+        credential.updated_at = now
+        user.updated_at = now
+        user.version += 1
+        action.used_at = now
+        await self._terminate_outbox_for_action(db, action.id, now)
+
+        session_ids = select(AuthSession.id).where(AuthSession.user_id == user.id)
+        await db.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.session_id.in_(session_ids),
+                RefreshToken.status == "active",
+            )
+            .values(status="revoked", used_at=now)
+        )
+        await db.execute(
+            update(AuthSession)
+            .where(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None))
+            .values(revoked_at=now, revoke_reason="password_recovery")
+        )
+        await self._add_outbox(
+            db,
+            user=user,
+            action_token_id=None,
+            purpose="security_notification",
+            payload={"recipient": user.email, "event": "password_recovery_completed"},
+        )
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="identity.password_recovered",
+                result="success",
+                actor_id=user.id,
+                target_type="user",
+                target_id=user.id,
+                metadata={"mfa_method": mfa_method or "not_required"},
+            )
+        )
+        return user
+
+    async def _terminate_active_actions(
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+        purpose: str,
+        now: datetime,
+    ) -> None:
+        active_ids = select(IdentityActionToken.id).where(
+            IdentityActionToken.user_id == user_id,
+            IdentityActionToken.purpose == purpose,
+            IdentityActionToken.used_at.is_(None),
+            IdentityActionToken.revoked_at.is_(None),
+        )
+        await db.execute(
+            update(EmailOutbox)
+            .where(
+                EmailOutbox.action_token_id.in_(active_ids),
+                EmailOutbox.status.in_(("pending", "leased")),
+            )
+            .values(
+                status="dead",
+                payload_ciphertext=b"",
+                payload_nonce=b"",
+                terminal_at=now,
+            )
+        )
+        await db.execute(
+            update(IdentityActionToken)
+            .where(IdentityActionToken.id.in_(active_ids))
+            .values(revoked_at=now)
+        )
+
+    async def _terminate_outbox_for_action(
+        self,
+        db: AsyncSession,
+        action_token_id: UUID,
+        now: datetime,
+    ) -> None:
+        await db.execute(
+            update(EmailOutbox)
+            .where(
+                EmailOutbox.action_token_id == action_token_id,
+                EmailOutbox.status.in_(("pending", "leased")),
+            )
+            .values(
+                status="dead",
+                payload_ciphertext=b"",
+                payload_nonce=b"",
+                terminal_at=now,
+            )
+        )
+
+    async def _add_outbox(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        action_token_id: UUID | None,
+        purpose: str,
+        payload: dict[str, str],
+    ) -> EmailOutbox:
+        outbox_id = uuid7()
+        encrypted = self._cipher.encrypt(
+            outbox_id=outbox_id,
+            user_id=user.id,
+            purpose=purpose,
+            payload=payload,
+        )
+        outbox = EmailOutbox(
+            id=outbox_id,
+            user_id=user.id,
+            action_token_id=action_token_id,
+            purpose=purpose,
+            encryption_key_id=encrypted.key_id,
+            payload_ciphertext=encrypted.ciphertext,
+            payload_nonce=encrypted.nonce,
+        )
+        db.add(outbox)
+        return outbox
+
     @staticmethod
     def _invalid_token() -> APIError:
         return APIError(
             code="AUTH_EMAIL_ACTION_INVALID",
             message="The email action is invalid or has expired.",
+            status_code=400,
+        )
+
+    @staticmethod
+    def _invalid_recovery() -> APIError:
+        return APIError(
+            code="AUTH_PASSWORD_RECOVERY_INVALID",
+            message="The password recovery request is invalid or has expired.",
             status_code=400,
         )
