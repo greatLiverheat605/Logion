@@ -40,18 +40,6 @@ jobs:
         run: pnpm audit --audit-level high
       - name: Python dependency audit
         run: uv run --group dev pip-audit
-      - name: Secret history scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Filesystem vulnerability scan
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
       - run: pnpm ci:fast
       - name: OpenAPI compatibility
         shell: bash
@@ -61,6 +49,19 @@ jobs:
             git show "origin/${{ github.base_ref }}:packages/contracts/openapi/openapi.json" > reports/openapi-base.json
             node scripts/check-openapi-breaking.mjs reports/openapi-base.json packages/contracts/openapi/openapi.json
           fi
+      - name: Secret history scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: Filesystem vulnerability scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
 
   integration:
     runs-on: ubuntu-latest
