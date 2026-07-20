@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.13"
 [dependency-groups]
 dev = [
   "httpx>=0.28,<1",
-  "mypy>=1.15,<2",
+  "mypy>=2.3.0,<3",
   "pip-audit>=2.9,<3",
   "pytest>=8.3,<10",
   "pytest-asyncio>=0.25,<2",
