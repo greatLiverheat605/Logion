@@ -18,6 +18,10 @@ from logion_api.identity.passkey_routes import router as passkey_router
 from logion_api.identity.routes import router as identity_router
 from logion_api.identity.totp_routes import router as totp_router
 from logion_api.middleware import request_id_middleware
+from logion_api.workspaces.invitation_routes import (
+    invitation_router,
+    workspace_invitation_router,
+)
 from logion_api.workspaces.routes import router as workspace_router
 
 
@@ -49,6 +53,8 @@ def create_app() -> FastAPI:
     application.include_router(identity_router)
     application.include_router(passkey_router)
     application.include_router(totp_router)
+    application.include_router(invitation_router)
+    application.include_router(workspace_invitation_router)
     application.include_router(workspace_router)
     return application
 

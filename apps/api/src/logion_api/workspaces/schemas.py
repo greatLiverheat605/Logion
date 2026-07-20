@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 from logion_api.workspaces.permissions import (
     MembershipStatus,
@@ -57,3 +57,32 @@ class SpaceResponse(BaseModel):
 
 class SpaceListResponse(BaseModel):
     spaces: list[SpaceResponse]
+
+
+InvitableWorkspaceRole = Literal["admin", "editor", "contributor", "reviewer", "viewer"]
+InvitationToken = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=32, max_length=256)
+]
+
+
+class WorkspaceInvitationCreateRequest(BaseModel):
+    email: EmailStr
+    role: InvitableWorkspaceRole
+
+
+class WorkspaceInvitationResponse(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    email: str
+    role: InvitableWorkspaceRole
+    status: Literal["pending", "accepted", "revoked", "expired"]
+    expires_at: datetime
+    created_at: datetime
+
+
+class WorkspaceInvitationCreatedResponse(WorkspaceInvitationResponse):
+    token: str
+
+
+class WorkspaceInvitationAcceptRequest(BaseModel):
+    token: InvitationToken
