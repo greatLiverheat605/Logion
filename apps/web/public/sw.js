@@ -1,9 +1,9 @@
-const CACHE_NAME = "logion-phase0-v1";
-const APP_SHELL = ["/"];
+const CACHE_NAME = "logion-auth-shell-v1";
+const PUBLIC_SHELL = ["/", "/offline"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PUBLIC_SHELL)),
   );
   self.skipWaiting();
 });
@@ -32,6 +32,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/")));
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        const url = new URL(event.request.url);
+        const fallback = await caches.match(
+          url.pathname === "/" ? "/" : "/offline",
+        );
+        return fallback ?? Response.error();
+      }),
+    );
   }
 });
