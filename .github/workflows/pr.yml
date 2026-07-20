@@ -36,6 +36,22 @@ jobs:
           enable-cache: true
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --group dev --frozen
+      - name: JavaScript dependency audit
+        run: pnpm audit --audit-level high
+      - name: Python dependency audit
+        run: uv run --group dev pip-audit
+      - name: Secret history scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Filesystem vulnerability scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
       - run: pnpm ci:fast
       - name: OpenAPI compatibility
         shell: bash

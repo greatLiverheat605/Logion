@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Protocol
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
@@ -46,6 +46,10 @@ RateLimiterDependency = Annotated[RateLimiter, Depends(get_rate_limiter)]
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 
 
+class RateLimitEnforcer(Protocol):
+    async def enforce(self, *, scope: str, subject_hash: str, limit: int, window: int) -> None: ...
+
+
 def _request_id(request: Request) -> str:
     return str(request.state.request_id)
 
@@ -63,6 +67,36 @@ def _require_trusted_origin(request: Request, settings: Settings) -> None:
             code="AUTH_ORIGIN_INVALID",
             message="The request origin is not allowed.",
             status_code=403,
+        )
+
+
+async def _enforce_login_rate_limits(
+    limiter: RateLimitEnforcer,
+    settings: Settings,
+    *,
+    client_ip: str | None,
+    normalized_email: str,
+) -> None:
+    security = get_security()
+    subjects = (
+        (
+            "login_ip",
+            client_ip or "unknown",
+            settings.login_ip_limit_per_five_minutes,
+        ),
+        (
+            "login_account",
+            normalized_email,
+            settings.login_account_limit_per_five_minutes,
+        ),
+    )
+    for scope, identity, limit in subjects:
+        subject_hash = security.privacy_hash(identity) or "unknown"
+        await limiter.enforce(
+            scope=scope,
+            subject_hash=subject_hash,
+            limit=limit,
+            window=300,
         )
 
 
@@ -214,13 +248,11 @@ async def login(
     settings: SettingsDependency,
 ) -> AuthResponse:
     _require_trusted_origin(request, settings)
-    identity = f"{_client_ip(request) or 'unknown'}:{normalize_email(str(payload.email))}"
-    subject = get_security().privacy_hash(identity) or "unknown"
-    await limiter.enforce(
-        scope="login",
-        subject_hash=subject,
-        limit=settings.login_limit_per_five_minutes,
-        window=300,
+    await _enforce_login_rate_limits(
+        limiter,
+        settings,
+        client_ip=_client_ip(request),
+        normalized_email=normalize_email(str(payload.email)),
     )
     issued = await service.login(
         db,
