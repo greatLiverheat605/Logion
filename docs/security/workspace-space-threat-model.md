@@ -31,18 +31,19 @@
 
 ## 威胁、控制与验证
 
-| 威胁                                       | 控制                                                                                   | 验证                                                                        |
-| ------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| IDOR：用户猜测其他 Workspace UUID          | `Workspace + Membership` 联合范围查询；非成员统一返回 `RESOURCE_NOT_FOUND`             | PostgreSQL 集成测试让用户 B 访问用户 A Workspace，验证 404                  |
-| 用正确 Space ID 搭配错误 Workspace         | Space 查询同时约束 `Space.id` 与 `Space.workspace_id`                                  | 集成测试使用错配 Workspace/Space ID，验证 404                               |
-| Workspace Owner/Admin 越权读取成员私人正文 | Private Space 查询额外要求 `owner_user_id == current_user`，不检查管理角色例外         | 集成测试在同一 Workspace 中验证 Owner 无法读取 Viewer 的 Private Space      |
-| 普通成员创建 Shared Space                  | 角色仅通过中心 `ROLE_PERMISSIONS` 解析 `space.create_shared`                           | 单元矩阵测试和 Viewer 创建 Shared Space 的 403 集成测试                     |
-| 前端伪造角色或 owner                       | 创建 API 不接受 role/owner 字段；owner 从认证上下文产生                                | OpenAPI 契约审查；集成测试检查新 Private Space owner                        |
-| 撤销/暂停成员继续访问                      | 所有 Workspace 解析要求 membership `status=active`                                     | 本切片模型与查询已失败关闭；状态变更 API 和撤销后负测在 L1-003B/L1-004 完成 |
-| 探测资源是否存在                           | 非成员、跨 Space 和 private 越权统一返回同一 404 机器码和消息                          | 集成测试比较跨租户与 private 拒绝路径                                       |
-| 拒绝事件未留证或泄漏正文                   | 拒绝路径提交最小化 audit，只含 actor、Workspace、target type、permission/role          | 集成测试验证拒绝审计已持久化                                                |
-| 注册后出现无租户账户                       | 用户、会话、个人 Workspace、owner membership 和默认 Private Space 在同一数据库事务提交 | 集成测试注册后立即读取唯一 owner Workspace 和 Private Space                 |
-| 权限逻辑在路由中分叉                       | 规范角色、permission 和默认 grant 只定义于 `workspaces/permissions.py`                 | 单元测试枚举完整性；代码审查禁止重复角色矩阵                                |
+| 威胁                                       | 控制                                                                                       | 验证                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| IDOR：用户猜测其他 Workspace UUID          | `Workspace + Membership` 联合范围查询；非成员统一返回 `RESOURCE_NOT_FOUND`                 | PostgreSQL 集成测试让用户 B 访问用户 A Workspace，验证 404                  |
+| 用正确 Space ID 搭配错误 Workspace         | Space 查询同时约束 `Space.id` 与 `Space.workspace_id`                                      | 集成测试使用错配 Workspace/Space ID，验证 404                               |
+| Workspace Owner/Admin 越权读取成员私人正文 | Private Space 查询额外要求 `owner_user_id == current_user`，不检查管理角色例外             | 集成测试在同一 Workspace 中验证 Owner 无法读取 Viewer 的 Private Space      |
+| 普通成员创建 Shared Space                  | 角色仅通过中心 `ROLE_PERMISSIONS` 解析 `space.create_shared`                               | 单元矩阵测试和 Viewer 创建 Shared Space 的 403 集成测试                     |
+| 前端伪造角色或 owner                       | 创建 API 不接受 role/owner 字段；owner 从认证上下文产生                                    | OpenAPI 契约审查；集成测试检查新 Private Space owner                        |
+| 撤销/暂停成员继续访问                      | 所有 Workspace 解析要求 membership `status=active`                                         | 本切片模型与查询已失败关闭；状态变更 API 和撤销后负测在 L1-003B/L1-004 完成 |
+| 探测资源是否存在                           | 非成员、跨 Space 和 private 越权统一返回同一 404 机器码和消息                              | 集成测试比较跨租户与 private 拒绝路径                                       |
+| 拒绝事件未留证或泄漏正文                   | 拒绝路径提交最小化 audit，只含 actor、Workspace、target type、permission/role              | 集成测试验证拒绝审计已持久化                                                |
+| 注册后出现无租户账户                       | 用户、会话、个人 Workspace、owner membership 和默认 Private Space 在同一数据库事务提交     | 集成测试注册后立即读取唯一 owner Workspace 和 Private Space                 |
+| 已认证用户耗尽持久化资源                   | Workspace/Space 创建使用 Redis 用户级限流；数据库锁定用户或 Workspace 后原子检查可配置配额 | 单元测试覆盖独立限流主体；集成测试覆盖配额拒绝；代码审查确认行锁            |
+| 权限逻辑在路由中分叉                       | 规范角色、permission 和默认 grant 只定义于 `workspaces/permissions.py`                     | 单元测试枚举完整性；代码审查禁止重复角色矩阵                                |
 
 ## 角色与隐私说明
 

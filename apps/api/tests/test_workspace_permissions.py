@@ -1,3 +1,5 @@
+import pytest
+from logion_api.config import Settings
 from logion_api.main import app
 from logion_api.workspaces.permissions import (
     ROLE_PERMISSIONS,
@@ -5,6 +7,22 @@ from logion_api.workspaces.permissions import (
     WorkspaceRole,
     role_has_permission,
 )
+from logion_api.workspaces.routes import _enforce_creation_rate_limit
+
+
+class RecordingRateLimiter:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str | int]] = []
+
+    async def enforce(self, *, scope: str, subject_hash: str, limit: int, window: int) -> None:
+        self.calls.append(
+            {
+                "scope": scope,
+                "subject_hash": subject_hash,
+                "limit": limit,
+                "window": window,
+            }
+        )
 
 
 def test_workspace_roles_are_canonical_and_do_not_include_legacy_member() -> None:
@@ -50,3 +68,27 @@ def test_openapi_exposes_only_canonical_workspace_roles() -> None:
         "reviewer",
         "viewer",
     ]
+
+
+@pytest.mark.asyncio
+async def test_creation_rate_limits_use_independent_hashed_subjects() -> None:
+    limiter = RecordingRateLimiter()
+    settings = Settings()
+
+    await _enforce_creation_rate_limit(
+        limiter,
+        scope="workspace_create",
+        identity="user-a",
+        limit=settings.workspace_create_limit_per_hour,
+    )
+    await _enforce_creation_rate_limit(
+        limiter,
+        scope="space_create",
+        identity="workspace-a:user-a",
+        limit=settings.space_create_limit_per_hour,
+    )
+
+    assert [call["scope"] for call in limiter.calls] == ["workspace_create", "space_create"]
+    assert [call["limit"] for call in limiter.calls] == [10, 60]
+    assert all(call["window"] == 3600 for call in limiter.calls)
+    assert limiter.calls[0]["subject_hash"] != limiter.calls[1]["subject_hash"]
