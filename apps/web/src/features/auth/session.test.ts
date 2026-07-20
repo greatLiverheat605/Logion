@@ -94,6 +94,27 @@ describe("session coordinator", () => {
     await expect(first).resolves.toMatchObject({ status: "authenticated" });
   });
 
+  it("routes refresh rotation through the cross-tab coordinator", async () => {
+    const authApi = {
+      me: vi.fn(),
+      refresh: vi.fn().mockResolvedValue(authResponse),
+    };
+    const run = vi.fn();
+    const crossTab = {
+      async run<T>(operation: () => Promise<T>): Promise<T> {
+        run();
+        return operation();
+      },
+    };
+    const coordinator = createSessionCoordinator(authApi, crossTab);
+
+    await expect(coordinator.refresh()).resolves.toMatchObject({
+      status: "authenticated",
+    });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(authApi.refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("treats rejected refresh credentials as anonymous", async () => {
     const authApi = {
       me: vi.fn().mockRejectedValue(unauthorized()),

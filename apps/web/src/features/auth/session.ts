@@ -23,6 +23,25 @@ interface AuthApi {
   refresh(): Promise<AuthResponse>;
 }
 
+export interface RefreshCoordinator {
+  run<T>(operation: () => Promise<T>): Promise<T>;
+}
+
+export const immediateRefreshCoordinator: RefreshCoordinator = {
+  run: (operation) => operation(),
+};
+
+export function createWebLockRefreshCoordinator(): RefreshCoordinator {
+  return {
+    run: async (operation) => {
+      if (typeof navigator === "undefined" || navigator.locks === undefined) {
+        return operation();
+      }
+      return navigator.locks.request("logion-session-refresh", operation);
+    },
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -114,13 +133,16 @@ export function createAuthApi(client: ApiClient): AuthApi {
   };
 }
 
-export function createSessionCoordinator(authApi: AuthApi): SessionCoordinator {
+export function createSessionCoordinator(
+  authApi: AuthApi,
+  crossTab: RefreshCoordinator = immediateRefreshCoordinator,
+): SessionCoordinator {
   let refreshInFlight: Promise<SessionState> | null = null;
 
   const refresh = (): Promise<SessionState> => {
     if (refreshInFlight !== null) return refreshInFlight;
-    const request: Promise<SessionState> = authApi
-      .refresh()
+    const request: Promise<SessionState> = crossTab
+      .run(() => authApi.refresh())
       .then(authenticated)
       .catch((error: unknown) =>
         isAnonymousError(error)
