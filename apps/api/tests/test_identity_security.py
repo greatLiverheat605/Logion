@@ -1,3 +1,4 @@
+import base64
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -114,6 +115,10 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
         allowed_origins=["https://logion.example"],
         webauthn_rp_id="logion.example",
         webauthn_origins=["https://logion.example"],
+        totp_active_encryption_key_id="production-v1",
+        totp_encryption_keys={
+            "production-v1": SecretStr(base64.urlsafe_b64encode(b"p" * 32).decode().rstrip("="))
+        },
     )
 
     assert settings.cookie_secure is True

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 WebAuthnTransport = Literal["usb", "nfc", "ble", "smart-card", "internal", "cable", "hybrid"]
 
@@ -34,6 +34,56 @@ class UserResponse(BaseModel):
 class AuthResponse(BaseModel):
     user: UserResponse
     session_expires_at: datetime
+
+
+class MfaChallengeResponse(BaseModel):
+    status: Literal["mfa_required"] = "mfa_required"
+    challenge_token: str
+    expires_at: datetime
+    methods: list[Literal["totp", "recovery_code"]]
+
+
+class MfaLoginVerifyRequest(BaseModel):
+    challenge_token: str = Field(min_length=32, max_length=128)
+    method: Literal["totp", "recovery_code"]
+    code: str = Field(min_length=6, max_length=32)
+
+    @model_validator(mode="after")
+    def validate_code_shape(self) -> "MfaLoginVerifyRequest":
+        if self.method == "totp" and (
+            len(self.code) != 6 or not self.code.isascii() or not self.code.isdigit()
+        ):
+            raise ValueError("TOTP codes must contain exactly six ASCII digits")
+        if self.method == "recovery_code":
+            normalized = self.code.replace("-", "")
+            if len(normalized) != 16 or not normalized.isascii() or not normalized.isalnum():
+                raise ValueError("Recovery codes must contain 16 ASCII letters or digits")
+        return self
+
+
+class TotpCodeRequest(BaseModel):
+    code: str = Field(pattern=r"^[0-9]{6}$")
+
+
+class TotpEnrollmentResponse(BaseModel):
+    secret: str
+    provisioning_uri: str
+    expires_at: datetime
+
+
+class TotpActivationResponse(BaseModel):
+    status: Literal["enabled"] = "enabled"
+    verified_at: datetime
+    recovery_codes: list[str]
+
+
+class RecoveryCodesResponse(BaseModel):
+    recovery_codes: list[str]
+
+
+class TotpStatusResponse(BaseModel):
+    enabled: bool
+    recovery_codes_remaining: int = Field(ge=0)
 
 
 class DeviceResponse(BaseModel):
@@ -97,9 +147,7 @@ class PasskeyRegistrationPublicKey(BaseModel):
     pub_key_cred_params: list[WebAuthnCredentialParameter] = Field(alias="pubKeyCredParams")
     timeout: int
     exclude_credentials: list[WebAuthnCredentialDescriptor] = Field(alias="excludeCredentials")
-    authenticator_selection: WebAuthnAuthenticatorSelection = Field(
-        alias="authenticatorSelection"
-    )
+    authenticator_selection: WebAuthnAuthenticatorSelection = Field(alias="authenticatorSelection")
     attestation: Literal["none"]
 
 

@@ -12,6 +12,8 @@ permissions:
 env:
   NEXT_TELEMETRY_DISABLED: "1"
   LOGION_SECRET_KEY: ${{ github.sha }}
+  LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+  LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
 
 concurrency:
   group: main-candidate

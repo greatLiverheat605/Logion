@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Request, Response, status
 from sqlalchemy.exc import IntegrityError
+from starlette.responses import JSONResponse
 
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
@@ -24,6 +25,7 @@ from logion_api.identity.schemas import (
     DeviceResponse,
     LoginRequest,
     MessageResponse,
+    MfaChallengeResponse,
     RegisterRequest,
     UserResponse,
 )
@@ -132,6 +134,7 @@ async def register(
     response_model=AuthResponse,
     operation_id="auth_login",
     responses={
+        202: {"model": MfaChallengeResponse},
         401: ERROR_RESPONSE,
         403: ERROR_RESPONSE,
         422: ERROR_RESPONSE,
@@ -147,7 +150,7 @@ async def login(
     service: IdentityServiceDependency,
     limiter: RateLimiterDependency,
     settings: SettingsDependency,
-) -> AuthResponse:
+) -> AuthResponse | JSONResponse:
     require_trusted_origin(request, settings)
     await _enforce_login_rate_limits(
         limiter,
@@ -155,7 +158,7 @@ async def login(
         client_ip_value=client_ip(request),
         normalized_email=normalize_email(str(payload.email)),
     )
-    issued = await service.login(
+    outcome = await service.login(
         db,
         payload,
         request_id=request_id(request),
@@ -164,16 +167,31 @@ async def login(
         device_cookie=request.cookies.get(settings.device_cookie_name),
     )
     await db.commit()
-    if issued is None:
+    if outcome is None:
         raise APIError(
             code="AUTH_INVALID_CREDENTIALS",
             message="The email or password is incorrect.",
             status_code=401,
         )
-    set_auth_cookies(response, issued, settings)
+    if outcome.mfa_challenge_token is not None:
+        if outcome.mfa_challenge_expires_at is None:
+            raise RuntimeError("MFA challenge expiry is required")
+        challenge_response = MfaChallengeResponse(
+            challenge_token=outcome.mfa_challenge_token,
+            expires_at=outcome.mfa_challenge_expires_at,
+            methods=["totp", "recovery_code"],
+        )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=challenge_response.model_dump(mode="json"),
+            headers={"Cache-Control": "no-store"},
+        )
+    if outcome.issued is None:
+        raise RuntimeError("Password login outcome is incomplete")
+    set_auth_cookies(response, outcome.issued, settings)
     return AuthResponse(
-        user=UserResponse.model_validate(issued.user),
-        session_expires_at=issued.session.access_expires_at,
+        user=UserResponse.model_validate(outcome.issued.user),
+        session_expires_at=outcome.issued.session.access_expires_at,
     )
 
 

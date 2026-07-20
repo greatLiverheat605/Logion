@@ -1,3 +1,5 @@
+import base64
+import binascii
 from functools import lru_cache
 from urllib.parse import urlparse
 
@@ -35,18 +37,53 @@ class Settings(BaseSettings):
     login_ip_limit_per_five_minutes: int = Field(default=30, ge=1, le=300)
     login_account_limit_per_five_minutes: int = Field(default=10, ge=1, le=100)
     passkey_limit_per_five_minutes: int = Field(default=20, ge=1, le=200)
+    totp_limit_per_five_minutes: int = Field(default=10, ge=1, le=100)
     passkey_max_credentials: int = Field(default=20, ge=1, le=100)
     recent_auth_ttl_seconds: int = Field(default=600, ge=60, le=1800)
     webauthn_rp_id: str = Field(default="localhost", min_length=1, max_length=253)
     webauthn_rp_name: str = Field(default="Logion", min_length=1, max_length=80)
     webauthn_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     webauthn_challenge_ttl_seconds: int = Field(default=300, ge=60, le=600)
+    totp_issuer_name: str = Field(default="Logion", min_length=1, max_length=80)
+    totp_challenge_ttl_seconds: int = Field(default=300, ge=60, le=600)
+    totp_enrollment_ttl_seconds: int = Field(default=600, ge=300, le=1800)
+    totp_active_encryption_key_id: str = Field(
+        default="development-v1",
+        min_length=1,
+        max_length=64,
+    )
+    totp_encryption_keys: dict[str, SecretStr] = Field(
+        default_factory=lambda: {
+            "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtb25seS10b3RwLWtleS0zMmJ5dGU")
+        }
+    )
 
     @model_validator(mode="after")
     def validate_security_configuration(self) -> "Settings":
         secret = self.secret_key.get_secret_value()
         if len(secret) < 32:
             raise ValueError("LOGION_SECRET_KEY must contain at least 32 characters")
+        if self.totp_active_encryption_key_id not in self.totp_encryption_keys:
+            raise ValueError("LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID must select a configured key")
+        for key_id, encoded_key in self.totp_encryption_keys.items():
+            if not 1 <= len(key_id) <= 64:
+                raise ValueError("LOGION_TOTP_ENCRYPTION_KEYS key IDs must be 1-64 characters")
+            try:
+                value = encoded_key.get_secret_value()
+                padding = "=" * (-len(value) % 4)
+                decoded_key = base64.b64decode(
+                    value + padding,
+                    altchars=b"-_",
+                    validate=True,
+                )
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(
+                    f"LOGION_TOTP_ENCRYPTION_KEYS contains invalid base64url for {key_id}"
+                ) from exc
+            if len(decoded_key) != 32:
+                raise ValueError(
+                    f"LOGION_TOTP_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
+                )
         if not set(self.webauthn_origins).issubset(self.allowed_origins):
             raise ValueError("LOGION_WEBAUTHN_ORIGINS must be included in LOGION_ALLOWED_ORIGINS")
         for origin in self.webauthn_origins:
@@ -61,9 +98,7 @@ class Settings(BaseSettings):
                 or parsed.fragment
             ):
                 raise ValueError("LOGION_WEBAUTHN_ORIGINS must contain valid origins only")
-            if hostname != self.webauthn_rp_id and not hostname.endswith(
-                f".{self.webauthn_rp_id}"
-            ):
+            if hostname != self.webauthn_rp_id and not hostname.endswith(f".{self.webauthn_rp_id}"):
                 raise ValueError("LOGION_WEBAUTHN_RP_ID must match every WebAuthn origin")
         if self.env == "production":
             if secret.startswith("development-only"):
@@ -76,6 +111,8 @@ class Settings(BaseSettings):
                 raise ValueError("LOGION_ALLOWED_ORIGINS must use HTTPS in production")
             if self.webauthn_rp_id == "localhost":
                 raise ValueError("LOGION_WEBAUTHN_RP_ID must be configured in production")
+            if self.totp_active_encryption_key_id.startswith("development-"):
+                raise ValueError("LOGION_TOTP_ENCRYPTION_KEYS must be replaced in production")
         return self
 
 

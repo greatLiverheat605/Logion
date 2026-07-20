@@ -16,6 +16,7 @@ from logion_api.errors import (
 from logion_api.health import router as health_router
 from logion_api.identity.passkey_routes import router as passkey_router
 from logion_api.identity.routes import router as identity_router
+from logion_api.identity.totp_routes import router as totp_router
 from logion_api.middleware import request_id_middleware
 
 
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(identity_router)
     application.include_router(passkey_router)
+    application.include_router(totp_router)
     return application
 
 

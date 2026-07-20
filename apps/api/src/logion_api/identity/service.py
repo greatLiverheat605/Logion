@@ -12,8 +12,10 @@ from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import (
     AuthSession,
     Device,
+    MfaChallenge,
     PasswordCredential,
     RefreshToken,
+    TotpCredential,
     User,
 )
 from logion_api.identity.schemas import LoginRequest, RegisterRequest
@@ -43,6 +45,13 @@ class AuthContext:
 class RefreshOutcome:
     issued: IssuedSession | None
     reuse_detected: bool = False
+
+
+@dataclass(frozen=True)
+class PasswordLoginOutcome:
+    issued: IssuedSession | None = None
+    mfa_challenge_token: str | None = None
+    mfa_challenge_expires_at: datetime | None = None
 
 
 class IdentityService:
@@ -99,7 +108,7 @@ class IdentityService:
         ip_address: str | None,
         user_agent: str | None,
         device_cookie: str | None,
-    ) -> IssuedSession | None:
+    ) -> PasswordLoginOutcome | None:
         normalized = normalize_email(str(payload.email))
         result = await db.execute(
             select(User, PasswordCredential)
@@ -130,6 +139,44 @@ class IdentityService:
             credential.password_hash = self._security.hash_password(payload.password)
             credential.updated_at = datetime.now(UTC)
 
+        totp_enabled = await db.scalar(
+            select(TotpCredential.user_id).where(
+                TotpCredential.user_id == user.id,
+                TotpCredential.verified_at.is_not(None),
+            )
+        )
+        if totp_enabled is not None:
+            challenge_token = self._security.new_mfa_challenge_token()
+            expires_at = datetime.now(UTC) + timedelta(
+                seconds=self._settings.totp_challenge_ttl_seconds
+            )
+            challenge = MfaChallenge(
+                user_id=user.id,
+                token_hash=self._security.token_hash(challenge_token),
+                device_name=payload.device_name.strip(),
+                platform=payload.platform,
+                request_id=request_id,
+                ip_hash=self._security.privacy_hash(ip_address),
+                user_agent_hash=self._security.privacy_hash(user_agent),
+                expires_at=expires_at,
+            )
+            db.add(challenge)
+            await db.flush()
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="identity.password_verified_mfa_required",
+                    result="pending",
+                    actor_id=user.id,
+                    target_type="mfa_challenge",
+                    target_id=challenge.id,
+                )
+            )
+            return PasswordLoginOutcome(
+                mfa_challenge_token=challenge_token,
+                mfa_challenge_expires_at=expires_at,
+            )
+
         device = await self.find_reusable_device(db, user.id, device_cookie)
         issued = await self.issue_session(
             db,
@@ -142,7 +189,7 @@ class IdentityService:
             user_agent=user_agent,
             event_type="identity.login_succeeded",
         )
-        return issued
+        return PasswordLoginOutcome(issued=issued)
 
     async def authenticate_access(self, db: AsyncSession, access_token: str | None) -> AuthContext:
         if not access_token:
@@ -349,6 +396,7 @@ class IdentityService:
         user_agent: str | None,
         event_type: str,
         device: Device | None = None,
+        event_metadata: dict[str, str] | None = None,
     ) -> IssuedSession:
         now = datetime.now(UTC)
         if device is None:
@@ -393,7 +441,7 @@ class IdentityService:
                 result="success",
                 actor_id=user.id,
                 target_id=auth_session.id,
-                metadata={"device_id": str(device.id)},
+                metadata={"device_id": str(device.id), **(event_metadata or {})},
             )
         )
         return IssuedSession(user=user, session=auth_session, device=device, secrets=secrets)
