@@ -195,6 +195,80 @@ class WebAuthnChallenge(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class TotpCredential(Base):
+    __tablename__ = "totp_credentials"
+    __table_args__ = (
+        CheckConstraint("algorithm = 'SHA1'", name="ck_totp_credentials_algorithm"),
+        CheckConstraint("digits = 6", name="ck_totp_credentials_digits"),
+        CheckConstraint("period = 30", name="ck_totp_credentials_period"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    secret_ciphertext: Mapped[bytes] = mapped_column(LargeBinary(256), nullable=False)
+    secret_nonce: Mapped[bytes] = mapped_column(LargeBinary(12), nullable=False)
+    data_key_ciphertext: Mapped[bytes] = mapped_column(LargeBinary(64), nullable=False)
+    data_key_nonce: Mapped[bytes] = mapped_column(LargeBinary(12), nullable=False)
+    encryption_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    algorithm: Mapped[str] = mapped_column(String(16), nullable=False, default="SHA1")
+    digits: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=6)
+    period: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=30)
+    last_used_step: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    pending_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RecoveryCode(Base):
+    __tablename__ = "recovery_codes"
+    __table_args__ = (Index("ix_recovery_codes_user_active", "user_id", "used_at", "revoked_at"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    batch_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
+    lookup_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    code_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MfaChallenge(Base):
+    __tablename__ = "mfa_challenges"
+    __table_args__ = (
+        CheckConstraint("purpose = 'login'", name="ck_mfa_challenges_purpose"),
+        Index("ix_mfa_challenges_expiry", "expires_at", "used_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False, default="login")
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    device_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    ip_hash: Mapped[str | None] = mapped_column(String(64))
+    user_agent_hash: Mapped[str | None] = mapped_column(String(64))
+    failed_attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     __table_args__ = (Index("ix_audit_events_actor_time", "actor_id", "occurred_at"),)

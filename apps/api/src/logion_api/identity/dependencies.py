@@ -11,6 +11,7 @@ from logion_api.identity.passkeys import PasskeyService
 from logion_api.identity.rate_limit import RateLimiter
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext, IdentityService, IssuedSession
+from logion_api.identity.totp import TotpService
 
 
 @lru_cache
@@ -30,10 +31,15 @@ def get_passkey_service() -> PasskeyService:
     return PasskeyService(get_settings(), get_security())
 
 
+def get_totp_service() -> TotpService:
+    return TotpService(get_settings(), get_security())
+
+
 DatabaseSession = Annotated[AsyncSession, Depends(get_session)]
 IdentityServiceDependency = Annotated[IdentityService, Depends(get_identity_service)]
 RateLimiterDependency = Annotated[RateLimiter, Depends(get_rate_limiter)]
 PasskeyServiceDependency = Annotated[PasskeyService, Depends(get_passkey_service)]
+TotpServiceDependency = Annotated[TotpService, Depends(get_totp_service)]
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 
 

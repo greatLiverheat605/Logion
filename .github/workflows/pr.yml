@@ -96,6 +96,8 @@ jobs:
       LOGION_SECRET_KEY: phase1-integration-secret-key-must-be-at-least-32
       LOGION_WEBAUTHN_RP_ID: test
       LOGION_WEBAUTHN_ORIGINS: '["http://test"]'
+      LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+      LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7

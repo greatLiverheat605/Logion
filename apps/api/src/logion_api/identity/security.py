@@ -53,6 +53,26 @@ class IdentitySecurity:
     def new_refresh_token(self) -> str:
         return secrets.token_urlsafe(48)
 
+    def new_mfa_challenge_token(self) -> str:
+        return secrets.token_urlsafe(48)
+
+    def new_recovery_code(self) -> str:
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        raw = "".join(secrets.choice(alphabet) for _ in range(16))
+        return "-".join(raw[index : index + 4] for index in range(0, 16, 4))
+
+    def hash_recovery_code(self, code: str) -> str:
+        return self._password_hasher.hash(self.normalize_recovery_code(code))
+
+    def verify_recovery_code(self, code_hash: str, code: str) -> bool:
+        try:
+            return bool(self._password_hasher.verify(code_hash, self.normalize_recovery_code(code)))
+        except (InvalidHashError, VerificationError, VerifyMismatchError):
+            return False
+
+    def recovery_code_lookup_hash(self, code: str) -> str:
+        return self.token_hash(f"recovery:{self.normalize_recovery_code(code)}")
+
     def token_hash(self, token: str) -> str:
         return hmac.new(self._secret_key, token.encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -63,3 +83,7 @@ class IdentitySecurity:
 
     def constant_time_equal(self, left: str, right: str) -> bool:
         return hmac.compare_digest(left, right)
+
+    @staticmethod
+    def normalize_recovery_code(code: str) -> str:
+        return code.strip().replace("-", "").upper()
