@@ -30,6 +30,7 @@ from logion_api.identity.schemas import (
     UserResponse,
 )
 from logion_api.identity.service import normalize_email
+from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(prefix="/api/v1/auth", tags=["identity"])
 
@@ -89,6 +90,7 @@ async def register(
     response: Response,
     db: DatabaseSession,
     service: IdentityServiceDependency,
+    workspaces: WorkspaceServiceDependency,
     limiter: RateLimiterDependency,
     settings: SettingsDependency,
 ) -> AuthResponse:
@@ -107,6 +109,12 @@ async def register(
         ip_address=client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
+    if issued is not None:
+        await workspaces.provision_personal_workspace(
+            db,
+            issued.user.id,
+            request_id=request_id(request),
+        )
     try:
         await db.commit()
     except IntegrityError as exc:
