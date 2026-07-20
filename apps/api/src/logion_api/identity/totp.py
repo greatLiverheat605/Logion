@@ -24,7 +24,7 @@ from logion_api.identity.models import (
     User,
 )
 from logion_api.identity.security import IdentitySecurity
-from logion_api.identity.service import AuthContext
+from logion_api.identity.service import AuthContext, require_verified_email
 
 
 @dataclass(frozen=True)
@@ -135,6 +135,7 @@ class TotpService:
         *,
         request_id: str,
     ) -> TotpEnrollment:
+        require_verified_email(context.user)
         credential = await db.scalar(
             select(TotpCredential)
             .where(TotpCredential.user_id == context.user.id)
@@ -205,6 +206,7 @@ class TotpService:
         request_id: str,
         now: datetime | None = None,
     ) -> TotpActivation:
+        require_verified_email(context.user)
         current_time = now or datetime.now(UTC)
         credential = await self._credential_for_update(db, context.user.id)
         if credential is None or credential.verified_at is not None:

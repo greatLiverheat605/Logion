@@ -14,6 +14,15 @@ class RegisterRequest(BaseModel):
     platform: Literal["web", "ios_pwa", "android_pwa"] = "web"
 
 
+class RegistrationStartRequest(BaseModel):
+    email: EmailStr
+
+
+class EmailVerificationConfirmationRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=128)
+    password: str = Field(min_length=12, max_length=128)
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)

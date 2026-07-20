@@ -43,6 +43,8 @@ jobs:
           POSTGRES_PASSWORD: phase0-ci-only
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: docker compose config --quiet
       - uses: docker/setup-buildx-action@v4
       - name: Build immutable candidate images
@@ -50,6 +52,8 @@ jobs:
           POSTGRES_PASSWORD: phase0-ci-only
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: docker compose build web api worker backup
       - uses: aquasecurity/trivy-action@v0.36.0
         with:

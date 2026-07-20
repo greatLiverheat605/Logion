@@ -40,6 +40,8 @@ jobs:
           LOGION_SECRET_KEY: ${{ github.sha }}
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: |
           docker compose up --build -d web api worker postgres redis reverse-proxy
           for attempt in $(seq 1 18); do
@@ -57,6 +59,8 @@ jobs:
           LOGION_SECRET_KEY: ${{ github.sha }}
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: |
           docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
           docker compose up --build -d backup
@@ -92,4 +96,6 @@ jobs:
           LOGION_SECRET_KEY: ${{ github.sha }}
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: docker compose down --volumes

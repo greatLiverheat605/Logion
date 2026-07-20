@@ -56,6 +56,9 @@ class IdentitySecurity:
     def new_mfa_challenge_token(self) -> str:
         return secrets.token_urlsafe(48)
 
+    def new_identity_action_token(self) -> str:
+        return secrets.token_urlsafe(48)
+
     def new_recovery_code(self) -> str:
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         raw = "".join(secrets.choice(alphabet) for _ in range(16))
@@ -72,6 +75,9 @@ class IdentitySecurity:
 
     def recovery_code_lookup_hash(self, code: str) -> str:
         return self.token_hash(f"recovery:{self.normalize_recovery_code(code)}")
+
+    def identity_action_token_hash(self, purpose: str, token: str) -> str:
+        return self.token_hash(f"identity-action:{purpose}:{token}")
 
     def token_hash(self, token: str) -> str:
         return hmac.new(self._secret_key, token.encode("utf-8"), hashlib.sha256).hexdigest()

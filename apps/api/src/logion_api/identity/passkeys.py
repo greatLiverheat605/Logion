@@ -41,7 +41,7 @@ from logion_api.identity.schemas import (
     RegistrationCredentialRequest,
 )
 from logion_api.identity.security import IdentitySecurity
-from logion_api.identity.service import AuthContext
+from logion_api.identity.service import AuthContext, require_verified_email
 
 
 @dataclass(frozen=True)
@@ -66,6 +66,7 @@ def _authentication_credential_statement(
             PasskeyCredential.credential_id == credential_id,
             PasskeyCredential.revoked_at.is_(None),
             User.status == "active",
+            User.email_verified_at.is_not(None),
         )
         .with_for_update(of=PasskeyCredential)
     )
@@ -84,6 +85,7 @@ class PasskeyService:
         request_id: str,
         ip_address: str | None,
     ) -> GeneratedPasskeyOptions:
+        require_verified_email(context.user)
         active_count = await db.scalar(
             select(func.count(PasskeyCredential.id)).where(
                 PasskeyCredential.user_id == context.user.id,
@@ -212,6 +214,7 @@ class PasskeyService:
         request_id: str,
         expected_origin: str,
     ) -> PasskeyCredential:
+        require_verified_email(context.user)
         try:
             parsed = parse_registration_credential_json(
                 credential_request.model_dump(by_alias=True, exclude_none=True)
