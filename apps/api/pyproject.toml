@@ -14,6 +14,7 @@ dependencies = [
   "sqlalchemy[asyncio]>=2.0.48,<3",
   "uuid6>=2025.0.1,<2026",
   "uvicorn[standard]>=0.41,<1",
+  "webauthn>=3,<4",
 ]
 
 [build-system]

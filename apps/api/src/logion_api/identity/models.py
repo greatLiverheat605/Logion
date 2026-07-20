@@ -5,11 +5,13 @@ from uuid import UUID
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
@@ -135,6 +137,62 @@ class RefreshToken(Base):
         Uuid,
         ForeignKey("refresh_tokens.id", ondelete="SET NULL"),
     )
+
+
+class PasskeyCredential(Base):
+    __tablename__ = "passkey_credentials"
+    __table_args__ = (
+        CheckConstraint(
+            "credential_device_type IN ('single_device', 'multi_device')",
+            name="ck_passkey_credentials_device_type",
+        ),
+        Index("ix_passkey_credentials_user_active", "user_id", "revoked_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    credential_id: Mapped[bytes] = mapped_column(LargeBinary(1024), nullable=False, unique=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary(4096), nullable=False)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    sign_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    aaguid: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    transports: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    credential_device_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    backed_up: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WebAuthnChallenge(Base):
+    __tablename__ = "webauthn_challenges"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('registration', 'authentication')",
+            name="ck_webauthn_challenges_purpose",
+        ),
+        Index("ix_webauthn_challenges_expiry", "expires_at", "used_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    challenge: Mapped[bytes] = mapped_column(LargeBinary(128), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    ip_hash: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AuditEvent(Base):

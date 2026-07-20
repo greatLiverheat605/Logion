@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.config import Settings
 from logion_api.errors import APIError
+from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import (
-    AuditEvent,
     AuthSession,
     Device,
     PasswordCredential,
@@ -63,7 +63,7 @@ class IdentityService:
         existing = await db.scalar(select(User.id).where(User.email_normalized == normalized))
         if existing is not None:
             db.add(
-                self._audit(
+                new_audit_event(
                     request_id=request_id,
                     event_type="identity.registration_rejected",
                     result="duplicate",
@@ -78,7 +78,7 @@ class IdentityService:
         )
         db.add(user)
         await db.flush()
-        issued = await self._create_session(
+        issued = await self.issue_session(
             db,
             user=user,
             device_name=payload.device_name,
@@ -115,7 +115,7 @@ class IdentityService:
         )
         if user is None or credential is None or not password_valid or user.status != "active":
             db.add(
-                self._audit(
+                new_audit_event(
                     request_id=request_id,
                     event_type="identity.login_failed",
                     result="denied",
@@ -130,8 +130,8 @@ class IdentityService:
             credential.password_hash = self._security.hash_password(payload.password)
             credential.updated_at = datetime.now(UTC)
 
-        device = await self._find_reusable_device(db, user.id, device_cookie)
-        issued = await self._create_session(
+        device = await self.find_reusable_device(db, user.id, device_cookie)
+        issued = await self.issue_session(
             db,
             user=user,
             device=device,
@@ -165,6 +165,15 @@ class IdentityService:
             raise self._authentication_error()
         return AuthContext(session=row[0], user=row[1], device=row[2])
 
+    def require_recent_authentication(self, context: AuthContext) -> None:
+        cutoff = datetime.now(UTC) - timedelta(seconds=self._settings.recent_auth_ttl_seconds)
+        if context.session.created_at < cutoff:
+            raise APIError(
+                code="AUTH_RECENT_LOGIN_REQUIRED",
+                message="Sign in again before changing authentication methods.",
+                status_code=403,
+            )
+
     async def refresh(
         self,
         db: AsyncSession,
@@ -195,7 +204,7 @@ class IdentityService:
         if token.status != "active":
             await self._revoke_session(db, auth_session, reason="refresh_reuse", now=now)
             db.add(
-                self._audit(
+                new_audit_event(
                     request_id=request_id,
                     event_type="identity.refresh_reuse_detected",
                     result="revoked",
@@ -234,7 +243,7 @@ class IdentityService:
         auth_session.rotation_counter += 1
         device.last_seen_at = now
         db.add(
-            self._audit(
+            new_audit_event(
                 request_id=request_id,
                 event_type="identity.session_refreshed",
                 result="success",
@@ -299,7 +308,7 @@ class IdentityService:
             .values(revoked_at=now, revoke_reason="device_revoked")
         )
         db.add(
-            self._audit(
+            new_audit_event(
                 request_id=request_id,
                 event_type="identity.device_revoked",
                 result="success",
@@ -319,7 +328,7 @@ class IdentityService:
     ) -> None:
         await self._revoke_session(db, context.session, reason="logout", now=datetime.now(UTC))
         db.add(
-            self._audit(
+            new_audit_event(
                 request_id=request_id,
                 event_type="identity.logout",
                 result="success",
@@ -328,7 +337,7 @@ class IdentityService:
             )
         )
 
-    async def _create_session(
+    async def issue_session(
         self,
         db: AsyncSession,
         *,
@@ -378,7 +387,7 @@ class IdentityService:
             )
         )
         db.add(
-            self._audit(
+            new_audit_event(
                 request_id=request_id,
                 event_type=event_type,
                 result="success",
@@ -389,7 +398,7 @@ class IdentityService:
         )
         return IssuedSession(user=user, session=auth_session, device=device, secrets=secrets)
 
-    async def _find_reusable_device(
+    async def find_reusable_device(
         self,
         db: AsyncSession,
         user_id: UUID,
@@ -429,27 +438,6 @@ class IdentityService:
                 RefreshToken.status == "active",
             )
             .values(status="revoked", used_at=now)
-        )
-
-    def _audit(
-        self,
-        *,
-        request_id: str,
-        event_type: str,
-        result: str,
-        actor_id: UUID | None = None,
-        target_type: str = "auth_session",
-        target_id: UUID | None = None,
-        metadata: dict[str, object] | None = None,
-    ) -> AuditEvent:
-        return AuditEvent(
-            request_id=request_id,
-            event_type=event_type,
-            target_type=target_type,
-            target_id=target_id,
-            actor_id=actor_id,
-            result=result,
-            event_metadata=metadata or {},
         )
 
     @staticmethod
