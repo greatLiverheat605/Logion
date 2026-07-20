@@ -1,9 +1,25 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import Settings
+from logion_api.identity.routes import _enforce_login_rate_limits
 from logion_api.identity.security import IdentitySecurity
 from logion_api.main import app
 from pydantic import SecretStr, ValidationError
+
+
+class RecordingRateLimiter:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str | int]] = []
+
+    async def enforce(self, *, scope: str, subject_hash: str, limit: int, window: int) -> None:
+        self.calls.append(
+            {
+                "scope": scope,
+                "subject_hash": subject_hash,
+                "limit": limit,
+                "window": window,
+            }
+        )
 
 
 def test_password_hash_is_argon2_and_verifies() -> None:
@@ -21,6 +37,46 @@ def test_token_hash_is_keyed_and_stable() -> None:
     assert security.token_hash("token") == security.token_hash("token")
     another_security = IdentitySecurity("another-secret-key-32-bytes")
     assert security.token_hash("token") != another_security.token_hash("token")
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limits_ip_and_account_independently() -> None:
+    limiter = RecordingRateLimiter()
+    settings = Settings(
+        login_ip_limit_per_five_minutes=17,
+        login_account_limit_per_five_minutes=7,
+    )
+
+    await _enforce_login_rate_limits(
+        limiter,
+        settings,
+        client_ip="203.0.113.10",
+        normalized_email="user@example.com",
+    )
+
+    assert [call["scope"] for call in limiter.calls] == ["login_ip", "login_account"]
+    assert [call["limit"] for call in limiter.calls] == [17, 7]
+    assert all(call["window"] == 300 for call in limiter.calls)
+    assert limiter.calls[0]["subject_hash"] != limiter.calls[1]["subject_hash"]
+
+
+@pytest.mark.asyncio
+async def test_changing_email_does_not_change_login_ip_bucket() -> None:
+    limiter = RecordingRateLimiter()
+    settings = Settings()
+
+    for email in ("first@example.com", "second@example.com"):
+        await _enforce_login_rate_limits(
+            limiter,
+            settings,
+            client_ip="203.0.113.10",
+            normalized_email=email,
+        )
+
+    ip_calls = [call for call in limiter.calls if call["scope"] == "login_ip"]
+    account_calls = [call for call in limiter.calls if call["scope"] == "login_account"]
+    assert ip_calls[0]["subject_hash"] == ip_calls[1]["subject_hash"]
+    assert account_calls[0]["subject_hash"] != account_calls[1]["subject_hash"]
 
 
 def test_production_identity_configuration_requires_secure_cookies() -> None:

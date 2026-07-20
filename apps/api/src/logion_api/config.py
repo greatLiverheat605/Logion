@@ -31,7 +31,8 @@ class Settings(BaseSettings):
     refresh_ttl_days: int = Field(default=30, ge=1, le=90)
     require_origin_header: bool = True
     registration_limit_per_hour: int = Field(default=5, ge=1, le=100)
-    login_limit_per_five_minutes: int = Field(default=10, ge=1, le=100)
+    login_ip_limit_per_five_minutes: int = Field(default=30, ge=1, le=300)
+    login_account_limit_per_five_minutes: int = Field(default=10, ge=1, le=100)
 
     @model_validator(mode="after")
     def reject_development_secrets_in_production(self) -> "Settings":
