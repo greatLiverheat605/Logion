@@ -125,6 +125,51 @@ h1 {
   font-size: 0.875rem;
 }
 
+.session-state {
+  display: grid;
+  width: min(calc(100% - 2rem), 44rem);
+  min-height: 100vh;
+  align-content: center;
+  gap: 1rem;
+  margin: 0 auto;
+  padding: 2rem 0;
+}
+
+.session-state h1,
+.session-state p {
+  margin: 0;
+}
+
+.session-state p {
+  max-width: 42rem;
+  color: #b8c9dc;
+  line-height: 1.7;
+}
+
+.session-state button,
+.text-link {
+  width: fit-content;
+  min-height: 2.75rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgb(105 219 255 / 55%);
+  border-radius: 0.65rem;
+  background: rgb(14 41 67 / 90%);
+  color: #e7f1ff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.session-state button:focus-visible,
+.text-link:focus-visible {
+  outline: 3px solid #67f2c1;
+  outline-offset: 3px;
+}
+
+.session-state code {
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .hero {
     animation: reveal 500ms ease-out both;
