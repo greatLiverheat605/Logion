@@ -1478,6 +1478,20 @@
         "title": "WorkspaceInvitationResponse",
         "type": "object"
       },
+      "WorkspaceLeaveRequest": {
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "title": "WorkspaceLeaveRequest",
+        "type": "object"
+      },
       "WorkspaceListResponse": {
         "properties": {
           "workspaces": {
@@ -1633,6 +1647,78 @@
           "expected_version"
         ],
         "title": "WorkspaceMemberUpdateRequest",
+        "type": "object"
+      },
+      "WorkspaceOwnershipTransferRequest": {
+        "properties": {
+          "expected_current_owner_version": {
+            "minimum": 1.0,
+            "title": "Expected Current Owner Version",
+            "type": "integer"
+          },
+          "expected_target_version": {
+            "minimum": 1.0,
+            "title": "Expected Target Version",
+            "type": "integer"
+          },
+          "expected_workspace_version": {
+            "minimum": 1.0,
+            "title": "Expected Workspace Version",
+            "type": "integer"
+          },
+          "previous_owner_role": {
+            "enum": [
+              "admin",
+              "editor",
+              "contributor",
+              "reviewer",
+              "viewer"
+            ],
+            "title": "Previous Owner Role",
+            "type": "string"
+          },
+          "target_membership_id": {
+            "format": "uuid",
+            "title": "Target Membership Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_membership_id",
+          "expected_workspace_version",
+          "expected_current_owner_version",
+          "expected_target_version",
+          "previous_owner_role"
+        ],
+        "title": "WorkspaceOwnershipTransferRequest",
+        "type": "object"
+      },
+      "WorkspaceOwnershipTransferResponse": {
+        "properties": {
+          "new_owner": {
+            "$ref": "#/components/schemas/WorkspaceMemberResponse"
+          },
+          "previous_owner": {
+            "$ref": "#/components/schemas/WorkspaceMemberResponse"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_version": {
+            "minimum": 1.0,
+            "title": "Workspace Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "workspace_version",
+          "previous_owner",
+          "new_owner"
+        ],
+        "title": "WorkspaceOwnershipTransferResponse",
         "type": "object"
       },
       "WorkspaceResponse": {
@@ -3801,6 +3887,135 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/members/me/leave": {
+      "post": {
+        "operationId": "workspace_member_leave",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceLeaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMemberResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Leave Workspace",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/members/{membership_id}/update": {
       "post": {
         "operationId": "workspace_member_update",
@@ -3935,6 +4150,135 @@
           }
         },
         "summary": "Update Workspace Member",
+        "tags": [
+          "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ownership/transfer": {
+      "post": {
+        "operationId": "workspace_ownership_transfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceOwnershipTransferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceOwnershipTransferResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Transfer Workspace Ownership",
         "tags": [
           "workspaces"
         ]

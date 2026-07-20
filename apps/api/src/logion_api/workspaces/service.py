@@ -32,6 +32,13 @@ class WorkspaceMember:
     user: User
 
 
+@dataclass(frozen=True)
+class WorkspaceOwnershipTransfer:
+    workspace: Workspace
+    previous_owner: WorkspaceMember
+    new_owner: WorkspaceMember
+
+
 class WorkspaceService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -151,6 +158,7 @@ class WorkspaceService:
     ) -> list[WorkspaceAccess]:
         result = await db.execute(
             select(Workspace, WorkspaceMembership)
+            .execution_options(populate_existing=True)
             .join(
                 WorkspaceMembership,
                 WorkspaceMembership.workspace_id == Workspace.id,
@@ -176,6 +184,7 @@ class WorkspaceService:
     ) -> WorkspaceAccess:
         result = await db.execute(
             select(Workspace, WorkspaceMembership)
+            .execution_options(populate_existing=True)
             .join(
                 WorkspaceMembership,
                 WorkspaceMembership.workspace_id == Workspace.id,
@@ -517,6 +526,227 @@ class WorkspaceService:
             )
         )
         return WorkspaceMember(membership=membership, user=user)
+
+    async def transfer_ownership(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        target_membership_id: UUID,
+        *,
+        expected_workspace_version: int,
+        expected_current_owner_version: int,
+        expected_target_version: int,
+        previous_owner_role: WorkspaceRole,
+        request_id: str,
+    ) -> WorkspaceOwnershipTransfer:
+        initial_access = await self.resolve_workspace(
+            db,
+            context,
+            workspace_id,
+            request_id=request_id,
+            permission=Permission.WORKSPACE_MANAGE_SECURITY,
+        )
+        if initial_access.membership.id == target_membership_id:
+            raise self._ownership_error(
+                "OWNERSHIP_TARGET_INVALID",
+                "Select another active member as the new Owner.",
+            )
+        workspace = await db.scalar(
+            select(Workspace)
+            .where(
+                Workspace.id == workspace_id,
+                Workspace.status == "active",
+                Workspace.deleted_at.is_(None),
+            )
+            .with_for_update(of=Workspace)
+        )
+        if workspace is None:
+            raise self._not_found_error()
+        live_access = await self.resolve_workspace(
+            db,
+            context,
+            workspace_id,
+            request_id=request_id,
+            permission=Permission.WORKSPACE_MANAGE_SECURITY,
+        )
+        if workspace.version != expected_workspace_version:
+            raise self._ownership_version_conflict()
+
+        result = await db.execute(
+            select(WorkspaceMembership, User)
+            .join(User, User.id == WorkspaceMembership.user_id)
+            .where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.id.in_(
+                    (live_access.membership.id, target_membership_id)
+                ),
+            )
+            .order_by(WorkspaceMembership.id.asc())
+            .with_for_update(of=WorkspaceMembership)
+        )
+        locked = {row[0].id: WorkspaceMember(membership=row[0], user=row[1]) for row in result}
+        current = locked.get(live_access.membership.id)
+        target = locked.get(target_membership_id)
+        if current is None or target is None:
+            raise self._not_found_error()
+        if current.membership.version != expected_current_owner_version:
+            raise self._ownership_version_conflict()
+        if target.membership.version != expected_target_version:
+            raise self._ownership_version_conflict()
+        if current.membership.role != "owner" or current.membership.status != "active":
+            raise self._membership_denied()
+        if target.membership.role == "owner" or target.membership.status != "active":
+            raise self._ownership_error(
+                "OWNERSHIP_TARGET_INVALID",
+                "The new Owner must be an active non-Owner member.",
+            )
+        owner_count = int(
+            await db.scalar(
+                select(func.count(WorkspaceMembership.id)).where(
+                    WorkspaceMembership.workspace_id == workspace_id,
+                    WorkspaceMembership.role == "owner",
+                )
+            )
+            or 0
+        )
+        if owner_count != 1:
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="workspace.ownership_invariant_denied",
+                    result="denied",
+                    actor_id=context.user.id,
+                    workspace_id=workspace_id,
+                    target_type="workspace",
+                    target_id=workspace_id,
+                    metadata={"owner_count": owner_count},
+                )
+            )
+            raise self._ownership_error(
+                "OWNERSHIP_INVARIANT_VIOLATION",
+                "Workspace ownership requires administrative repair.",
+            )
+
+        now = datetime.now(UTC)
+        target_before_role = target.membership.role
+        current.membership.role = previous_owner_role.value
+        current.membership.version += 1
+        current.membership.updated_at = now
+        target.membership.role = WorkspaceRole.OWNER.value
+        target.membership.version += 1
+        target.membership.updated_at = now
+        workspace.version += 1
+        workspace.updated_at = now
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="workspace.ownership_transferred",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="workspace",
+                target_id=workspace_id,
+                metadata={
+                    "previous_owner_membership_id": str(current.membership.id),
+                    "new_owner_membership_id": str(target.membership.id),
+                    "previous_owner_role_after": current.membership.role,
+                    "new_owner_role_before": target_before_role,
+                },
+            )
+        )
+        return WorkspaceOwnershipTransfer(
+            workspace=workspace,
+            previous_owner=current,
+            new_owner=target,
+        )
+
+    async def leave_workspace(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        *,
+        expected_version: int,
+        request_id: str,
+    ) -> WorkspaceMember:
+        existing = await db.scalar(
+            select(WorkspaceMembership.id).where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.user_id == context.user.id,
+                WorkspaceMembership.status.in_(("active", "suspended")),
+            )
+        )
+        if existing is None:
+            raise self._not_found_error()
+        workspace = await db.scalar(
+            select(Workspace)
+            .where(
+                Workspace.id == workspace_id,
+                Workspace.status == "active",
+                Workspace.deleted_at.is_(None),
+            )
+            .with_for_update(of=Workspace)
+        )
+        if workspace is None:
+            raise self._not_found_error()
+        result = await db.execute(
+            select(WorkspaceMembership, User)
+            .join(User, User.id == WorkspaceMembership.user_id)
+            .where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.user_id == context.user.id,
+                WorkspaceMembership.status.in_(("active", "suspended")),
+            )
+            .with_for_update(of=WorkspaceMembership)
+        )
+        row = result.one_or_none()
+        if row is None:
+            raise self._not_found_error()
+        membership: WorkspaceMembership = row[0]
+        user: User = row[1]
+        if membership.role == WorkspaceRole.OWNER.value:
+            raise self._ownership_error(
+                "OWNERSHIP_TRANSFER_REQUIRED",
+                "Transfer Workspace ownership before leaving.",
+            )
+        if membership.version != expected_version:
+            raise APIError(
+                code="MEMBERSHIP_VERSION_CONFLICT",
+                message="The membership changed. Refresh and try again.",
+                status_code=409,
+            )
+        now = datetime.now(UTC)
+        before_status = membership.status
+        membership.status = "revoked"
+        membership.version += 1
+        membership.updated_at = now
+        membership.revoked_at = now
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="workspace.membership_left",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="workspace_membership",
+                target_id=membership.id,
+                metadata={"status_before": before_status},
+            )
+        )
+        return WorkspaceMember(membership=membership, user=user)
+
+    @staticmethod
+    def _ownership_version_conflict() -> APIError:
+        return APIError(
+            code="OWNERSHIP_VERSION_CONFLICT",
+            message="Workspace ownership changed. Refresh and try again.",
+            status_code=409,
+        )
+
+    @staticmethod
+    def _ownership_error(code: str, message: str) -> APIError:
+        return APIError(code=code, message=message, status_code=409)
 
     @staticmethod
     def _membership_denied() -> APIError:
