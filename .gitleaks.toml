@@ -3,11 +3,10 @@ title = "Logion secret scanning configuration"
 [extend]
 useDefault = true
 
-[[allowlists]]
-id = "ci-only-deterministic-credentials"
+[allowlist]
 description = "Known non-production credentials used only by isolated CI services"
-regexTarget = "secret"
+regexTarget = "match"
 regexes = [
-  '''^phase0-nightly$''',
-  '''^phase1-integration-secret-key-must-be-at-least-32$''',
+  '''POSTGRES_PASSWORD:\s+phase0-nightly''',
+  '''LOGION_SECRET_KEY:\s+phase1-integration-secret-key-must-be-at-least-32''',
 ]
