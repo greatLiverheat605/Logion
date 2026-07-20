@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
@@ -16,9 +17,11 @@ export const viewport: Viewport = {
   themeColor: "#07111f",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
+  // Dynamic HTML lets Next attach the per-request CSP nonce to hydration scripts.
+  await headers();
   return (
     <html lang="zh-CN">
       <body>

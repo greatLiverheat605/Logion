@@ -15,6 +15,7 @@ import { browserApiClient } from "@/lib/api/client";
 import {
   createAuthApi,
   createSessionCoordinator,
+  createWebLockRefreshCoordinator,
   type SessionCoordinator,
   type SessionState,
 } from "./session";
@@ -30,7 +31,10 @@ export function SessionProvider({
   children,
 }: Readonly<{ children: ReactNode }>) {
   const [coordinator] = useState<SessionCoordinator>(() =>
-    createSessionCoordinator(createAuthApi(browserApiClient)),
+    createSessionCoordinator(
+      createAuthApi(browserApiClient),
+      createWebLockRefreshCoordinator(),
+    ),
   );
   const generation = useRef(0);
   const [state, setState] = useState<SessionState>({ status: "loading" });
