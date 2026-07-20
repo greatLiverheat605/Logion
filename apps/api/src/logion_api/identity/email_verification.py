@@ -174,18 +174,17 @@ class EmailVerificationService:
             purpose=self._PURPOSE,
             payload={"recipient": user.email, "token": raw_token},
         )
-        db.add_all(
-            (
-                action,
-                EmailOutbox(
-                    id=outbox_id,
-                    user_id=user.id,
-                    action_token_id=action.id,
-                    purpose=self._PURPOSE,
-                    encryption_key_id=encrypted.key_id,
-                    payload_ciphertext=encrypted.ciphertext,
-                    payload_nonce=encrypted.nonce,
-                ),
+        db.add(action)
+        await db.flush()
+        db.add(
+            EmailOutbox(
+                id=outbox_id,
+                user_id=user.id,
+                action_token_id=action.id,
+                purpose=self._PURPOSE,
+                encryption_key_id=encrypted.key_id,
+                payload_ciphertext=encrypted.ciphertext,
+                payload_nonce=encrypted.nonce,
             )
         )
         db.add(
