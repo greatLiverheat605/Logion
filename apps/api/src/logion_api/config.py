@@ -33,7 +33,12 @@ class Settings(BaseSettings):
     access_ttl_minutes: int = Field(default=15, ge=5, le=60)
     refresh_ttl_days: int = Field(default=30, ge=1, le=90)
     require_origin_header: bool = True
+    legacy_registration_enabled: bool = True
     registration_limit_per_hour: int = Field(default=5, ge=1, le=100)
+    email_registration_ip_limit_per_hour: int = Field(default=10, ge=1, le=100)
+    email_registration_account_limit_per_hour: int = Field(default=3, ge=1, le=20)
+    email_verification_confirm_limit_per_five_minutes: int = Field(default=30, ge=1, le=200)
+    email_verification_ttl_hours: int = Field(default=24, ge=1, le=72)
     login_ip_limit_per_five_minutes: int = Field(default=30, ge=1, le=300)
     login_account_limit_per_five_minutes: int = Field(default=10, ge=1, le=100)
     passkey_limit_per_five_minutes: int = Field(default=20, ge=1, le=200)
@@ -68,6 +73,18 @@ class Settings(BaseSettings):
             "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtb25seS10b3RwLWtleS0zMmJ5dGU")
         }
     )
+    email_delivery_active_encryption_key_id: str = Field(
+        default="development-v1",
+        min_length=1,
+        max_length=64,
+    )
+    email_delivery_encryption_keys: dict[str, SecretStr] = Field(
+        default_factory=lambda: {
+            "development-v1": SecretStr(
+                "ZGV2ZWxvcG1lbnQtZW1haWwta2V5LTMyYnl0ZXMhISE"
+            )
+        }
+    )
 
     @model_validator(mode="after")
     def validate_security_configuration(self) -> "Settings":
@@ -94,6 +111,32 @@ class Settings(BaseSettings):
             if len(decoded_key) != 32:
                 raise ValueError(
                     f"LOGION_TOTP_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
+                )
+        if self.email_delivery_active_encryption_key_id not in self.email_delivery_encryption_keys:
+            raise ValueError(
+                "LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID must select a configured key"
+            )
+        for key_id, encoded_key in self.email_delivery_encryption_keys.items():
+            if not 1 <= len(key_id) <= 64:
+                raise ValueError(
+                    "LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS key IDs must be 1-64 characters"
+                )
+            try:
+                value = encoded_key.get_secret_value()
+                padding = "=" * (-len(value) % 4)
+                decoded_key = base64.b64decode(
+                    value + padding,
+                    altchars=b"-_",
+                    validate=True,
+                )
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(
+                    "LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS contains invalid base64url "
+                    f"for {key_id}"
+                ) from exc
+            if len(decoded_key) != 32:
+                raise ValueError(
+                    f"LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
                 )
         if not set(self.webauthn_origins).issubset(self.allowed_origins):
             raise ValueError("LOGION_WEBAUTHN_ORIGINS must be included in LOGION_ALLOWED_ORIGINS")
@@ -124,6 +167,14 @@ class Settings(BaseSettings):
                 raise ValueError("LOGION_WEBAUTHN_RP_ID must be configured in production")
             if self.totp_active_encryption_key_id.startswith("development-"):
                 raise ValueError("LOGION_TOTP_ENCRYPTION_KEYS must be replaced in production")
+            if self.email_delivery_active_encryption_key_id.startswith("development-"):
+                raise ValueError(
+                    "LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS must be replaced in production"
+                )
+            if self.legacy_registration_enabled:
+                raise ValueError(
+                    "LOGION_LEGACY_REGISTRATION_ENABLED must be disabled in production"
+                )
         return self
 
 

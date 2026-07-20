@@ -26,6 +26,15 @@ def normalize_email(email: str) -> str:
     return email.strip().casefold()
 
 
+def require_verified_email(user: User) -> None:
+    if user.email_verified_at is None:
+        raise APIError(
+            code="AUTH_EMAIL_VERIFICATION_REQUIRED",
+            message="Verify the account email before continuing.",
+            status_code=403,
+        )
+
+
 @dataclass(frozen=True)
 class IssuedSession:
     user: User
@@ -81,7 +90,11 @@ class IdentityService:
             )
             return None
 
-        user = User(email=str(payload.email), email_normalized=normalized)
+        user = User(
+            email=str(payload.email),
+            email_normalized=normalized,
+            email_verified_at=datetime.now(UTC),
+        )
         user.password_credential = PasswordCredential(
             password_hash=self._security.hash_password(payload.password),
         )
@@ -122,7 +135,13 @@ class IdentityService:
             credential.password_hash if credential else None,
             payload.password,
         )
-        if user is None or credential is None or not password_valid or user.status != "active":
+        if (
+            user is None
+            or credential is None
+            or not password_valid
+            or user.status != "active"
+            or user.email_verified_at is None
+        ):
             db.add(
                 new_audit_event(
                     request_id=request_id,
@@ -267,6 +286,7 @@ class IdentityService:
             or auth_session.revoked_at is not None
             or device.revoked_at is not None
             or user.status != "active"
+            or user.email_verified_at is None
         ):
             await self._revoke_session(db, auth_session, reason="expired", now=now)
             return RefreshOutcome(issued=None)

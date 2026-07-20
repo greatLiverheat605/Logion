@@ -38,14 +38,29 @@ jobs:
         env:
           POSTGRES_PASSWORD: phase0-release
           LOGION_VERSION: ${{ inputs.version }}
+          LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: |
           docker compose up --build --wait --timeout 180
           curl --fail http://localhost:8080/healthz
           curl --fail http://localhost:8080/health
       - name: Capture evidence
         if: always()
+        env:
+          POSTGRES_PASSWORD: phase0-release
+          LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: docker compose ps > release-compose-status.txt
       - if: always()
+        env:
+          POSTGRES_PASSWORD: phase0-release
+          LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
         run: docker compose down --volumes
       - uses: actions/upload-artifact@v6
         if: always()

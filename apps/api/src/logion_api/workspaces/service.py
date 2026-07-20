@@ -50,6 +50,26 @@ class WorkspaceService:
         *,
         request_id: str,
     ) -> WorkspaceAccess:
+        existing = (
+            await db.execute(
+                select(Workspace, WorkspaceMembership)
+                .join(
+                    WorkspaceMembership,
+                    WorkspaceMembership.workspace_id == Workspace.id,
+                )
+                .where(
+                    WorkspaceMembership.user_id == user_id,
+                    WorkspaceMembership.role == WorkspaceRole.OWNER.value,
+                    WorkspaceMembership.status == "active",
+                    Workspace.status == "active",
+                    Workspace.deleted_at.is_(None),
+                )
+                .order_by(Workspace.created_at.asc(), Workspace.id.asc())
+                .limit(1)
+            )
+        ).first()
+        if existing is not None:
+            return WorkspaceAccess(workspace=existing[0], membership=existing[1])
         return await self._create_workspace(
             db,
             user_id,

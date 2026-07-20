@@ -79,6 +79,7 @@ async def _enforce_login_rate_limits(
     responses={
         403: ERROR_RESPONSE,
         409: ERROR_RESPONSE,
+        410: ERROR_RESPONSE,
         422: ERROR_RESPONSE,
         429: ERROR_RESPONSE,
         503: ERROR_RESPONSE,
@@ -95,6 +96,12 @@ async def register(
     settings: SettingsDependency,
 ) -> AuthResponse:
     require_trusted_origin(request, settings)
+    if not settings.legacy_registration_enabled:
+        raise APIError(
+            code="AUTH_REGISTRATION_UPGRADE_REQUIRED",
+            message="Use the email verification registration flow.",
+            status_code=410,
+        )
     subject = get_security().privacy_hash(client_ip(request) or "unknown") or "unknown"
     await limiter.enforce(
         scope="register",

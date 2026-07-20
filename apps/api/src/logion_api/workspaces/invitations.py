@@ -11,7 +11,7 @@ from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import User
 from logion_api.identity.security import IdentitySecurity
-from logion_api.identity.service import AuthContext, normalize_email
+from logion_api.identity.service import AuthContext, normalize_email, require_verified_email
 from logion_api.workspaces.models import (
     Workspace,
     WorkspaceInvitation,
@@ -114,6 +114,7 @@ class WorkspaceInvitationService:
         *,
         request_id: str,
     ) -> WorkspaceAccess:
+        require_verified_email(context.user)
         invitation = await db.scalar(
             select(WorkspaceInvitation)
             .where(WorkspaceInvitation.token_hash == self._token_hash(token))

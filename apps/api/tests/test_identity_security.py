@@ -119,6 +119,11 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
         totp_encryption_keys={
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"p" * 32).decode().rstrip("="))
         },
+        email_delivery_active_encryption_key_id="production-v1",
+        email_delivery_encryption_keys={
+            "production-v1": SecretStr(base64.urlsafe_b64encode(b"e" * 32).decode().rstrip("="))
+        },
+        legacy_registration_enabled=False,
     )
 
     assert settings.cookie_secure is True

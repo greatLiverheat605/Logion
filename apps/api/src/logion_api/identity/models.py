@@ -39,7 +39,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
-    password_credential: Mapped["PasswordCredential"] = relationship(
+    password_credential: Mapped["PasswordCredential | None"] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         uselist=False,
@@ -267,6 +267,78 @@ class MfaChallenge(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IdentityActionToken(Base):
+    __tablename__ = "identity_action_tokens"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('email_verification', 'password_recovery')",
+            name="ck_identity_action_tokens_purpose",
+        ),
+        Index(
+            "ix_identity_action_tokens_user_purpose_active",
+            "user_id",
+            "purpose",
+            "used_at",
+            "revoked_at",
+        ),
+        Index("ix_identity_action_tokens_expiry", "purpose", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    failed_attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EmailOutbox(Base):
+    __tablename__ = "email_outbox"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('email_verification', 'password_recovery', 'security_notification')",
+            name="ck_email_outbox_purpose",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'leased', 'sent', 'failed', 'dead')",
+            name="ck_email_outbox_status",
+        ),
+        Index("ix_email_outbox_delivery", "status", "available_at", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    action_token_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("identity_action_tokens.id", ondelete="SET NULL"),
+        index=True,
+    )
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    encryption_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_ciphertext: Mapped[bytes] = mapped_column(LargeBinary(4096), nullable=False)
+    payload_nonce: Mapped[bytes] = mapped_column(LargeBinary(12), nullable=False)
+    attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AuditEvent(Base):

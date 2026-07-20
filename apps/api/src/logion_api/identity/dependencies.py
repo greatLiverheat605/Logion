@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logion_api.config import Settings, get_settings
 from logion_api.db import get_session
 from logion_api.errors import APIError
+from logion_api.identity.email_verification import EmailVerificationService
 from logion_api.identity.passkeys import PasskeyService
 from logion_api.identity.rate_limit import RateLimiter
 from logion_api.identity.security import IdentitySecurity
@@ -35,11 +36,19 @@ def get_totp_service() -> TotpService:
     return TotpService(get_settings(), get_security())
 
 
+def get_email_verification_service() -> EmailVerificationService:
+    return EmailVerificationService(get_settings(), get_security())
+
+
 DatabaseSession = Annotated[AsyncSession, Depends(get_session)]
 IdentityServiceDependency = Annotated[IdentityService, Depends(get_identity_service)]
 RateLimiterDependency = Annotated[RateLimiter, Depends(get_rate_limiter)]
 PasskeyServiceDependency = Annotated[PasskeyService, Depends(get_passkey_service)]
 TotpServiceDependency = Annotated[TotpService, Depends(get_totp_service)]
+EmailVerificationServiceDependency = Annotated[
+    EmailVerificationService,
+    Depends(get_email_verification_service),
+]
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 
 
