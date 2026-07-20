@@ -11,9 +11,6 @@ permissions:
 env:
   NEXT_TELEMETRY_DISABLED: "1"
   POSTGRES_PASSWORD: phase0-nightly
-  LOGION_SECRET_KEY: ${{ github.sha }}
-  LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
-  LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
 
 jobs:
   assurance:
@@ -39,6 +36,10 @@ jobs:
       - run: pnpm audit --audit-level high
       - run: uv run --group dev pip-audit
       - name: Compose smoke
+        env:
+          LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
         run: |
           docker compose up --build -d web api worker postgres redis reverse-proxy
           for attempt in $(seq 1 18); do
@@ -52,6 +53,10 @@ jobs:
           docker compose logs --no-color web api worker reverse-proxy
           exit 1
       - name: Migration and empty-environment restore
+        env:
+          LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
         run: |
           docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
           docker compose up --build -d backup
@@ -83,4 +88,8 @@ jobs:
             exit 1
           fi
       - if: always()
+        env:
+          LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
         run: docker compose down --volumes
