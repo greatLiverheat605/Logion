@@ -21,13 +21,16 @@ from logion_api.workspaces.schemas import (
     SpaceListResponse,
     SpaceResponse,
     WorkspaceCreateRequest,
+    WorkspaceLeaveRequest,
     WorkspaceListResponse,
     WorkspaceMemberListResponse,
     WorkspaceMemberResponse,
     WorkspaceMemberUpdateRequest,
+    WorkspaceOwnershipTransferRequest,
+    WorkspaceOwnershipTransferResponse,
     WorkspaceResponse,
 )
-from logion_api.workspaces.service import WorkspaceMember
+from logion_api.workspaces.service import WorkspaceMember, WorkspaceOwnershipTransfer
 
 router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
 
@@ -53,6 +56,17 @@ def _member_response(member: WorkspaceMember) -> WorkspaceMemberResponse:
             "updated_at": record.updated_at,
             "revoked_at": record.revoked_at,
         }
+    )
+
+
+def _ownership_transfer_response(
+    transfer: WorkspaceOwnershipTransfer,
+) -> WorkspaceOwnershipTransferResponse:
+    return WorkspaceOwnershipTransferResponse(
+        workspace_id=transfer.workspace.id,
+        workspace_version=transfer.workspace.version,
+        previous_owner=_member_response(transfer.previous_owner),
+        new_owner=_member_response(transfer.new_owner),
     )
 
 
@@ -232,6 +246,110 @@ async def update_workspace_member(
             expected_version=payload.expected_version,
             role=WorkspaceRole(payload.role) if payload.role is not None else None,
             status=payload.status,
+            request_id=request_id(request),
+        )
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    return _member_response(member)
+
+
+@router.post(
+    "/{workspace_id}/ownership/transfer",
+    response_model=WorkspaceOwnershipTransferResponse,
+    operation_id="workspace_ownership_transfer",
+    responses={
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        409: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        429: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+async def transfer_workspace_ownership(
+    workspace_id: UUID,
+    payload: WorkspaceOwnershipTransferRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    workspaces: WorkspaceServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> WorkspaceOwnershipTransferResponse:
+    require_trusted_origin(request, settings)
+    identity.validate_csrf(context.session, x_csrf_token, _csrf_cookie(request, settings))
+    identity.require_recent_authentication(context)
+    await _enforce_creation_rate_limit(
+        limiter,
+        scope="workspace_ownership_transfer",
+        identity=f"{workspace_id}:{context.user.id}",
+        limit=settings.ownership_transfer_limit_per_hour,
+    )
+    try:
+        transfer = await workspaces.transfer_ownership(
+            db,
+            context,
+            workspace_id,
+            payload.target_membership_id,
+            expected_workspace_version=payload.expected_workspace_version,
+            expected_current_owner_version=payload.expected_current_owner_version,
+            expected_target_version=payload.expected_target_version,
+            previous_owner_role=WorkspaceRole(payload.previous_owner_role),
+            request_id=request_id(request),
+        )
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    return _ownership_transfer_response(transfer)
+
+
+@router.post(
+    "/{workspace_id}/members/me/leave",
+    response_model=WorkspaceMemberResponse,
+    operation_id="workspace_member_leave",
+    responses={
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        404: ERROR_RESPONSE,
+        409: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        429: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
+)
+async def leave_workspace(
+    workspace_id: UUID,
+    payload: WorkspaceLeaveRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    workspaces: WorkspaceServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> WorkspaceMemberResponse:
+    require_trusted_origin(request, settings)
+    identity.validate_csrf(context.session, x_csrf_token, _csrf_cookie(request, settings))
+    identity.require_recent_authentication(context)
+    await _enforce_creation_rate_limit(
+        limiter,
+        scope="workspace_membership_leave",
+        identity=f"{workspace_id}:{context.user.id}",
+        limit=settings.membership_leave_limit_per_hour,
+    )
+    try:
+        member = await workspaces.leave_workspace(
+            db,
+            context,
+            workspace_id,
+            expected_version=payload.expected_version,
             request_id=request_id(request),
         )
         await db.commit()

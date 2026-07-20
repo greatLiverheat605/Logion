@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     invitation_accept_limit_per_five_minutes: int = Field(default=20, ge=1, le=200)
     invitation_ttl_days: int = Field(default=7, ge=1, le=30)
     membership_change_limit_per_hour: int = Field(default=60, ge=1, le=1000)
+    ownership_transfer_limit_per_hour: int = Field(default=10, ge=1, le=100)
+    membership_leave_limit_per_hour: int = Field(default=10, ge=1, le=100)
     workspace_owned_quota: int = Field(default=10, ge=1, le=100)
     space_per_workspace_quota: int = Field(default=200, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(

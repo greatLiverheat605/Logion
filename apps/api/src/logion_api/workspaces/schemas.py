@@ -115,3 +115,22 @@ class WorkspaceMemberUpdateRequest(BaseModel):
         if self.role is None and self.status is None:
             raise ValueError("At least one membership change is required")
         return self
+
+
+class WorkspaceOwnershipTransferRequest(BaseModel):
+    target_membership_id: UUID
+    expected_workspace_version: int = Field(ge=1)
+    expected_current_owner_version: int = Field(ge=1)
+    expected_target_version: int = Field(ge=1)
+    previous_owner_role: InvitableWorkspaceRole
+
+
+class WorkspaceOwnershipTransferResponse(BaseModel):
+    workspace_id: UUID
+    workspace_version: int = Field(ge=1)
+    previous_owner: WorkspaceMemberResponse
+    new_owner: WorkspaceMemberResponse
+
+
+class WorkspaceLeaveRequest(BaseModel):
+    expected_version: int = Field(ge=1)
