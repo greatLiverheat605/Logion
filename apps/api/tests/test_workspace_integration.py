@@ -20,12 +20,12 @@ async def test_workspace_and_private_space_tenant_boundaries() -> None:
 
     async with (
         AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.10", 41000)),
             base_url=origin,
             headers=headers,
         ) as client_a,
         AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.11", 41001)),
             base_url=origin,
             headers=headers,
         ) as client_b,
