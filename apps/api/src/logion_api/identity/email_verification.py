@@ -373,6 +373,7 @@ class EmailVerificationService:
             select(IdentityActionToken)
             .where(IdentityActionToken.id == candidate.id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if (
             action is None

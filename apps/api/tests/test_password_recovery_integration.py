@@ -91,6 +91,15 @@ async def test_password_recovery_is_uniform_revokes_sessions_and_notifies() -> N
         assert existing.headers["cache-control"] == "no-store"
 
         action, recovery_outbox, token = await _latest_recovery(user_id)
+        async with session_factory() as db:
+            original_session_ids = tuple(
+                (
+                    await db.scalars(
+                        select(AuthSession.id).where(AuthSession.user_id == user_id)
+                    )
+                ).all()
+            )
+        assert len(original_session_ids) == 2
         completed = await clients[0].post(
             "/api/v1/auth/password-recovery/completions",
             json={"token": token, "new_password": "replacement-password-123"},
@@ -135,7 +144,9 @@ async def test_password_recovery_is_uniform_revokes_sessions_and_notifies() -> N
             assert stored_recovery_outbox.payload_ciphertext == b""
             sessions = list(
                 (
-                    await db.scalars(select(AuthSession).where(AuthSession.user_id == user_id))
+                    await db.scalars(
+                        select(AuthSession).where(AuthSession.id.in_(original_session_ids))
+                    )
                 ).all()
             )
             assert any(session.revoke_reason == "password_recovery" for session in sessions)
@@ -145,7 +156,7 @@ async def test_password_recovery_is_uniform_revokes_sessions_and_notifies() -> N
                     select(func.count(RefreshToken.id))
                     .join(AuthSession, AuthSession.id == RefreshToken.session_id)
                     .where(
-                        AuthSession.user_id == user_id,
+                        AuthSession.id.in_(original_session_ids),
                         RefreshToken.status == "active",
                     )
                 )
