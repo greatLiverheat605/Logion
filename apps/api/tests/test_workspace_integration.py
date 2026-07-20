@@ -3,10 +3,15 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.config import Settings
 from logion_api.db import session_factory
-from logion_api.identity.models import AuditEvent, User
+from logion_api.errors import APIError
+from logion_api.identity.models import AuditEvent, AuthSession, Device, User
+from logion_api.identity.service import AuthContext
 from logion_api.main import app
 from logion_api.workspaces.models import Space, WorkspaceMembership
+from logion_api.workspaces.permissions import SpaceVisibility
+from logion_api.workspaces.service import WorkspaceService
 from sqlalchemy import func, select
 
 
@@ -172,3 +177,70 @@ async def test_workspace_and_private_space_tenant_boundaries() -> None:
                 or 0
             )
         assert denied_audits >= 5
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_workspace_and_space_quotas_fail_closed() -> None:
+    origin = "http://test"
+    email = f"workspace-quota-{uuid4()}@example.com"
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("192.0.2.20", 42000)),
+        base_url=origin,
+        headers={"Origin": origin},
+    ) as client:
+        registered = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": email,
+                "password": "a-strong-password-123",
+                "device_name": "Quota browser",
+            },
+        )
+        assert registered.status_code == 201, registered.text
+        user_id = UUID(registered.json()["user"]["id"])
+        listed = await client.get("/api/v1/workspaces")
+        workspace_id = UUID(listed.json()["workspaces"][0]["id"])
+
+    service = WorkspaceService(
+        Settings(
+            workspace_owned_quota=1,
+            space_per_workspace_quota=1,
+        )
+    )
+    async with session_factory() as db:
+        user = await db.scalar(select(User).where(User.id == user_id))
+        assert user is not None
+        context = AuthContext(user=user, session=AuthSession(), device=Device())
+
+        with pytest.raises(APIError) as workspace_error:
+            await service.create_workspace(
+                db,
+                context,
+                "Over quota",
+                request_id="quota-workspace",
+            )
+        assert workspace_error.value.code == "RESOURCE_QUOTA_EXCEEDED"
+        await db.commit()
+
+        with pytest.raises(APIError) as space_error:
+            await service.create_space(
+                db,
+                context,
+                workspace_id,
+                name="Over quota",
+                visibility=SpaceVisibility.PRIVATE,
+                request_id="quota-space",
+            )
+        assert space_error.value.code == "RESOURCE_QUOTA_EXCEEDED"
+        await db.commit()
+
+        quota_audits = int(
+            await db.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.event_type.in_(("workspace.quota_denied", "space.quota_denied"))
+                )
+            )
+            or 0
+        )
+        assert quota_audits >= 2

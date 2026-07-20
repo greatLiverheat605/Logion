@@ -2,12 +2,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.config import Settings
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
-from logion_api.identity.models import AuditEvent
+from logion_api.identity.models import AuditEvent, User
 from logion_api.identity.service import AuthContext
 from logion_api.workspaces.models import Space, Workspace, WorkspaceMembership
 from logion_api.workspaces.permissions import (
@@ -25,6 +26,9 @@ class WorkspaceAccess:
 
 
 class WorkspaceService:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
     async def provision_personal_workspace(
         self,
         db: AsyncSession,
@@ -49,6 +53,38 @@ class WorkspaceService:
         *,
         request_id: str,
     ) -> WorkspaceAccess:
+        await db.scalar(
+            select(User.id).where(User.id == context.user.id).with_for_update(of=User)
+        )
+        owned_count = int(
+            await db.scalar(
+                select(func.count(WorkspaceMembership.id))
+                .join(Workspace, Workspace.id == WorkspaceMembership.workspace_id)
+                .where(
+                    WorkspaceMembership.user_id == context.user.id,
+                    WorkspaceMembership.role == WorkspaceRole.OWNER.value,
+                    WorkspaceMembership.status == "active",
+                    Workspace.status == "active",
+                    Workspace.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if owned_count >= self._settings.workspace_owned_quota:
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="workspace.quota_denied",
+                    result="denied",
+                    actor_id=context.user.id,
+                    target_type="workspace",
+                    metadata={
+                        "quota": self._settings.workspace_owned_quota,
+                        "current": owned_count,
+                    },
+                )
+            )
+            raise self._quota_error("The account has reached its Workspace limit.")
         return await self._create_workspace(
             db,
             context.user.id,
@@ -269,6 +305,36 @@ class WorkspaceService:
             request_id=request_id,
             permission=permission,
         )
+        await db.scalar(
+            select(Workspace.id)
+            .where(Workspace.id == access.workspace.id)
+            .with_for_update(of=Workspace)
+        )
+        space_count = int(
+            await db.scalar(
+                select(func.count(Space.id)).where(
+                    Space.workspace_id == access.workspace.id,
+                    Space.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if space_count >= self._settings.space_per_workspace_quota:
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="space.quota_denied",
+                    result="denied",
+                    actor_id=context.user.id,
+                    workspace_id=access.workspace.id,
+                    target_type="space",
+                    metadata={
+                        "quota": self._settings.space_per_workspace_quota,
+                        "current": space_count,
+                    },
+                )
+            )
+            raise self._quota_error("The Workspace has reached its Space limit.")
         space = Space(
             workspace_id=access.workspace.id,
             owner_user_id=context.user.id,
@@ -315,4 +381,12 @@ class WorkspaceService:
             code="RESOURCE_NOT_FOUND",
             message="The requested resource was not found.",
             status_code=404,
+        )
+
+    @staticmethod
+    def _quota_error(message: str) -> APIError:
+        return APIError(
+            code="RESOURCE_QUOTA_EXCEEDED",
+            message=message,
+            status_code=409,
         )

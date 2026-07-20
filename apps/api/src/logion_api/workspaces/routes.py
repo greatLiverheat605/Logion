@@ -7,7 +7,9 @@ from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
     IdentityServiceDependency,
+    RateLimiterDependency,
     SettingsDependency,
+    get_security,
     request_id,
     require_trusted_origin,
 )
@@ -29,6 +31,22 @@ ERROR_RESPONSE = {"model": ErrorResponse}
 
 def _csrf_cookie(request: Request, settings: SettingsDependency) -> str | None:
     return request.cookies.get(settings.csrf_cookie_name)
+
+
+async def _enforce_creation_rate_limit(
+    limiter: RateLimiterDependency,
+    *,
+    scope: str,
+    identity: str,
+    limit: int,
+) -> None:
+    subject_hash = get_security().privacy_hash(identity) or "unknown"
+    await limiter.enforce(
+        scope=scope,
+        subject_hash=subject_hash,
+        limit=limit,
+        window=3600,
+    )
 
 
 def _workspace_response(access: WorkspaceAccess) -> WorkspaceResponse:
@@ -66,7 +84,14 @@ async def list_workspaces(
     response_model=WorkspaceResponse,
     status_code=status.HTTP_201_CREATED,
     operation_id="workspace_create",
-    responses={401: ERROR_RESPONSE, 403: ERROR_RESPONSE, 422: ERROR_RESPONSE},
+    responses={
+        401: ERROR_RESPONSE,
+        403: ERROR_RESPONSE,
+        409: ERROR_RESPONSE,
+        422: ERROR_RESPONSE,
+        429: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
+    },
 )
 async def create_workspace(
     payload: WorkspaceCreateRequest,
@@ -75,19 +100,30 @@ async def create_workspace(
     db: DatabaseSession,
     identity: IdentityServiceDependency,
     workspaces: WorkspaceServiceDependency,
+    limiter: RateLimiterDependency,
     settings: SettingsDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> WorkspaceResponse:
     require_trusted_origin(request, settings)
     identity.validate_csrf(context.session, x_csrf_token, _csrf_cookie(request, settings))
     identity.require_recent_authentication(context)
-    access = await workspaces.create_workspace(
-        db,
-        context,
-        payload.name,
-        request_id=request_id(request),
+    await _enforce_creation_rate_limit(
+        limiter,
+        scope="workspace_create",
+        identity=str(context.user.id),
+        limit=settings.workspace_create_limit_per_hour,
     )
-    await db.commit()
+    try:
+        access = await workspaces.create_workspace(
+            db,
+            context,
+            payload.name,
+            request_id=request_id(request),
+        )
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
     return _workspace_response(access)
 
 
@@ -151,8 +187,11 @@ async def list_spaces(
     responses={
         401: ERROR_RESPONSE,
         403: ERROR_RESPONSE,
+        409: ERROR_RESPONSE,
         404: ERROR_RESPONSE,
         422: ERROR_RESPONSE,
+        429: ERROR_RESPONSE,
+        503: ERROR_RESPONSE,
     },
 )
 async def create_space(
@@ -163,12 +202,19 @@ async def create_space(
     db: DatabaseSession,
     identity: IdentityServiceDependency,
     workspaces: WorkspaceServiceDependency,
+    limiter: RateLimiterDependency,
     settings: SettingsDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> SpaceResponse:
     require_trusted_origin(request, settings)
     identity.validate_csrf(context.session, x_csrf_token, _csrf_cookie(request, settings))
     identity.require_recent_authentication(context)
+    await _enforce_creation_rate_limit(
+        limiter,
+        scope="space_create",
+        identity=f"{workspace_id}:{context.user.id}",
+        limit=settings.space_create_limit_per_hour,
+    )
     try:
         space = await workspaces.create_space(
             db,

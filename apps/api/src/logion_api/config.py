@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     totp_issuer_name: str = Field(default="Logion", min_length=1, max_length=80)
     totp_challenge_ttl_seconds: int = Field(default=300, ge=60, le=600)
     totp_enrollment_ttl_seconds: int = Field(default=600, ge=300, le=1800)
+    workspace_create_limit_per_hour: int = Field(default=10, ge=1, le=100)
+    space_create_limit_per_hour: int = Field(default=60, ge=1, le=1000)
+    workspace_owned_quota: int = Field(default=10, ge=1, le=100)
+    space_per_workspace_quota: int = Field(default=200, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,
