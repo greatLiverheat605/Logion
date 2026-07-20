@@ -160,6 +160,9 @@ class TotpService:
                 data_key_ciphertext=encrypted.data_key_ciphertext,
                 data_key_nonce=encrypted.data_key_nonce,
                 encryption_key_id=encrypted.encryption_key_id,
+                algorithm="SHA1",
+                digits=6,
+                period=30,
                 pending_expires_at=expires_at,
             )
             db.add(credential)
