@@ -14,6 +14,7 @@ from logion_api.identity.dependencies import (
     require_trusted_origin,
 )
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
+from logion_api.workspaces.invitation_routes_support import workspace_response
 from logion_api.workspaces.schemas import (
     SpaceCreateRequest,
     SpaceListResponse,
@@ -22,7 +23,6 @@ from logion_api.workspaces.schemas import (
     WorkspaceListResponse,
     WorkspaceResponse,
 )
-from logion_api.workspaces.service import WorkspaceAccess
 
 router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
 
@@ -49,21 +49,6 @@ async def _enforce_creation_rate_limit(
     )
 
 
-def _workspace_response(access: WorkspaceAccess) -> WorkspaceResponse:
-    return WorkspaceResponse.model_validate(
-        {
-            "id": access.workspace.id,
-            "name": access.workspace.name,
-            "status": access.workspace.status,
-            "version": access.workspace.version,
-            "role": access.membership.role,
-            "membership_status": access.membership.status,
-            "created_at": access.workspace.created_at,
-            "updated_at": access.workspace.updated_at,
-        }
-    )
-
-
 @router.get(
     "",
     response_model=WorkspaceListResponse,
@@ -76,7 +61,7 @@ async def list_workspaces(
     workspaces: WorkspaceServiceDependency,
 ) -> WorkspaceListResponse:
     accessible = await workspaces.list_workspaces(db, context)
-    return WorkspaceListResponse(workspaces=[_workspace_response(access) for access in accessible])
+    return WorkspaceListResponse(workspaces=[workspace_response(access) for access in accessible])
 
 
 @router.post(
@@ -124,7 +109,7 @@ async def create_workspace(
     except APIError:
         await db.commit()
         raise
-    return _workspace_response(access)
+    return workspace_response(access)
 
 
 @router.get(
@@ -150,7 +135,7 @@ async def get_workspace(
     except APIError:
         await db.commit()
         raise
-    return _workspace_response(access)
+    return workspace_response(access)
 
 
 @router.get(
