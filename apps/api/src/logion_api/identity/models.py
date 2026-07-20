@@ -271,7 +271,11 @@ class MfaChallenge(Base):
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"
-    __table_args__ = (Index("ix_audit_events_actor_time", "actor_id", "occurred_at"),)
+    __table_args__ = (
+        Index("ix_audit_events_actor_time", "actor_id", "occurred_at"),
+        Index("ix_audit_events_actor_time_id", "actor_id", "occurred_at", "id"),
+        Index("ix_audit_events_workspace_time_id", "workspace_id", "occurred_at", "id"),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     workspace_id: Mapped[UUID | None] = mapped_column(Uuid, index=True)
