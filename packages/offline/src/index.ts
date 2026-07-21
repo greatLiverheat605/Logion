@@ -8,6 +8,11 @@ export {
 export { hashPayload } from "./hashing";
 export { OfflineRepository, type MutationCommitResult } from "./repository";
 export {
+  SyncClient,
+  type SyncCycleResult,
+  type SyncTransport,
+} from "./sync-client";
+export {
   databaseNameForUser,
   DEFAULT_MAX_OPERATION_BYTES,
   validateMutation,

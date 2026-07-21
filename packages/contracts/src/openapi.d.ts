@@ -602,6 +602,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/sync/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bootstrap */
+        post: operations["sync_bootstrap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/sync/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pull */
+        post: operations["sync_pull"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/sync/push": {
         parameters: {
             query?: never;
@@ -749,6 +783,138 @@ export interface components {
              */
             type: "public-key";
         };
+        /** BootstrapRequest */
+        BootstrapRequest: {
+            /** Chunk Index */
+            chunk_index: number | null;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Known Sync Epoch */
+            known_sync_epoch: string | null;
+            /**
+             * Message Type
+             * @constant
+             */
+            message_type: "bootstrap_request";
+            /**
+             * Protocol Version
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /** Snapshot Id */
+            snapshot_id: string | null;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** BootstrapResponse */
+        BootstrapResponse: {
+            /** Chunk Checksum */
+            chunk_checksum: string;
+            /** Chunk Count */
+            chunk_count: number;
+            /** Chunk Index */
+            chunk_index: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Cursor */
+            cursor: number;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /**
+             * Message Type
+             * @default bootstrap_response
+             * @constant
+             */
+            message_type: "bootstrap_response";
+            /**
+             * Min Supported Version
+             * @default sync-v1
+             * @constant
+             */
+            min_supported_version: "sync-v1";
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /** Records */
+            records: components["schemas"]["EntityRecord"][];
+            /** Snapshot Checksum */
+            snapshot_checksum: string;
+            /**
+             * Snapshot Id
+             * Format: uuid
+             */
+            snapshot_id: string;
+            /**
+             * Snapshot Schema Version
+             * @default 1
+             * @constant
+             */
+            snapshot_schema_version: 1;
+            /**
+             * Sync Epoch
+             * Format: uuid
+             */
+            sync_epoch: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** Change */
+        Change: {
+            /** Deleted At */
+            deleted_at: string | null;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /**
+             * Operation Type
+             * @enum {string}
+             */
+            operation_type: "create" | "update" | "delete" | "restore";
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Payload Hash */
+            payload_hash: string;
+            /** Sequence */
+            sequence: number;
+            /** Server Version */
+            server_version: number;
+            /** Tombstone */
+            tombstone: boolean;
+        };
         /** ConflictResolution */
         ConflictResolution: {
             /**
@@ -763,6 +929,44 @@ export interface components {
              * @enum {string}
              */
             resolution: "keep_local" | "keep_remote" | "merge" | "dismiss";
+        };
+        /** CursorExpiredControl */
+        CursorExpiredControl: {
+            /**
+             * Action
+             * @default cursor_expired
+             * @constant
+             */
+            action: "cursor_expired";
+            /**
+             * Message Type
+             * @default sync_control
+             * @constant
+             */
+            message_type: "sync_control";
+            /**
+             * Min Supported Version
+             * @default sync-v1
+             * @constant
+             */
+            min_supported_version: "sync-v1";
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Reason Code
+             * @default CURSOR_EXPIRED
+             * @constant
+             */
+            reason_code: "CURSOR_EXPIRED";
+            /**
+             * Server Sync Epoch
+             * Format: uuid
+             */
+            server_sync_epoch: string;
         };
         /** DeviceListResponse */
         DeviceListResponse: {
@@ -804,6 +1008,46 @@ export interface components {
             password: string;
             /** Token */
             token: string;
+        };
+        /** EntityRecord */
+        EntityRecord: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Deleted At */
+            deleted_at: string | null;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Payload Hash */
+            payload_hash: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Updated By
+             * Format: uuid
+             */
+            updated_by: string;
+            /** Version */
+            version: number;
         };
         /** ErrorResponse */
         ErrorResponse: {
@@ -1059,6 +1303,76 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /** PullRequest */
+        PullRequest: {
+            /** Cursor */
+            cursor: number;
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** Limit */
+            limit: number;
+            /**
+             * Message Type
+             * @constant
+             */
+            message_type: "pull_request";
+            /**
+             * Protocol Version
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Sync Epoch
+             * Format: uuid
+             */
+            sync_epoch: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** PullResponse */
+        PullResponse: {
+            /** Changes */
+            changes: components["schemas"]["Change"][];
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** From Cursor */
+            from_cursor: number;
+            /** Has More */
+            has_more: boolean;
+            /**
+             * Message Type
+             * @default pull_response
+             * @constant
+             */
+            message_type: "pull_response";
+            /** Next Cursor */
+            next_cursor: number;
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Sync Epoch
+             * Format: uuid
+             */
+            sync_epoch: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
         };
         /** PushRequest */
         PushRequest: {
@@ -4157,6 +4471,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_bootstrap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_pull: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PullRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["CursorExpiredControl"];
                 };
             };
             /** @description Validation Error */

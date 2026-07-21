@@ -14,11 +14,35 @@ from logion_api.identity.dependencies import (
     require_trusted_origin,
 )
 from logion_api.sync.push import SyncPushService
-from logion_api.sync.schemas import PushRequest, PushResponse, RebootstrapControl
+from logion_api.sync.read import InvalidChunkError, StaleSnapshotError, SyncReadService
+from logion_api.sync.schemas import (
+    BootstrapRequest,
+    BootstrapResponse,
+    CursorExpiredControl,
+    PullRequest,
+    PullResponse,
+    PushRequest,
+    PushResponse,
+    RebootstrapControl,
+)
 from logion_api.sync.service import SyncLedgerService
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/sync", tags=["sync"])
+
+
+def _validate_context(
+    workspace_id: UUID,
+    envelope_workspace_id: UUID,
+    envelope_device_id: UUID,
+    context: AuthContextDependency,
+) -> None:
+    if envelope_workspace_id != workspace_id or envelope_device_id != context.device.id:
+        raise APIError(
+            code="SYNC_CONTEXT_MISMATCH",
+            message="The sync context is invalid.",
+            status_code=403,
+        )
 
 
 @router.post(
@@ -66,12 +90,7 @@ async def push(
             message="The sync batch is too large.",
             status_code=413,
         )
-    if payload.workspace_id != workspace_id or payload.device_id != context.device.id:
-        raise APIError(
-            code="SYNC_CONTEXT_MISMATCH",
-            message="The sync context is invalid.",
-            status_code=403,
-        )
+    _validate_context(workspace_id, payload.workspace_id, payload.device_id, context)
     for operation in payload.operations:
         if operation.workspace_id != workspace_id or operation.device_id != context.device.id:
             raise APIError(
@@ -110,3 +129,79 @@ async def push(
         sync_epoch=state.sync_epoch,
         results=results,
     )
+
+
+@router.post(
+    "/pull",
+    response_model=PullResponse | RebootstrapControl | CursorExpiredControl,
+    operation_id="sync_pull",
+)
+async def pull(
+    workspace_id: UUID,
+    payload: PullRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+    settings: SettingsDependency,
+) -> PullResponse | RebootstrapControl | CursorExpiredControl:
+    require_trusted_origin(request, settings)
+    _validate_context(workspace_id, payload.workspace_id, payload.device_id, context)
+    await workspaces.resolve_workspace(db, context, workspace_id, request_id=request_id(request))
+    state = await SyncLedgerService().lock_workspace_state(db, workspace_id)
+    if payload.sync_epoch != state.sync_epoch:
+        return RebootstrapControl(server_sync_epoch=state.sync_epoch)
+    if payload.cursor < state.min_retained_sequence:
+        return CursorExpiredControl(server_sync_epoch=state.sync_epoch)
+    return await SyncReadService().pull(
+        db,
+        state,
+        device_id=context.device.id,
+        user_id=context.user.id,
+        cursor=payload.cursor,
+        limit=payload.limit,
+    )
+
+
+@router.post(
+    "/bootstrap",
+    response_model=BootstrapResponse,
+    operation_id="sync_bootstrap",
+)
+async def bootstrap(
+    workspace_id: UUID,
+    payload: BootstrapRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+    settings: SettingsDependency,
+) -> BootstrapResponse:
+    require_trusted_origin(request, settings)
+    _validate_context(workspace_id, payload.workspace_id, payload.device_id, context)
+    await workspaces.resolve_workspace(db, context, workspace_id, request_id=request_id(request))
+    state = await SyncLedgerService().lock_workspace_state(db, workspace_id)
+    try:
+        response = await SyncReadService().bootstrap(
+            db,
+            state,
+            device_id=context.device.id,
+            user_id=context.user.id,
+            requested_snapshot_id=payload.snapshot_id,
+            chunk_index=payload.chunk_index,
+        )
+    except StaleSnapshotError as exc:
+        raise APIError(
+            code="SYNC_SNAPSHOT_STALE",
+            message="The snapshot changed; restart bootstrap.",
+            status_code=409,
+            retryable=True,
+        ) from exc
+    except InvalidChunkError as exc:
+        raise APIError(
+            code="SYNC_SNAPSHOT_CHUNK_INVALID",
+            message="The snapshot chunk does not exist.",
+            status_code=422,
+        ) from exc
+    await db.commit()
+    return response
