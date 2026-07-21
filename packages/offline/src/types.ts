@@ -34,11 +34,16 @@ export interface LocalEntity {
 }
 
 export interface OutboxEntry extends SyncOperationV1 {
+  payload_vault_id?: string;
   outbox_state: OutboxState;
   attempt_count: number;
   next_attempt_at: string | null;
   last_error_code: string | null;
   queued_at: string;
+}
+
+export interface ProtectedMutationInput extends LocalMutationInput {
+  entity_type: "learning_goal" | "note" | "resource" | "evidence";
 }
 
 export type BootstrapState =

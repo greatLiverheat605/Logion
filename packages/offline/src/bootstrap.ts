@@ -22,6 +22,7 @@ import {
   type LocalEntity,
 } from "./types";
 import { validatePayload, validateUuid } from "./validation";
+import { OfflineVault } from "./vault";
 
 export const DEFAULT_MAX_SNAPSHOT_CHUNK_BYTES = 4 * 1024 * 1024;
 export const DEFAULT_MAX_BOOTSTRAP_OPERATION_BYTES = 256 * 1024;
@@ -83,6 +84,7 @@ export class BootstrapRepository {
   constructor(
     private readonly database: LogionOfflineDatabase,
     options: BootstrapRepositoryOptions = {},
+    private readonly vault?: OfflineVault,
   ) {
     this.maxSnapshotChunkBytes =
       options.maxSnapshotChunkBytes ?? DEFAULT_MAX_SNAPSHOT_CHUNK_BYTES;
@@ -163,7 +165,31 @@ export class BootstrapRepository {
       ) {
         throw new OfflineStorageError("OFFLINE_BOOTSTRAP_RECORD_HASH_MISMATCH");
       }
-      return await this.persistVerifiedChunk(message, context);
+      let protectedMessage = message;
+      if (
+        message.records.some((record) => record.entity_type === "learning_goal")
+      ) {
+        const vault = this.vault;
+        if (vault === undefined) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        const records = await Promise.all(
+          message.records.map(async (record) => {
+            if (record.entity_type !== "learning_goal") return record;
+            await vault.put(
+              record.entity_id,
+              context.workspace_id,
+              record.payload as JsonObject,
+            );
+            return {
+              ...record,
+              payload: { encrypted_payload_ref: record.entity_id },
+            };
+          }),
+        );
+        protectedMessage = { ...message, records };
+      }
+      return await this.persistVerifiedChunk(protectedMessage, context);
     } catch (error) {
       throw normalizeStorageError(error);
     }

@@ -9,8 +9,14 @@ import {
 import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
 import { OfflineRepository } from "./repository";
-import type { JsonObject, LocalEntity, WorkspaceSyncState } from "./types";
+import type {
+  JsonObject,
+  LocalEntity,
+  OutboxEntry,
+  WorkspaceSyncState,
+} from "./types";
 import { validateUuid } from "./validation";
+import { OfflineVault } from "./vault";
 
 export interface SyncTransport {
   push(request: PushRequest): Promise<unknown>;
@@ -39,6 +45,7 @@ export class SyncClient {
   constructor(
     private readonly database: LogionOfflineDatabase,
     private readonly transport: SyncTransport,
+    private readonly vault?: OfflineVault,
   ) {
     this.repository = new OfflineRepository(database);
   }
@@ -84,7 +91,9 @@ export class SyncClient {
       workspace_id: state.workspace_id,
       device_id: state.device_id,
       sync_epoch: state.sync_epoch,
-      operations: ready.map(stripLocalOperation) as PushRequest["operations"],
+      operations: (await Promise.all(
+        ready.map((operation) => this.transportOperation(operation)),
+      )) as PushRequest["operations"],
     };
     const raw = await this.transport.push(request);
     const validation = validateSyncV1Message(raw);
@@ -230,6 +239,22 @@ export class SyncClient {
     state: WorkspaceSyncState,
     message: PullResponse,
   ): Promise<void> {
+    const protectedPayloads = new Map<string, JsonObject>();
+    for (const change of message.changes) {
+      if (change.entity_type === "learning_goal") {
+        if (this.vault === undefined) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        await this.vault.put(
+          change.entity_id,
+          state.workspace_id,
+          change.payload as JsonObject,
+        );
+        protectedPayloads.set(change.entity_id, {
+          encrypted_payload_ref: change.entity_id,
+        });
+      }
+    }
     await this.database.transaction(
       "rw",
       this.database.entities,
@@ -265,7 +290,9 @@ export class SyncClient {
             deleted_at: change.deleted_at,
             created_by: existing?.created_by ?? actor,
             updated_by: actor,
-            payload: change.payload as JsonObject,
+            payload:
+              protectedPayloads.get(change.entity_id) ??
+              (change.payload as JsonObject),
             payload_hash: change.payload_hash,
             sync_status: "clean",
           };
@@ -313,6 +340,24 @@ export class SyncClient {
       throw new OfflineStorageError("OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH");
     }
     return state as ReadySyncState;
+  }
+
+  private async transportOperation(
+    operation: OutboxEntry,
+  ): Promise<SyncOperationV1> {
+    const base = stripLocalOperation(operation);
+    if (operation.payload_vault_id === undefined) return base;
+    if (this.vault === undefined) {
+      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+    }
+    const payload = await this.vault.get(
+      operation.payload_vault_id,
+      operation.workspace_id,
+    );
+    if (payload === null) {
+      throw new OfflineStorageError("OFFLINE_TRANSACTION_FAILED");
+    }
+    return { ...base, payload };
   }
 }
 
