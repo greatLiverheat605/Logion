@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     execution_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     content_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
     content_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    evidence_per_space_quota: int = Field(default=100000, ge=1, le=1000000)
+    verification_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,

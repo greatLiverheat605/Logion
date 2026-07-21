@@ -5,6 +5,7 @@ from alembic import context
 from logion_api.config import get_settings
 from logion_api.content import models as content_models  # noqa: F401
 from logion_api.db import Base
+from logion_api.execution import evidence_models as evidence_models  # noqa: F401
 from logion_api.execution import models as execution_models  # noqa: F401
 from logion_api.identity import models as identity_models  # noqa: F401
 from logion_api.planning import models as planning_models  # noqa: F401
