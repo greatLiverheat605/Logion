@@ -11,14 +11,15 @@ import {
   hashPayload,
   MAX_CANONICAL_JSON_BYTES,
 } from "./hashing";
-import type {
-  BootstrapContext,
-  BootstrapManifest,
-  BootstrapProgress,
-  BootstrapRepositoryOptions,
-  BootstrapStagedRecord,
-  JsonObject,
-  LocalEntity,
+import {
+  OFFLINE_SCHEMA_VERSION,
+  type BootstrapContext,
+  type BootstrapManifest,
+  type BootstrapProgress,
+  type BootstrapRepositoryOptions,
+  type BootstrapStagedRecord,
+  type JsonObject,
+  type LocalEntity,
 } from "./types";
 import { validatePayload, validateUuid } from "./validation";
 
@@ -436,7 +437,7 @@ export class BootstrapRepository {
         await this.database.syncState.put({
           workspace_id: context.workspace_id,
           device_id: context.device_id,
-          schema_version: 2,
+          schema_version: OFFLINE_SCHEMA_VERSION,
           sync_epoch: message.sync_epoch,
           cursor: message.cursor,
           bootstrap_state: "ready",
