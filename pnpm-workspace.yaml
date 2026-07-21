@@ -7,4 +7,5 @@ allowBuilds:
   unrs-resolver: true
 
 overrides:
+  js-yaml: 4.3.0
   postcss: 8.5.10

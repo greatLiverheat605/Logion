@@ -1,0 +1,625 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.logion.dev/sync-v1.schema.json",
+  "title": "LogionSyncV1Message",
+  "description": "Versioned envelopes for bootstrap, push, pull and explicit sync control.",
+  "oneOf": [
+    { "$ref": "#/$defs/capabilities" },
+    { "$ref": "#/$defs/bootstrapRequest" },
+    { "$ref": "#/$defs/bootstrapResponse" },
+    { "$ref": "#/$defs/pushRequest" },
+    { "$ref": "#/$defs/pushResponse" },
+    { "$ref": "#/$defs/pullRequest" },
+    { "$ref": "#/$defs/pullResponse" },
+    { "$ref": "#/$defs/syncControl" }
+  ],
+  "$defs": {
+    "protocolVersion": { "const": "sync-v1" },
+    "uuid": { "type": "string", "format": "uuid" },
+    "dateTime": { "type": "string", "format": "date-time" },
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "cursor": { "type": "integer", "minimum": 0 },
+    "entityType": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$" },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "maxProperties": 200
+    },
+    "baseMessage": {
+      "type": "object",
+      "required": ["message_type", "protocol_version"],
+      "properties": {
+        "message_type": { "type": "string" },
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" }
+      }
+    },
+    "workspaceDevice": {
+      "type": "object",
+      "required": ["workspace_id", "device_id"],
+      "properties": {
+        "workspace_id": { "$ref": "#/$defs/uuid" },
+        "device_id": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "syncOperation": {
+      "title": "SyncOperationV1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "protocol_version",
+        "workspace_id",
+        "device_id",
+        "entity_type",
+        "entity_id",
+        "operation_type",
+        "base_version",
+        "client_occurred_at",
+        "payload",
+        "payload_hash",
+        "dependencies"
+      ],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+        "workspace_id": { "$ref": "#/$defs/uuid" },
+        "device_id": { "$ref": "#/$defs/uuid" },
+        "entity_type": { "$ref": "#/$defs/entityType" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "operation_type": { "enum": ["create", "update", "delete", "restore"] },
+        "base_version": { "type": "integer", "minimum": 0 },
+        "client_occurred_at": { "$ref": "#/$defs/dateTime" },
+        "payload": { "$ref": "#/$defs/payload" },
+        "payload_hash": { "$ref": "#/$defs/hash" },
+        "conflict_resolution": {
+          "oneOf": [
+            { "$ref": "#/$defs/conflictResolution" },
+            { "type": "null" }
+          ]
+        },
+        "dependencies": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/uuid" }
+        }
+      }
+    },
+    "conflictResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflict_id", "resolution", "expected_remote_version"],
+      "properties": {
+        "conflict_id": { "$ref": "#/$defs/uuid" },
+        "resolution": {
+          "enum": ["keep_local", "keep_remote", "merge", "dismiss"]
+        },
+        "expected_remote_version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "entityRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entity_type",
+        "entity_id",
+        "version",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "created_by",
+        "updated_by",
+        "payload",
+        "payload_hash"
+      ],
+      "properties": {
+        "entity_type": { "$ref": "#/$defs/entityType" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "version": { "type": "integer", "minimum": 1 },
+        "created_at": { "$ref": "#/$defs/dateTime" },
+        "updated_at": { "$ref": "#/$defs/dateTime" },
+        "deleted_at": {
+          "oneOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "created_by": { "$ref": "#/$defs/uuid" },
+        "updated_by": { "$ref": "#/$defs/uuid" },
+        "payload": { "$ref": "#/$defs/payload" },
+        "payload_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conflict_id",
+        "conflict_kind",
+        "status",
+        "entity_type",
+        "entity_id",
+        "base_version",
+        "local_payload_hash",
+        "remote_version",
+        "remote_payload",
+        "remote_payload_hash",
+        "resolution_options",
+        "created_at"
+      ],
+      "properties": {
+        "conflict_id": { "$ref": "#/$defs/uuid" },
+        "conflict_kind": {
+          "enum": [
+            "content",
+            "status",
+            "hierarchy",
+            "delete_update",
+            "permission"
+          ]
+        },
+        "status": { "const": "open" },
+        "entity_type": { "$ref": "#/$defs/entityType" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "base_version": { "type": "integer", "minimum": 0 },
+        "local_payload_hash": { "$ref": "#/$defs/hash" },
+        "remote_version": { "type": "integer", "minimum": 1 },
+        "remote_payload": { "$ref": "#/$defs/payload" },
+        "remote_payload_hash": { "$ref": "#/$defs/hash" },
+        "resolution_options": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["keep_local", "keep_remote", "merge", "dismiss"] }
+        },
+        "created_at": { "$ref": "#/$defs/dateTime" }
+      }
+    },
+    "capabilities": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "min_supported_version",
+            "sync_epoch",
+            "snapshot_schema_version",
+            "max_push_operations",
+            "max_pull_changes",
+            "max_operation_bytes",
+            "max_batch_bytes",
+            "max_snapshot_chunk_bytes",
+            "server_time"
+          ],
+          "properties": {
+            "message_type": { "const": "capabilities" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "min_supported_version": { "$ref": "#/$defs/protocolVersion" },
+            "sync_epoch": { "$ref": "#/$defs/uuid" },
+            "snapshot_schema_version": { "const": 1 },
+            "max_push_operations": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "max_pull_changes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "max_operation_bytes": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 1048576
+            },
+            "max_batch_bytes": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 16777216
+            },
+            "max_snapshot_chunk_bytes": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 16777216
+            },
+            "server_time": { "$ref": "#/$defs/dateTime" }
+          }
+        }
+      ]
+    },
+    "bootstrapRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        { "$ref": "#/$defs/workspaceDevice" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "workspace_id",
+            "device_id",
+            "known_sync_epoch",
+            "snapshot_id",
+            "chunk_index"
+          ],
+          "properties": {
+            "message_type": { "const": "bootstrap_request" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "workspace_id": { "$ref": "#/$defs/uuid" },
+            "device_id": { "$ref": "#/$defs/uuid" },
+            "known_sync_epoch": {
+              "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }]
+            },
+            "snapshot_id": {
+              "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }]
+            },
+            "chunk_index": {
+              "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }]
+            }
+          }
+        }
+      ]
+    },
+    "bootstrapResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        { "$ref": "#/$defs/workspaceDevice" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "min_supported_version",
+            "workspace_id",
+            "device_id",
+            "sync_epoch",
+            "snapshot_schema_version",
+            "snapshot_id",
+            "chunk_index",
+            "chunk_count",
+            "cursor",
+            "snapshot_checksum",
+            "chunk_checksum",
+            "records",
+            "created_at"
+          ],
+          "properties": {
+            "message_type": { "const": "bootstrap_response" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "min_supported_version": { "$ref": "#/$defs/protocolVersion" },
+            "workspace_id": { "$ref": "#/$defs/uuid" },
+            "device_id": { "$ref": "#/$defs/uuid" },
+            "sync_epoch": { "$ref": "#/$defs/uuid" },
+            "snapshot_schema_version": { "const": 1 },
+            "snapshot_id": { "$ref": "#/$defs/uuid" },
+            "chunk_index": { "type": "integer", "minimum": 0 },
+            "chunk_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "cursor": { "$ref": "#/$defs/cursor" },
+            "snapshot_checksum": { "$ref": "#/$defs/hash" },
+            "chunk_checksum": { "$ref": "#/$defs/hash" },
+            "records": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": { "$ref": "#/$defs/entityRecord" }
+            },
+            "created_at": { "$ref": "#/$defs/dateTime" }
+          }
+        }
+      ]
+    },
+    "pushRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        { "$ref": "#/$defs/workspaceDevice" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "workspace_id",
+            "device_id",
+            "sync_epoch",
+            "operations"
+          ],
+          "properties": {
+            "message_type": { "const": "push_request" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "workspace_id": { "$ref": "#/$defs/uuid" },
+            "device_id": { "$ref": "#/$defs/uuid" },
+            "sync_epoch": { "$ref": "#/$defs/uuid" },
+            "operations": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": { "$ref": "#/$defs/syncOperation" }
+            }
+          }
+        }
+      ]
+    },
+    "operationResult": {
+      "oneOf": [
+        { "$ref": "#/$defs/appliedOperationResult" },
+        { "$ref": "#/$defs/conflictOperationResult" },
+        { "$ref": "#/$defs/failedOperationResult" }
+      ]
+    },
+    "appliedOperationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation_id",
+        "status",
+        "retryable",
+        "server_version",
+        "sequence"
+      ],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "status": { "enum": ["applied", "duplicate"] },
+        "retryable": { "const": false },
+        "server_version": { "type": "integer", "minimum": 1 },
+        "sequence": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "conflictOperationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_id", "status", "retryable", "conflict"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "status": { "const": "conflict" },
+        "retryable": { "const": false },
+        "conflict": { "$ref": "#/$defs/conflict" }
+      }
+    },
+    "failedOperationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_id", "status", "retryable", "error_code"],
+      "properties": {
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "status": { "enum": ["rejected", "blocked_dependency"] },
+        "retryable": { "type": "boolean" },
+        "error_code": { "type": "string", "pattern": "^SYNC_[A-Z0-9_]{2,80}$" }
+      }
+    },
+    "pushResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        { "$ref": "#/$defs/workspaceDevice" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "workspace_id",
+            "device_id",
+            "sync_epoch",
+            "results"
+          ],
+          "properties": {
+            "message_type": { "const": "push_response" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "workspace_id": { "$ref": "#/$defs/uuid" },
+            "device_id": { "$ref": "#/$defs/uuid" },
+            "sync_epoch": { "$ref": "#/$defs/uuid" },
+            "results": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 100,
+              "items": { "$ref": "#/$defs/operationResult" }
+            }
+          }
+        }
+      ]
+    },
+    "pullRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        { "$ref": "#/$defs/workspaceDevice" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "workspace_id",
+            "device_id",
+            "sync_epoch",
+            "cursor",
+            "limit"
+          ],
+          "properties": {
+            "message_type": { "const": "pull_request" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "workspace_id": { "$ref": "#/$defs/uuid" },
+            "device_id": { "$ref": "#/$defs/uuid" },
+            "sync_epoch": { "$ref": "#/$defs/uuid" },
+            "cursor": { "$ref": "#/$defs/cursor" },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 1000 }
+          }
+        }
+      ]
+    },
+    "change": {
+      "oneOf": [
+        { "$ref": "#/$defs/liveChange" },
+        { "$ref": "#/$defs/tombstoneChange" }
+      ]
+    },
+    "liveChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "operation_id",
+        "entity_type",
+        "entity_id",
+        "operation_type",
+        "server_version",
+        "occurred_at",
+        "tombstone",
+        "deleted_at",
+        "payload",
+        "payload_hash"
+      ],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "entity_type": { "$ref": "#/$defs/entityType" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "operation_type": { "enum": ["create", "update", "restore"] },
+        "server_version": { "type": "integer", "minimum": 1 },
+        "occurred_at": { "$ref": "#/$defs/dateTime" },
+        "tombstone": { "const": false },
+        "deleted_at": { "type": "null" },
+        "payload": { "$ref": "#/$defs/payload" },
+        "payload_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "tombstoneChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "operation_id",
+        "entity_type",
+        "entity_id",
+        "operation_type",
+        "server_version",
+        "occurred_at",
+        "tombstone",
+        "deleted_at",
+        "payload",
+        "payload_hash"
+      ],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "operation_id": { "$ref": "#/$defs/uuid" },
+        "entity_type": { "$ref": "#/$defs/entityType" },
+        "entity_id": { "$ref": "#/$defs/uuid" },
+        "operation_type": { "const": "delete" },
+        "server_version": { "type": "integer", "minimum": 1 },
+        "occurred_at": { "$ref": "#/$defs/dateTime" },
+        "tombstone": { "const": true },
+        "deleted_at": { "$ref": "#/$defs/dateTime" },
+        "payload": { "type": "object", "maxProperties": 0 },
+        "payload_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "pullResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/baseMessage" },
+        { "$ref": "#/$defs/workspaceDevice" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message_type",
+            "protocol_version",
+            "workspace_id",
+            "device_id",
+            "sync_epoch",
+            "from_cursor",
+            "next_cursor",
+            "has_more",
+            "changes"
+          ],
+          "properties": {
+            "message_type": { "const": "pull_response" },
+            "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+            "workspace_id": { "$ref": "#/$defs/uuid" },
+            "device_id": { "$ref": "#/$defs/uuid" },
+            "sync_epoch": { "$ref": "#/$defs/uuid" },
+            "from_cursor": { "$ref": "#/$defs/cursor" },
+            "next_cursor": { "$ref": "#/$defs/cursor" },
+            "has_more": { "type": "boolean" },
+            "changes": {
+              "type": "array",
+              "maxItems": 1000,
+              "items": { "$ref": "#/$defs/change" }
+            }
+          }
+        }
+      ]
+    },
+    "syncControl": {
+      "oneOf": [
+        { "$ref": "#/$defs/upgradeControl" },
+        { "$ref": "#/$defs/rebootstrapControl" },
+        { "$ref": "#/$defs/cursorExpiredControl" }
+      ]
+    },
+    "upgradeControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_type",
+        "protocol_version",
+        "min_supported_version",
+        "action",
+        "reason_code",
+        "server_sync_epoch"
+      ],
+      "properties": {
+        "message_type": { "const": "sync_control" },
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+        "min_supported_version": { "$ref": "#/$defs/protocolVersion" },
+        "action": { "const": "upgrade_required" },
+        "reason_code": {
+          "enum": ["PROTOCOL_UNSUPPORTED", "SNAPSHOT_SCHEMA_UNSUPPORTED"]
+        },
+        "server_sync_epoch": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "rebootstrapControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_type",
+        "protocol_version",
+        "min_supported_version",
+        "action",
+        "reason_code",
+        "server_sync_epoch"
+      ],
+      "properties": {
+        "message_type": { "const": "sync_control" },
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+        "min_supported_version": { "$ref": "#/$defs/protocolVersion" },
+        "action": { "const": "rebootstrap_required" },
+        "reason_code": { "const": "EPOCH_MISMATCH" },
+        "server_sync_epoch": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "cursorExpiredControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_type",
+        "protocol_version",
+        "min_supported_version",
+        "action",
+        "reason_code",
+        "server_sync_epoch"
+      ],
+      "properties": {
+        "message_type": { "const": "sync_control" },
+        "protocol_version": { "$ref": "#/$defs/protocolVersion" },
+        "min_supported_version": { "$ref": "#/$defs/protocolVersion" },
+        "action": { "const": "cursor_expired" },
+        "reason_code": { "const": "CURSOR_EXPIRED" },
+        "server_sync_epoch": { "$ref": "#/$defs/uuid" }
+      }
+    }
+  }
+}
