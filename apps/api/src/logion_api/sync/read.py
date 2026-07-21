@@ -4,6 +4,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
 from logion_api.sync.push import canonical_hash
 from logion_api.sync.schemas import BootstrapResponse, Change, EntityRecord, PullResponse
@@ -43,6 +44,12 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "space"},
         )
+        visible_goals = await self._visible_goal_ids(
+            db,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "learning_goal"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -61,7 +68,8 @@ class SyncReadService:
                 payload_hash=row.payload_hash,
             )
             for row in page
-            if row.entity_type == "space" and row.entity_id in visible_spaces
+            if (row.entity_type == "space" and row.entity_id in visible_spaces)
+            or (row.entity_type == "learning_goal" and row.entity_id in visible_goals)
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -84,16 +92,17 @@ class SyncReadService:
         chunk_index: int | None,
         chunk_size: int = 100,
     ) -> BootstrapResponse:
-        records = await self._space_records(db, state.workspace_id, user_id)
+        records = [
+            *(await self._space_records(db, state.workspace_id, user_id)),
+            *(await self._goal_records(db, state.workspace_id, user_id)),
+        ]
         chunks = [
-            records[index : index + chunk_size]
-            for index in range(0, len(records), chunk_size)
+            records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
         ]
         if not chunks:
             chunks = [[]]
         checksums = [
-            canonical_hash([record.model_dump(mode="json") for record in chunk])
-            for chunk in chunks
+            canonical_hash([record.model_dump(mode="json") for record in chunk]) for chunk in chunks
         ]
         manifest = {
             "chunks": [
@@ -181,6 +190,125 @@ class SyncReadService:
                 )
             ).all()
         )
+
+    async def _visible_goal_ids(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        return set(
+            (
+                await db.scalars(
+                    select(LearningGoal.id)
+                    .join(Space, Space.id == LearningGoal.space_id)
+                    .where(
+                        LearningGoal.workspace_id == workspace_id,
+                        LearningGoal.id.in_(entity_ids),
+                        LearningGoal.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                )
+            ).all()
+        )
+
+    async def _goal_records(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[EntityRecord]:
+        goals = list(
+            (
+                await db.scalars(
+                    select(LearningGoal)
+                    .join(Space, Space.id == LearningGoal.space_id)
+                    .where(
+                        LearningGoal.workspace_id == workspace_id,
+                        LearningGoal.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                    .order_by(LearningGoal.id)
+                )
+            ).all()
+        )
+        if not goals:
+            return []
+        plans = list(
+            (
+                await db.scalars(
+                    select(LearningPlan).where(
+                        LearningPlan.goal_id.in_([goal.id for goal in goals])
+                    )
+                )
+            ).all()
+        )
+        versions = list(
+            (
+                await db.scalars(
+                    select(PlanVersion).where(PlanVersion.plan_id.in_([plan.id for plan in plans]))
+                )
+            ).all()
+        )
+        phases = list(
+            (
+                await db.scalars(
+                    select(PlanPhase)
+                    .where(PlanPhase.plan_version_id.in_([version.id for version in versions]))
+                    .order_by(PlanPhase.position)
+                )
+            ).all()
+        )
+        plan_by_goal = {plan.goal_id: plan for plan in plans}
+        version_by_plan = {version.plan_id: version for version in versions}
+        phases_by_version: dict[UUID, list[PlanPhase]] = {}
+        for phase in phases:
+            phases_by_version.setdefault(phase.plan_version_id, []).append(phase)
+        records: list[EntityRecord] = []
+        for goal in goals:
+            plan = plan_by_goal.get(goal.id)
+            version = version_by_plan.get(plan.id) if plan is not None else None
+            if plan is None or version is None:
+                continue
+            payload = {
+                "space_id": str(goal.space_id),
+                "plan_id": str(plan.id),
+                "plan_version_id": str(version.id),
+                "title": goal.title,
+                "description": goal.description,
+                "desired_outcome": goal.desired_outcome,
+                "weekly_minutes": goal.weekly_minutes,
+                "target_date": goal.target_date.isoformat() if goal.target_date else None,
+                "phases": [
+                    {
+                        "id": str(phase.id),
+                        "title": phase.title,
+                        "description": phase.description,
+                        "position": phase.position,
+                        "estimated_minutes": phase.estimated_minutes,
+                        "acceptance_criteria": phase.acceptance_criteria,
+                    }
+                    for phase in phases_by_version.get(version.id, [])
+                ],
+            }
+            records.append(
+                EntityRecord(
+                    entity_type="learning_goal",
+                    entity_id=goal.id,
+                    version=goal.version,
+                    created_at=goal.created_at,
+                    updated_at=goal.updated_at,
+                    deleted_at=goal.deleted_at,
+                    created_by=goal.created_by,
+                    updated_by=goal.updated_by,
+                    payload=payload,
+                    payload_hash=canonical_hash(payload),
+                )
+            )
+        return records
 
 
 class StaleSnapshotError(Exception):
