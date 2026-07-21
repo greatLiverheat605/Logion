@@ -1,4 +1,12 @@
-import type { PushRequest, SyncOperationV1 } from "../src/sync-v1";
+import type {
+  LogionSyncV1Message,
+  PushRequest,
+  SyncOperationV1,
+} from "../src/sync-v1";
+import {
+  isSyncV1Message,
+  validateSyncV1Message,
+} from "../src/sync-v1-validator.js";
 
 const operation: SyncOperationV1 = {
   operation_id: "01900000-0000-7000-8000-000000000005",
@@ -38,3 +46,14 @@ const invalid: PushRequest = {
 };
 
 void invalid;
+
+declare const unknownMessage: unknown;
+if (isSyncV1Message(unknownMessage)) {
+  const message: LogionSyncV1Message = unknownMessage;
+  void message;
+}
+const validation = validateSyncV1Message(unknownMessage);
+if (validation.ok) {
+  const message: LogionSyncV1Message = validation.value;
+  void message;
+}
