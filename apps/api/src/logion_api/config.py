@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     space_per_workspace_quota: int = Field(default=200, ge=1, le=10000)
     goal_per_space_quota: int = Field(default=500, ge=1, le=100000)
     planning_write_limit_per_hour: int = Field(default=120, ge=1, le=2000)
+    task_per_goal_quota: int = Field(default=5000, ge=1, le=100000)
+    execution_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,
