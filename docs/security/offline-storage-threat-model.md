@@ -1,7 +1,7 @@
 # 离线存储威胁模型
 
-- 工作包：`L2-001A`
-- 当前范围：IndexedDB v1、本地实体、Outbox 原子事务和公开错误边界
+- 工作包：`L2-001A`、`L2-002A`
+- 当前范围：IndexedDB v2、本地实体、Outbox、Bootstrap staging/原子切换和公开错误边界
 - 权威输入：根目录两份基线与已冻结 `sync-v1`
 
 ## 信任边界与数据寿命
@@ -24,12 +24,15 @@
 | Outbox 依赖乱序或绕过阻塞        | 待发送列表做拓扑排序；依赖 blocked/conflict/isolated/in-flight 时不发送后继    | 顺序与阻塞测试                        |
 | 新应用 schema 被旧代码写坏       | IndexedDB `VersionError` 映射为 upgrade-required，旧代码不自动删除数据库       | future schema 测试                    |
 | 错误或日志泄露 Payload           | `OfflineStorageError` 只序列化 code/retryable；库内无 console/log 调用         | 静态审查                              |
+| 伪造或损坏的快照进入可见数据     | 运行时 schema、context、记录/块/总 Hash 和实体唯一性全部通过后才原子切换       | 格式、Hash、重复与跨 context 负测     |
+| 中断、配额或崩溃造成半份快照     | chunk 仅写 staging；最终实体/cursor/epoch/清理在一个事务提交                   | reopen、staging/activation 配额注入   |
+| epoch 恢复后重放旧编辑           | 同一最终事务隔离当前设备 Outbox，移除旧 overlay，保留 operation 供人工处理     | epoch 切换与回滚测试                  |
+| 超大快照放大 Hash/内存消耗       | 先检查 canonical chunk 字节上限，再核对逐记录 Hash；总 Hash 只处理 chunk 清单  | 大小上限与固定 manifest framing       |
 
 ## 仍需在 Phase 2 关闭前完成
 
 - 本地解锁、数据密钥包装、锁定/退出/撤销策略及恢复方式；
-- bootstrap staging、chunk/总 Hash 校验、配额不足和原子快照切换；
-- epoch 改变后的 Outbox 隔离、导出与重�� bootstrap；
+- 隔离 Outbox 的用户可见导出、冲突中心和保留策略；
 - 服务端租户/设备/角色授权、operation 幂等表和变更日志；
 - 浏览器真实配额、Safari/iOS PWA、崩溃点和多设备故障注入。
 

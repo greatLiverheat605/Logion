@@ -319,7 +319,7 @@ describe("IndexedDB v1 and atomic Outbox", () => {
     ).rejects.toMatchObject({ code: "OFFLINE_STORAGE_UNAVAILABLE" });
 
     const name = `logion-future-${crypto.randomUUID()}`;
-    const request = indexedDB.open(name, 20);
+    const request = indexedDB.open(name, 30);
     await new Promise<void>((resolve, reject) => {
       request.onupgradeneeded = () =>
         request.result.createObjectStore("future");

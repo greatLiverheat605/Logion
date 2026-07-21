@@ -11,6 +11,7 @@ import {
   validateUuid,
   type LocalMutationInput,
 } from "../src";
+import { hashCanonicalJson } from "../src/hashing";
 
 const valid: LocalMutationInput = {
   operation_id: "01900000-0000-7000-8000-000000000005",
@@ -173,5 +174,8 @@ describe("offline validation and public errors", () => {
     await expect(hashPayload({ value: true }, -1)).rejects.toMatchObject({
       code: "OFFLINE_INPUT_INVALID",
     });
+    await expect(
+      hashCanonicalJson(undefined, 1024, "OFFLINE_BOOTSTRAP_CHUNK_TOO_LARGE"),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
   });
 });
