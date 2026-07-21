@@ -16,6 +16,7 @@ from logion_api.errors import (
     http_error_handler,
     validation_error_handler,
 )
+from logion_api.execution.evidence_routes import router as evidence_router
 from logion_api.execution.routes import router as execution_router
 from logion_api.health import router as health_router
 from logion_api.identity.passkey_routes import router as passkey_router
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
     application.include_router(planning_router)
     application.include_router(execution_router)
     application.include_router(content_router)
+    application.include_router(evidence_router)
     return application
 
 

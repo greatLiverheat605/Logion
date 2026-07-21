@@ -602,6 +602,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Evidence */
+        post: operations["evidence_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/goals": {
         parameters: {
             query?: never;
@@ -755,6 +772,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/tasks/{task_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Task */
+        post: operations["verified_task_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/tasks/{task_id}/transition": {
         parameters: {
             query?: never;
@@ -766,6 +800,23 @@ export interface paths {
         put?: never;
         /** Transition Task */
         post: operations["task_transition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/verifications/{verification_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Verification */
+        post: operations["verification_decide"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1257,6 +1308,87 @@ export interface components {
              * @default false
              */
             retryable: boolean;
+        };
+        /** EvidenceResponse */
+        EvidenceResponse: {
+            /**
+             * Evidence Id
+             * Format: uuid
+             */
+            evidence_id: string;
+            /**
+             * Evidence Type
+             * @enum {string}
+             */
+            evidence_type: "text" | "link" | "note" | "resource";
+            /** Evidence Version */
+            evidence_version: number;
+            /** External Url */
+            external_url: string | null;
+            /** Note Id */
+            note_id: string | null;
+            /** Resource Id */
+            resource_id: string | null;
+            /** Summary */
+            summary: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+            /**
+             * Task Status
+             * @enum {string}
+             */
+            task_status: "backlog" | "planned" | "in_progress" | "submitted" | "verified" | "done" | "blocked" | "cancelled";
+            /** Task Version */
+            task_version: number;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "pending" | "passed" | "failed" | "needs_revision";
+            /**
+             * Verification Id
+             * Format: uuid
+             */
+            verification_id: string;
+            /** Verification Version */
+            verification_version: number;
+        };
+        /** EvidenceSubmitRequest */
+        EvidenceSubmitRequest: {
+            /**
+             * Evidence Id
+             * Format: uuid
+             */
+            evidence_id: string;
+            /**
+             * Evidence Type
+             * @enum {string}
+             */
+            evidence_type: "text" | "link" | "note" | "resource";
+            /** External Url */
+            external_url?: string | null;
+            /** Note Id */
+            note_id?: string | null;
+            /** Resource Id */
+            resource_id?: string | null;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+            /**
+             * Verification Id
+             * Format: uuid
+             */
+            verification_id: string;
         };
         /** FailedOperationResult */
         FailedOperationResult: {
@@ -2261,6 +2393,11 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** TaskCloseRequest */
+        TaskCloseRequest: {
+            /** Expected Task Version */
+            expected_task_version: number;
+        };
         /** TaskCreateRequest */
         TaskCreateRequest: {
             /**
@@ -2442,6 +2579,55 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VerificationDecisionRequest */
+        VerificationDecisionRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Reviewer Notes
+             * @default
+             */
+            reviewer_notes: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "passed" | "failed" | "needs_revision";
+        };
+        /** VerificationResponse */
+        VerificationResponse: {
+            /**
+             * Evidence Id
+             * Format: uuid
+             */
+            evidence_id: string;
+            /** Reviewer Notes */
+            reviewer_notes: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+            /**
+             * Task Status
+             * @enum {string}
+             */
+            task_status: "in_progress" | "submitted" | "verified" | "done";
+            /** Task Version */
+            task_version: number;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "pending" | "passed" | "failed" | "needs_revision";
+            /**
+             * Verification Id
+             * Format: uuid
+             */
+            verification_id: string;
+            /** Version */
+            version: number;
         };
         /** WebAuthnAuthenticatorSelection */
         WebAuthnAuthenticatorSelection: {
@@ -5207,6 +5393,98 @@ export interface operations {
             };
         };
     };
+    evidence_submit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     planning_goal_create: {
         parameters: {
             query?: never;
@@ -6039,6 +6317,99 @@ export interface operations {
             };
         };
     };
+    verified_task_close: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCloseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     task_transition: {
         parameters: {
             query?: never;
@@ -6065,6 +6436,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verification_decide: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                verification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationResponse"];
                 };
             };
             /** @description Unauthorized */
