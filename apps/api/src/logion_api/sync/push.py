@@ -6,6 +6,14 @@ import rfc8785
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.content.models import Note, Resource
+from logion_api.content.schemas import (
+    NoteUpdateRequest,
+    NoteWriteRequest,
+    ResourceCreateRequest,
+    ResourceUpdateRequest,
+)
+from logion_api.content.service import ContentService
 from logion_api.db import utc_now
 from logion_api.errors import APIError
 from logion_api.execution.models import StudySession, Task
@@ -54,11 +62,13 @@ class SyncPushService:
         workspaces: WorkspaceService,
         planning: PlanningService,
         execution: ExecutionService,
+        content: ContentService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
         self._planning = planning
         self._execution = execution
+        self._content = content
 
     async def push(
         self,
@@ -151,6 +161,22 @@ class SyncPushService:
             )
         if operation.entity_type == "study_session" and operation.operation_type == "update":
             return await self._finish_session(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "note" and operation.operation_type == "create":
+            return await self._create_note(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "note" and operation.operation_type == "update":
+            return await self._update_note(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "resource" and operation.operation_type == "create":
+            return await self._create_resource(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "resource" and operation.operation_type == "update":
+            return await self._update_resource(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -554,6 +580,164 @@ class SyncPushService:
             sequence=durable.sequence,
         )
 
+    async def _create_note(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            parsed_space = UUID(space_id)
+            payload = NoteWriteRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                note = await self._content.create_note(
+                    db, context, request.workspace_id, parsed_space, payload, request_id
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, note.version, note_payload(note)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _update_note(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            if expected is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            payload = NoteUpdateRequest.model_validate({**raw, "expected_version": expected})
+            async with db.begin_nested():
+                note = await self._content.update_note(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    operation.entity_id,
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, note.version, note_payload(note)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_resource(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = ResourceCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                resource = await self._content.create_resource(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload.id,
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, resource.version, resource_payload(resource)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _update_resource(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            if expected is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            payload = ResourceUpdateRequest.model_validate({**raw, "expected_version": expected})
+            async with db.begin_nested():
+                resource = await self._content.update_resource(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    operation.entity_id,
+                    payload.expected_version,
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, resource.version, resource_payload(resource)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _causal_base_version(
         self, db: AsyncSession, request: PushRequest, operation: object
     ) -> int | None:
@@ -583,6 +767,20 @@ class SyncPushService:
             if study_session is None or study_session.workspace_id != request.workspace_id:
                 return None
             return study_session.version
+        if operation.entity_type == "note":
+            note = await db.get(Note, operation.entity_id)
+            return (
+                note.version
+                if note is not None and note.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "resource":
+            resource = await db.get(Resource, operation.entity_id)
+            return (
+                resource.version
+                if resource is not None and resource.workspace_id == request.workspace_id
+                else None
+            )
         else:
             return None
 
@@ -601,14 +799,25 @@ class SyncPushService:
                 "SYNC_OPERATION_INVALID" if exc.status_code == 422 else "SYNC_OPERATION_FORBIDDEN"
             )
             return self._rejected(operation.operation_id, code)
-        remote: Task | StudySession | None = None
+        remote: Task | StudySession | Note | Resource | None = None
         if operation.entity_type == "task":
             remote = await db.get(Task, operation.entity_id)
         elif operation.entity_type == "study_session":
             remote = await db.get(StudySession, operation.entity_id)
+        elif operation.entity_type == "note":
+            remote = await db.get(Note, operation.entity_id)
+        elif operation.entity_type == "resource":
+            remote = await db.get(Resource, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
-        payload = task_payload(remote) if isinstance(remote, Task) else session_payload(remote)
+        if isinstance(remote, Task):
+            payload = task_payload(remote)
+        elif isinstance(remote, StudySession):
+            payload = session_payload(remote)
+        elif isinstance(remote, Note):
+            payload = note_payload(remote)
+        else:
+            payload = resource_payload(remote)
         return ConflictOperationResult(
             operation_id=operation.operation_id,
             conflict=SyncConflict(
@@ -616,7 +825,9 @@ class SyncPushService:
                     NAMESPACE_URL,
                     f"logion:sync-conflict:{request.workspace_id}:{operation.operation_id}",
                 ),
-                conflict_kind="status",
+                conflict_kind=(
+                    "content" if operation.entity_type in {"note", "resource"} else "status"
+                ),
                 entity_type=operation.entity_type,
                 entity_id=operation.entity_id,
                 base_version=operation.base_version,
@@ -664,4 +875,27 @@ def session_payload(session: StudySession) -> dict[str, object]:
         "ended_at": session.ended_at.isoformat() if session.ended_at is not None else None,
         "manual_minutes": session.manual_minutes,
         "reflection": session.reflection,
+    }
+
+
+def note_payload(note: Note) -> dict[str, object]:
+    return {
+        "space_id": str(note.space_id),
+        "task_id": str(note.task_id) if note.task_id is not None else None,
+        "title": note.title,
+        "markdown_body": note.markdown_body,
+    }
+
+
+def resource_payload(resource: Resource) -> dict[str, object]:
+    return {
+        "space_id": str(resource.space_id),
+        "task_id": str(resource.task_id) if resource.task_id is not None else None,
+        "resource_type": resource.resource_type,
+        "title": resource.title,
+        "source_url": resource.source_url,
+        "pdf_filename": resource.pdf_filename,
+        "page_count": resource.page_count,
+        "sha256": resource.sha256,
+        "page_index": resource.page_index,
     }

@@ -1,5 +1,7 @@
 const PROTECTED_ENTITY_TYPES = new Set([
   "learning_goal",
+  "note",
+  "resource",
   "study_session",
   "task",
 ]);

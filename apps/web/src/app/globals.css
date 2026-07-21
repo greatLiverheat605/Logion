@@ -543,6 +543,24 @@ h1 {
   gap: 1rem;
 }
 
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 1rem;
+}
+
+.markdown-safe-preview {
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0.85rem;
+  border: 1px solid rgb(105 219 255 / 25%);
+  border-radius: 0.65rem;
+  background: #071526;
+  color: #d7e8fa;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .task-card {
   display: flex;
   min-width: 0;

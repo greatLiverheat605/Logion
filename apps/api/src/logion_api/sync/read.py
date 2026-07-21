@@ -4,10 +4,17 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.content.models import Note, Resource
 from logion_api.execution.models import StudySession, Task
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
-from logion_api.sync.push import canonical_hash, session_payload, task_payload
+from logion_api.sync.push import (
+    canonical_hash,
+    note_payload,
+    resource_payload,
+    session_payload,
+    task_payload,
+)
 from logion_api.sync.schemas import BootstrapResponse, Change, EntityRecord, PullResponse
 from logion_api.workspaces.models import Space
 
@@ -63,6 +70,20 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "study_session"},
         )
+        visible_notes = await self._visible_content_ids(
+            db,
+            Note,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "note"},
+        )
+        visible_resources = await self._visible_content_ids(
+            db,
+            Resource,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "resource"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -85,6 +106,8 @@ class SyncReadService:
             or (row.entity_type == "learning_goal" and row.entity_id in visible_goals)
             or (row.entity_type == "task" and row.entity_id in visible_tasks)
             or (row.entity_type == "study_session" and row.entity_id in visible_sessions)
+            or (row.entity_type == "note" and row.entity_id in visible_notes)
+            or (row.entity_type == "resource" and row.entity_id in visible_resources)
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -112,6 +135,8 @@ class SyncReadService:
             *(await self._goal_records(db, state.workspace_id, user_id)),
             *(await self._task_records(db, state.workspace_id, user_id)),
             *(await self._session_records(db, state.workspace_id, user_id)),
+            *(await self._content_records(db, Note, state.workspace_id, user_id)),
+            *(await self._content_records(db, Resource, state.workspace_id, user_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -439,6 +464,107 @@ class SyncReadService:
                 payload_hash=canonical_hash(session_payload(session)),
             )
             for session in sessions
+        ]
+
+    async def _visible_content_ids(
+        self,
+        db: AsyncSession,
+        model: type[Note] | type[Resource],
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        if model is Note:
+            statement = (
+                select(Note.id)
+                .join(Space, Space.id == Note.space_id)
+                .where(
+                    Note.workspace_id == workspace_id,
+                    Note.id.in_(entity_ids),
+                    Note.deleted_at.is_(None),
+                    (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                )
+            )
+        else:
+            statement = (
+                select(Resource.id)
+                .join(Space, Space.id == Resource.space_id)
+                .where(
+                    Resource.workspace_id == workspace_id,
+                    Resource.id.in_(entity_ids),
+                    Resource.deleted_at.is_(None),
+                    (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                )
+            )
+        return set((await db.scalars(statement)).all())
+
+    async def _content_records(
+        self,
+        db: AsyncSession,
+        model: type[Note] | type[Resource],
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[EntityRecord]:
+        if model is Note:
+            notes = list(
+                (
+                    await db.scalars(
+                        select(Note)
+                        .join(Space, Space.id == Note.space_id)
+                        .where(
+                            Note.workspace_id == workspace_id,
+                            Note.deleted_at.is_(None),
+                            (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                        )
+                        .order_by(Note.id)
+                    )
+                ).all()
+            )
+            return [
+                EntityRecord(
+                    entity_type="note",
+                    entity_id=item.id,
+                    version=item.version,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    deleted_at=item.deleted_at,
+                    created_by=item.created_by,
+                    updated_by=item.updated_by,
+                    payload=note_payload(item),
+                    payload_hash=canonical_hash(note_payload(item)),
+                )
+                for item in notes
+            ]
+        resources = list(
+            (
+                await db.scalars(
+                    select(Resource)
+                    .join(Space, Space.id == Resource.space_id)
+                    .where(
+                        Resource.workspace_id == workspace_id,
+                        Resource.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                    .order_by(Resource.id)
+                )
+            ).all()
+        )
+        return [
+            EntityRecord(
+                entity_type="resource",
+                entity_id=item.id,
+                version=item.version,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+                deleted_at=item.deleted_at,
+                created_by=item.created_by,
+                updated_by=item.updated_by,
+                payload=resource_payload(item),
+                payload_hash=canonical_hash(resource_payload(item)),
+            )
+            for item in resources
         ]
 
 

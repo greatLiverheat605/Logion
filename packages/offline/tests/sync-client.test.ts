@@ -9,6 +9,7 @@ import {
   openOfflineDatabase,
   SyncClient,
   type LogionOfflineDatabase,
+  type JsonObject,
   type SyncTransport,
 } from "../src";
 
@@ -430,6 +431,70 @@ describe("recoverable push/pull cycle", () => {
     expect(await vault.get(ids.entity, ids.workspace)).toEqual(
       protectedPayload,
     );
+  });
+
+  it("keeps note bodies and resource page notes out of entity and Outbox rows", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-content-vault-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    const repository = new ProtectedOfflineRepository(database, vault);
+    const now = "2026-07-21T00:00:00Z";
+    const cases: ["note" | "resource", JsonObject][] = [
+      [
+        "note",
+        {
+          space_id: ids.entity,
+          task_id: null,
+          title: "Private note",
+          markdown_body: "secret markdown body",
+        },
+      ],
+      [
+        "resource",
+        {
+          space_id: ids.entity,
+          task_id: null,
+          resource_type: "pdf_index",
+          title: "Private PDF",
+          source_url: null,
+          pdf_filename: "paper.pdf",
+          page_count: 2,
+          sha256: null,
+          page_index: [{ page: 1, label: "Method", note: "secret page note" }],
+        },
+      ],
+    ];
+    for (const [entityType, payload] of cases) {
+      await repository.commitMutation({
+        operation_id: crypto.randomUUID(),
+        protocol_version: "sync-v1",
+        workspace_id: ids.workspace,
+        device_id: ids.device,
+        entity_type: entityType,
+        entity_id: crypto.randomUUID(),
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: now,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        created_by: ids.user,
+        updated_by: ids.user,
+        payload,
+      });
+    }
+    const durableRows = JSON.stringify({
+      entities: await database.entities.toArray(),
+      outbox: await database.outbox.toArray(),
+    });
+    expect(durableRows).not.toContain("secret markdown body");
+    expect(durableRows).not.toContain("secret page note");
+    expect(await database.vaultRecords.count()).toBe(2);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {
