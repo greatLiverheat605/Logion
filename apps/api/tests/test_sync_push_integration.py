@@ -99,6 +99,55 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         assert replay.status_code == 200, replay.text
         assert replay.json()["results"][0]["status"] == "duplicate"
 
+        pull = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/pull",
+            json={
+                "message_type": "pull_request",
+                "protocol_version": "sync-v1",
+                "workspace_id": str(workspace_id),
+                "device_id": str(device_id),
+                "sync_epoch": str(sync_epoch),
+                "cursor": 0,
+                "limit": 1,
+            },
+        )
+        assert pull.status_code == 200, pull.text
+        assert pull.json()["next_cursor"] == 1
+        assert pull.json()["changes"][0]["entity_id"] == str(entity_id)
+
+        first_chunk = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",
+            json={
+                "message_type": "bootstrap_request",
+                "protocol_version": "sync-v1",
+                "workspace_id": str(workspace_id),
+                "device_id": str(device_id),
+                "known_sync_epoch": None,
+                "snapshot_id": None,
+                "chunk_index": None,
+            },
+        )
+        assert first_chunk.status_code == 200, first_chunk.text
+        snapshot = first_chunk.json()
+        assert snapshot["cursor"] == 1
+        assert snapshot["chunk_count"] == 1
+        assert str(entity_id) in {record["entity_id"] for record in snapshot["records"]}
+
+        resumed_chunk = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",
+            json={
+                "message_type": "bootstrap_request",
+                "protocol_version": "sync-v1",
+                "workspace_id": str(workspace_id),
+                "device_id": str(device_id),
+                "known_sync_epoch": str(sync_epoch),
+                "snapshot_id": snapshot["snapshot_id"],
+                "chunk_index": 0,
+            },
+        )
+        assert resumed_chunk.status_code == 200
+        assert resumed_chunk.json()["snapshot_checksum"] == snapshot["snapshot_checksum"]
+
         wrong_epoch = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/push",
             headers={"X-CSRF-Token": csrf},
