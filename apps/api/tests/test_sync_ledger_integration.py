@@ -46,7 +46,9 @@ async def _register(label: str, client_ip: str) -> tuple[UUID, UUID, UUID]:
         workspace_id = UUID(workspace_response.json()["workspaces"][0]["id"])
     async with session_factory() as db:
         device_id = await db.scalar(
-            select(Device.id).where(Device.user_id == user_id).order_by(Device.created_at.desc())
+            select(Device.id)
+            .where(Device.user_id == user_id)
+            .order_by(Device.first_seen_at.desc())
         )
     assert device_id is not None
     return user_id, workspace_id, device_id
