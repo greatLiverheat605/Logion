@@ -101,9 +101,13 @@ interface LocalView<T extends JsonObject> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof LogionApiError
-    ? `操作未完成（请求编号：${error.requestId}）`
-    : "网络暂不可用，操作已保存在本设备，稍后可继续同步。";
+  if (error instanceof LogionApiError) {
+    if (error.status === 403 || error.status === 404) {
+      return `当前账号没有访问或修改该内容的权限（请求编号：${error.requestId}）。`;
+    }
+    return `操作未完成（请求编号：${error.requestId}）。`;
+  }
+  return "网络暂不可用，操作已保存在本设备，稍后可继续同步。";
 }
 
 function transport(workspaceId: string): SyncTransport {
@@ -407,7 +411,28 @@ export function TodayCenter() {
         workspaceId,
         deviceId,
       );
-      setStatus("本地修改已与服务器同步。");
+      const remaining = await db.outbox
+        .where("[workspace_id+device_id]")
+        .equals([workspaceId, deviceId])
+        .toArray();
+      const blocked = remaining.filter(
+        (item) => item.outbox_state === "blocked",
+      ).length;
+      const conflicts = remaining.filter(
+        (item) => item.outbox_state === "conflict",
+      ).length;
+      const pending = remaining.length - blocked - conflicts;
+      if (conflicts > 0) {
+        setStatus(`有 ${conflicts} 项修改发生冲突，需要明确选择保留版本。`);
+      } else if (blocked > 0) {
+        setStatus(
+          `有 ${blocked} 项修改因权限、版本或输入校验未同步，请检查同步中心。`,
+        );
+      } else if (pending > 0) {
+        setStatus(`仍有 ${pending} 项本地修改等待网络恢复后同步。`);
+      } else {
+        setStatus("本地修改已与服务器同步。");
+      }
     } catch (error) {
       setStatus(errorMessage(error));
     } finally {
