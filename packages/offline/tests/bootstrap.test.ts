@@ -65,7 +65,7 @@ afterEach(async () => {
 
 async function record(entityId: string, payload: JsonObject, version = 1) {
   return {
-    entity_type: "note",
+    entity_type: "space",
     entity_id: entityId,
     version,
     created_at: "2026-07-21T00:00:00Z",
@@ -124,7 +124,7 @@ async function messages(
 function oldEntity(syncStatus: LocalEntity["sync_status"] = "clean") {
   return {
     workspace_id: ids.workspace,
-    entity_type: "note",
+    entity_type: "space",
     entity_id: ids.entityA,
     server_version: 1,
     local_revision: syncStatus === "clean" ? 0 : 1,
@@ -162,7 +162,7 @@ function mutation(): LocalMutationInput {
     protocol_version: "sync-v1",
     workspace_id: ids.workspace,
     device_id: ids.device,
-    entity_type: "note",
+    entity_type: "space",
     entity_id: ids.entityA,
     operation_type: "create",
     base_version: 0,
@@ -596,7 +596,7 @@ describe("IndexedDB v2 bootstrap staging and atomic activation", () => {
 
     await new BootstrapRepository(database).stageChunk(message, context);
     expect(
-      await database.entities.get([ids.workspaceB, "note", ids.entityB]),
+      await database.entities.get([ids.workspaceB, "space", ids.entityB]),
     ).toMatchObject({
       sync_status: "pending",
       payload: { markdown: "pending local overlay" },
