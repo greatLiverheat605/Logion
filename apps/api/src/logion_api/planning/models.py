@@ -131,6 +131,7 @@ class PlanPhase(Base):
         CheckConstraint("position >= 0", name="ck_plan_phases_position"),
         CheckConstraint("estimated_minutes >= 0", name="ck_plan_phases_estimated_minutes"),
         CheckConstraint("jsonb_typeof(acceptance_criteria) = 'array'", name="ck_phase_criteria"),
+        UniqueConstraint("id", "workspace_id", name="uq_plan_phase_workspace"),
         UniqueConstraint("plan_version_id", "position", name="uq_plan_phase_position"),
         Index("ix_plan_phases_version_position", "plan_version_id", "position"),
     )
