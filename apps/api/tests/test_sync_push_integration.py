@@ -99,6 +99,45 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         assert replay.status_code == 200, replay.text
         assert replay.json()["results"][0]["status"] == "duplicate"
 
+        goal_entity_id = uuid4()
+        goal_operation_id = uuid4()
+        goal_payload = {
+            "space_id": str(entity_id),
+            "plan_id": str(uuid4()),
+            "plan_version_id": str(uuid4()),
+            "title": "Offline goal",
+            "description": "Created before reconnect",
+            "desired_outcome": "Produce a reviewable artifact",
+            "weekly_minutes": 300,
+            "target_date": None,
+            "phases": [
+                {
+                    "id": str(uuid4()),
+                    "title": "Foundation",
+                    "description": "",
+                    "position": 0,
+                    "estimated_minutes": 600,
+                    "acceptance_criteria": ["Pass the foundation check"],
+                }
+            ],
+        }
+        goal_operation = {
+            **operation,
+            "operation_id": str(goal_operation_id),
+            "entity_type": "learning_goal",
+            "entity_id": str(goal_entity_id),
+            "payload": goal_payload,
+            "payload_hash": canonical_hash(goal_payload),
+            "dependencies": [str(operation_id)],
+        }
+        goal_push = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/push",
+            headers={"X-CSRF-Token": csrf},
+            json={**envelope, "operations": [goal_operation]},
+        )
+        assert goal_push.status_code == 200, goal_push.text
+        assert goal_push.json()["results"][0]["status"] == "applied"
+
         pull = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/pull",
             json={
@@ -129,9 +168,10 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         )
         assert first_chunk.status_code == 200, first_chunk.text
         snapshot = first_chunk.json()
-        assert snapshot["cursor"] == 1
+        assert snapshot["cursor"] == 2
         assert snapshot["chunk_count"] == 1
         assert str(entity_id) in {record["entity_id"] for record in snapshot["records"]}
+        assert str(goal_entity_id) in {record["entity_id"] for record in snapshot["records"]}
 
         resumed_chunk = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",

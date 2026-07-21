@@ -13,6 +13,7 @@ from logion_api.identity.dependencies import (
     request_id,
     require_trusted_origin,
 )
+from logion_api.planning.dependencies import PlanningServiceDependency
 from logion_api.sync.push import SyncPushService
 from logion_api.sync.read import InvalidChunkError, StaleSnapshotError, SyncReadService
 from logion_api.sync.schemas import (
@@ -67,6 +68,7 @@ async def push(
     workspaces: WorkspaceServiceDependency,
     limiter: RateLimiterDependency,
     settings: SettingsDependency,
+    planning: PlanningServiceDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> PushResponse | RebootstrapControl:
     require_trusted_origin(request, settings)
@@ -76,8 +78,10 @@ async def push(
         request.cookies.get(settings.csrf_cookie_name),
     )
     content_length = request.headers.get("content-length")
-    if content_length is not None and content_length.isdecimal() and (
-        int(content_length) > settings.sync_max_batch_bytes
+    if (
+        content_length is not None
+        and content_length.isdecimal()
+        and (int(content_length) > settings.sync_max_batch_bytes)
     ):
         raise APIError(
             code="SYNC_BATCH_TOO_LARGE",
@@ -116,7 +120,7 @@ async def push(
         server_sync_epoch = state.sync_epoch
         await db.rollback()
         return RebootstrapControl(server_sync_epoch=server_sync_epoch)
-    results = await SyncPushService(SyncLedgerService(), workspaces).push(
+    results = await SyncPushService(SyncLedgerService(), workspaces, planning).push(
         db,
         context,
         payload,
