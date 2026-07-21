@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { compileFromFile } from "json-schema-to-typescript";
 import { format } from "prettier";
 
+import "./generate-sync-validator.mjs";
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const schemaPath = resolve(packageRoot, "schemas", "sync-v1.schema.json");
 const outputPath = resolve(packageRoot, "src", "sync-v1.ts");
