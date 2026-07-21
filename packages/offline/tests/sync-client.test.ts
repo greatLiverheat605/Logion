@@ -433,7 +433,7 @@ describe("recoverable push/pull cycle", () => {
     );
   });
 
-  it("keeps note bodies and resource page notes out of entity and Outbox rows", async () => {
+  it("keeps content and verification details out of entity and Outbox rows", async () => {
     database = await openOfflineDatabase({
       databaseName: `logion-content-vault-${crypto.randomUUID()}`,
       indexedDB,
@@ -443,7 +443,10 @@ describe("recoverable push/pull cycle", () => {
     await vault.initialize(ids.user, "correct horse battery staple");
     const repository = new ProtectedOfflineRepository(database, vault);
     const now = "2026-07-21T00:00:00Z";
-    const cases: ["note" | "resource", JsonObject][] = [
+    const cases: [
+      "evidence" | "note" | "resource" | "verification",
+      JsonObject,
+    ][] = [
       [
         "note",
         {
@@ -465,6 +468,26 @@ describe("recoverable push/pull cycle", () => {
           page_count: 2,
           sha256: null,
           page_index: [{ page: 1, label: "Method", note: "secret page note" }],
+        },
+      ],
+      [
+        "evidence",
+        {
+          space_id: ids.entity,
+          task_id: ids.user,
+          evidence_type: "text",
+          summary: "secret evidence summary",
+        },
+      ],
+      [
+        "verification",
+        {
+          space_id: ids.entity,
+          task_id: ids.user,
+          evidence_id: ids.operation,
+          action: "decide",
+          verdict: "passed",
+          reviewer_notes: "secret reviewer note",
         },
       ],
     ];
@@ -494,7 +517,9 @@ describe("recoverable push/pull cycle", () => {
     });
     expect(durableRows).not.toContain("secret markdown body");
     expect(durableRows).not.toContain("secret page note");
-    expect(await database.vaultRecords.count()).toBe(2);
+    expect(durableRows).not.toContain("secret evidence summary");
+    expect(durableRows).not.toContain("secret reviewer note");
+    expect(await database.vaultRecords.count()).toBe(4);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

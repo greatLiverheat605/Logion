@@ -5,15 +5,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.content.models import Note, Resource
+from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.models import StudySession, Task
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
 from logion_api.sync.push import (
     canonical_hash,
+    evidence_payload,
     note_payload,
     resource_payload,
     session_payload,
     task_payload,
+    verification_payload,
 )
 from logion_api.sync.schemas import BootstrapResponse, Change, EntityRecord, PullResponse
 from logion_api.workspaces.models import Space
@@ -84,6 +87,20 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "resource"},
         )
+        visible_evidence = await self._visible_verification_ids(
+            db,
+            EvidenceItem,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "evidence"},
+        )
+        visible_verifications = await self._visible_verification_ids(
+            db,
+            VerificationRecord,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "verification"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -108,6 +125,10 @@ class SyncReadService:
             or (row.entity_type == "study_session" and row.entity_id in visible_sessions)
             or (row.entity_type == "note" and row.entity_id in visible_notes)
             or (row.entity_type == "resource" and row.entity_id in visible_resources)
+            or (row.entity_type == "evidence" and row.entity_id in visible_evidence)
+            or (
+                row.entity_type == "verification" and row.entity_id in visible_verifications
+            )
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -137,6 +158,12 @@ class SyncReadService:
             *(await self._session_records(db, state.workspace_id, user_id)),
             *(await self._content_records(db, Note, state.workspace_id, user_id)),
             *(await self._content_records(db, Resource, state.workspace_id, user_id)),
+            *(await self._verification_records(db, EvidenceItem, state.workspace_id, user_id)),
+            *(
+                await self._verification_records(
+                    db, VerificationRecord, state.workspace_id, user_id
+                )
+            ),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -566,6 +593,81 @@ class SyncReadService:
             )
             for item in resources
         ]
+
+    async def _visible_verification_ids(
+        self,
+        db: AsyncSession,
+        model: type[EvidenceItem] | type[VerificationRecord],
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        statement = (
+            select(model.id)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                model.id.in_(entity_ids),
+                (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+            )
+        )
+        if model is EvidenceItem:
+            statement = statement.where(EvidenceItem.deleted_at.is_(None))
+        return set((await db.scalars(statement)).all())
+
+    async def _verification_records(
+        self,
+        db: AsyncSession,
+        model: type[EvidenceItem] | type[VerificationRecord],
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[EntityRecord]:
+        statement = (
+            select(model)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+            )
+            .order_by(model.id)
+        )
+        if model is EvidenceItem:
+            statement = statement.where(EvidenceItem.deleted_at.is_(None))
+        items = cast(
+            list[EvidenceItem | VerificationRecord],
+            list((await db.scalars(statement)).all()),
+        )
+        records: list[EntityRecord] = []
+        for item in items:
+            if isinstance(item, EvidenceItem):
+                payload = evidence_payload(item)
+                entity_type = "evidence"
+                deleted_at = item.deleted_at
+                created_by = item.created_by
+                updated_by = item.updated_by
+            else:
+                payload = verification_payload(item)
+                entity_type = "verification"
+                deleted_at = None
+                created_by = item.requested_by
+                updated_by = item.decided_by or item.requested_by
+            records.append(
+                EntityRecord(
+                    entity_type=entity_type,
+                    entity_id=item.id,
+                    version=item.version,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    deleted_at=deleted_at,
+                    created_by=created_by,
+                    updated_by=updated_by,
+                    payload=payload,
+                    payload_hash=canonical_hash(payload),
+                )
+            )
+        return records
 
 
 class StaleSnapshotError(Exception):
