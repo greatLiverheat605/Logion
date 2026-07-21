@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import rfc8785
@@ -16,6 +16,9 @@ from logion_api.content.schemas import (
 from logion_api.content.service import ContentService
 from logion_api.db import utc_now
 from logion_api.errors import APIError
+from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
+from logion_api.execution.evidence_schemas import EvidenceSubmitRequest
+from logion_api.execution.evidence_service import EvidenceService
 from logion_api.execution.models import StudySession, Task
 from logion_api.execution.schemas import (
     SessionFinishRequest,
@@ -63,12 +66,14 @@ class SyncPushService:
         planning: PlanningService,
         execution: ExecutionService,
         content: ContentService,
+        evidence: EvidenceService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
         self._planning = planning
         self._execution = execution
         self._content = content
+        self._evidence = evidence
 
     async def push(
         self,
@@ -177,6 +182,14 @@ class SyncPushService:
             )
         if operation.entity_type == "resource" and operation.operation_type == "update":
             return await self._update_resource(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "evidence" and operation.operation_type == "create":
+            return await self._create_evidence(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "verification" and operation.operation_type == "update":
+            return await self._update_verification(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -580,6 +593,285 @@ class SyncPushService:
             sequence=durable.sequence,
         )
 
+    async def _append_derived(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID,
+        parent: SyncOperationIdentity,
+        *,
+        suffix: str,
+        entity_type: str,
+        entity_id: UUID,
+        operation_type: Literal["create", "update", "delete", "restore"],
+        version: int,
+        payload: dict[str, object],
+    ) -> None:
+        operation_id = uuid5(
+            NAMESPACE_URL,
+            f"logion:sync-derived:{workspace_id}:{parent.operation_id}:{suffix}",
+        )
+        fingerprint = {
+            "operation_id": str(operation_id),
+            "workspace_id": str(workspace_id),
+            "device_id": str(parent.device_id),
+            "entity_type": entity_type,
+            "entity_id": str(entity_id),
+            "operation_type": operation_type,
+            "derived_from": str(parent.operation_id),
+            "suffix": suffix,
+        }
+        identity = SyncOperationIdentity(
+            operation_id=operation_id,
+            workspace_id=workspace_id,
+            device_id=parent.device_id,
+            payload_hash=canonical_hash(payload),
+            operation_fingerprint=operation_fingerprint(fingerprint),
+            entity_type=entity_type,
+            entity_id=entity_id,
+            operation_type=operation_type,
+        )
+        state = await self._ledger.lock_workspace_state(db, workspace_id)
+        await self._ledger.append_applied(
+            db,
+            state,
+            identity,
+            AppliedSyncChange(
+                server_version=version,
+                payload=payload,
+                payload_hash=canonical_hash(payload),
+            ),
+        )
+
+    async def _create_evidence(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        verification_id = raw.pop("verification_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            parsed_space_id = UUID(space_id)
+            payload = EvidenceSubmitRequest.model_validate(
+                {
+                    **raw,
+                    "evidence_id": operation.entity_id,
+                    "verification_id": verification_id,
+                }
+            )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        task = await db.get(Task, payload.task_id)
+        if (
+            task is None
+            or task.workspace_id != request.workspace_id
+            or task.space_id != parsed_space_id
+        ):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+        # The client must enqueue the task transition first so that every
+        # cross-entity mutation has its own durable ledger entry.
+        if task.status != "submitted":
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            async with db.begin_nested():
+                aggregate = await self._evidence.submit(
+                    db,
+                    context,
+                    request.workspace_id,
+                    parsed_space_id,
+                    payload,
+                    request_id,
+                )
+                verification = aggregate.verification
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="verification",
+                    entity_type="verification",
+                    entity_id=verification.id,
+                    operation_type="create",
+                    version=verification.version,
+                    payload=verification_payload(verification),
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    aggregate.evidence.version,
+                    evidence_payload(aggregate.evidence),
+                )
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _update_verification(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        action = raw.pop("action", None)
+        space_id = raw.pop("space_id", None)
+        if not isinstance(space_id, str) or action not in {"decide", "close_task"}:
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            parsed_space_id = UUID(space_id)
+            expected = await self._causal_base_version(db, request, operation)
+            if expected is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            async with db.begin_nested():
+                if action == "decide":
+                    if not {"verdict", "reviewer_notes"}.issubset(raw) or not set(
+                        raw
+                    ).issubset(
+                        {
+                            "verdict",
+                            "reviewer_notes",
+                            "task_id",
+                            "evidence_id",
+                            "decided_by",
+                            "decided_at",
+                        }
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    verdict = raw["verdict"]
+                    reviewer_notes = raw["reviewer_notes"]
+                    if verdict not in {"passed", "failed", "needs_revision"} or not isinstance(
+                        reviewer_notes, str
+                    ) or len(reviewer_notes.strip()) > 10000:
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    current = await db.get(VerificationRecord, operation.entity_id)
+                    if current is None or current.workspace_id != request.workspace_id:
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+                    if (
+                        raw.get("task_id", str(current.task_id)) != str(current.task_id)
+                        or raw.get("evidence_id", str(current.evidence_id))
+                        != str(current.evidence_id)
+                        or raw.get("decided_by", current.decided_by) != current.decided_by
+                        or raw.get("decided_at", current.decided_at) != current.decided_at
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    aggregate = await self._evidence.decide(
+                        db,
+                        context,
+                        request.workspace_id,
+                        parsed_space_id,
+                        operation.entity_id,
+                        expected,
+                        verdict,
+                        reviewer_notes.strip(),
+                        request_id,
+                    )
+                    verification = aggregate.verification
+                    task = aggregate.task
+                else:
+                    if not {"task_id", "expected_task_version"}.issubset(raw) or not set(
+                        raw
+                    ).issubset(
+                        {
+                            "task_id",
+                            "expected_task_version",
+                            "evidence_id",
+                            "verdict",
+                            "reviewer_notes",
+                            "decided_by",
+                            "decided_at",
+                        }
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    task_id = UUID(str(raw["task_id"]))
+                    expected_task_version = raw["expected_task_version"]
+                    if (
+                        isinstance(expected_task_version, bool)
+                        or not isinstance(expected_task_version, int)
+                        or expected_task_version < 1
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    found_verification = await db.get(
+                        VerificationRecord, operation.entity_id
+                    )
+                    if (
+                        found_verification is None
+                        or found_verification.workspace_id != request.workspace_id
+                        or found_verification.task_id != task_id
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+                    if found_verification.version != expected:
+                        raise APIError(
+                            code="RESOURCE_VERSION_CONFLICT",
+                            message="Verification changed.",
+                            status_code=409,
+                        )
+                    verification = found_verification
+                    if raw.get("evidence_id", str(verification.evidence_id)) != str(
+                        verification.evidence_id
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    projection = verification_payload(verification)
+                    if any(
+                        key in raw and raw[key] != projection[key]
+                        for key in {
+                            "verdict",
+                            "reviewer_notes",
+                            "decided_by",
+                            "decided_at",
+                        }
+                    ):
+                        return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+                    task = await self._evidence.close_task(
+                        db,
+                        context,
+                        request.workspace_id,
+                        parsed_space_id,
+                        task_id,
+                        expected_task_version,
+                        request_id,
+                    )
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="task",
+                    entity_type="task",
+                    entity_id=task.id,
+                    operation_type="update",
+                    version=task.version,
+                    payload=task_payload(task),
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    verification.version,
+                    verification_payload(verification),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _create_note(
         self,
         db: AsyncSession,
@@ -744,8 +1036,6 @@ class SyncPushService:
         from logion_api.sync.schemas import SyncOperation
 
         assert isinstance(operation, SyncOperation)
-        if operation.base_version > 0:
-            return operation.base_version
         predecessor = await db.scalar(
             select(ProcessedSyncOperation).where(
                 ProcessedSyncOperation.operation_id.in_(operation.dependencies),
@@ -756,7 +1046,7 @@ class SyncPushService:
             )
         )
         if predecessor is None:
-            return None
+            return operation.base_version if operation.base_version > 0 else None
         if operation.entity_type == "task":
             task = await db.get(Task, operation.entity_id)
             if task is None or task.workspace_id != request.workspace_id:
@@ -781,6 +1071,20 @@ class SyncPushService:
                 if resource is not None and resource.workspace_id == request.workspace_id
                 else None
             )
+        if operation.entity_type == "evidence":
+            evidence = await db.get(EvidenceItem, operation.entity_id)
+            return (
+                evidence.version
+                if evidence is not None and evidence.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "verification":
+            verification = await db.get(VerificationRecord, operation.entity_id)
+            return (
+                verification.version
+                if verification is not None and verification.workspace_id == request.workspace_id
+                else None
+            )
         else:
             return None
 
@@ -799,7 +1103,9 @@ class SyncPushService:
                 "SYNC_OPERATION_INVALID" if exc.status_code == 422 else "SYNC_OPERATION_FORBIDDEN"
             )
             return self._rejected(operation.operation_id, code)
-        remote: Task | StudySession | Note | Resource | None = None
+        remote: (
+            Task | StudySession | Note | Resource | EvidenceItem | VerificationRecord | None
+        ) = None
         if operation.entity_type == "task":
             remote = await db.get(Task, operation.entity_id)
         elif operation.entity_type == "study_session":
@@ -808,6 +1114,10 @@ class SyncPushService:
             remote = await db.get(Note, operation.entity_id)
         elif operation.entity_type == "resource":
             remote = await db.get(Resource, operation.entity_id)
+        elif operation.entity_type == "evidence":
+            remote = await db.get(EvidenceItem, operation.entity_id)
+        elif operation.entity_type == "verification":
+            remote = await db.get(VerificationRecord, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -816,6 +1126,10 @@ class SyncPushService:
             payload = session_payload(remote)
         elif isinstance(remote, Note):
             payload = note_payload(remote)
+        elif isinstance(remote, EvidenceItem):
+            payload = evidence_payload(remote)
+        elif isinstance(remote, VerificationRecord):
+            payload = verification_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -826,7 +1140,9 @@ class SyncPushService:
                     f"logion:sync-conflict:{request.workspace_id}:{operation.operation_id}",
                 ),
                 conflict_kind=(
-                    "content" if operation.entity_type in {"note", "resource"} else "status"
+                    "content"
+                    if operation.entity_type in {"note", "resource", "evidence"}
+                    else "status"
                 ),
                 entity_type=operation.entity_type,
                 entity_id=operation.entity_id,
@@ -898,4 +1214,28 @@ def resource_payload(resource: Resource) -> dict[str, object]:
         "page_count": resource.page_count,
         "sha256": resource.sha256,
         "page_index": resource.page_index,
+    }
+
+
+def evidence_payload(item: EvidenceItem) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "task_id": str(item.task_id),
+        "evidence_type": item.evidence_type,
+        "note_id": str(item.note_id) if item.note_id is not None else None,
+        "resource_id": str(item.resource_id) if item.resource_id is not None else None,
+        "summary": item.summary,
+        "external_url": item.external_url,
+    }
+
+
+def verification_payload(record: VerificationRecord) -> dict[str, object]:
+    return {
+        "space_id": str(record.space_id),
+        "task_id": str(record.task_id),
+        "evidence_id": str(record.evidence_id),
+        "verdict": record.verdict,
+        "reviewer_notes": record.reviewer_notes,
+        "decided_by": str(record.decided_by) if record.decided_by is not None else None,
+        "decided_at": record.decided_at.isoformat() if record.decided_at is not None else None,
     }

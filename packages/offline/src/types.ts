@@ -49,7 +49,8 @@ export interface ProtectedMutationInput extends LocalMutationInput {
     | "note"
     | "resource"
     | "study_session"
-    | "task";
+    | "task"
+    | "verification";
 }
 
 export type BootstrapState =

@@ -70,6 +70,31 @@ interface GoalPayload extends JsonObject {
   phases: { id: string; title: string }[];
 }
 
+interface EvidencePayload extends JsonObject {
+  space_id: string;
+  task_id: string;
+  evidence_type: "text" | "link" | "note" | "resource";
+  note_id: string | null;
+  resource_id: string | null;
+  summary: string;
+  external_url: string | null;
+}
+
+interface VerificationPayload extends JsonObject {
+  space_id: string;
+  task_id: string;
+  evidence_id: string;
+  verdict: "pending" | "passed" | "failed" | "needs_revision";
+  reviewer_notes: string;
+  decided_by: string | null;
+  decided_at: string | null;
+}
+
+interface ContentReferencePayload extends JsonObject {
+  space_id: string;
+  title: string;
+}
+
 interface LocalView<T extends JsonObject> {
   entity: LocalEntity;
   payload: T;
@@ -122,6 +147,14 @@ export function TodayCenter() {
   const [tasks, setTasks] = useState<LocalView<TaskPayload>[]>([]);
   const [sessions, setSessions] = useState<LocalView<SessionPayload>[]>([]);
   const [goals, setGoals] = useState<LocalView<GoalPayload>[]>([]);
+  const [evidence, setEvidence] = useState<LocalView<EvidencePayload>[]>([]);
+  const [verifications, setVerifications] = useState<
+    LocalView<VerificationPayload>[]
+  >([]);
+  const [notes, setNotes] = useState<LocalView<ContentReferencePayload>[]>([]);
+  const [resources, setResources] = useState<
+    LocalView<ContentReferencePayload>[]
+  >([]);
   const [conflictCount, setConflictCount] = useState(0);
   const database = useRef<LogionOfflineDatabase | null>(null);
   const vault = useRef<OfflineVault | null>(null);
@@ -238,7 +271,16 @@ export function TodayCenter() {
     localVault = vault.current,
   ): Promise<void> {
     if (db === null || localVault === null || !workspaceId) return;
-    const [taskRows, sessionRows, goalRows, openConflicts] = await Promise.all([
+    const [
+      taskRows,
+      sessionRows,
+      goalRows,
+      evidenceRows,
+      verificationRows,
+      noteRows,
+      resourceRows,
+      openConflicts,
+    ] = await Promise.all([
       db.entities
         .where("[workspace_id+entity_type]")
         .equals([workspaceId, "task"])
@@ -251,12 +293,36 @@ export function TodayCenter() {
         .where("[workspace_id+entity_type]")
         .equals([workspaceId, "learning_goal"])
         .toArray(),
+      db.entities
+        .where("[workspace_id+entity_type]")
+        .equals([workspaceId, "evidence"])
+        .toArray(),
+      db.entities
+        .where("[workspace_id+entity_type]")
+        .equals([workspaceId, "verification"])
+        .toArray(),
+      db.entities
+        .where("[workspace_id+entity_type]")
+        .equals([workspaceId, "note"])
+        .toArray(),
+      db.entities
+        .where("[workspace_id+entity_type]")
+        .equals([workspaceId, "resource"])
+        .toArray(),
       db.conflicts
         .where("[workspace_id+status]")
         .equals([workspaceId, "open"])
         .count(),
     ]);
-    const [nextTasks, nextSessions, nextGoals] = await Promise.all([
+    const [
+      nextTasks,
+      nextSessions,
+      nextGoals,
+      nextEvidence,
+      nextVerifications,
+      nextNotes,
+      nextResources,
+    ] = await Promise.all([
       Promise.all(
         taskRows.map((item) => decrypted<TaskPayload>(localVault, item)),
       ),
@@ -266,10 +332,34 @@ export function TodayCenter() {
       Promise.all(
         goalRows.map((item) => decrypted<GoalPayload>(localVault, item)),
       ),
+      Promise.all(
+        evidenceRows.map((item) =>
+          decrypted<EvidencePayload>(localVault, item),
+        ),
+      ),
+      Promise.all(
+        verificationRows.map((item) =>
+          decrypted<VerificationPayload>(localVault, item),
+        ),
+      ),
+      Promise.all(
+        noteRows.map((item) =>
+          decrypted<ContentReferencePayload>(localVault, item),
+        ),
+      ),
+      Promise.all(
+        resourceRows.map((item) =>
+          decrypted<ContentReferencePayload>(localVault, item),
+        ),
+      ),
     ]);
     setTasks(nextTasks);
     setSessions(nextSessions);
     setGoals(nextGoals);
+    setEvidence(nextEvidence);
+    setVerifications(nextVerifications);
+    setNotes(nextNotes);
+    setResources(nextResources);
     setConflictCount(openConflicts);
   }
 
@@ -326,7 +416,7 @@ export function TodayCenter() {
   }
 
   async function commit(
-    entityType: "study_session" | "task",
+    entityType: "evidence" | "study_session" | "task" | "verification",
     entityId: string,
     payload: JsonObject,
     existing?: LocalEntity,
@@ -500,6 +590,132 @@ export function TodayCenter() {
     }
   }
 
+  async function submitEvidence(
+    event: FormEvent<HTMLFormElement>,
+    task: LocalView<TaskPayload>,
+  ) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const evidenceType = String(data.get("evidence_type")) as
+      | "text"
+      | "link"
+      | "note"
+      | "resource";
+    const summary = String(data.get("summary") ?? "").trim();
+    const externalUrl = String(data.get("external_url") ?? "").trim();
+    const referenceId = String(data.get("reference_id") ?? "");
+    if (evidenceType === "text" && !summary) {
+      setStatus("文字证据需要填写内容。");
+      return;
+    }
+    if (evidenceType === "link" && !/^https?:\/\//i.test(externalUrl)) {
+      setStatus("链接证据必须使用 HTTP 或 HTTPS 地址。");
+      return;
+    }
+    const availableReferences = evidenceType === "note" ? notes : resources;
+    if (
+      (evidenceType === "note" || evidenceType === "resource") &&
+      !availableReferences.some(
+        (item) =>
+          item.entity.entity_id === referenceId &&
+          item.payload.space_id === task.payload.space_id,
+      )
+    ) {
+      setStatus("请选择当前空间中已保存的笔记或资料。");
+      return;
+    }
+    try {
+      let dependency: string[] = [];
+      if (task.payload.status === "in_progress") {
+        const transition = await commit(
+          "task",
+          task.entity.entity_id,
+          { ...task.payload, status: "submitted", blocked_reason: null },
+          task.entity,
+        );
+        dependency = [transition.operation.operation_id];
+      }
+      const verificationId = crypto.randomUUID();
+      await commit(
+        "evidence",
+        crypto.randomUUID(),
+        {
+          space_id: task.payload.space_id,
+          verification_id: verificationId,
+          task_id: task.entity.entity_id,
+          evidence_type: evidenceType,
+          note_id: evidenceType === "note" ? referenceId : null,
+          resource_id: evidenceType === "resource" ? referenceId : null,
+          summary,
+          external_url: evidenceType === "link" ? externalUrl : null,
+        },
+        undefined,
+        dependency,
+      );
+      form.reset();
+      setStatus("证据和待验收状态已保存在本地；正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(errorMessage(error));
+      await refresh();
+    }
+  }
+
+  async function decideVerification(
+    event: FormEvent<HTMLFormElement>,
+    verification: LocalView<VerificationPayload>,
+  ) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const verdict = String(data.get("verdict")) as
+      | "passed"
+      | "failed"
+      | "needs_revision";
+    try {
+      await commit(
+        "verification",
+        verification.entity.entity_id,
+        {
+          ...verification.payload,
+          action: "decide",
+          verdict,
+          reviewer_notes: String(data.get("reviewer_notes") ?? "").trim(),
+        },
+        verification.entity,
+      );
+      setStatus("人工验收决定已保存在本地；正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(errorMessage(error));
+      await refresh();
+    }
+  }
+
+  async function closeVerifiedTask(
+    verification: LocalView<VerificationPayload>,
+    task: LocalView<TaskPayload>,
+  ) {
+    try {
+      await commit(
+        "verification",
+        verification.entity.entity_id,
+        {
+          ...verification.payload,
+          action: "close_task",
+          expected_task_version: task.entity.server_version,
+        },
+        verification.entity,
+      );
+      setStatus("关闭任务操作已保存在本地；正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(errorMessage(error));
+      await refresh();
+    }
+  }
+
   const visibleGoals = goals.filter(
     (item) => item.payload.space_id === spaceId,
   );
@@ -508,6 +724,18 @@ export function TodayCenter() {
   );
   const activeSession = sessions.find(
     (item) => item.payload.status === "active",
+  );
+  const visibleEvidence = evidence.filter(
+    (item) => item.payload.space_id === spaceId,
+  );
+  const visibleVerifications = verifications.filter(
+    (item) => item.payload.space_id === spaceId,
+  );
+  const visibleNotes = notes.filter(
+    (item) => item.payload.space_id === spaceId,
+  );
+  const visibleResources = resources.filter(
+    (item) => item.payload.space_id === spaceId,
   );
 
   return (
@@ -689,11 +917,165 @@ export function TodayCenter() {
                     </button>
                   ) : null}
                 </div>
+                {taskStatus === "in_progress" || taskStatus === "submitted" ? (
+                  <form
+                    className="planning-form"
+                    onSubmit={(event) => void submitEvidence(event, task)}
+                  >
+                    <h4>提交证据并进入人工验收</h4>
+                    <label htmlFor={`evidence-type-${task.entity.entity_id}`}>
+                      证据类型
+                    </label>
+                    <select
+                      id={`evidence-type-${task.entity.entity_id}`}
+                      name="evidence_type"
+                      defaultValue="text"
+                    >
+                      <option value="text">文字说明</option>
+                      <option value="link">HTTP(S) 链接</option>
+                      <option value="note">已保存笔记</option>
+                      <option value="resource">已保存资料</option>
+                    </select>
+                    <label
+                      htmlFor={`evidence-summary-${task.entity.entity_id}`}
+                    >
+                      证据说明
+                    </label>
+                    <textarea
+                      id={`evidence-summary-${task.entity.entity_id}`}
+                      name="summary"
+                      maxLength={10000}
+                    />
+                    <label htmlFor={`evidence-url-${task.entity.entity_id}`}>
+                      链接（仅链接证据）
+                    </label>
+                    <input
+                      id={`evidence-url-${task.entity.entity_id}`}
+                      name="external_url"
+                      type="url"
+                      maxLength={4096}
+                      placeholder="https://example.com/result"
+                    />
+                    <label
+                      htmlFor={`evidence-reference-${task.entity.entity_id}`}
+                    >
+                      笔记或资料（仅引用证据）
+                    </label>
+                    <select
+                      id={`evidence-reference-${task.entity.entity_id}`}
+                      name="reference_id"
+                      defaultValue=""
+                    >
+                      <option value="">请选择</option>
+                      <optgroup label="笔记">
+                        {visibleNotes.map((item) => (
+                          <option
+                            key={`note-${item.entity.entity_id}`}
+                            value={item.entity.entity_id}
+                          >
+                            {item.payload.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="资料">
+                        {visibleResources.map((item) => (
+                          <option
+                            key={`resource-${item.entity.entity_id}`}
+                            value={item.entity.entity_id}
+                          >
+                            {item.payload.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    <button type="submit">保存证据到本地</button>
+                  </form>
+                ) : null}
               </article>
             );
           })}
           {visibleTasks.length === 0 ? (
             <p className="empty-state">当前空间还没有任务。</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="settings-card sync-wide-card">
+        <h2>证据与人工验收</h2>
+        <p>所有决定都需要人明确点击确认；AI 建议不会自动改变验收或任务状态。</p>
+        <div className="task-grid">
+          {visibleVerifications.map((verification) => {
+            const task = visibleTasks.find(
+              (item) => item.entity.entity_id === verification.payload.task_id,
+            );
+            const evidenceItem = visibleEvidence.find(
+              (item) =>
+                item.entity.entity_id === verification.payload.evidence_id,
+            );
+            return (
+              <article
+                className="task-card"
+                key={verification.entity.entity_id}
+              >
+                <div>
+                  <span className="count-badge">
+                    {verification.payload.verdict}
+                  </span>
+                  <h3>{task?.payload.title ?? "待验收任务"}</h3>
+                  <p>{evidenceItem?.payload.summary || "关联证据已记录"}</p>
+                  <small>人工验收 · {verification.entity.sync_status}</small>
+                </div>
+                {verification.payload.verdict === "pending" ? (
+                  <form
+                    className="planning-form"
+                    onSubmit={(event) =>
+                      void decideVerification(event, verification)
+                    }
+                  >
+                    <label
+                      htmlFor={`verification-verdict-${verification.entity.entity_id}`}
+                    >
+                      人工决定
+                    </label>
+                    <select
+                      id={`verification-verdict-${verification.entity.entity_id}`}
+                      name="verdict"
+                      defaultValue="passed"
+                    >
+                      <option value="passed">通过</option>
+                      <option value="needs_revision">需要修改</option>
+                      <option value="failed">不通过</option>
+                    </select>
+                    <label
+                      htmlFor={`verification-notes-${verification.entity.entity_id}`}
+                    >
+                      验收意见
+                    </label>
+                    <textarea
+                      id={`verification-notes-${verification.entity.entity_id}`}
+                      name="reviewer_notes"
+                      maxLength={10000}
+                    />
+                    <button type="submit">确认人工验收决定</button>
+                  </form>
+                ) : null}
+                {verification.payload.verdict === "passed" &&
+                task?.payload.status === "verified" ? (
+                  <button
+                    type="button"
+                    onClick={() => void closeVerifiedTask(verification, task)}
+                  >
+                    关闭已验收任务
+                  </button>
+                ) : null}
+                {verification.payload.reviewer_notes ? (
+                  <p>验收意见：{verification.payload.reviewer_notes}</p>
+                ) : null}
+              </article>
+            );
+          })}
+          {visibleVerifications.length === 0 ? (
+            <p className="empty-state">当前空间还没有待验收记录。</p>
           ) : null}
         </div>
       </section>
