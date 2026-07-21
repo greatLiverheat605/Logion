@@ -1,4 +1,5 @@
 export { LogionOfflineDatabase, openOfflineDatabase } from "./database";
+export { BootstrapRepository } from "./bootstrap";
 export {
   normalizeStorageError,
   OfflineStorageError,

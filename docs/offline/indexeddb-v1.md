@@ -4,6 +4,8 @@
 - 实现：`packages/offline`
 - 输入合同：`sync-v1`（main `63203e8`）
 
+> 本文保留不可变的 v1 历史定义。当前应用 schema 为 v2；Bootstrap 行为见 `docs/offline/indexeddb-v2-bootstrap.md`。
+
 ## Schema v1
 
 | Store       | 主键                                   | 主要索引                                                            | 责任                                         |
@@ -34,6 +36,6 @@
 - 当前尚无生产 IndexedDB 数据，预发布回滚可删除数据库。产生真实用户数据后，删除数据库不再是回滚方案，必须以 v2+ 升级、只读导出或前向修复处理；
 - `syncState` 的 bootstrap/epoch/cursor 事务语义将在 L2-002 实现，不得由页面自行更新。
 
-## L2-002 输入
+## L2-002 交接
 
-L2-002 可以新增 staging store 并通过 IndexedDB v2 迁移实现 chunk 下载和原子快照切换；必须覆盖从 v1 升级、升级中断、配额不足、重新打开、旧应用打开 v2 和 epoch Outbox 隔离。不得改写 v1 历史 schema。
+L2-002A 已通过新增 staging store 和 IndexedDB v2 实现 chunk 下载、恢复与原子快照切换，并覆盖从 v1 升级、升级中断、配额不足、重新打开、旧应用预检 v2 和 epoch Outbox 隔离。v1 历史 schema 未改写。

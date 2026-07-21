@@ -1,6 +1,6 @@
-import type { SyncOperationV1 } from "@logion/contracts";
+import type { EntityRecord, SyncOperationV1 } from "@logion/contracts";
 
-export const OFFLINE_SCHEMA_VERSION = 1 as const;
+export const OFFLINE_SCHEMA_VERSION = 2 as const;
 
 export type JsonPrimitive = boolean | null | number | string;
 export type JsonValue =
@@ -51,13 +51,63 @@ export type BootstrapState =
 export interface WorkspaceSyncState {
   workspace_id: string;
   device_id: string;
-  schema_version: typeof OFFLINE_SCHEMA_VERSION;
+  schema_version: 1 | typeof OFFLINE_SCHEMA_VERSION;
   sync_epoch: string | null;
   cursor: number;
   bootstrap_state: BootstrapState;
   last_sync_at: string | null;
   outbox_isolated_at: string | null;
   isolation_reason_code: string | null;
+}
+
+export type BootstrapManifestStatus = "complete" | "staging";
+
+export interface BootstrapReceivedChunk {
+  chunk_index: number;
+  chunk_checksum: string;
+}
+
+export interface BootstrapManifest {
+  workspace_id: string;
+  snapshot_id: string;
+  device_id: string;
+  sync_epoch: string;
+  snapshot_schema_version: 1;
+  chunk_count: number;
+  cursor: number;
+  snapshot_checksum: string;
+  created_at: string;
+  received_chunks: BootstrapReceivedChunk[];
+  received_records: number;
+  status: BootstrapManifestStatus;
+}
+
+export interface BootstrapStagedRecord extends EntityRecord {
+  workspace_id: string;
+  snapshot_id: string;
+  chunk_index: number;
+  record_index: number;
+  payload: JsonObject;
+}
+
+export interface BootstrapContext {
+  workspace_id: string;
+  device_id: string;
+}
+
+export interface BootstrapProgress {
+  workspace_id: string;
+  snapshot_id: string;
+  received_chunks: number;
+  chunk_count: number;
+  received_records: number;
+  complete: boolean;
+}
+
+export interface BootstrapRepositoryOptions {
+  maxOperationBytes?: number;
+  maxSnapshotChunkBytes?: number;
+  subtleCrypto?: SubtleCrypto | null;
 }
 
 export interface LocalMutationInput {

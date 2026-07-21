@@ -3,6 +3,8 @@ import Dexie, { type Table } from "dexie";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
 import {
   OFFLINE_SCHEMA_VERSION,
+  type BootstrapManifest,
+  type BootstrapStagedRecord,
   type LocalEntity,
   type OfflineDatabaseOptions,
   type OutboxEntry,
@@ -13,6 +15,11 @@ export class LogionOfflineDatabase extends Dexie {
   readonly entities!: Table<LocalEntity, [string, string, string]>;
   readonly outbox!: Table<OutboxEntry, string>;
   readonly syncState!: Table<WorkspaceSyncState, string>;
+  readonly bootstrapManifests!: Table<BootstrapManifest, [string, string]>;
+  readonly bootstrapRecords!: Table<
+    BootstrapStagedRecord,
+    [string, string, number, string, string]
+  >;
 
   constructor(options: OfflineDatabaseOptions) {
     if (options.indexedDB === null || options.IDBKeyRange === null) {
@@ -22,12 +29,23 @@ export class LogionOfflineDatabase extends Dexie {
       indexedDB: options.indexedDB,
       IDBKeyRange: options.IDBKeyRange,
     });
+    this.version(1).stores({
+      entities:
+        "[workspace_id+entity_type+entity_id], workspace_id, [workspace_id+entity_type], [workspace_id+sync_status]",
+      outbox:
+        "operation_id, workspace_id, [workspace_id+outbox_state+queued_at], [workspace_id+entity_type+entity_id], [workspace_id+device_id]",
+      syncState: "workspace_id, device_id, bootstrap_state",
+    });
     this.version(OFFLINE_SCHEMA_VERSION).stores({
       entities:
         "[workspace_id+entity_type+entity_id], workspace_id, [workspace_id+entity_type], [workspace_id+sync_status]",
       outbox:
         "operation_id, workspace_id, [workspace_id+outbox_state+queued_at], [workspace_id+entity_type+entity_id], [workspace_id+device_id]",
       syncState: "workspace_id, device_id, bootstrap_state",
+      bootstrapManifests:
+        "[workspace_id+snapshot_id], workspace_id, [workspace_id+status]",
+      bootstrapRecords:
+        "[workspace_id+snapshot_id+chunk_index+entity_type+entity_id], [workspace_id+snapshot_id], [workspace_id+snapshot_id+chunk_index], &[workspace_id+snapshot_id+entity_type+entity_id]",
     });
   }
 }
