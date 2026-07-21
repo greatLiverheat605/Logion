@@ -432,6 +432,128 @@ describe("recoverable push/pull cycle", () => {
     );
   });
 
+  it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-task-conflict-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    await database.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 3,
+      sync_epoch: ids.epoch,
+      cursor: 0,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    const local = {
+      space_id: ids.user,
+      title: "Local private task",
+      description: "local private description",
+      status: "in_progress",
+      blocked_reason: null,
+    };
+    await new ProtectedOfflineRepository(database, vault).commitMutation({
+      operation_id: ids.operation,
+      protocol_version: "sync-v1",
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      entity_type: "task",
+      entity_id: ids.entity,
+      operation_type: "create",
+      base_version: 0,
+      local_revision: 1,
+      client_occurred_at: "2026-07-21T00:00:00Z",
+      created_at: "2026-07-21T00:00:00Z",
+      updated_at: "2026-07-21T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: local,
+    });
+    expect(JSON.stringify(await database.entities.toArray())).not.toContain(
+      "local private description",
+    );
+    expect(JSON.stringify(await database.outbox.toArray())).not.toContain(
+      "local private description",
+    );
+    const remote = {
+      space_id: ids.user,
+      title: "Sensitive remote task",
+      description: "remote private description",
+      status: "submitted",
+    };
+    const remoteHash = await hashPayload(remote);
+    await new SyncClient(
+      database,
+      {
+        async push(request) {
+          await Promise.resolve();
+          return {
+            message_type: "push_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            results: [
+              {
+                operation_id: ids.operation,
+                status: "conflict",
+                retryable: false,
+                conflict: {
+                  conflict_id: ids.user,
+                  conflict_kind: "status",
+                  status: "open",
+                  entity_type: "task",
+                  entity_id: ids.entity,
+                  base_version: 0,
+                  local_payload_hash: await hashPayload(local),
+                  remote_version: 2,
+                  remote_payload: remote,
+                  remote_payload_hash: remoteHash,
+                  resolution_options: ["keep_remote", "dismiss"],
+                  created_at: "2026-07-21T00:00:02Z",
+                },
+              },
+            ],
+          };
+        },
+        async pull(request) {
+          await Promise.resolve();
+          return {
+            message_type: "pull_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            from_cursor: 0,
+            next_cursor: 0,
+            has_more: false,
+            changes: [],
+          };
+        },
+      },
+      vault,
+    ).synchronize(ids.workspace, ids.device);
+
+    const conflict = await database.conflicts.get(ids.user);
+    expect(conflict?.remote_payload).toEqual({
+      encrypted_payload_ref: ids.user,
+    });
+    expect(await vault.get(ids.user, ids.workspace)).toEqual(remote);
+    expect(JSON.stringify(await database.conflicts.toArray())).not.toContain(
+      "remote private description",
+    );
+    expect(await database.outbox.get(ids.operation)).toMatchObject({
+      outbox_state: "conflict",
+    });
+  });
+
   it("fails closed when the local Workspace is not bootstrapped for the device", async () => {
     database = await openOfflineDatabase({
       databaseName: `logion-invalid-${crypto.randomUUID()}`,
@@ -528,11 +650,11 @@ describe("recoverable push/pull cycle", () => {
           device_id: request.device_id,
           sync_epoch: request.sync_epoch,
           from_cursor: 7,
-          next_cursor: 8,
+          next_cursor: 9,
           has_more: false,
           changes: [
             {
-              sequence: 8,
+              sequence: 9,
               operation_id: ids.operation,
               entity_type: "space",
               entity_id: ids.entity,

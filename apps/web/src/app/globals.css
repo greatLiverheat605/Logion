@@ -509,6 +509,7 @@ h1 {
 }
 
 .planning-form input,
+.planning-form select,
 .planning-form textarea,
 .planning-form button {
   min-height: 2.75rem;
@@ -534,4 +535,50 @@ h1 {
 .planning-form button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1rem;
+}
+
+.task-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgb(105 219 255 / 32%);
+  border-radius: 0.85rem;
+  background: rgb(7 24 42 / 74%);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 15rem;
+}
+
+.task-card h3 {
+  margin-block: 0.75rem 0.35rem;
+}
+
+.task-card p {
+  overflow-wrap: anywhere;
+  color: #bfd0e3;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.task-actions button {
+  min-height: 2.6rem;
+  flex: 1 1 8rem;
+}
+
+@media (max-width: 42rem) {
+  .task-actions {
+    flex-direction: column;
+  }
 }

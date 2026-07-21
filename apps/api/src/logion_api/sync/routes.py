@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Request
 
 from logion_api.errors import APIError, ErrorResponse
+from logion_api.execution.dependencies import ExecutionServiceDependency
 from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
@@ -69,6 +70,7 @@ async def push(
     limiter: RateLimiterDependency,
     settings: SettingsDependency,
     planning: PlanningServiceDependency,
+    execution: ExecutionServiceDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> PushResponse | RebootstrapControl:
     require_trusted_origin(request, settings)
@@ -120,7 +122,7 @@ async def push(
         server_sync_epoch = state.sync_epoch
         await db.rollback()
         return RebootstrapControl(server_sync_epoch=server_sync_epoch)
-    results = await SyncPushService(SyncLedgerService(), workspaces, planning).push(
+    results = await SyncPushService(SyncLedgerService(), workspaces, planning, execution).push(
         db,
         context,
         payload,

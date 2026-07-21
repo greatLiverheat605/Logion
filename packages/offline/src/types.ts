@@ -43,7 +43,13 @@ export interface OutboxEntry extends SyncOperationV1 {
 }
 
 export interface ProtectedMutationInput extends LocalMutationInput {
-  entity_type: "learning_goal" | "note" | "resource" | "evidence";
+  entity_type:
+    | "evidence"
+    | "learning_goal"
+    | "note"
+    | "resource"
+    | "study_session"
+    | "task";
 }
 
 export type BootstrapState =

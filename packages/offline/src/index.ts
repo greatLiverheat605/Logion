@@ -8,6 +8,7 @@ export {
 export { hashPayload } from "./hashing";
 export { OfflineRepository, type MutationCommitResult } from "./repository";
 export { ProtectedOfflineRepository } from "./protected-repository";
+export { isProtectedEntityType } from "./protected-entities";
 export { AttachmentQueueRepository, ConflictRepository } from "./resilience";
 export { OfflineVault } from "./vault";
 export {

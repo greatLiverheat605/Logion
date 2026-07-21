@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { validatePayload, validateUuid } from "./validation";
 import { OfflineVault } from "./vault";
+import { isProtectedEntityType } from "./protected-entities";
 
 export const DEFAULT_MAX_SNAPSHOT_CHUNK_BYTES = 4 * 1024 * 1024;
 export const DEFAULT_MAX_BOOTSTRAP_OPERATION_BYTES = 256 * 1024;
@@ -167,7 +168,9 @@ export class BootstrapRepository {
       }
       let protectedMessage = message;
       if (
-        message.records.some((record) => record.entity_type === "learning_goal")
+        message.records.some((record) =>
+          isProtectedEntityType(record.entity_type),
+        )
       ) {
         const vault = this.vault;
         if (vault === undefined) {
@@ -175,7 +178,7 @@ export class BootstrapRepository {
         }
         const records = await Promise.all(
           message.records.map(async (record) => {
-            if (record.entity_type !== "learning_goal") return record;
+            if (!isProtectedEntityType(record.entity_type)) return record;
             await vault.put(
               record.entity_id,
               context.workspace_id,

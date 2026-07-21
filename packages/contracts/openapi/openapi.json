@@ -508,6 +508,37 @@
         "title": "Change",
         "type": "object"
       },
+      "ConflictOperationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "conflict": {
+            "$ref": "#/components/schemas/SyncConflict"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "retryable": {
+            "const": false,
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "status": {
+            "const": "conflict",
+            "default": "conflict",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "conflict"
+        ],
+        "title": "ConflictOperationResult",
+        "type": "object"
+      },
       "ConflictResolution": {
         "additionalProperties": false,
         "properties": {
@@ -1877,6 +1908,9 @@
                   "$ref": "#/components/schemas/AppliedOperationResult"
                 },
                 {
+                  "$ref": "#/components/schemas/ConflictOperationResult"
+                },
+                {
                   "$ref": "#/components/schemas/FailedOperationResult"
                 }
               ]
@@ -2417,6 +2451,102 @@
         ],
         "title": "SpaceVisibility",
         "type": "string"
+      },
+      "SyncConflict": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version": {
+            "minimum": 0.0,
+            "title": "Base Version",
+            "type": "integer"
+          },
+          "conflict_id": {
+            "format": "uuid",
+            "title": "Conflict Id",
+            "type": "string"
+          },
+          "conflict_kind": {
+            "enum": [
+              "content",
+              "status",
+              "hierarchy",
+              "delete_update",
+              "permission"
+            ],
+            "title": "Conflict Kind",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entity_id": {
+            "format": "uuid",
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "local_payload_hash": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "title": "Local Payload Hash",
+            "type": "string"
+          },
+          "remote_payload": {
+            "additionalProperties": true,
+            "title": "Remote Payload",
+            "type": "object"
+          },
+          "remote_payload_hash": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "title": "Remote Payload Hash",
+            "type": "string"
+          },
+          "remote_version": {
+            "minimum": 1.0,
+            "title": "Remote Version",
+            "type": "integer"
+          },
+          "resolution_options": {
+            "items": {
+              "enum": [
+                "keep_local",
+                "keep_remote",
+                "merge",
+                "dismiss"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Resolution Options",
+            "type": "array"
+          },
+          "status": {
+            "const": "open",
+            "default": "open",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conflict_id",
+          "conflict_kind",
+          "entity_type",
+          "entity_id",
+          "base_version",
+          "local_payload_hash",
+          "remote_version",
+          "remote_payload",
+          "remote_payload_hash",
+          "resolution_options",
+          "created_at"
+        ],
+        "title": "SyncConflict",
+        "type": "object"
       },
       "SyncOperation": {
         "additionalProperties": false,

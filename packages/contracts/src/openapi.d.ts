@@ -1017,6 +1017,27 @@ export interface components {
             /** Tombstone */
             tombstone: boolean;
         };
+        /** ConflictOperationResult */
+        ConflictOperationResult: {
+            conflict: components["schemas"]["SyncConflict"];
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /**
+             * Retryable
+             * @default false
+             * @constant
+             */
+            retryable: false;
+            /**
+             * Status
+             * @default conflict
+             * @constant
+             */
+            status: "conflict";
+        };
         /** ConflictResolution */
         ConflictResolution: {
             /**
@@ -1676,7 +1697,7 @@ export interface components {
              */
             protocol_version: "sync-v1";
             /** Results */
-            results: (components["schemas"]["AppliedOperationResult"] | components["schemas"]["FailedOperationResult"])[];
+            results: (components["schemas"]["AppliedOperationResult"] | components["schemas"]["ConflictOperationResult"] | components["schemas"]["FailedOperationResult"])[];
             /**
              * Sync Epoch
              * Format: uuid
@@ -1914,6 +1935,51 @@ export interface components {
          * @enum {string}
          */
         SpaceVisibility: "private" | "shared";
+        /** SyncConflict */
+        SyncConflict: {
+            /** Base Version */
+            base_version: number;
+            /**
+             * Conflict Id
+             * Format: uuid
+             */
+            conflict_id: string;
+            /**
+             * Conflict Kind
+             * @enum {string}
+             */
+            conflict_kind: "content" | "status" | "hierarchy" | "delete_update" | "permission";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Local Payload Hash */
+            local_payload_hash: string;
+            /** Remote Payload */
+            remote_payload: {
+                [key: string]: unknown;
+            };
+            /** Remote Payload Hash */
+            remote_payload_hash: string;
+            /** Remote Version */
+            remote_version: number;
+            /** Resolution Options */
+            resolution_options: ("keep_local" | "keep_remote" | "merge" | "dismiss")[];
+            /**
+             * Status
+             * @default open
+             * @constant
+             */
+            status: "open";
+        };
         /** SyncOperation */
         SyncOperation: {
             /** Base Version */
