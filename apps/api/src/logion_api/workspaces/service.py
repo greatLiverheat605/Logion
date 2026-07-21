@@ -328,6 +328,7 @@ class WorkspaceService:
         name: str,
         visibility: SpaceVisibility,
         request_id: str,
+        space_id: UUID | None = None,
     ) -> Space:
         permission = (
             Permission.SPACE_CREATE_SHARED
@@ -372,6 +373,7 @@ class WorkspaceService:
             )
             raise self._quota_error("The Workspace has reached its Space limit.")
         space = Space(
+            id=space_id,
             workspace_id=access.workspace.id,
             owner_user_id=context.user.id,
             name=name.strip(),

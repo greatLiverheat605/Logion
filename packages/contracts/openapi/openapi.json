@@ -1,6 +1,48 @@
 {
   "components": {
     "schemas": {
+      "AppliedOperationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "retryable": {
+            "const": false,
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "server_version": {
+            "minimum": 1.0,
+            "title": "Server Version",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "applied",
+              "duplicate"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "status",
+          "server_version",
+          "sequence"
+        ],
+        "title": "AppliedOperationResult",
+        "type": "object"
+      },
       "AuditEventPageResponse": {
         "properties": {
           "events": {
@@ -205,6 +247,38 @@
         "title": "AuthenticationCredentialRequest",
         "type": "object"
       },
+      "ConflictResolution": {
+        "additionalProperties": false,
+        "properties": {
+          "conflict_id": {
+            "format": "uuid",
+            "title": "Conflict Id",
+            "type": "string"
+          },
+          "expected_remote_version": {
+            "minimum": 1.0,
+            "title": "Expected Remote Version",
+            "type": "integer"
+          },
+          "resolution": {
+            "enum": [
+              "keep_local",
+              "keep_remote",
+              "merge",
+              "dismiss"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conflict_id",
+          "resolution",
+          "expected_remote_version"
+        ],
+        "title": "ConflictResolution",
+        "type": "object"
+      },
       "DeviceListResponse": {
         "properties": {
           "devices": {
@@ -328,6 +402,41 @@
           "request_id"
         ],
         "title": "ErrorResponse",
+        "type": "object"
+      },
+      "FailedOperationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "error_code": {
+            "pattern": "^SYNC_[A-Z0-9_]{2,80}$",
+            "title": "Error Code",
+            "type": "string"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "rejected",
+              "blocked_dependency"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "status",
+          "retryable",
+          "error_code"
+        ],
+        "title": "FailedOperationResult",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -861,6 +970,156 @@
         "title": "PasswordRecoveryStartRequest",
         "type": "object"
       },
+      "PushRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "message_type": {
+            "const": "push_request",
+            "title": "Message Type",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/SyncOperation"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          },
+          "protocol_version": {
+            "const": "sync-v1",
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "sync_epoch": {
+            "format": "uuid",
+            "title": "Sync Epoch",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_type",
+          "protocol_version",
+          "workspace_id",
+          "device_id",
+          "sync_epoch",
+          "operations"
+        ],
+        "title": "PushRequest",
+        "type": "object"
+      },
+      "PushResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "message_type": {
+            "const": "push_response",
+            "default": "push_response",
+            "title": "Message Type",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": "sync-v1",
+            "default": "sync-v1",
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AppliedOperationResult"
+                },
+                {
+                  "$ref": "#/components/schemas/FailedOperationResult"
+                }
+              ]
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Results",
+            "type": "array"
+          },
+          "sync_epoch": {
+            "format": "uuid",
+            "title": "Sync Epoch",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "device_id",
+          "sync_epoch",
+          "results"
+        ],
+        "title": "PushResponse",
+        "type": "object"
+      },
+      "RebootstrapControl": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "rebootstrap_required",
+            "default": "rebootstrap_required",
+            "title": "Action",
+            "type": "string"
+          },
+          "message_type": {
+            "const": "sync_control",
+            "default": "sync_control",
+            "title": "Message Type",
+            "type": "string"
+          },
+          "min_supported_version": {
+            "const": "sync-v1",
+            "default": "sync-v1",
+            "title": "Min Supported Version",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": "sync-v1",
+            "default": "sync-v1",
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "reason_code": {
+            "const": "EPOCH_MISMATCH",
+            "default": "EPOCH_MISMATCH",
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "server_sync_epoch": {
+            "format": "uuid",
+            "title": "Server Sync Epoch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_sync_epoch"
+        ],
+        "title": "RebootstrapControl",
+        "type": "object"
+      },
       "RecoveryCodesResponse": {
         "properties": {
           "recovery_codes": {
@@ -1179,6 +1438,106 @@
         ],
         "title": "SpaceVisibility",
         "type": "string"
+      },
+      "SyncOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version": {
+            "minimum": 0.0,
+            "title": "Base Version",
+            "type": "integer"
+          },
+          "client_occurred_at": {
+            "format": "date-time",
+            "title": "Client Occurred At",
+            "type": "string"
+          },
+          "conflict_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConflictResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dependencies": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "entity_id": {
+            "format": "uuid",
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "operation_type": {
+            "enum": [
+              "create",
+              "update",
+              "delete",
+              "restore"
+            ],
+            "title": "Operation Type",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "payload_hash": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "title": "Payload Hash",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": "sync-v1",
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "protocol_version",
+          "workspace_id",
+          "device_id",
+          "entity_type",
+          "entity_id",
+          "operation_type",
+          "base_version",
+          "client_occurred_at",
+          "payload",
+          "payload_hash",
+          "dependencies"
+        ],
+        "title": "SyncOperation",
+        "type": "object"
       },
       "TotpActivationResponse": {
         "properties": {
@@ -5407,6 +5766,123 @@
         "summary": "Get Space",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/sync/push": {
+      "post": {
+        "operationId": "sync_push",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PushResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RebootstrapControl"
+                    }
+                  ],
+                  "title": "Response Sync Push"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Push",
+        "tags": [
+          "sync"
         ]
       }
     },
