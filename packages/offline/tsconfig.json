@@ -1,0 +1,7 @@
+{
+  "extends": "@logion/config/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "ES2022"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
+}
