@@ -9,6 +9,7 @@ import {
 import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
 import { OfflineRepository } from "./repository";
+import { isProtectedEntityType } from "./protected-entities";
 import type {
   JsonObject,
   LocalEntity,
@@ -115,6 +116,25 @@ export class SyncClient {
     ) {
       throw new OfflineStorageError("OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH");
     }
+    const protectedConflicts = new Map<string, JsonObject>();
+    for (const result of message.results) {
+      if (
+        result.status === "conflict" &&
+        isProtectedEntityType(result.conflict.entity_type)
+      ) {
+        if (this.vault === undefined) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        await this.vault.put(
+          result.conflict.conflict_id,
+          state.workspace_id,
+          result.conflict.remote_payload as JsonObject,
+        );
+        protectedConflicts.set(result.conflict.conflict_id, {
+          encrypted_payload_ref: result.conflict.conflict_id,
+        });
+      }
+    }
     await this.database.transaction(
       "rw",
       this.database.outbox,
@@ -158,7 +178,9 @@ export class SyncClient {
                 ...result.conflict,
                 workspace_id: state.workspace_id,
                 local_payload: local.payload,
-                remote_payload: result.conflict.remote_payload as JsonObject,
+                remote_payload:
+                  protectedConflicts.get(result.conflict.conflict_id) ??
+                  (result.conflict.remote_payload as JsonObject),
                 resolved_at: null,
               });
               await this.database.entities.update(
@@ -241,7 +263,7 @@ export class SyncClient {
   ): Promise<void> {
     const protectedPayloads = new Map<string, JsonObject>();
     for (const change of message.changes) {
-      if (change.entity_type === "learning_goal") {
+      if (isProtectedEntityType(change.entity_type)) {
         if (this.vault === undefined) {
           throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
         }
@@ -262,7 +284,10 @@ export class SyncClient {
       async () => {
         let expected = message.from_cursor;
         for (const change of message.changes) {
-          if (change.sequence !== expected + 1) {
+          if (
+            change.sequence <= expected ||
+            change.sequence > message.next_cursor
+          ) {
             throw new OfflineStorageError("OFFLINE_TRANSACTION_FAILED");
           }
           expected = change.sequence;
@@ -298,7 +323,10 @@ export class SyncClient {
           };
           await this.database.entities.put(entity);
         }
-        if (expected !== message.next_cursor) {
+        if (
+          message.next_cursor < expected ||
+          message.next_cursor < message.from_cursor
+        ) {
           throw new OfflineStorageError("OFFLINE_TRANSACTION_FAILED");
         }
         await this.database.syncState.update(state.workspace_id, {

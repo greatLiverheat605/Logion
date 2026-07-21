@@ -248,6 +248,7 @@ class ExecutionService:
                 StudySession.workspace_id == workspace_id,
                 StudySession.created_by == context.user.id,
                 StudySession.status == "active",
+                StudySession.deleted_at.is_(None),
             )
         )
         if active is not None or await db.get(StudySession, session_id) is not None:
@@ -259,6 +260,7 @@ class ExecutionService:
             space_id=space_id,
             task_id=task.id,
             created_by=context.user.id,
+            updated_by=context.user.id,
             started_at=now,
         )
         if task.status == "planned":
@@ -313,6 +315,7 @@ class ExecutionService:
                 StudySession.workspace_id == workspace_id,
                 StudySession.space_id == space_id,
                 StudySession.created_by == context.user.id,
+                StudySession.deleted_at.is_(None),
             )
             .with_for_update()
         )
@@ -329,6 +332,7 @@ class ExecutionService:
         session.reflection = reflection
         session.version += 1
         session.updated_at = now
+        session.updated_by = context.user.id
         db.add(
             SessionEvent(
                 workspace_id=workspace_id,

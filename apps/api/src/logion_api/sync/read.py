@@ -4,9 +4,10 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.execution.models import StudySession, Task
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
-from logion_api.sync.push import canonical_hash
+from logion_api.sync.push import canonical_hash, session_payload, task_payload
 from logion_api.sync.schemas import BootstrapResponse, Change, EntityRecord, PullResponse
 from logion_api.workspaces.models import Space
 
@@ -50,6 +51,18 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "learning_goal"},
         )
+        visible_tasks = await self._visible_task_ids(
+            db,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "task"},
+        )
+        visible_sessions = await self._visible_session_ids(
+            db,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "study_session"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -70,6 +83,8 @@ class SyncReadService:
             for row in page
             if (row.entity_type == "space" and row.entity_id in visible_spaces)
             or (row.entity_type == "learning_goal" and row.entity_id in visible_goals)
+            or (row.entity_type == "task" and row.entity_id in visible_tasks)
+            or (row.entity_type == "study_session" and row.entity_id in visible_sessions)
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -95,6 +110,8 @@ class SyncReadService:
         records = [
             *(await self._space_records(db, state.workspace_id, user_id)),
             *(await self._goal_records(db, state.workspace_id, user_id)),
+            *(await self._task_records(db, state.workspace_id, user_id)),
+            *(await self._session_records(db, state.workspace_id, user_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -309,6 +326,120 @@ class SyncReadService:
                 )
             )
         return records
+
+    async def _visible_task_ids(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        return set(
+            (
+                await db.scalars(
+                    select(Task.id)
+                    .join(Space, Space.id == Task.space_id)
+                    .where(
+                        Task.workspace_id == workspace_id,
+                        Task.id.in_(entity_ids),
+                        Task.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                )
+            ).all()
+        )
+
+    async def _visible_session_ids(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        return set(
+            (
+                await db.scalars(
+                    select(StudySession.id)
+                    .join(Space, Space.id == StudySession.space_id)
+                    .where(
+                        StudySession.workspace_id == workspace_id,
+                        StudySession.id.in_(entity_ids),
+                        StudySession.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                )
+            ).all()
+        )
+
+    async def _task_records(
+        self, db: AsyncSession, workspace_id: UUID, user_id: UUID
+    ) -> list[EntityRecord]:
+        tasks = list(
+            (
+                await db.scalars(
+                    select(Task)
+                    .join(Space, Space.id == Task.space_id)
+                    .where(
+                        Task.workspace_id == workspace_id,
+                        Task.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                    .order_by(Task.id)
+                )
+            ).all()
+        )
+        return [
+            EntityRecord(
+                entity_type="task",
+                entity_id=task.id,
+                version=task.version,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+                deleted_at=task.deleted_at,
+                created_by=task.created_by,
+                updated_by=task.updated_by,
+                payload=task_payload(task),
+                payload_hash=canonical_hash(task_payload(task)),
+            )
+            for task in tasks
+        ]
+
+    async def _session_records(
+        self, db: AsyncSession, workspace_id: UUID, user_id: UUID
+    ) -> list[EntityRecord]:
+        sessions = list(
+            (
+                await db.scalars(
+                    select(StudySession)
+                    .join(Space, Space.id == StudySession.space_id)
+                    .where(
+                        StudySession.workspace_id == workspace_id,
+                        StudySession.deleted_at.is_(None),
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                    .order_by(StudySession.id)
+                )
+            ).all()
+        )
+        return [
+            EntityRecord(
+                entity_type="study_session",
+                entity_id=session.id,
+                version=session.version,
+                created_at=session.created_at,
+                updated_at=session.updated_at,
+                deleted_at=session.deleted_at,
+                created_by=session.created_by,
+                updated_by=session.updated_by,
+                payload=session_payload(session),
+                payload_hash=canonical_hash(session_payload(session)),
+            )
+            for session in sessions
+        ]
 
 
 class StaleSnapshotError(Exception):

@@ -68,7 +68,31 @@ class FailedOperationResult(StrictModel):
     error_code: Annotated[str, StringConstraints(pattern=r"^SYNC_[A-Z0-9_]{2,80}$")]
 
 
-OperationResult = AppliedOperationResult | FailedOperationResult
+class SyncConflict(StrictModel):
+    conflict_id: UUID
+    conflict_kind: Literal["content", "status", "hierarchy", "delete_update", "permission"]
+    status: Literal["open"] = "open"
+    entity_type: EntityType
+    entity_id: UUID
+    base_version: int = Field(ge=0)
+    local_payload_hash: Hash
+    remote_version: int = Field(ge=1)
+    remote_payload: dict[str, object]
+    remote_payload_hash: Hash
+    resolution_options: list[Literal["keep_local", "keep_remote", "merge", "dismiss"]] = Field(
+        min_length=1
+    )
+    created_at: datetime
+
+
+class ConflictOperationResult(StrictModel):
+    operation_id: UUID
+    status: Literal["conflict"] = "conflict"
+    retryable: Literal[False] = False
+    conflict: SyncConflict
+
+
+OperationResult = AppliedOperationResult | ConflictOperationResult | FailedOperationResult
 
 
 class PushResponse(StrictModel):

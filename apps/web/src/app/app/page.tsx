@@ -8,6 +8,9 @@ export default function AuthenticatedShellPage() {
       <h1>认证边界已就绪</h1>
       <p>可信身份、设备与多租户工作区边界已经可以使用。</p>
       <nav className="app-actions" aria-label="账户与工作区">
+        <Link className="text-link" href="/app/today">
+          今日学习
+        </Link>
         <Link className="text-link" href="/app/planning">
           学习计划
         </Link>
