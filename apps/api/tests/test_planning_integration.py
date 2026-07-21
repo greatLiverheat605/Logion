@@ -124,7 +124,9 @@ async def test_private_goal_plan_creation_publication_and_tenant_boundaries() ->
         audit_count = await db.scalar(
             select(func.count(AuditEvent.id)).where(
                 AuditEvent.event_type.in_(("planning.goal_created", "planning.plan_published")),
-                AuditEvent.target_id == UUID(str(payload["goal_id"])),
+                AuditEvent.target_id.in_(
+                    [UUID(str(payload["goal_id"])), UUID(str(payload["plan_id"]))]
+                ),
             )
         )
         assert int(audit_count or 0) == 2
