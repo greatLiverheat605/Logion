@@ -5,6 +5,7 @@ from alembic import context
 from logion_api.config import get_settings
 from logion_api.db import Base
 from logion_api.identity import models as identity_models  # noqa: F401
+from logion_api.planning import models as planning_models  # noqa: F401
 from logion_api.sync import models as sync_models  # noqa: F401
 from logion_api.workspaces import models as workspace_models  # noqa: F401
 from sqlalchemy import pool

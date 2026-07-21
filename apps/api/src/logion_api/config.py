@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     sync_max_batch_bytes: int = Field(default=2097152, ge=1024, le=16777216)
     workspace_owned_quota: int = Field(default=10, ge=1, le=100)
     space_per_workspace_quota: int = Field(default=200, ge=1, le=10000)
+    goal_per_space_quota: int = Field(default=500, ge=1, le=100000)
+    planning_write_limit_per_hour: int = Field(default=120, ge=1, le=2000)
     totp_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,
@@ -88,9 +90,7 @@ class Settings(BaseSettings):
     )
     email_delivery_encryption_keys: dict[str, SecretStr] = Field(
         default_factory=lambda: {
-            "development-v1": SecretStr(
-                "ZGV2ZWxvcG1lbnQtZW1haWwta2V5LTMyYnl0ZXMhISE"
-            )
+            "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtZW1haWwta2V5LTMyYnl0ZXMhISE")
         }
     )
 
@@ -139,8 +139,7 @@ class Settings(BaseSettings):
                 )
             except (binascii.Error, ValueError) as exc:
                 raise ValueError(
-                    "LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS contains invalid base64url "
-                    f"for {key_id}"
+                    f"LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS contains invalid base64url for {key_id}"
                 ) from exc
             if len(decoded_key) != 32:
                 raise ValueError(
