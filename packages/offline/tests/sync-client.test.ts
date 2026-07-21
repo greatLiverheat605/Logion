@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   hashPayload,
   OfflineRepository,
+  OfflineVault,
+  ProtectedOfflineRepository,
   openOfflineDatabase,
   SyncClient,
   type LogionOfflineDatabase,
@@ -296,6 +298,138 @@ describe("recoverable push/pull cycle", () => {
     expect(await database.syncState.get(ids.workspace)).toMatchObject({
       cursor: 5,
     });
+  });
+
+  it("decrypts protected Outbox payloads only for transport", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-protected-sync-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    await database.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 3,
+      sync_epoch: ids.epoch,
+      cursor: 0,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    const protectedPayload = {
+      space_id: ids.entity,
+      title: "Private learning goal",
+      description: "sensitive context",
+    };
+    await new ProtectedOfflineRepository(database, vault).commitMutation({
+      operation_id: ids.operation,
+      protocol_version: "sync-v1",
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      entity_type: "learning_goal",
+      entity_id: ids.entity,
+      operation_type: "create",
+      base_version: 0,
+      local_revision: 1,
+      client_occurred_at: "2026-07-21T00:00:00Z",
+      created_at: "2026-07-21T00:00:00Z",
+      updated_at: "2026-07-21T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: protectedPayload,
+    });
+    const unusedTransport: SyncTransport = {
+      async push() {
+        await Promise.resolve();
+        throw new Error("transport must not run");
+      },
+      async pull() {
+        await Promise.resolve();
+        throw new Error("transport must not run");
+      },
+    };
+    await expect(
+      new SyncClient(database, unusedTransport).synchronize(
+        ids.workspace,
+        ids.device,
+      ),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await database.vaultRecords.delete(ids.operation);
+    await expect(
+      new SyncClient(database, unusedTransport, vault).synchronize(
+        ids.workspace,
+        ids.device,
+      ),
+    ).rejects.toMatchObject({ code: "OFFLINE_TRANSACTION_FAILED" });
+    await vault.put(ids.operation, ids.workspace, protectedPayload);
+    let transportedPayload: unknown;
+    const result = await new SyncClient(
+      database,
+      {
+        async push(request) {
+          await Promise.resolve();
+          transportedPayload = request.operations[0].payload;
+          return {
+            message_type: "push_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            results: [
+              {
+                operation_id: ids.operation,
+                status: "applied",
+                retryable: false,
+                server_version: 1,
+                sequence: 1,
+              },
+            ],
+          };
+        },
+        async pull(request) {
+          await Promise.resolve();
+          return {
+            message_type: "pull_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            from_cursor: 0,
+            next_cursor: 1,
+            has_more: false,
+            changes: [
+              {
+                sequence: 1,
+                operation_id: ids.operation,
+                entity_type: "learning_goal",
+                entity_id: ids.entity,
+                operation_type: "create",
+                server_version: 1,
+                occurred_at: "2026-07-21T00:00:01Z",
+                tombstone: false,
+                deleted_at: null,
+                payload: protectedPayload,
+                payload_hash: await hashPayload(protectedPayload),
+              },
+            ],
+          };
+        },
+      },
+      vault,
+    ).synchronize(ids.workspace, ids.device);
+    expect(result.pushed).toBe(1);
+    expect(result.pulled).toBe(1);
+    expect(transportedPayload).toEqual(protectedPayload);
+    expect(JSON.stringify(await database.entities.toArray())).not.toContain(
+      "sensitive context",
+    );
+    expect(await vault.get(ids.entity, ids.workspace)).toEqual(
+      protectedPayload,
+    );
   });
 
   it("fails closed when the local Workspace is not bootstrapped for the device", async () => {

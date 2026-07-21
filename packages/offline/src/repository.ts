@@ -25,6 +25,11 @@ export type MutationCommitResult =
   | { kind: "committed"; entity: LocalEntity; operation: OutboxEntry }
   | { kind: "duplicate"; entity: LocalEntity; operation: OutboxEntry };
 
+export interface MutationCommitOptions {
+  payloadHash?: string;
+  payloadVaultId?: string;
+}
+
 function sameOperation(left: OutboxEntry, right: OutboxEntry): boolean {
   return (
     left.payload_hash === right.payload_hash &&
@@ -76,9 +81,10 @@ export class OfflineRepository {
 
   async commitMutation(
     input: LocalMutationInput,
+    options: MutationCommitOptions = {},
   ): Promise<MutationCommitResult> {
     validateMutation(input);
-    const hash = await hashPayload(input.payload);
+    const hash = options.payloadHash ?? (await hashPayload(input.payload));
     const operation: OutboxEntry = {
       operation_id: input.operation_id,
       protocol_version: "sync-v1",
@@ -91,6 +97,7 @@ export class OfflineRepository {
       client_occurred_at: input.client_occurred_at,
       payload: input.payload,
       payload_hash: hash,
+      payload_vault_id: options.payloadVaultId,
       dependencies: input.dependencies ?? [],
       conflict_resolution: null,
       outbox_state: "pending",

@@ -7,6 +7,7 @@ import {
   hashPayload,
   OfflineRepository,
   OfflineStorageError,
+  OfflineVault,
   openOfflineDatabase,
   type JsonObject,
   type LocalEntity,
@@ -177,6 +178,40 @@ function mutation(): LocalMutationInput {
 }
 
 describe("IndexedDB v2 bootstrap staging and atomic activation", () => {
+  it("encrypts protected bootstrap payloads before IndexedDB staging", async () => {
+    const database = await open();
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    const protectedRecord = {
+      ...(await record(ids.entityA, {
+        title: "Private goal",
+        description: "sensitive bootstrap context",
+      })),
+      entity_type: "learning_goal",
+    };
+    const [message] = await messages([[protectedRecord]]);
+    expect(message).toBeDefined();
+    await expect(
+      new BootstrapRepository(database).stageChunk(message, context),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await new BootstrapRepository(database, {}, vault).stageChunk(
+      message,
+      context,
+    );
+    const entity = await database.entities.get([
+      ids.workspace,
+      "learning_goal",
+      ids.entityA,
+    ]);
+    expect(entity?.payload).toEqual({ encrypted_payload_ref: ids.entityA });
+    expect(
+      JSON.stringify(await database.bootstrapRecords.toArray()),
+    ).not.toContain("sensitive bootstrap context");
+    expect(await vault.get(ids.entityA, ids.workspace)).toEqual(
+      protectedRecord.payload,
+    );
+  });
+
   it("upgrades v1 without rewriting its stores or losing readable data", async () => {
     const name = `logion-v1-upgrade-${crypto.randomUUID()}`;
     databaseNames.add(name);

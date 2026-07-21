@@ -7,6 +7,7 @@ import {
   hashPayload,
   openOfflineDatabase,
   OfflineVault,
+  ProtectedOfflineRepository,
   type LogionOfflineDatabase,
 } from "../src";
 
@@ -205,6 +206,90 @@ describe("conflict center and attachment queue", () => {
     await vault.wipeLocalData();
     expect(await db.vaultRecords.count()).toBe(0);
     expect(vault.unlocked).toBe(false);
+  });
+
+  it("keeps protected entity and Outbox payloads encrypted at rest", async () => {
+    const db = await open();
+    const vault = new OfflineVault(db);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    const payload = {
+      title: "Private goal",
+      description: "sensitive planning context",
+      desired_outcome: "private outcome",
+    };
+    await new ProtectedOfflineRepository(db, vault).commitMutation({
+      operation_id: ids.conflict,
+      protocol_version: "sync-v1",
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      entity_type: "learning_goal",
+      entity_id: ids.entity,
+      operation_type: "create",
+      base_version: 0,
+      local_revision: 1,
+      client_occurred_at: "2026-07-21T00:00:00Z",
+      created_at: "2026-07-21T00:00:00Z",
+      updated_at: "2026-07-21T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload,
+    });
+    const entity = await db.entities.get([
+      ids.workspace,
+      "learning_goal",
+      ids.entity,
+    ]);
+    const operation = await db.outbox.get(ids.conflict);
+    expect(entity?.payload).toEqual({ encrypted_payload_ref: ids.conflict });
+    expect(operation?.payload).toEqual({ encrypted_payload_ref: ids.conflict });
+    expect(operation?.payload_vault_id).toBe(ids.conflict);
+    expect(
+      JSON.stringify(await db.vaultRecords.get(ids.conflict)),
+    ).not.toContain("sensitive planning context");
+    expect(await vault.get(ids.conflict, ids.workspace)).toEqual(payload);
+    await expect(
+      new ProtectedOfflineRepository(db, vault).commitMutation({
+        operation_id: ids.conflict,
+        protocol_version: "sync-v1",
+        workspace_id: ids.workspace,
+        device_id: ids.device,
+        entity_type: "learning_goal",
+        entity_id: ids.entity,
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: "2026-07-21T00:00:00Z",
+        created_at: "2026-07-21T00:00:00Z",
+        updated_at: "2026-07-21T00:00:00Z",
+        deleted_at: null,
+        created_by: ids.user,
+        updated_by: ids.user,
+        payload: { ...payload, description: "attacker replacement" },
+      }),
+    ).rejects.toMatchObject({ code: "OFFLINE_OPERATION_HASH_MISMATCH" });
+    expect(await vault.get(ids.conflict, ids.workspace)).toEqual(payload);
+    await expect(
+      new ProtectedOfflineRepository(db, vault).commitMutation({
+        operation_id: ids.attachment,
+        protocol_version: "sync-v1",
+        workspace_id: ids.workspace,
+        device_id: ids.device,
+        entity_type: "learning_goal",
+        entity_id: ids.attachment,
+        operation_type: "update",
+        base_version: 1,
+        local_revision: 2,
+        client_occurred_at: "2026-07-21T00:00:01Z",
+        created_at: "2026-07-21T00:00:00Z",
+        updated_at: "2026-07-21T00:00:01Z",
+        deleted_at: null,
+        created_by: ids.user,
+        updated_by: ids.user,
+        payload,
+      }),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    expect(await db.vaultRecords.get(ids.attachment)).toBeUndefined();
   });
 
   it("rejects invalid conflict transitions without changing the entity", async () => {
