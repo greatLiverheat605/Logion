@@ -9,6 +9,7 @@ from logion_api import __version__
 from logion_api.audit.routes import router as audit_router
 from logion_api.audit.routes import workspace_router as workspace_audit_router
 from logion_api.config import get_settings
+from logion_api.content.routes import router as content_router
 from logion_api.errors import (
     APIError,
     api_error_handler,
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     application.include_router(sync_router)
     application.include_router(planning_router)
     application.include_router(execution_router)
+    application.include_router(content_router)
     return application
 
 
