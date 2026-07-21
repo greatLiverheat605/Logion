@@ -20,6 +20,18 @@
 12. `payload_hash`、`chunk_checksum` 和 `snapshot_checksum` 均为 RFC 8785 JSON Canonicalization Scheme 字节的 SHA-256；实现不得依赖对象键顺序或平台序列化差异。
 13. Bootstrap 首次请求的 `snapshot_id/chunk_index` 必须同时为 null，续传时必须同时非 null；响应还必须满足 `chunk_index < chunk_count`。传输层在 schema 校验后执行这些跨字段不变量。
 
+## 校验和 framing（规范性）
+
+所有 Hash 均对 RFC 8785 规范化结果的 UTF-8 字节计算 SHA-256，并编码为小写 `sha256:<64 hex>`：
+
+- `payload_hash = SHA-256(JCS(payload))`；
+- `chunk_checksum = SHA-256(JCS(records))`，其中 `records` 是该响应的数组，顺序保持服务端快照顺序；
+- `snapshot_checksum = SHA-256(JCS({"chunks":[{"chunk_index":0,"chunk_checksum":"..."}, ...]}))`。`chunks` 必须按 `chunk_index` 严格升序，从 0 开始、无重复、无缺口，长度必须等于 `chunk_count`。
+
+总 Hash 使用有序 chunk manifest，而不是再次拼接全部记录；因此客户端可逐块校验并在内存有界的情况下验证完整快照。任何 chunk 顺序变化、缺失、重复或内容变化都会改变总 Hash。相同实体键在同一快照内出现多次仍是协议错误，不能依靠后出现记录覆盖。
+
+权威测试向量位于 `packages/contracts/fixtures/sync-v1-checksum-vectors.json`。实现必须同时核对规范化字节和最终 Hash；不得只对供应方给出的 Hash 字符串做格式校验。
+
 ## 兼容矩阵
 
 | 场景                               | 服务端响应/本地动作                                    | 是否允许自动继续 |

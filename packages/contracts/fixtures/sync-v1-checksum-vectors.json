@@ -1,0 +1,46 @@
+{
+  "protocol_version": "sync-v1",
+  "hash_algorithm": "SHA-256",
+  "canonicalization": "RFC 8785",
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "records": [
+        {
+          "entity_type": "note",
+          "entity_id": "01900000-0000-7000-8000-000000000004",
+          "version": 1,
+          "created_at": "2026-07-21T00:00:00Z",
+          "updated_at": "2026-07-21T00:01:00Z",
+          "deleted_at": null,
+          "created_by": "01900000-0000-7000-8000-000000000006",
+          "updated_by": "01900000-0000-7000-8000-000000000006",
+          "payload": { "z": 1, "a": "学习" },
+          "payload_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "canonical_records": "[{\"created_at\":\"2026-07-21T00:00:00Z\",\"created_by\":\"01900000-0000-7000-8000-000000000006\",\"deleted_at\":null,\"entity_id\":\"01900000-0000-7000-8000-000000000004\",\"entity_type\":\"note\",\"payload\":{\"a\":\"学习\",\"z\":1},\"payload_hash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"updated_at\":\"2026-07-21T00:01:00Z\",\"updated_by\":\"01900000-0000-7000-8000-000000000006\",\"version\":1}]",
+      "chunk_checksum": "sha256:07c923ae1d0a0a831b316151bd488f1f356d0b218e91d615916e2bf63777419c"
+    },
+    {
+      "chunk_index": 1,
+      "records": [],
+      "canonical_records": "[]",
+      "chunk_checksum": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  ],
+  "snapshot_manifest": {
+    "chunks": [
+      {
+        "chunk_index": 0,
+        "chunk_checksum": "sha256:07c923ae1d0a0a831b316151bd488f1f356d0b218e91d615916e2bf63777419c"
+      },
+      {
+        "chunk_index": 1,
+        "chunk_checksum": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    ]
+  },
+  "canonical_snapshot_manifest": "{\"chunks\":[{\"chunk_checksum\":\"sha256:07c923ae1d0a0a831b316151bd488f1f356d0b218e91d615916e2bf63777419c\",\"chunk_index\":0},{\"chunk_checksum\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"chunk_index\":1}]}",
+  "snapshot_checksum": "sha256:b7d16104ca7571051424e399171b36623e1b8b9f4f144ae0191b06a23a8aab57"
+}
