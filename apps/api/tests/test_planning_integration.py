@@ -123,7 +123,8 @@ async def test_private_goal_plan_creation_publication_and_tenant_boundaries() ->
         assert await db.get(PlanPhase, phase_id) is not None
         audit_count = await db.scalar(
             select(func.count(AuditEvent.id)).where(
-                AuditEvent.event_type.in_(("planning.goal_created", "planning.plan_published"))
+                AuditEvent.event_type.in_(("planning.goal_created", "planning.plan_published")),
+                AuditEvent.target_id == UUID(str(payload["goal_id"])),
             )
         )
         assert int(audit_count or 0) == 2
