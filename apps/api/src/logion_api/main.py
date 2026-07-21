@@ -21,6 +21,7 @@ from logion_api.identity.routes import router as identity_router
 from logion_api.identity.totp_routes import router as totp_router
 from logion_api.identity.verification_routes import router as verification_router
 from logion_api.middleware import request_id_middleware
+from logion_api.sync.routes import router as sync_router
 from logion_api.workspaces.invitation_routes import (
     invitation_router,
     workspace_invitation_router,
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     application.include_router(invitation_router)
     application.include_router(workspace_invitation_router)
     application.include_router(workspace_router)
+    application.include_router(sync_router)
     return application
 
 

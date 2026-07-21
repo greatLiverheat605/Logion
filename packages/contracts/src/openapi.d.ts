@@ -602,6 +602,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/sync/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Push */
+        post: operations["sync_push"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -640,6 +657,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AppliedOperationResult */
+        AppliedOperationResult: {
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /**
+             * Retryable
+             * @default false
+             * @constant
+             */
+            retryable: false;
+            /** Sequence */
+            sequence: number;
+            /** Server Version */
+            server_version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "duplicate";
+        };
         /** AuditEventPageResponse */
         AuditEventPageResponse: {
             /** Events */
@@ -709,6 +749,21 @@ export interface components {
              */
             type: "public-key";
         };
+        /** ConflictResolution */
+        ConflictResolution: {
+            /**
+             * Conflict Id
+             * Format: uuid
+             */
+            conflict_id: string;
+            /** Expected Remote Version */
+            expected_remote_version: number;
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "keep_local" | "keep_remote" | "merge" | "dismiss";
+        };
         /** DeviceListResponse */
         DeviceListResponse: {
             /** Devices */
@@ -767,6 +822,23 @@ export interface components {
              * @default false
              */
             retryable: boolean;
+        };
+        /** FailedOperationResult */
+        FailedOperationResult: {
+            /** Error Code */
+            error_code: string;
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /** Retryable */
+            retryable: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "rejected" | "blocked_dependency";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -988,6 +1060,106 @@ export interface components {
              */
             email: string;
         };
+        /** PushRequest */
+        PushRequest: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /**
+             * Message Type
+             * @constant
+             */
+            message_type: "push_request";
+            /** Operations */
+            operations: components["schemas"]["SyncOperation"][];
+            /**
+             * Protocol Version
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Sync Epoch
+             * Format: uuid
+             */
+            sync_epoch: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** PushResponse */
+        PushResponse: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /**
+             * Message Type
+             * @default push_response
+             * @constant
+             */
+            message_type: "push_response";
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /** Results */
+            results: (components["schemas"]["AppliedOperationResult"] | components["schemas"]["FailedOperationResult"])[];
+            /**
+             * Sync Epoch
+             * Format: uuid
+             */
+            sync_epoch: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** RebootstrapControl */
+        RebootstrapControl: {
+            /**
+             * Action
+             * @default rebootstrap_required
+             * @constant
+             */
+            action: "rebootstrap_required";
+            /**
+             * Message Type
+             * @default sync_control
+             * @constant
+             */
+            message_type: "sync_control";
+            /**
+             * Min Supported Version
+             * @default sync-v1
+             * @constant
+             */
+            min_supported_version: "sync-v1";
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Reason Code
+             * @default EPOCH_MISMATCH
+             * @constant
+             */
+            reason_code: "EPOCH_MISMATCH";
+            /**
+             * Server Sync Epoch
+             * Format: uuid
+             */
+            server_sync_epoch: string;
+        };
         /** RecoveryCodesResponse */
         RecoveryCodesResponse: {
             /** Recovery Codes */
@@ -1105,6 +1277,57 @@ export interface components {
          * @enum {string}
          */
         SpaceVisibility: "private" | "shared";
+        /** SyncOperation */
+        SyncOperation: {
+            /** Base Version */
+            base_version: number;
+            /**
+             * Client Occurred At
+             * Format: date-time
+             */
+            client_occurred_at: string;
+            conflict_resolution?: components["schemas"]["ConflictResolution"] | null;
+            /** Dependencies */
+            dependencies: string[];
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /**
+             * Operation Id
+             * Format: uuid
+             */
+            operation_id: string;
+            /**
+             * Operation Type
+             * @enum {string}
+             */
+            operation_type: "create" | "update" | "delete" | "restore";
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Payload Hash */
+            payload_hash: string;
+            /**
+             * Protocol Version
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
         /** TotpActivationResponse */
         TotpActivationResponse: {
             /** Recovery Codes */
@@ -3943,6 +4166,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_push: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushResponse"] | components["schemas"]["RebootstrapControl"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

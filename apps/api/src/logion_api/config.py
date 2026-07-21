@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     ownership_transfer_limit_per_hour: int = Field(default=10, ge=1, le=100)
     membership_leave_limit_per_hour: int = Field(default=10, ge=1, le=100)
     audit_query_limit_per_minute: int = Field(default=60, ge=1, le=600)
+    sync_push_limit_per_minute: int = Field(default=120, ge=1, le=1000)
+    sync_max_operation_bytes: int = Field(default=262144, ge=1024, le=1048576)
+    sync_max_batch_bytes: int = Field(default=2097152, ge=1024, le=16777216)
     workspace_owned_quota: int = Field(default=10, ge=1, le=100)
     space_per_workspace_quota: int = Field(default=200, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
