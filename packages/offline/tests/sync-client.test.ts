@@ -241,6 +241,63 @@ describe("recoverable push/pull cycle", () => {
     });
   });
 
+  it("preserves the Outbox and cursor when the network fails mid-cycle", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-network-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    await database.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 3,
+      sync_epoch: ids.epoch,
+      cursor: 5,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    await new OfflineRepository(database).commitMutation({
+      operation_id: ids.operation,
+      protocol_version: "sync-v1",
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      entity_type: "space",
+      entity_id: ids.entity,
+      operation_type: "create",
+      base_version: 0,
+      local_revision: 1,
+      client_occurred_at: "2026-07-21T00:00:00Z",
+      created_at: "2026-07-21T00:00:00Z",
+      updated_at: "2026-07-21T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: { name: "Offline", visibility: "private" },
+    });
+    const client = new SyncClient(database, {
+      async push() {
+        await Promise.resolve();
+        throw new TypeError("network unavailable");
+      },
+      async pull() {
+        await Promise.resolve();
+        throw new Error("pull must not run");
+      },
+    });
+
+    await expect(
+      client.synchronize(ids.workspace, ids.device),
+    ).rejects.toBeDefined();
+    expect(await database.outbox.get(ids.operation)).toMatchObject({
+      outbox_state: "pending",
+    });
+    expect(await database.syncState.get(ids.workspace)).toMatchObject({
+      cursor: 5,
+    });
+  });
+
   it("fails closed when the local Workspace is not bootstrapped for the device", async () => {
     database = await openOfflineDatabase({
       databaseName: `logion-invalid-${crypto.randomUUID()}`,
