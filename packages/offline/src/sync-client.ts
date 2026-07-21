@@ -110,6 +110,7 @@ export class SyncClient {
       "rw",
       this.database.outbox,
       this.database.entities,
+      this.database.conflicts,
       async () => {
         for (let index = 0; index < ready.length; index += 1) {
           const operation = ready[index];
@@ -135,6 +136,31 @@ export class SyncClient {
               });
             }
           } else {
+            if (result.status === "conflict") {
+              const local = await this.database.entities.get([
+                state.workspace_id,
+                operation.entity_type,
+                operation.entity_id,
+              ]);
+              if (local === undefined) {
+                throw new OfflineStorageError("OFFLINE_TRANSACTION_FAILED");
+              }
+              await this.database.conflicts.put({
+                ...result.conflict,
+                workspace_id: state.workspace_id,
+                local_payload: local.payload,
+                remote_payload: result.conflict.remote_payload as JsonObject,
+                resolved_at: null,
+              });
+              await this.database.entities.update(
+                [
+                  state.workspace_id,
+                  operation.entity_type,
+                  operation.entity_id,
+                ],
+                { sync_status: "conflict" },
+              );
+            }
             await this.database.outbox.update(operation.operation_id, {
               outbox_state:
                 result.status === "conflict" ? "conflict" : "blocked",

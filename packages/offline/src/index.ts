@@ -7,6 +7,8 @@ export {
 } from "./errors";
 export { hashPayload } from "./hashing";
 export { OfflineRepository, type MutationCommitResult } from "./repository";
+export { AttachmentQueueRepository, ConflictRepository } from "./resilience";
+export { OfflineVault } from "./vault";
 export {
   SyncClient,
   type SyncCycleResult,

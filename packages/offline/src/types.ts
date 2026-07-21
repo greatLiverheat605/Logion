@@ -1,6 +1,6 @@
 import type { EntityRecord, SyncOperationV1 } from "@logion/contracts";
 
-export const OFFLINE_SCHEMA_VERSION = 2 as const;
+export const OFFLINE_SCHEMA_VERSION = 3 as const;
 
 export type JsonPrimitive = boolean | null | number | string;
 export type JsonValue =
@@ -51,7 +51,7 @@ export type BootstrapState =
 export interface WorkspaceSyncState {
   workspace_id: string;
   device_id: string;
-  schema_version: 1 | typeof OFFLINE_SCHEMA_VERSION;
+  schema_version: 1 | 2 | typeof OFFLINE_SCHEMA_VERSION;
   sync_epoch: string | null;
   cursor: number;
   bootstrap_state: BootstrapState;
@@ -134,4 +134,71 @@ export interface OfflineDatabaseOptions {
   databaseName: string;
   indexedDB: IDBFactory | null;
   IDBKeyRange: typeof globalThis.IDBKeyRange | null;
+}
+
+export type ConflictStatus =
+  | "open"
+  | "resolved_local"
+  | "resolved_merge"
+  | "resolved_remote"
+  | "dismissed";
+
+export interface LocalConflict {
+  conflict_id: string;
+  workspace_id: string;
+  entity_type: string;
+  entity_id: string;
+  status: ConflictStatus;
+  conflict_kind:
+    | "content"
+    | "delete_update"
+    | "hierarchy"
+    | "permission"
+    | "status";
+  base_version: number;
+  local_payload: JsonObject;
+  local_payload_hash: string;
+  remote_version: number;
+  remote_payload: JsonObject;
+  remote_payload_hash: string;
+  resolution_options: ("dismiss" | "keep_local" | "keep_remote" | "merge")[];
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export type AttachmentQueueState =
+  | "failed"
+  | "pending_upload"
+  | "uploading"
+  | "verified";
+
+export interface AttachmentQueueEntry {
+  attachment_id: string;
+  workspace_id: string;
+  device_id: string;
+  filename: string;
+  media_type: "image/jpeg" | "image/png" | "text/plain";
+  byte_size: number;
+  sha256: string;
+  state: AttachmentQueueState;
+  blob: Blob;
+  queued_at: string;
+  last_error_code: string | null;
+}
+
+export interface VaultMetadata {
+  user_id: string;
+  salt: string;
+  verifier_iv: string;
+  verifier_ciphertext: string;
+  iterations: number;
+  created_at: string;
+}
+
+export interface VaultRecord {
+  record_id: string;
+  workspace_id: string;
+  iv: string;
+  ciphertext: string;
+  updated_at: string;
 }

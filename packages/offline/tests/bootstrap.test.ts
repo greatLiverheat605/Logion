@@ -225,11 +225,15 @@ describe("IndexedDB v2 bootstrap staging and atomic activation", () => {
       cursor: 1,
     });
     expect(upgraded.tables.map((table) => table.name).sort()).toEqual([
+      "attachmentQueue",
       "bootstrapManifests",
       "bootstrapRecords",
+      "conflicts",
       "entities",
       "outbox",
       "syncState",
+      "vaultMetadata",
+      "vaultRecords",
     ]);
   });
 
@@ -592,9 +596,9 @@ describe("IndexedDB v2 bootstrap staging and atomic activation", () => {
         resolve(version);
       };
     });
-    expect(nativeVersion).toBe(20);
+    expect(nativeVersion).toBe(30);
     expect(nativeVersion).toBeGreaterThan(1 * 10);
     const reopened = await open(name);
-    expect(reopened.verno).toBe(2);
+    expect(reopened.verno).toBe(3);
   });
 });

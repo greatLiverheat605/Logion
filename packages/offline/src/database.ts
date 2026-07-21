@@ -3,12 +3,16 @@ import Dexie, { type Table } from "dexie";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
 import {
   OFFLINE_SCHEMA_VERSION,
+  type AttachmentQueueEntry,
   type BootstrapManifest,
   type BootstrapStagedRecord,
   type LocalEntity,
+  type LocalConflict,
   type OfflineDatabaseOptions,
   type OutboxEntry,
   type WorkspaceSyncState,
+  type VaultMetadata,
+  type VaultRecord,
 } from "./types";
 
 export class LogionOfflineDatabase extends Dexie {
@@ -20,6 +24,10 @@ export class LogionOfflineDatabase extends Dexie {
     BootstrapStagedRecord,
     [string, string, number, string, string]
   >;
+  readonly conflicts!: Table<LocalConflict, string>;
+  readonly attachmentQueue!: Table<AttachmentQueueEntry, string>;
+  readonly vaultMetadata!: Table<VaultMetadata, string>;
+  readonly vaultRecords!: Table<VaultRecord, string>;
 
   constructor(options: OfflineDatabaseOptions) {
     if (options.indexedDB === null || options.IDBKeyRange === null) {
@@ -46,6 +54,12 @@ export class LogionOfflineDatabase extends Dexie {
         "[workspace_id+snapshot_id], workspace_id, [workspace_id+status]",
       bootstrapRecords:
         "[workspace_id+snapshot_id+chunk_index+entity_type+entity_id], [workspace_id+snapshot_id], [workspace_id+snapshot_id+chunk_index], &[workspace_id+snapshot_id+entity_type+entity_id]",
+      conflicts:
+        "conflict_id, workspace_id, [workspace_id+status], [workspace_id+entity_type+entity_id]",
+      attachmentQueue:
+        "attachment_id, workspace_id, [workspace_id+state+queued_at], [workspace_id+device_id]",
+      vaultMetadata: "user_id",
+      vaultRecords: "record_id, workspace_id",
     });
   }
 }
