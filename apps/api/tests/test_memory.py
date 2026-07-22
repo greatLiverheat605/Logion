@@ -1,7 +1,13 @@
+from datetime import date
 from uuid import uuid4
 
 import pytest
-from logion_api.memory.schemas import MasteryConfirmRequest, TopicDependencyCreateRequest
+from logion_api.memory.schemas import (
+    AuditReviewCreateRequest,
+    MasteryConfirmRequest,
+    QuizAttemptCreateRequest,
+    TopicDependencyCreateRequest,
+)
 from logion_api.memory.service import REVIEW_INTERVAL_DAYS
 from pydantic import ValidationError
 
@@ -40,4 +46,35 @@ def test_memory_schemas_reject_self_links_alias_ids_and_unknown_levels() -> None
             schedule_id=uuid4(),
             expected_version=0,
             confirmed_level="perfect",
+        )
+
+
+def test_assessment_and_review_schemas_reject_ambiguous_human_state() -> None:
+    shared_id = uuid4()
+    with pytest.raises(ValidationError):
+        QuizAttemptCreateRequest(
+            id=shared_id,
+            error_pattern_id=shared_id,
+            schedule_id=uuid4(),
+            response_text="answer",
+            confidence=3,
+            duration_seconds=10,
+        )
+    with pytest.raises(ValidationError):
+        QuizAttemptCreateRequest(
+            id=uuid4(),
+            error_pattern_id=uuid4(),
+            schedule_id=uuid4(),
+            response_text="answer",
+            confidence=3,
+            duration_seconds=10,
+            self_assessed_correct=True,
+            error_cause="careless",
+        )
+    with pytest.raises(ValidationError):
+        AuditReviewCreateRequest(
+            id=uuid4(),
+            cadence="daily",
+            period_start=date(2026, 7, 20),
+            period_end=date(2026, 7, 21),
         )
