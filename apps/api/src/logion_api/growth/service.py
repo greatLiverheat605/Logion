@@ -14,6 +14,7 @@ from uuid6 import uuid7
 
 from logion_api.config import Settings
 from logion_api.db import utc_now
+from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
 from logion_api.growth.models import ShareSnapshot, TemplateInstallation, TemplatePackage
 from logion_api.growth.schemas import (
@@ -369,6 +370,17 @@ class GrowthService:
             created_by=context.user.id,
         )
         db.add(row)
+        await EngagementService.emit(
+            db,
+            workspace_id=workspace_id,
+            recipient_user_id=context.user.id,
+            category="collaboration",
+            title="Read-only share created",
+            summary="A revocable read-only snapshot was created.",
+            dedupe_key=f"share-created:{row.id}",
+            target_type="share_snapshot",
+            target_id=row.id,
+        )
         db.add(
             new_audit_event(
                 request_id=request_id,

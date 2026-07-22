@@ -7,6 +7,7 @@ from logion_api.collaboration import models as collaboration_models  # noqa: F40
 from logion_api.config import get_settings
 from logion_api.content import models as content_models  # noqa: F401
 from logion_api.db import Base
+from logion_api.engagement import models as engagement_models  # noqa: F401
 from logion_api.exam import models as exam_models  # noqa: F401
 from logion_api.execution import evidence_models as evidence_models  # noqa: F401
 from logion_api.execution import models as execution_models  # noqa: F401
