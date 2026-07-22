@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     research_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     collaboration_entity_per_space_quota: int = Field(default=100000, ge=1, le=1000000)
     collaboration_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    ai_provider_per_workspace_quota: int = Field(default=50, ge=1, le=1000)
+    ai_provider_write_limit_per_hour: int = Field(default=60, ge=1, le=1000)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
@@ -114,6 +116,16 @@ class Settings(BaseSettings):
     email_delivery_encryption_keys: dict[str, SecretStr] = Field(
         default_factory=lambda: {
             "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtZW1haWwta2V5LTMyYnl0ZXMhISE")
+        }
+    )
+    ai_credential_active_encryption_key_id: str = Field(
+        default="development-v1",
+        min_length=1,
+        max_length=64,
+    )
+    ai_credential_encryption_keys: dict[str, SecretStr] = Field(
+        default_factory=lambda: {
+            "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtYWkta2V5LTMyYnl0ZXMhISEhISE")
         }
     )
 
@@ -168,6 +180,31 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
                 )
+        if self.ai_credential_active_encryption_key_id not in self.ai_credential_encryption_keys:
+            raise ValueError(
+                "LOGION_AI_CREDENTIAL_ACTIVE_ENCRYPTION_KEY_ID must select a configured key"
+            )
+        for key_id, encoded_key in self.ai_credential_encryption_keys.items():
+            if not 1 <= len(key_id) <= 64:
+                raise ValueError(
+                    "LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS key IDs must be 1-64 characters"
+                )
+            try:
+                value = encoded_key.get_secret_value()
+                padding = "=" * (-len(value) % 4)
+                decoded_key = base64.b64decode(
+                    value + padding,
+                    altchars=b"-_",
+                    validate=True,
+                )
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(
+                    f"LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS contains invalid base64url for {key_id}"
+                ) from exc
+            if len(decoded_key) != 32:
+                raise ValueError(
+                    f"LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
+                )
         if not set(self.webauthn_origins).issubset(self.allowed_origins):
             raise ValueError("LOGION_WEBAUTHN_ORIGINS must be included in LOGION_ALLOWED_ORIGINS")
         for origin in self.webauthn_origins:
@@ -200,6 +237,10 @@ class Settings(BaseSettings):
             if self.email_delivery_active_encryption_key_id.startswith("development-"):
                 raise ValueError(
                     "LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS must be replaced in production"
+                )
+            if self.ai_credential_active_encryption_key_id.startswith("development-"):
+                raise ValueError(
+                    "LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS must be replaced in production"
                 )
             if self.legacy_registration_enabled:
                 raise ValueError(

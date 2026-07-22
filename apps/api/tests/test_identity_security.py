@@ -123,6 +123,10 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
         email_delivery_encryption_keys={
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"e" * 32).decode().rstrip("="))
         },
+        ai_credential_active_encryption_key_id="production-v1",
+        ai_credential_encryption_keys={
+            "production-v1": SecretStr(base64.urlsafe_b64encode(b"a" * 32).decode().rstrip("="))
+        },
         legacy_registration_enabled=False,
     )
 

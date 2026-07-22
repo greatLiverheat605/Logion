@@ -50,6 +50,10 @@ def _production_settings(**overrides: object) -> dict[str, object]:
         "email_delivery_encryption_keys": {
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"e" * 32).decode())
         },
+        "ai_credential_active_encryption_key_id": "production-v1",
+        "ai_credential_encryption_keys": {
+            "production-v1": SecretStr(base64.urlsafe_b64encode(b"a" * 32).decode())
+        },
         "legacy_registration_enabled": False,
     }
     values.update(overrides)
@@ -62,9 +66,7 @@ def test_production_rejects_development_email_key_and_legacy_registration() -> N
             **_production_settings(
                 email_delivery_active_encryption_key_id="development-v1",
                 email_delivery_encryption_keys={
-                    "development-v1": SecretStr(
-                        base64.urlsafe_b64encode(b"e" * 32).decode()
-                    )
+                    "development-v1": SecretStr(base64.urlsafe_b64encode(b"e" * 32).decode())
                 },
             )
         )
@@ -143,17 +145,13 @@ async def test_registration_rate_limits_ip_and_account_independently() -> None:
 def test_email_verification_contract_is_additive_and_token_is_not_in_path() -> None:
     openapi = app.openapi()
     start = openapi["paths"]["/api/v1/auth/registrations"]["post"]
-    confirmation = openapi["paths"][
-        "/api/v1/auth/email-verification/confirmations"
-    ]["post"]
+    confirmation = openapi["paths"]["/api/v1/auth/email-verification/confirmations"]["post"]
 
     assert "202" in start["responses"]
     assert "token" not in "/api/v1/auth/email-verification/confirmations"
     assert confirmation["requestBody"]["required"] is True
     assert "410" in openapi["paths"]["/api/v1/auth/register"]["post"]["responses"]
-    assert "202" in openapi["paths"]["/api/v1/auth/password-recovery/requests"]["post"][
-        "responses"
-    ]
+    assert "202" in openapi["paths"]["/api/v1/auth/password-recovery/requests"]["post"]["responses"]
     assert "/api/v1/auth/password-recovery/completions" in openapi["paths"]
 
 
@@ -173,9 +171,7 @@ def test_unverified_accounts_cannot_enroll_or_authenticate_with_passkeys() -> No
     assert raised.value.code == "AUTH_EMAIL_VERIFICATION_REQUIRED"
 
     statement = str(
-        _authentication_credential_statement(b"credential-id").compile(
-            dialect=postgresql.dialect()
-        )
+        _authentication_credential_statement(b"credential-id").compile(dialect=postgresql.dialect())
     )
     assert "users.email_verified_at IS NOT NULL" in statement
 
