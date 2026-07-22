@@ -36,6 +36,7 @@ from logion_api.identity.verification_routes import router as verification_route
 from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
 from logion_api.planning.routes import router as planning_router
+from logion_api.portability.routes import import_router as portability_import_router
 from logion_api.portability.routes import router as portability_router
 from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
     application.include_router(engagement_router)
     application.include_router(public_calendar_router)
     application.include_router(portability_router)
+    application.include_router(portability_import_router)
     return application
 
 

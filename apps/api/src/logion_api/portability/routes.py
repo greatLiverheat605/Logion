@@ -13,11 +13,26 @@ from logion_api.identity.dependencies import (
     request_id,
     require_trusted_origin,
 )
-from logion_api.portability.dependencies import PortabilityServiceDependency
-from logion_api.portability.models import DataExportJob
-from logion_api.portability.schemas import ExportCancel, ExportCreate, ExportList, ExportResponse
+from logion_api.portability.dependencies import (
+    ImportServiceDependency,
+    PortabilityServiceDependency,
+)
+from logion_api.portability.models import DataExportJob, DataImportPreview
+from logion_api.portability.schemas import (
+    ExportCancel,
+    ExportCreate,
+    ExportList,
+    ExportResponse,
+    ImportCommit,
+    ImportPreviewCreate,
+    ImportPreviewList,
+    ImportPreviewResponse,
+)
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/data-exports", tags=["portability"])
+import_router = APIRouter(
+    prefix="/api/v1/workspaces/{workspace_id}/data-imports", tags=["portability"]
+)
 ERROR = {"model": ErrorResponse}
 
 
@@ -33,6 +48,24 @@ def export_response(row: DataExportJob) -> ExportResponse:
         version=row.version,
         created_at=row.created_at,
         completed_at=row.completed_at,
+        expires_at=row.expires_at,
+    )
+
+
+def import_response(row: DataImportPreview) -> ImportPreviewResponse:
+    return ImportPreviewResponse(
+        id=row.id,
+        workspace_id=row.workspace_id,
+        source_format=row.source_format,
+        source_filename=row.source_filename,
+        source_sha256=row.source_sha256,
+        counts=row.counts,
+        warnings=row.warnings,
+        status=row.status,
+        imported_space_id=row.imported_space_id,
+        version=row.version,
+        created_at=row.created_at,
+        imported_at=row.imported_at,
         expires_at=row.expires_at,
     )
 
@@ -171,3 +204,86 @@ async def cancel_export(
         await db.commit()
         raise
     return export_response(row)
+
+
+@import_router.post(
+    "/preview",
+    response_model=ImportPreviewResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="data_import_preview",
+    responses={401: ERROR, 403: ERROR, 404: ERROR, 409: ERROR, 422: ERROR, 429: ERROR},
+)
+async def preview_import(
+    workspace_id: UUID,
+    payload: ImportPreviewCreate,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    imports: ImportServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> ImportPreviewResponse:
+    await write_boundary(request, context, identity, limiter, settings, workspace_id, x_csrf_token)
+    try:
+        row = await imports.preview(db, context, workspace_id, payload, request_id(request))
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    return import_response(row)
+
+
+@import_router.get(
+    "",
+    response_model=ImportPreviewList,
+    operation_id="data_import_list",
+    responses={401: ERROR, 403: ERROR, 404: ERROR},
+)
+async def list_imports(
+    workspace_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    imports: ImportServiceDependency,
+) -> ImportPreviewList:
+    rows = await imports.list_previews(db, context, workspace_id, request_id(request))
+    return ImportPreviewList(imports=[import_response(row) for row in rows])
+
+
+@import_router.post(
+    "/{preview_id}/commit",
+    response_model=ImportPreviewResponse,
+    operation_id="data_import_commit",
+    responses={401: ERROR, 403: ERROR, 404: ERROR, 409: ERROR, 422: ERROR, 429: ERROR},
+)
+async def commit_import(
+    workspace_id: UUID,
+    preview_id: UUID,
+    payload: ImportCommit,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    imports: ImportServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> ImportPreviewResponse:
+    await write_boundary(request, context, identity, limiter, settings, workspace_id, x_csrf_token)
+    try:
+        row = await imports.commit(
+            db,
+            context,
+            workspace_id,
+            preview_id,
+            payload.target_space_id,
+            payload.expected_version,
+            request_id(request),
+        )
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    return import_response(row)

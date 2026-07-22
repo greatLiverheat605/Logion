@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from logion_api.config import Settings
 from logion_api.errors import APIError
-from logion_api.portability.models import DataExportJob
+from logion_api.portability.models import DataExportJob, DataImportPreview
 
 
 class ExportArtifactCipher:
@@ -58,5 +58,51 @@ class ExportArtifactCipher:
         return APIError(
             code="EXPORT_ARTIFACT_UNAVAILABLE",
             message="The export artifact is unavailable.",
+            status_code=503,
+        )
+
+
+class ImportPreviewCipher(ExportArtifactCipher):
+    def encrypt_preview(
+        self, preview_id: UUID, workspace_id: UUID, value: bytes
+    ) -> tuple[bytes, bytes, str]:
+        nonce = secrets.token_bytes(12)
+        return (
+            AESGCM(self._keys[self._active_key_id]).encrypt(
+                nonce,
+                value,
+                self._preview_aad(preview_id, workspace_id, self._active_key_id),
+            ),
+            nonce,
+            self._active_key_id,
+        )
+
+    def decrypt_preview(self, preview: DataImportPreview) -> bytes:
+        key_id = preview.normalized_encryption_key_id
+        if (
+            preview.normalized_ciphertext is None
+            or preview.normalized_nonce is None
+            or key_id is None
+            or key_id not in self._keys
+        ):
+            raise self._unavailable()
+        try:
+            return AESGCM(self._keys[key_id]).decrypt(
+                preview.normalized_nonce,
+                preview.normalized_ciphertext,
+                self._preview_aad(preview.id, preview.workspace_id, key_id),
+            )
+        except InvalidTag as exc:
+            raise self._unavailable() from exc
+
+    @staticmethod
+    def _preview_aad(preview_id: UUID, workspace_id: UUID, key_id: str) -> bytes:
+        return f"logion:data-import-preview:v1:{workspace_id}:{preview_id}:{key_id}".encode()
+
+    @staticmethod
+    def _unavailable() -> APIError:
+        return APIError(
+            code="IMPORT_PREVIEW_UNAVAILABLE",
+            message="The encrypted import preview is unavailable.",
             status_code=503,
         )
