@@ -7,6 +7,7 @@ const PROTECTED_ENTITY_TYPES = new Set([
   "quiz_item",
   "resource",
   "error_pattern",
+  "exam",
   "audit_review",
   "review_finding",
   "review_schedule",

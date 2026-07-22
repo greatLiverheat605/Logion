@@ -20,6 +20,9 @@ export default function AuthenticatedShellPage() {
         <Link className="text-link" href="/app/review">
           掌握与复习
         </Link>
+        <Link className="text-link" href="/app/exam">
+          备考倒计时
+        </Link>
         <Link className="text-link" href="/app/workspaces">
           管理工作区
         </Link>

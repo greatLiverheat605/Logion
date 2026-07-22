@@ -16,6 +16,7 @@ from logion_api.errors import (
     http_error_handler,
     validation_error_handler,
 )
+from logion_api.exam.routes import router as exam_router
 from logion_api.execution.evidence_routes import router as evidence_router
 from logion_api.execution.routes import router as execution_router
 from logion_api.health import router as health_router
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
     application.include_router(content_router)
     application.include_router(evidence_router)
     application.include_router(memory_router)
+    application.include_router(exam_router)
     return application
 
 
