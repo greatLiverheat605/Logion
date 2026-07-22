@@ -497,7 +497,7 @@ class MemoryService:
                     status_code=422,
                 )
             is_correct = payload.self_assessed_correct
-        if is_correct and payload.error_cause is not None:
+        if is_correct and payload.error_cause is not None and item.evaluation_mode != "exact_match":
             raise APIError(
                 code="RESOURCE_INPUT_INVALID",
                 message="A correct attempt cannot have an error cause.",
@@ -521,7 +521,7 @@ class MemoryService:
             is_correct=is_correct,
             confidence=payload.confidence,
             duration_seconds=payload.duration_seconds,
-            error_cause=payload.error_cause,
+            error_cause=None if is_correct else payload.error_cause,
             attempted_at=now,
             created_by=context.user.id,
             updated_by=context.user.id,

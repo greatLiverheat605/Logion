@@ -446,9 +446,14 @@ describe("recoverable push/pull cycle", () => {
     const cases: [
       (
         | "evidence"
+        | "error_pattern"
+        | "audit_review"
         | "mastery"
         | "note"
+        | "quiz_attempt"
+        | "quiz_item"
         | "resource"
+        | "review_finding"
         | "review_schedule"
         | "topic"
         | "topic_dependency"
@@ -534,6 +539,50 @@ describe("recoverable push/pull cycle", () => {
           next_review_at: now,
         },
       ],
+      [
+        "quiz_item",
+        {
+          space_id: ids.entity,
+          topic_id: ids.user,
+          prompt: "secret quiz prompt",
+          answer_key: "secret answer key",
+          evaluation_mode: "exact_match",
+        },
+      ],
+      [
+        "quiz_attempt",
+        {
+          space_id: ids.entity,
+          quiz_item_id: ids.user,
+          response_text: "secret attempt response",
+          error_cause: "concept_confusion",
+        },
+      ],
+      [
+        "error_pattern",
+        {
+          space_id: ids.entity,
+          topic_id: ids.user,
+          cause: "secret pattern cause",
+          status: "open",
+        },
+      ],
+      [
+        "audit_review",
+        {
+          space_id: ids.entity,
+          cadence: "daily",
+          summary: "secret audit summary",
+        },
+      ],
+      [
+        "review_finding",
+        {
+          space_id: ids.entity,
+          audit_review_id: ids.user,
+          description: "secret review finding",
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -565,7 +614,12 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain("secret reviewer note");
     expect(durableRows).not.toContain("secret topic description");
     expect(durableRows).not.toContain("secret suggestion reason");
-    expect(await database.vaultRecords.count()).toBe(8);
+    expect(durableRows).not.toContain("secret answer key");
+    expect(durableRows).not.toContain("secret attempt response");
+    expect(durableRows).not.toContain("secret pattern cause");
+    expect(durableRows).not.toContain("secret audit summary");
+    expect(durableRows).not.toContain("secret review finding");
+    expect(await database.vaultRecords.count()).toBe(13);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

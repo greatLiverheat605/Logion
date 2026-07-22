@@ -1,6 +1,6 @@
 # Assessment and audit-review threat model
 
-Status: L4-002A server foundation
+Status: L4-002B protected offline/sync baseline
 
 ## Assets and invariants
 
@@ -31,11 +31,15 @@ Status: L4-002A server foundation
 | Sensitive content reaches audit logs        | Prompt, answer, response, confidence, error cause, summary, descriptions, and actions are excluded from audit metadata    |
 | Storage or response exhaustion              | Strict text/numeric bounds, per-Space/per-user quotas, user rate limits, serialized quota locks, and bounded list queries |
 | Duplicate period or stale completion        | Per-user period uniqueness plus expected-version state transitions                                                        |
+| Shared quiz sync leaks its answer           | QuizItem sync payloads omit answer and explanation; only a personal post-submission attempt payload discloses them        |
+| IndexedDB exposes learning weaknesses       | Assessment and review payloads use the Vault; durable entity, Outbox, and conflict rows hold encrypted references         |
+| Owner receives member assessment changes    | Pull and Bootstrap filter personal entities by authenticated `user_id` while still advancing the global cursor            |
+| Partial attempt sync loses derived feedback | Pattern and schedule changes precede the attempt in one transaction; the Push result points to the final sequence         |
+| Repeated offline attempts fork derived IDs  | Pending encrypted attempts retain stable pattern/schedule IDs and later attempts depend on their predecessor              |
+| Offline review completes before findings    | Completion depends on pending review and finding operations; failed dependencies remain explicit                          |
 
 ## Residual and follow-up work
 
-- L4-002B must add Vault-protected sync payloads, replay/ordering tests, and Review UI states
-  before claiming offline assessment and audit review.
 - A learner can intentionally submit a blank wrong attempt to reveal an answer. These quizzes
   are formative self-study tools, not proctored exams. High-stakes controls are out of scope.
 - Mentor and group reporting requires a later explicit aggregate scope and minimum disclosure
