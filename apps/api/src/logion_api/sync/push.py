@@ -16,8 +16,12 @@ from logion_api.content.schemas import (
 from logion_api.content.service import ContentService
 from logion_api.db import utc_now
 from logion_api.errors import APIError
-from logion_api.exam.models import Exam
-from logion_api.exam.schemas import ExamCreateRequest
+from logion_api.exam.models import Exam, Subject, SyllabusNode
+from logion_api.exam.schemas import (
+    ExamCreateRequest,
+    SubjectCreateRequest,
+    SyllabusNodeCreateRequest,
+)
 from logion_api.exam.service import ExamService
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.evidence_schemas import EvidenceSubmitRequest
@@ -268,6 +272,14 @@ class SyncPushService:
             )
         if operation.entity_type == "exam" and operation.operation_type == "create":
             return await self._create_exam(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "exam_subject" and operation.operation_type == "create":
+            return await self._create_exam_subject(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "syllabus_node" and operation.operation_type == "create":
+            return await self._create_syllabus_node(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -1710,17 +1722,12 @@ class SyncPushService:
         if operation.base_version != 0 or not isinstance(space_id, str):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         try:
-            payload = ExamCreateRequest.model_validate(
-                {**raw, "id": operation.entity_id}
-            )
+            payload = ExamCreateRequest.model_validate({**raw, "id": operation.entity_id})
             current = await db.get(Exam, operation.entity_id)
             if current is not None and (
-                current.workspace_id != request.workspace_id
-                or current.user_id != context.user.id
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
             ):
-                return self._rejected(
-                    operation.operation_id, "SYNC_OPERATION_FORBIDDEN"
-                )
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
             async with db.begin_nested():
                 exam = await self._exams.create_exam(
                     db,
@@ -1736,6 +1743,102 @@ class SyncPushService:
                     identity,
                     exam.version,
                     exam_payload(exam),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_exam_subject(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        raw.pop("status", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = SubjectCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(Subject, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                subject = await self._exams.create_subject(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    subject.version,
+                    exam_subject_payload(subject),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_syllabus_node(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        raw.pop("coverage_status", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = SyllabusNodeCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(SyllabusNode, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                node = await self._exams.create_syllabus_node(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    node.version,
+                    syllabus_node_payload(node),
                 )
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
@@ -1883,6 +1986,8 @@ class SyncPushService:
             | AuditReview
             | ReviewFinding
             | Exam
+            | Subject
+            | SyllabusNode
             | None
         ) = None
         if operation.entity_type == "task":
@@ -1917,6 +2022,10 @@ class SyncPushService:
             remote = await db.get(ReviewFinding, operation.entity_id)
         elif operation.entity_type == "exam":
             remote = await db.get(Exam, operation.entity_id)
+        elif operation.entity_type == "exam_subject":
+            remote = await db.get(Subject, operation.entity_id)
+        elif operation.entity_type == "syllabus_node":
+            remote = await db.get(SyllabusNode, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -1949,6 +2058,10 @@ class SyncPushService:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         elif isinstance(remote, Exam):
             payload = exam_payload(remote)
+        elif isinstance(remote, Subject):
+            payload = exam_subject_payload(remote)
+        elif isinstance(remote, SyllabusNode):
+            payload = syllabus_node_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -2175,4 +2288,25 @@ def exam_payload(item: Exam) -> dict[str, object]:
         "target_score": item.target_score,
         "score_scale_max": item.score_scale_max,
         "status": item.status,
+    }
+
+
+def exam_subject_payload(item: Subject) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "exam_id": str(item.exam_id),
+        "name": item.name,
+        "weight_basis_points": item.weight_basis_points,
+        "status": item.status,
+    }
+
+
+def syllabus_node_payload(item: SyllabusNode) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "subject_id": str(item.subject_id),
+        "parent_id": str(item.parent_id) if item.parent_id is not None else None,
+        "title": item.title,
+        "importance": item.importance,
+        "coverage_status": item.coverage_status,
     }

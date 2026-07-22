@@ -53,6 +53,8 @@ export interface ProtectedMutationInput extends LocalMutationInput {
     | "resource"
     | "error_pattern"
     | "exam"
+    | "exam_subject"
+    | "syllabus_node"
     | "audit_review"
     | "review_finding"
     | "review_schedule"

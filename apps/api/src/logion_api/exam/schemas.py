@@ -59,3 +59,51 @@ class ExamResponse(StrictModel):
 
 class ExamListResponse(StrictModel):
     exams: list[ExamResponse]
+
+
+class SubjectCreateRequest(StrictModel):
+    id: UUID
+    exam_id: UUID
+    name: Title
+    weight_basis_points: int = Field(default=0, ge=0, le=10000)
+
+
+class SubjectResponse(StrictModel):
+    id: UUID
+    exam_id: UUID
+    name: str
+    weight_basis_points: int
+    status: Literal["active", "archived"]
+    version: int
+
+
+class SubjectListResponse(StrictModel):
+    subjects: list[SubjectResponse]
+
+
+class SyllabusNodeCreateRequest(StrictModel):
+    id: UUID
+    subject_id: UUID
+    parent_id: UUID | None = None
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=240)]
+    importance: int = Field(default=3, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def reject_self_parent(self) -> "SyllabusNodeCreateRequest":
+        if self.parent_id == self.id:
+            raise ValueError("a syllabus node cannot be its own parent")
+        return self
+
+
+class SyllabusNodeResponse(StrictModel):
+    id: UUID
+    subject_id: UUID
+    parent_id: UUID | None
+    title: str
+    importance: int
+    coverage_status: Literal["not_started", "in_progress", "covered"]
+    version: int
+
+
+class SyllabusNodeListResponse(StrictModel):
+    nodes: list[SyllabusNodeResponse]

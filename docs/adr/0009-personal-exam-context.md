@@ -1,6 +1,6 @@
 # ADR 0009: Personal exam context and derived countdown
 
-Status: Accepted for Phase 4 L4-E1
+Status: Accepted for Phase 4 L4-E1/L4-E2
 
 ## Context
 
@@ -24,6 +24,12 @@ target to a Workspace owner.
 - Exam payloads are protected offline entities. Durable IndexedDB entity, Outbox, and
   conflict rows contain Vault references, while Sync Push carries plaintext only in the
   authenticated request.
+- Subject and SyllabusNode inherit the Exam's personal owner boundary. Subject weights use
+  basis points and cannot total more than 100 percent for one Exam. New syllabus nodes may
+  reference only an existing parent in the same Subject, so create-only hierarchy writes
+  cannot introduce cycles.
+- Syllabus coverage begins at `not_started`. A later explicit user transition may change
+  it; create payloads and AI output cannot forge another coverage state.
 - AI may explain or propose planning drafts in later work, but it cannot create, modify,
   complete, archive, or retarget an Exam without an explicit user action.
 

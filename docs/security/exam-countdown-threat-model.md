@@ -1,6 +1,6 @@
 # Personal exam countdown threat model
 
-Status: L4-E1 protected offline/sync baseline
+Status: L4-E1/L4-E2 protected offline/sync baseline
 
 ## Assets and invariants
 
@@ -28,6 +28,10 @@ Status: L4-E1 protected offline/sync baseline
 | Duplicate offline creation                  | Operation replay is idempotent and returns the original sequence/version                                           |
 | AI changes a formal target                  | No AI write path exists; formal mutations require an authenticated user action                                     |
 | Clock drift changes stored truth            | Countdown is a pure projection and never writes back to Exam state                                                 |
+| Cross-owner Subject or parent link          | Composite foreign keys and owner-scoped resolution bind the hierarchy to one user and Space                        |
+| Subject weights exceed the whole            | A locked Exam row serializes bounded basis-point totals; the database bounds each weight                           |
+| Cyclic or forged syllabus hierarchy         | A new node selects only an existing same-Subject parent; schema and database reject self-parenting                 |
+| Client forges coverage                      | Create payload coverage is discarded and the server initializes `not_started`; AI has no transition path           |
 
 ## Residual and follow-up work
 
