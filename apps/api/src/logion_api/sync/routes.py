@@ -19,6 +19,7 @@ from logion_api.identity.dependencies import (
 )
 from logion_api.memory.dependencies import MemoryServiceDependency
 from logion_api.planning.dependencies import PlanningServiceDependency
+from logion_api.research.dependencies import ResearchServiceDependency
 from logion_api.self_study.dependencies import SelfStudyServiceDependency
 from logion_api.sync.push import SyncPushService
 from logion_api.sync.read import InvalidChunkError, StaleSnapshotError, SyncReadService
@@ -81,6 +82,7 @@ async def push(
     memory: MemoryServiceDependency,
     exams: ExamServiceDependency,
     self_study: SelfStudyServiceDependency,
+    research: ResearchServiceDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> PushResponse | RebootstrapControl:
     require_trusted_origin(request, settings)
@@ -142,6 +144,7 @@ async def push(
         memory,
         exams,
         self_study,
+        research,
     ).push(
         db,
         context,

@@ -27,7 +27,17 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
-type Kind = "learning_track" | "study_project" | "inbox_item" | "deliverable";
+type Kind =
+  | "learning_track"
+  | "study_project"
+  | "inbox_item"
+  | "deliverable"
+  | "paper_record"
+  | "research_claim"
+  | "research_question"
+  | "experiment_run"
+  | "metric_record"
+  | "research_feedback";
 interface View {
   entity: LocalEntity;
   payload: JsonObject;
@@ -55,6 +65,13 @@ function errorMessage(error: unknown) {
 }
 
 export function SelfStudyCenter() {
+  return <OfflineLearningCenter mode="self-study" />;
+}
+export function ResearchCenter() {
+  return <OfflineLearningCenter mode="research" />;
+}
+
+function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
   const { state: session } = useSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [spaces, setSpaces] = useState<Space[]>([]);
@@ -68,6 +85,12 @@ export function SelfStudyCenter() {
     study_project: [],
     inbox_item: [],
     deliverable: [],
+    paper_record: [],
+    research_claim: [],
+    research_question: [],
+    experiment_run: [],
+    metric_record: [],
+    research_feedback: [],
   });
   const database = useRef<LogionOfflineDatabase | null>(null),
     vault = useRef<OfflineVault | null>(null);
@@ -168,6 +191,12 @@ export function SelfStudyCenter() {
       "study_project",
       "inbox_item",
       "deliverable",
+      "paper_record",
+      "research_claim",
+      "research_question",
+      "experiment_run",
+      "metric_record",
+      "research_feedback",
     ];
     const entries = await Promise.all(
       kinds.map(async (kind) => {
@@ -331,8 +360,252 @@ export function SelfStudyCenter() {
       await refresh();
     }
   }
+  async function submitResearch(event: FormEvent<HTMLFormElement>, kind: Kind) {
+    event.preventDefault();
+    const form = event.currentTarget,
+      data = new FormData(form);
+    try {
+      if (kind === "paper_record")
+        await commit(kind, {
+          title: String(data.get("title")),
+          citation_key: String(data.get("citation_key")),
+          source_url: null,
+        });
+      if (kind === "research_question")
+        await commit(kind, {
+          question: String(data.get("question")),
+          rationale: String(data.get("rationale")),
+        });
+      if (kind === "research_claim") {
+        const parent = String(data.get("paper_id"));
+        await commit(
+          kind,
+          {
+            paper_id: parent,
+            statement: String(data.get("statement")),
+            stance: String(data.get("stance")),
+          },
+          [parent],
+        );
+      }
+      if (kind === "experiment_run") {
+        const parent = String(data.get("question_id"));
+        await commit(
+          kind,
+          {
+            question_id: parent,
+            title: String(data.get("title")),
+            method_summary: String(data.get("method")),
+            completed_at: new Date().toISOString(),
+          },
+          [parent],
+        );
+      }
+      if (kind === "metric_record") {
+        const parent = String(data.get("run_id"));
+        await commit(
+          kind,
+          {
+            run_id: parent,
+            name: String(data.get("name")),
+            value: Number(data.get("value")),
+            unit: String(data.get("unit")),
+          },
+          [parent],
+        );
+      }
+      if (kind === "research_feedback") {
+        const parent = String(data.get("claim_id"));
+        await commit(
+          kind,
+          {
+            claim_id: parent,
+            description: String(data.get("description")),
+            requested_action: String(data.get("action")),
+          },
+          [parent],
+        );
+      }
+      form.reset();
+      setStatus("研究记录已加密保存。");
+    } catch (error) {
+      setStatus(errorMessage(error));
+      await refresh();
+    }
+  }
   const visible = (kind: Kind) =>
     records[kind].filter((x) => x.payload.space_id === spaceId);
+  if (mode === "research")
+    return (
+      <main id="main-content" className="settings-page today-page">
+        <header>
+          <p className="eyebrow">LOGION · RESEARCH</p>
+          <h1>研究证据与实验闭环</h1>
+          <p aria-live="polite">{status}</p>
+        </header>
+        <section className="settings-card">
+          <h2>研究空间</h2>
+          <div className="inline-form">
+            <select
+              aria-label="工作区"
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+            >
+              {workspaces.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="空间"
+              value={spaceId}
+              onChange={(e) => setSpaceId(e.target.value)}
+            >
+              {spaces.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!unlocked}
+              onClick={() => void synchronize()}
+            >
+              同步
+            </button>
+          </div>
+          <form className="inline-form" onSubmit={unlock}>
+            <input
+              name="passphrase"
+              type="password"
+              minLength={10}
+              autoComplete="current-password"
+              aria-label="本地口令"
+              required
+            />
+            <button>解锁</button>
+          </form>
+        </section>
+        <section className="settings-card">
+          <h2>论文与声明</h2>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitResearch(e, "paper_record")}
+          >
+            <input name="title" placeholder="论文标题" required />
+            <input name="citation_key" placeholder="引用键" required />
+            <button disabled={!unlocked}>保存论文索引</button>
+          </form>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitResearch(e, "research_claim")}
+          >
+            <select name="paper_id" required>
+              <option value="">选择论文</option>
+              {visible("paper_record").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.title)}
+                </option>
+              ))}
+            </select>
+            <textarea name="statement" placeholder="研究声明" required />
+            <select name="stance">
+              <option value="supports">支持</option>
+              <option value="opposes">反对</option>
+              <option value="mixed">混合</option>
+              <option value="unknown">未判断</option>
+            </select>
+            <button disabled={!unlocked}>记录声明证据</button>
+          </form>
+        </section>
+        <section className="settings-card">
+          <h2>问题与实验</h2>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitResearch(e, "research_question")}
+          >
+            <textarea name="question" placeholder="研究问题" required />
+            <textarea name="rationale" placeholder="问题依据" />
+            <button disabled={!unlocked}>创建问题</button>
+          </form>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitResearch(e, "experiment_run")}
+          >
+            <select name="question_id" required>
+              <option value="">选择问题</option>
+              {visible("research_question").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.question)}
+                </option>
+              ))}
+            </select>
+            <input name="title" placeholder="实验运行名称" required />
+            <textarea name="method" placeholder="方法摘要" required />
+            <button disabled={!unlocked}>记录已完成运行</button>
+          </form>
+        </section>
+        <section className="settings-card">
+          <h2>指标与反馈</h2>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitResearch(e, "metric_record")}
+          >
+            <select name="run_id" required>
+              <option value="">选择运行</option>
+              {visible("experiment_run").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.title)}
+                </option>
+              ))}
+            </select>
+            <input name="name" placeholder="指标名称" required />
+            <input
+              name="value"
+              type="number"
+              step="any"
+              placeholder="数值"
+              required
+            />
+            <input name="unit" placeholder="单位" />
+            <button disabled={!unlocked}>追加指标</button>
+          </form>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitResearch(e, "research_feedback")}
+          >
+            <select name="claim_id" required>
+              <option value="">选择声明</option>
+              {visible("research_claim").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.statement)}
+                </option>
+              ))}
+            </select>
+            <textarea name="description" placeholder="反馈" required />
+            <textarea name="action" placeholder="建议动作" />
+            <button disabled={!unlocked}>记录反馈</button>
+          </form>
+          <div className="task-grid">
+            {visible("experiment_run").map((run) => (
+              <article className="task-card" key={run.entity.entity_id}>
+                <h3>{String(run.payload.title)}</h3>
+                {visible("metric_record")
+                  .filter((m) => m.payload.run_id === run.entity.entity_id)
+                  .map((m) => (
+                    <p key={m.entity.entity_id}>
+                      {String(m.payload.name)}：{String(m.payload.value)}{" "}
+                      {String(m.payload.unit)}
+                    </p>
+                  ))}
+              </article>
+            ))}
+          </div>
+        </section>
+      </main>
+    );
   return (
     <main id="main-content" className="settings-page today-page">
       <header>
