@@ -89,7 +89,7 @@ async def test_phase4_guessed_ids_never_disclose_personal_or_private_content() -
                 "date_status": "undetermined",
                 "exam_at": None,
                 "timezone": "UTC",
-                "target_score": None,
+                "target_score": 80,
                 "score_scale_max": 100,
             },
             "learning_track": {
@@ -156,7 +156,7 @@ async def test_phase4_guessed_ids_never_disclose_personal_or_private_content() -
                 "date_status": "undetermined",
                 "exam_at": None,
                 "timezone": "UTC",
-                "target_score": None,
+                "target_score": 80,
                 "score_scale_max": 100,
                 "status": "planning",
             },
