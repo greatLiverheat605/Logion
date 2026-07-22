@@ -17,6 +17,9 @@ export default function AuthenticatedShellPage() {
         <Link className="text-link" href="/app/records">
           笔记与资料
         </Link>
+        <Link className="text-link" href="/app/review">
+          掌握与复习
+        </Link>
         <Link className="text-link" href="/app/workspaces">
           管理工作区
         </Link>

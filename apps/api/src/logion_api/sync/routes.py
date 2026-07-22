@@ -16,6 +16,7 @@ from logion_api.identity.dependencies import (
     request_id,
     require_trusted_origin,
 )
+from logion_api.memory.dependencies import MemoryServiceDependency
 from logion_api.planning.dependencies import PlanningServiceDependency
 from logion_api.sync.push import SyncPushService
 from logion_api.sync.read import InvalidChunkError, StaleSnapshotError, SyncReadService
@@ -75,6 +76,7 @@ async def push(
     execution: ExecutionServiceDependency,
     content: ContentServiceDependency,
     evidence: EvidenceServiceDependency,
+    memory: MemoryServiceDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> PushResponse | RebootstrapControl:
     require_trusted_origin(request, settings)
@@ -127,7 +129,7 @@ async def push(
         await db.rollback()
         return RebootstrapControl(server_sync_epoch=server_sync_epoch)
     results = await SyncPushService(
-        SyncLedgerService(), workspaces, planning, execution, content, evidence
+        SyncLedgerService(), workspaces, planning, execution, content, evidence, memory
     ).push(
         db,
         context,
