@@ -22,7 +22,8 @@ jobs:
       - name: Create ephemeral backup encryption key
         run: |
           printf '%s' 'Y2ktYmFja3VwLWVuY3J5cHRpb24ta2V5LTMyYnl0ZSE' > "$LOGION_BACKUP_SECRET_SOURCE"
-          chmod 600 "$LOGION_BACKUP_SECRET_SOURCE"
+          sudo chown 70:70 "$LOGION_BACKUP_SECRET_SOURCE"
+          chmod 400 "$LOGION_BACKUP_SECRET_SOURCE"
       - uses: pnpm/action-setup@v5
         with:
           version: 11.9.0
@@ -93,6 +94,10 @@ jobs:
           docker compose run --name logion-backup-tools -d --entrypoint sh \
             -v "$source_attachments:/attachments:ro" backup -c 'sleep 600'
           backup_container="logion-backup-tools"
+          if ! docker exec "$backup_container" test -r /run/secrets/logion_backup_key; then
+            echo '::error title=Backup secret mount unreadable::The postgres user cannot read the mounted backup key.'
+            exit 1
+          fi
           docker exec -e LOGION_BACKUP_ONCE=true "$backup_container" logion-backup
           latest="$(docker exec "$backup_container" sh -c 'find /backups -type f -name "logion-*.backup" | sort | tail -n 1')"
           test -n "$latest"
