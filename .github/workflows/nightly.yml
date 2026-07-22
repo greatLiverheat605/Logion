@@ -87,12 +87,12 @@ jobs:
           VALUES ('00000000-0000-7000-8000-000000000002','00000000-0000-7000-8000-000000000004',0,0,1,now(),now());
           SQL
           docker compose build backup
-          docker compose run --name logion-backup-tools -d --entrypoint sh backup -c 'sleep 600'
+          source_attachments="$RUNNER_TEMP/logion-source-attachments"
+          mkdir -p "$source_attachments"
+          printf '%s' 'phase5-attachment-marker' > "$source_attachments/restore-marker.txt"
+          docker compose run --name logion-backup-tools -d --entrypoint sh \
+            -v "$source_attachments:/attachments:ro" backup -c 'sleep 600'
           backup_container="logion-backup-tools"
-          attachments_volume="$(docker inspect "$backup_container" --format '{{range .Mounts}}{{if eq .Destination "/attachments"}}{{.Name}}{{end}}{{end}}')"
-          test -n "$attachments_volume"
-          docker run --rm -v "$attachments_volume:/attachments" alpine:3.22 \
-            sh -c 'printf "%s" "phase5-attachment-marker" > /attachments/restore-marker.txt'
           docker exec -e LOGION_BACKUP_ONCE=true "$backup_container" logion-backup
           latest="$(docker exec "$backup_container" sh -c 'find /backups -type f -name "logion-*.backup" | sort | tail -n 1')"
           test -n "$latest"
