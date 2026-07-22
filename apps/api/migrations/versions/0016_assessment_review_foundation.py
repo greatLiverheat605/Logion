@@ -1,6 +1,6 @@
 """Add private quizzes, error patterns, and audit reviews.
 
-Revision ID: 0016_assessment_review_foundation
+Revision ID: 0016_assessment_review
 Revises: 0015_learning_science_foundation
 """
 
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0016_assessment_review_foundation"
+revision: str = "0016_assessment_review"
 down_revision: str | None = "0015_learning_science_foundation"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
