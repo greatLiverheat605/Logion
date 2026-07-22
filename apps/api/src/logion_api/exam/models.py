@@ -172,3 +172,76 @@ class SyllabusNode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MockExam(Base):
+    __tablename__ = "mock_exams"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["exam_id", "workspace_id", "space_id", "user_id"],
+            ["exams.id", "exams.workspace_id", "exams.space_id", "exams.user_id"],
+            name="fk_mock_exam_exam_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "duration_limit_seconds BETWEEN 60 AND 86400",
+            name="ck_mock_exam_duration_limit",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_mock_exam_workspace"),
+        UniqueConstraint("id", "workspace_id", "space_id", "user_id", name="uq_mock_exam_scope"),
+        Index("ix_mock_exam_user_exam", "workspace_id", "user_id", "exam_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    exam_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    duration_limit_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    updated_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ScoreRecord(Base):
+    __tablename__ = "score_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["mock_exam_id", "workspace_id", "space_id", "user_id"],
+            [
+                "mock_exams.id",
+                "mock_exams.workspace_id",
+                "mock_exams.space_id",
+                "mock_exams.user_id",
+            ],
+            name="fk_score_record_mock_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "score BETWEEN 0 AND score_scale_max AND score_scale_max BETWEEN 1 AND 1000000",
+            name="ck_score_record_score",
+        ),
+        CheckConstraint("duration_seconds BETWEEN 0 AND 86400", name="ck_score_record_duration"),
+        UniqueConstraint("id", "workspace_id", name="uq_score_record_workspace"),
+        Index("ix_score_record_user_time", "workspace_id", "user_id", "completed_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    mock_exam_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_scale_max: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    updated_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

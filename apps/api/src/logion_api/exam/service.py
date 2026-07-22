@@ -5,9 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.config import Settings
 from logion_api.errors import APIError
-from logion_api.exam.models import Exam, Subject, SyllabusNode
+from logion_api.exam.models import Exam, MockExam, ScoreRecord, Subject, SyllabusNode
 from logion_api.exam.schemas import (
     ExamCreateRequest,
+    MockExamCreateRequest,
+    ScoreRecordCreateRequest,
     SubjectCreateRequest,
     SyllabusNodeCreateRequest,
 )
@@ -338,6 +340,208 @@ class ExamService:
                         SyllabusNode.deleted_at.is_(None),
                     )
                     .order_by(SyllabusNode.subject_id, SyllabusNode.id)
+                    .limit(10000)
+                )
+            ).all()
+        )
+
+    async def create_mock_exam(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: MockExamCreateRequest,
+        request_id: str,
+    ) -> MockExam:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        exam = await db.scalar(
+            select(Exam)
+            .where(
+                Exam.id == payload.exam_id,
+                Exam.workspace_id == workspace_id,
+                Exam.space_id == space_id,
+                Exam.user_id == context.user.id,
+                Exam.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if exam is None:
+            raise APIError(code="RESOURCE_NOT_FOUND", message="Exam not found.", status_code=404)
+        if await db.get(MockExam, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        count = int(
+            await db.scalar(
+                select(func.count(MockExam.id)).where(
+                    MockExam.workspace_id == workspace_id,
+                    MockExam.user_id == context.user.id,
+                    MockExam.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if count >= self._settings.mock_exam_per_user_quota:
+            raise APIError(
+                code="RESOURCE_QUOTA_EXCEEDED",
+                message="The account has reached its mock-exam limit.",
+                status_code=409,
+            )
+        item = MockExam(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            exam_id=exam.id,
+            user_id=context.user.id,
+            title=payload.title,
+            duration_limit_seconds=payload.duration_limit_seconds,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(item)
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="exam.mock_created",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="mock_exam",
+                target_id=item.id,
+                metadata={},
+            )
+        )
+        return item
+
+    async def create_score_record(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: ScoreRecordCreateRequest,
+        request_id: str,
+    ) -> ScoreRecord:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        mock = await db.scalar(
+            select(MockExam)
+            .where(
+                MockExam.id == payload.mock_exam_id,
+                MockExam.workspace_id == workspace_id,
+                MockExam.space_id == space_id,
+                MockExam.user_id == context.user.id,
+                MockExam.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if mock is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Mock exam not found.", status_code=404
+            )
+        if await db.get(ScoreRecord, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        count = int(
+            await db.scalar(
+                select(func.count(ScoreRecord.id)).where(
+                    ScoreRecord.workspace_id == workspace_id,
+                    ScoreRecord.user_id == context.user.id,
+                    ScoreRecord.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if count >= self._settings.score_record_per_user_quota:
+            raise APIError(
+                code="RESOURCE_QUOTA_EXCEEDED",
+                message="The account has reached its score-record limit.",
+                status_code=409,
+            )
+        item = ScoreRecord(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            mock_exam_id=mock.id,
+            user_id=context.user.id,
+            score=payload.score,
+            score_scale_max=payload.score_scale_max,
+            duration_seconds=payload.duration_seconds,
+            completed_at=payload.completed_at,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(item)
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="exam.score_recorded",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="score_record",
+                target_id=item.id,
+                metadata={},
+            )
+        )
+        return item
+
+    async def list_mock_exams(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> list[MockExam]:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        return list(
+            (
+                await db.scalars(
+                    select(MockExam)
+                    .where(
+                        MockExam.workspace_id == workspace_id,
+                        MockExam.space_id == space_id,
+                        MockExam.user_id == context.user.id,
+                        MockExam.deleted_at.is_(None),
+                    )
+                    .order_by(MockExam.id)
+                    .limit(10000)
+                )
+            ).all()
+        )
+
+    async def list_score_records(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> list[ScoreRecord]:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        return list(
+            (
+                await db.scalars(
+                    select(ScoreRecord)
+                    .where(
+                        ScoreRecord.workspace_id == workspace_id,
+                        ScoreRecord.space_id == space_id,
+                        ScoreRecord.user_id == context.user.id,
+                        ScoreRecord.deleted_at.is_(None),
+                    )
+                    .order_by(ScoreRecord.completed_at, ScoreRecord.id)
                     .limit(10000)
                 )
             ).all()

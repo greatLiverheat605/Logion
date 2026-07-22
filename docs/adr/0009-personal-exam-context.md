@@ -1,6 +1,6 @@
 # ADR 0009: Personal exam context and derived countdown
 
-Status: Accepted for Phase 4 L4-E1/L4-E2
+Status: Accepted for Phase 4 L4-E1/L4-E2/L4-E3
 
 ## Context
 
@@ -30,6 +30,9 @@ target to a Workspace owner.
   cannot introduce cycles.
 - Syllabus coverage begins at `not_started`. A later explicit user transition may change
   it; create payloads and AI output cannot forge another coverage state.
+- MockExam is a user-defined timed template under one Exam. ScoreRecord is append-only,
+  belongs to the same personal boundary, and records a bounded score, scale, elapsed time,
+  and timezone-aware completion instant. AI has no submission path.
 - AI may explain or propose planning drafts in later work, but it cannot create, modify,
   complete, archive, or retarget an Exam without an explicit user action.
 

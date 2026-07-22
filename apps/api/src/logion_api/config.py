@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     exam_per_user_quota: int = Field(default=1000, ge=1, le=100000)
     exam_subject_per_user_quota: int = Field(default=10000, ge=1, le=1000000)
     syllabus_node_per_user_quota: int = Field(default=100000, ge=1, le=1000000)
+    mock_exam_per_user_quota: int = Field(default=10000, ge=1, le=1000000)
+    score_record_per_user_quota: int = Field(default=100000, ge=1, le=1000000)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(

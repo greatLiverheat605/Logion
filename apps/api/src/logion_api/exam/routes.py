@@ -5,11 +5,17 @@ from fastapi import APIRouter, Header, Request, status
 
 from logion_api.errors import ErrorResponse
 from logion_api.exam.dependencies import ExamServiceDependency
-from logion_api.exam.models import Exam, Subject, SyllabusNode
+from logion_api.exam.models import Exam, MockExam, ScoreRecord, Subject, SyllabusNode
 from logion_api.exam.schemas import (
     ExamCreateRequest,
     ExamListResponse,
     ExamResponse,
+    MockExamCreateRequest,
+    MockExamListResponse,
+    MockExamResponse,
+    ScoreRecordCreateRequest,
+    ScoreRecordListResponse,
+    ScoreRecordResponse,
     SubjectCreateRequest,
     SubjectListResponse,
     SubjectResponse,
@@ -69,6 +75,28 @@ def syllabus_node_response(item: SyllabusNode) -> SyllabusNodeResponse:
         title=item.title,
         importance=item.importance,
         coverage_status=cast(Any, item.coverage_status),
+        version=item.version,
+    )
+
+
+def mock_exam_response(item: MockExam) -> MockExamResponse:
+    return MockExamResponse(
+        id=item.id,
+        exam_id=item.exam_id,
+        title=item.title,
+        duration_limit_seconds=item.duration_limit_seconds,
+        version=item.version,
+    )
+
+
+def score_record_response(item: ScoreRecord) -> ScoreRecordResponse:
+    return ScoreRecordResponse(
+        id=item.id,
+        mock_exam_id=item.mock_exam_id,
+        score=item.score,
+        score_scale_max=item.score_scale_max,
+        duration_seconds=item.duration_seconds,
+        completed_at=item.completed_at,
         version=item.version,
     )
 
@@ -237,3 +265,99 @@ async def create_syllabus_node(
     )
     await db.commit()
     return syllabus_node_response(item)
+
+
+@router.get(
+    "/mock-exams",
+    response_model=MockExamListResponse,
+    operation_id="mock_exam_list",
+    responses=ERRORS,
+)
+async def list_mock_exams(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    exams: ExamServiceDependency,
+) -> MockExamListResponse:
+    items = await exams.list_mock_exams(db, context, workspace_id, space_id, request_id(request))
+    return MockExamListResponse(mock_exams=[mock_exam_response(item) for item in items])
+
+
+@router.post(
+    "/mock-exams",
+    response_model=MockExamResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="mock_exam_create",
+    responses=ERRORS,
+)
+async def create_mock_exam(
+    workspace_id: UUID,
+    space_id: UUID,
+    payload: MockExamCreateRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    exams: ExamServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> MockExamResponse:
+    await exam_write_boundary(
+        request, context, identity, limiter, settings, workspace_id, x_csrf_token
+    )
+    item = await exams.create_mock_exam(
+        db, context, workspace_id, space_id, payload, request_id(request)
+    )
+    await db.commit()
+    return mock_exam_response(item)
+
+
+@router.get(
+    "/score-records",
+    response_model=ScoreRecordListResponse,
+    operation_id="score_record_list",
+    responses=ERRORS,
+)
+async def list_score_records(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    exams: ExamServiceDependency,
+) -> ScoreRecordListResponse:
+    items = await exams.list_score_records(db, context, workspace_id, space_id, request_id(request))
+    return ScoreRecordListResponse(score_records=[score_record_response(item) for item in items])
+
+
+@router.post(
+    "/score-records",
+    response_model=ScoreRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="score_record_create",
+    responses=ERRORS,
+)
+async def create_score_record(
+    workspace_id: UUID,
+    space_id: UUID,
+    payload: ScoreRecordCreateRequest,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    exams: ExamServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> ScoreRecordResponse:
+    await exam_write_boundary(
+        request, context, identity, limiter, settings, workspace_id, x_csrf_token
+    )
+    item = await exams.create_score_record(
+        db, context, workspace_id, space_id, payload, request_id(request)
+    )
+    await db.commit()
+    return score_record_response(item)

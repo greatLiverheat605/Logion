@@ -130,6 +130,36 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
         )
         assert node.status_code == 201, node.text
         assert (await learner.get(node_endpoint)).json()["nodes"] == []
+        mock_id = uuid4()
+        mock_endpoint = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/mock-exams"
+        mock = await owner.post(
+            mock_endpoint,
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={
+                "id": str(mock_id),
+                "exam_id": str(rest_exam_id),
+                "title": "Private mock title",
+                "duration_limit_seconds": 7200,
+            },
+        )
+        assert mock.status_code == 201, mock.text
+        assert (await learner.get(mock_endpoint)).json()["mock_exams"] == []
+        score_id = uuid4()
+        score_endpoint = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/score-records"
+        score = await owner.post(
+            score_endpoint,
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={
+                "id": str(score_id),
+                "mock_exam_id": str(mock_id),
+                "score": 80,
+                "score_scale_max": 100,
+                "duration_seconds": 6900,
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        assert score.status_code == 201, score.text
+        assert (await learner.get(score_endpoint)).json()["score_records"] == []
 
         async def current_device(client: AsyncClient) -> UUID:
             devices = (await client.get("/api/v1/auth/devices")).json()["devices"]
@@ -169,8 +199,15 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
             record["entity_type"] == "syllabus_node" and record["entity_id"] == str(node_id)
             for record in owner_bootstrap.json()["records"]
         )
+        assert any(
+            record["entity_type"] == "mock_exam" for record in owner_bootstrap.json()["records"]
+        )
+        assert any(
+            record["entity_type"] == "score_record" for record in owner_bootstrap.json()["records"]
+        )
         assert not any(
-            record["entity_type"] in {"exam", "exam_subject", "syllabus_node"}
+            record["entity_type"]
+            in {"exam", "exam_subject", "syllabus_node", "mock_exam", "score_record"}
             for record in learner_bootstrap.json()["records"]
         )
         epoch = learner_bootstrap.json()["sync_epoch"]
@@ -267,6 +304,47 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
             "applied",
             "applied",
         ]
+        offline_mock_id, mock_operation_id = uuid4(), uuid4()
+        mock_payload = {
+            "space_id": str(space_id),
+            "exam_id": str(exam_id),
+            "title": "Learner private offline mock",
+            "duration_limit_seconds": 5400,
+        }
+        mock_operation = {
+            **operation,
+            "operation_id": str(mock_operation_id),
+            "entity_type": "mock_exam",
+            "entity_id": str(offline_mock_id),
+            "payload": mock_payload,
+            "payload_hash": canonical_hash(mock_payload),
+            "dependencies": [str(operation_id)],
+        }
+        offline_score_id, score_operation_id = uuid4(), uuid4()
+        score_payload = {
+            "space_id": str(space_id),
+            "mock_exam_id": str(offline_mock_id),
+            "score": 75,
+            "score_scale_max": 100,
+            "duration_seconds": 5000,
+            "completed_at": datetime.now(UTC).isoformat(),
+        }
+        score_operation = {
+            **operation,
+            "operation_id": str(score_operation_id),
+            "entity_type": "score_record",
+            "entity_id": str(offline_score_id),
+            "payload": score_payload,
+            "payload_hash": canonical_hash(score_payload),
+            "dependencies": [str(mock_operation_id)],
+        }
+        score_push = await learner.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/push",
+            headers={"X-CSRF-Token": learner.cookies["logion_csrf"]},
+            json={**push_body, "operations": [mock_operation, score_operation]},
+        )
+        assert score_push.status_code == 200, score_push.text
+        assert [item["status"] for item in score_push.json()["results"]] == ["applied", "applied"]
         foreign_parent = await owner.post(
             node_endpoint,
             headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
@@ -299,14 +377,20 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
             f"/api/v1/workspaces/{workspace_id}/sync/pull",
             json=pull_body(owner_device),
         )
-        personal_ids = {str(exam_id), str(offline_subject_id), str(offline_node_id)}
+        personal_ids = {
+            str(exam_id),
+            str(offline_subject_id),
+            str(offline_node_id),
+            str(offline_mock_id),
+            str(offline_score_id),
+        }
         assert personal_ids.issubset(
             {change["entity_id"] for change in learner_pull.json()["changes"]}
         )
         assert not any(
             change["entity_id"] in personal_ids for change in owner_pull.json()["changes"]
         )
-        assert owner_pull.json()["next_cursor"] >= hierarchy_push.json()["results"][-1]["sequence"]
+        assert owner_pull.json()["next_cursor"] >= score_push.json()["results"][-1]["sequence"]
 
     async with session_factory() as db:
         audits = list(
@@ -321,6 +405,8 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
         assert "Private syllabus node" not in serialized
         assert "Learner private offline subject" not in serialized
         assert "Learner private offline syllabus node" not in serialized
+        assert "Private mock title" not in serialized
+        assert "Learner private offline mock" not in serialized
         assert all(
             {"title", "exam_at", "timezone", "target_score", "score_scale_max"}.isdisjoint(
                 item.event_metadata

@@ -62,6 +62,22 @@ interface SyllabusNodePayload extends JsonObject {
   coverage_status: "not_started" | "in_progress" | "covered";
 }
 
+interface MockExamPayload extends JsonObject {
+  space_id: string;
+  exam_id: string;
+  title: string;
+  duration_limit_seconds: number;
+}
+
+interface ScoreRecordPayload extends JsonObject {
+  space_id: string;
+  mock_exam_id: string;
+  score: number;
+  score_scale_max: number;
+  duration_seconds: number;
+  completed_at: string;
+}
+
 interface ProtectedView<T extends JsonObject> {
   entity: LocalEntity;
   payload: T;
@@ -143,6 +159,12 @@ export function ExamCenter() {
   const [subjects, setSubjects] = useState<ProtectedView<SubjectPayload>[]>([]);
   const [syllabusNodes, setSyllabusNodes] = useState<
     ProtectedView<SyllabusNodePayload>[]
+  >([]);
+  const [mockExams, setMockExams] = useState<ProtectedView<MockExamPayload>[]>(
+    [],
+  );
+  const [scoreRecords, setScoreRecords] = useState<
+    ProtectedView<ScoreRecordPayload>[]
   >([]);
   const database = useRef<LogionOfflineDatabase | null>(null);
   const vault = useRef<OfflineVault | null>(null);
@@ -274,14 +296,19 @@ export function ExamCenter() {
         }),
       );
     }
-    const [nextExams, nextSubjects, nextNodes] = await Promise.all([
-      readProtected<ExamPayload>("exam"),
-      readProtected<SubjectPayload>("exam_subject"),
-      readProtected<SyllabusNodePayload>("syllabus_node"),
-    ]);
+    const [nextExams, nextSubjects, nextNodes, nextMocks, nextScores] =
+      await Promise.all([
+        readProtected<ExamPayload>("exam"),
+        readProtected<SubjectPayload>("exam_subject"),
+        readProtected<SyllabusNodePayload>("syllabus_node"),
+        readProtected<MockExamPayload>("mock_exam"),
+        readProtected<ScoreRecordPayload>("score_record"),
+      ]);
     setExams(nextExams);
     setSubjects(nextSubjects);
     setSyllabusNodes(nextNodes);
+    setMockExams(nextMocks);
+    setScoreRecords(nextScores);
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -496,6 +523,110 @@ export function ExamCenter() {
     }
   }
 
+  async function createMockExam(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      session.status !== "authenticated" ||
+      database.current === null ||
+      vault.current === null
+    )
+      return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const examId = String(data.get("exam_id") ?? "");
+    const now = new Date().toISOString();
+    try {
+      await new ProtectedOfflineRepository(
+        database.current,
+        vault.current,
+      ).commitMutation({
+        operation_id: crypto.randomUUID(),
+        protocol_version: "sync-v1",
+        workspace_id: workspaceId,
+        device_id: deviceId,
+        entity_type: "mock_exam",
+        entity_id: crypto.randomUUID(),
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: now,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        created_by: session.user.id,
+        updated_by: session.user.id,
+        payload: {
+          space_id: spaceId,
+          exam_id: examId,
+          title: String(data.get("title") ?? "").trim(),
+          duration_limit_seconds:
+            Number(data.get("duration_minutes") ?? 1) * 60,
+        },
+        dependencies: await pendingDependencies([examId]),
+      });
+      form.reset();
+      setStatus("模考已加密保存，正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(message(error));
+      await refresh();
+    }
+  }
+
+  async function createScoreRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      session.status !== "authenticated" ||
+      database.current === null ||
+      vault.current === null
+    )
+      return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const mockExamId = String(data.get("mock_exam_id") ?? "");
+    const score = Number(data.get("score") ?? 0);
+    const scoreScale = Number(data.get("score_scale_max") ?? 1);
+    const now = new Date().toISOString();
+    try {
+      if (score > scoreScale) throw new Error("score exceeds scale");
+      await new ProtectedOfflineRepository(
+        database.current,
+        vault.current,
+      ).commitMutation({
+        operation_id: crypto.randomUUID(),
+        protocol_version: "sync-v1",
+        workspace_id: workspaceId,
+        device_id: deviceId,
+        entity_type: "score_record",
+        entity_id: crypto.randomUUID(),
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: now,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        created_by: session.user.id,
+        updated_by: session.user.id,
+        payload: {
+          space_id: spaceId,
+          mock_exam_id: mockExamId,
+          score,
+          score_scale_max: scoreScale,
+          duration_seconds: Number(data.get("duration_minutes") ?? 0) * 60,
+          completed_at: now,
+        },
+        dependencies: await pendingDependencies([mockExamId]),
+      });
+      form.reset();
+      setStatus("成绩已加密保存，正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(message(error));
+      await refresh();
+    }
+  }
+
   const visibleExams = exams.filter(
     (item) => item.payload.space_id === spaceId,
   );
@@ -511,6 +642,20 @@ export function ExamCenter() {
       item.payload.space_id === spaceId &&
       visibleSubjects.some(
         (subject) => subject.entity.entity_id === item.payload.subject_id,
+      ),
+  );
+  const visibleMocks = mockExams.filter(
+    (item) =>
+      item.payload.space_id === spaceId &&
+      visibleExams.some(
+        (exam) => exam.entity.entity_id === item.payload.exam_id,
+      ),
+  );
+  const visibleScores = scoreRecords.filter(
+    (item) =>
+      item.payload.space_id === spaceId &&
+      visibleMocks.some(
+        (mock) => mock.entity.entity_id === item.payload.mock_exam_id,
       ),
   );
 
@@ -696,6 +841,90 @@ export function ExamCenter() {
             加密保存大纲节点
           </button>
         </form>
+      </section>
+
+      <section className="settings-card sync-wide-card">
+        <h2>模考与成绩趋势</h2>
+        <form className="planning-form" onSubmit={createMockExam}>
+          <label htmlFor="mock-exam">所属考试</label>
+          <select id="mock-exam" name="exam_id" required>
+            <option value="">请选择</option>
+            {visibleExams.map((exam) => (
+              <option key={exam.entity.entity_id} value={exam.entity.entity_id}>
+                {exam.payload.title}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="mock-title">模考名称</label>
+          <input id="mock-title" name="title" maxLength={160} required />
+          <label htmlFor="mock-duration">限时（分钟）</label>
+          <input
+            id="mock-duration"
+            name="duration_minutes"
+            type="number"
+            min={1}
+            max={1440}
+            required
+          />
+          <button
+            type="submit"
+            disabled={!unlocked || visibleExams.length === 0}
+          >
+            加密保存模考
+          </button>
+        </form>
+        <form className="planning-form" onSubmit={createScoreRecord}>
+          <label htmlFor="score-mock">已完成模考</label>
+          <select id="score-mock" name="mock_exam_id" required>
+            <option value="">请选择</option>
+            {visibleMocks.map((mock) => (
+              <option key={mock.entity.entity_id} value={mock.entity.entity_id}>
+                {mock.payload.title}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="score-value">得分</label>
+          <input id="score-value" name="score" type="number" min={0} required />
+          <label htmlFor="score-scale">满分</label>
+          <input
+            id="score-scale"
+            name="score_scale_max"
+            type="number"
+            min={1}
+            required
+          />
+          <label htmlFor="score-duration">实际用时（分钟）</label>
+          <input
+            id="score-duration"
+            name="duration_minutes"
+            type="number"
+            min={0}
+            max={1440}
+            required
+          />
+          <button
+            type="submit"
+            disabled={!unlocked || visibleMocks.length === 0}
+          >
+            记录正式成绩
+          </button>
+        </form>
+        <ol>
+          {visibleScores.map((record) => {
+            const mock = visibleMocks.find(
+              (item) => item.entity.entity_id === record.payload.mock_exam_id,
+            );
+            return (
+              <li key={record.entity.entity_id}>
+                {mock?.payload.title ?? "模考"}：{record.payload.score} /{" "}
+                {record.payload.score_scale_max} ·{" "}
+                {EXAM_DATE_FORMATTER.format(
+                  new Date(record.payload.completed_at),
+                )}
+              </li>
+            );
+          })}
+        </ol>
       </section>
 
       <section className="settings-card sync-wide-card">

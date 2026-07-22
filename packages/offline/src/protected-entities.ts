@@ -10,6 +10,8 @@ const PROTECTED_ENTITY_TYPES = new Set([
   "exam",
   "exam_subject",
   "syllabus_node",
+  "mock_exam",
+  "score_record",
   "audit_review",
   "review_finding",
   "review_schedule",

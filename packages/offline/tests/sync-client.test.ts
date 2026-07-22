@@ -450,6 +450,8 @@ describe("recoverable push/pull cycle", () => {
         | "exam"
         | "exam_subject"
         | "syllabus_node"
+        | "mock_exam"
+        | "score_record"
         | "audit_review"
         | "mastery"
         | "note"
@@ -620,6 +622,26 @@ describe("recoverable push/pull cycle", () => {
           coverage_status: "not_started",
         },
       ],
+      [
+        "mock_exam",
+        {
+          space_id: ids.entity,
+          exam_id: ids.user,
+          title: "secret mock title",
+          duration_limit_seconds: 7200,
+        },
+      ],
+      [
+        "score_record",
+        {
+          space_id: ids.entity,
+          mock_exam_id: ids.user,
+          score: 80,
+          score_scale_max: 100,
+          duration_seconds: 6900,
+          completed_at: now,
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -661,7 +683,9 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain('"target_score":85');
     expect(durableRows).not.toContain("secret subject name");
     expect(durableRows).not.toContain("secret syllabus title");
-    expect(await database.vaultRecords.count()).toBe(16);
+    expect(durableRows).not.toContain("secret mock title");
+    expect(durableRows).not.toContain('"duration_seconds":6900');
+    expect(await database.vaultRecords.count()).toBe(18);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

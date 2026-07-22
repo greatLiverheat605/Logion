@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.content.models import Note, Resource
-from logion_api.exam.models import Exam, Subject, SyllabusNode
+from logion_api.exam.models import Exam, MockExam, ScoreRecord, Subject, SyllabusNode
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.models import StudySession, Task
 from logion_api.memory.models import (
@@ -29,12 +29,14 @@ from logion_api.sync.push import (
     exam_payload,
     exam_subject_payload,
     mastery_payload,
+    mock_exam_payload,
     note_payload,
     quiz_attempt_payload,
     quiz_item_payload,
     resource_payload,
     review_finding_payload,
     review_schedule_payload,
+    score_record_payload,
     session_payload,
     syllabus_node_payload,
     task_payload,
@@ -196,6 +198,20 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "syllabus_node"},
         )
+        visible_mock_exams = await self._visible_personal_memory_ids(
+            db,
+            MockExam,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "mock_exam"},
+        )
+        visible_score_records = await self._visible_personal_memory_ids(
+            db,
+            ScoreRecord,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "score_record"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -234,6 +250,8 @@ class SyncReadService:
             or (row.entity_type == "exam" and row.entity_id in visible_exams)
             or (row.entity_type == "exam_subject" and row.entity_id in visible_subjects)
             or (row.entity_type == "syllabus_node" and row.entity_id in visible_syllabus_nodes)
+            or (row.entity_type == "mock_exam" and row.entity_id in visible_mock_exams)
+            or (row.entity_type == "score_record" and row.entity_id in visible_score_records)
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -281,6 +299,8 @@ class SyncReadService:
             *(await self._personal_memory_records(db, Exam, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, Subject, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, SyllabusNode, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, MockExam, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, ScoreRecord, state.workspace_id, user_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -821,6 +841,8 @@ class SyncReadService:
             | type[Exam]
             | type[Subject]
             | type[SyllabusNode]
+            | type[MockExam]
+            | type[ScoreRecord]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -901,6 +923,8 @@ class SyncReadService:
             | type[Exam]
             | type[Subject]
             | type[SyllabusNode]
+            | type[MockExam]
+            | type[ScoreRecord]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -926,6 +950,8 @@ class SyncReadService:
                 | Exam
                 | Subject
                 | SyllabusNode
+                | MockExam
+                | ScoreRecord
             ],
             list((await db.scalars(statement)).all()),
         )
@@ -952,9 +978,15 @@ class SyncReadService:
             elif isinstance(item, Subject):
                 entity_type = "exam_subject"
                 payload = exam_subject_payload(item)
-            else:
+            elif isinstance(item, SyllabusNode):
                 entity_type = "syllabus_node"
                 payload = syllabus_node_payload(item)
+            elif isinstance(item, MockExam):
+                entity_type = "mock_exam"
+                payload = mock_exam_payload(item)
+            else:
+                entity_type = "score_record"
+                payload = score_record_payload(item)
             records.append(
                 EntityRecord(
                     entity_type=entity_type,

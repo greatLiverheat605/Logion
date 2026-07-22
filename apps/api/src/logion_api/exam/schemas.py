@@ -107,3 +107,53 @@ class SyllabusNodeResponse(StrictModel):
 
 class SyllabusNodeListResponse(StrictModel):
     nodes: list[SyllabusNodeResponse]
+
+
+class MockExamCreateRequest(StrictModel):
+    id: UUID
+    exam_id: UUID
+    title: Title
+    duration_limit_seconds: int = Field(ge=60, le=86400)
+
+
+class MockExamResponse(StrictModel):
+    id: UUID
+    exam_id: UUID
+    title: str
+    duration_limit_seconds: int
+    version: int
+
+
+class MockExamListResponse(StrictModel):
+    mock_exams: list[MockExamResponse]
+
+
+class ScoreRecordCreateRequest(StrictModel):
+    id: UUID
+    mock_exam_id: UUID
+    score: int = Field(ge=0, le=1000000)
+    score_scale_max: int = Field(ge=1, le=1000000)
+    duration_seconds: int = Field(ge=0, le=86400)
+    completed_at: datetime
+
+    @model_validator(mode="after")
+    def valid_score_and_time(self) -> "ScoreRecordCreateRequest":
+        if self.score > self.score_scale_max:
+            raise ValueError("score cannot exceed scale maximum")
+        if self.completed_at.utcoffset() is None:
+            raise ValueError("completion time must include a timezone")
+        return self
+
+
+class ScoreRecordResponse(StrictModel):
+    id: UUID
+    mock_exam_id: UUID
+    score: int
+    score_scale_max: int
+    duration_seconds: int
+    completed_at: datetime
+    version: int
+
+
+class ScoreRecordListResponse(StrictModel):
+    score_records: list[ScoreRecordResponse]
