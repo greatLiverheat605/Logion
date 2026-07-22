@@ -3,14 +3,31 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.ai_gateway.adapter import DiscoveredModel
 from logion_api.ai_gateway.crypto import AIProviderCredentialCipher
-from logion_api.ai_gateway.models import AIProvider
+from logion_api.ai_gateway.dependencies import get_ai_discovery_adapter
+from logion_api.ai_gateway.models import AIModel, AIProvider
 from logion_api.config import get_settings
 from logion_api.db import session_factory
 from logion_api.identity.models import AuditEvent
 from logion_api.main import app
 from logion_api.workspaces.models import WorkspaceMembership
 from sqlalchemy import select
+
+
+class FakeDiscoveryAdapter:
+    credentials: list[str] = []
+
+    async def discover(
+        self, *, base_url: str, credential: str, timeout_seconds: int
+    ) -> list[DiscoveredModel]:
+        assert base_url == "https://api.example.com/v1"
+        assert timeout_seconds == 30
+        self.credentials.append(credential)
+        return [
+            DiscoveredModel(provider_model_id="model-a", display_name="model-a"),
+            DiscoveredModel(provider_model_id="model-b", display_name="model-b"),
+        ]
 
 
 @pytest.mark.integration
@@ -167,3 +184,141 @@ async def test_provider_credentials_are_server_only_and_workspace_scoped() -> No
         assert first_secret not in audit_text
         assert rotated_secret not in audit_text
         assert "api.example.com" not in audit_text
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_model_discovery_is_authorized_audited_and_idempotent() -> None:
+    origin = "http://test"
+    fake = FakeDiscoveryAdapter()
+    FakeDiscoveryAdapter.credentials = []
+    app.dependency_overrides[get_ai_discovery_adapter] = lambda: fake
+    try:
+        async with (
+            AsyncClient(
+                transport=ASGITransport(app=app, client=("192.0.2.162", 49002)),
+                base_url=origin,
+                headers={"Origin": origin},
+            ) as owner,
+            AsyncClient(
+                transport=ASGITransport(app=app, client=("192.0.2.163", 49003)),
+                base_url=origin,
+                headers={"Origin": origin},
+            ) as viewer,
+        ):
+            owner_registration = await owner.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"discovery-owner-{uuid4()}@example.com",
+                    "password": "a-strong-password-123",
+                    "device_name": "owner",
+                },
+            )
+            viewer_registration = await viewer.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"discovery-viewer-{uuid4()}@example.com",
+                    "password": "a-strong-password-123",
+                    "device_name": "viewer",
+                },
+            )
+            assert owner_registration.status_code == 201
+            assert viewer_registration.status_code == 201
+            viewer_id = UUID(viewer_registration.json()["user"]["id"])
+            workspace_id = UUID(
+                (await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+            )
+            external_workspace_id = UUID(
+                (await viewer.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+            )
+            async with session_factory() as db:
+                db.add(
+                    WorkspaceMembership(
+                        workspace_id=workspace_id,
+                        user_id=viewer_id,
+                        role="viewer",
+                        status="active",
+                        joined_at=datetime.now(UTC),
+                    )
+                )
+                await db.commit()
+
+            provider_id = uuid4()
+            secret = f"discovery-secret-{uuid4().hex}"
+            base = f"/api/v1/workspaces/{workspace_id}/ai/providers"
+            csrf = {"X-CSRF-Token": owner.cookies["logion_csrf"]}
+            created = await owner.post(
+                base,
+                headers=csrf,
+                json={
+                    "id": str(provider_id),
+                    "name": "Discovery Provider",
+                    "provider_type": "openai_compatible",
+                    "base_url": "https://api.example.com/v1",
+                    "credential": secret,
+                    "enabled": True,
+                    "timeout_seconds": 30,
+                    "max_retries": 0,
+                },
+            )
+            assert created.status_code == 201, created.text
+            discover_url = f"{base}/{provider_id}/discover-models"
+            assert (await owner.post(discover_url)).status_code == 403
+            assert (
+                await viewer.post(
+                    discover_url, headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]}
+                )
+            ).status_code == 403
+            assert (
+                await owner.post(
+                    f"/api/v1/workspaces/{external_workspace_id}/ai/providers/{provider_id}/discover-models",
+                    headers=csrf,
+                )
+            ).status_code == 404
+
+            first = await owner.post(discover_url, headers=csrf)
+            second = await owner.post(discover_url, headers=csrf)
+            assert first.status_code == 200, first.text
+            assert second.status_code == 200, second.text
+            assert first.json()["model_count"] == 2
+            models = await owner.get(f"/api/v1/workspaces/{workspace_id}/ai/models")
+            assert models.status_code == 200
+            assert {row["provider_model_id"] for row in models.json()["models"]} == {
+                "model-a",
+                "model-b",
+            }
+            assert len(FakeDiscoveryAdapter.credentials) == 2
+            assert all(value == secret for value in FakeDiscoveryAdapter.credentials)
+
+        async with session_factory() as db:
+            provider = await db.get(AIProvider, provider_id)
+            assert provider is not None
+            assert provider.last_health_status == "healthy"
+            assert provider.last_health_error_code is None
+            rows = list(
+                (
+                    await db.scalars(
+                        select(AIModel).where(
+                            AIModel.workspace_id == workspace_id,
+                            AIModel.provider_id == provider_id,
+                        )
+                    )
+                ).all()
+            )
+            assert len(rows) == 2
+            audits = list(
+                (
+                    await db.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.workspace_id == workspace_id,
+                            AuditEvent.event_type == "ai.provider_models_discovered",
+                        )
+                    )
+                ).all()
+            )
+            assert len(audits) == 2
+            audit_text = " ".join(str(row.event_metadata) for row in audits)
+            assert secret not in audit_text
+            assert "api.example.com" not in audit_text
+    finally:
+        app.dependency_overrides.pop(get_ai_discovery_adapter, None)

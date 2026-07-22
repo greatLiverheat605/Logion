@@ -1,17 +1,30 @@
 "use client";
 
 import type { components } from "@logion/contracts";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Provider = components["schemas"]["AIProviderResponse"];
+type Model = components["schemas"]["AIModelResponse"];
 
 function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
     if (error.code === "AI_PROVIDER_URL_BLOCKED")
       return "Base URL 必须是公开 HTTPS 地址，且不能指向本机、私网或内部域名。";
+    if (error.code === "AI_PROVIDER_DNS_BLOCKED")
+      return "Provider 域名解析结果包含非公网地址，连接已阻止。";
+    if (error.code === "AI_PROVIDER_AUTH_FAILED")
+      return "Provider 拒绝了密钥，请更新凭据后重试。";
+    if (error.code.startsWith("AI_PROVIDER_"))
+      return `Provider 检查失败（${error.code}）；核心学习功能不受影响。`;
     if (error.status === 403) return "当前角色无权配置 AI Provider。";
     return `操作未完成（请求编号：${error.requestId}）。`;
   }
@@ -22,7 +35,9 @@ export function ProviderCenter() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
   const [providerWorkspaceId, setProviderWorkspaceId] = useState("");
+  const [modelsWorkspaceId, setModelsWorkspaceId] = useState("");
   const [online, setOnline] = useState(true);
   const [status, setStatus] = useState("正在读取 Provider 配置……");
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
@@ -46,22 +61,36 @@ export function ProviderCenter() {
     }
   }, []);
 
-  const loadProviders = useCallback(async (selected: string) => {
+  const loadProviderData = useCallback(async (selected: string) => {
     try {
-      const result = await browserApiClient.request<{
-        providers: Provider[];
-      }>(`/api/v1/workspaces/${selected}/ai/providers`);
-      const next = Array.isArray(result.providers) ? result.providers : [];
-      setProviders(next);
+      const [providerResult, modelResult] = await Promise.all([
+        browserApiClient.request<{ providers: Provider[] }>(
+          `/api/v1/workspaces/${selected}/ai/providers`,
+        ),
+        browserApiClient.request<{ models: Model[] }>(
+          `/api/v1/workspaces/${selected}/ai/models`,
+        ),
+      ]);
+      const nextProviders = Array.isArray(providerResult.providers)
+        ? providerResult.providers
+        : [];
+      const nextModels = Array.isArray(modelResult.models)
+        ? modelResult.models
+        : [];
+      setProviders(nextProviders);
+      setModels(nextModels);
       setProviderWorkspaceId(selected);
+      setModelsWorkspaceId(selected);
       setStatus(
-        next.length
-          ? "Provider 配置已更新；密钥仅保存在服务端。"
+        nextProviders.length
+          ? "Provider 与模型状态已更新；密钥仅保存在服务端。"
           : "尚未配置 Provider；AI 不可用，但学习、复习和研究功能仍可使用。",
       );
     } catch (error) {
       setProviders([]);
+      setModels([]);
       setProviderWorkspaceId(selected);
+      setModelsWorkspaceId(selected);
       setStatus(errorText(error));
     }
   }, []);
@@ -80,11 +109,23 @@ export function ProviderCenter() {
 
   useEffect(() => {
     if (workspaceId && canConfigure && online)
-      queueMicrotask(() => void loadProviders(workspaceId));
-  }, [canConfigure, loadProviders, online, workspaceId]);
+      queueMicrotask(() => void loadProviderData(workspaceId));
+  }, [canConfigure, loadProviderData, online, workspaceId]);
 
   const visibleProviders =
     canConfigure && providerWorkspaceId === workspaceId ? providers : [];
+  const visibleModels =
+    canConfigure && modelsWorkspaceId === workspaceId ? models : [];
+  const visibleProviderById = useMemo(
+    () =>
+      new Map(
+        (canConfigure && providerWorkspaceId === workspaceId
+          ? providers
+          : []
+        ).map((provider) => [provider.id, provider]),
+      ),
+    [canConfigure, providerWorkspaceId, providers, workspaceId],
+  );
   const visibleStatus = !online
     ? "当前离线：已有学习数据仍可编辑，Provider 配置暂时只读。"
     : selectedWorkspace && !canConfigure
@@ -116,7 +157,7 @@ export function ProviderCenter() {
       );
       form.reset();
       setStatus("Provider 已加密保存；浏览器不会保留密钥。尚未执行连接测试。");
-      await loadProviders(workspaceId);
+      await loadProviderData(workspaceId);
     } catch (error) {
       setStatus(errorText(error));
     }
@@ -141,7 +182,7 @@ export function ProviderCenter() {
           }),
         },
       );
-      await loadProviders(workspaceId);
+      await loadProviderData(workspaceId);
     } catch (error) {
       setStatus(errorText(error));
     }
@@ -165,8 +206,31 @@ export function ProviderCenter() {
         },
       );
       setStatus(`${provider.name} 已删除，服务端密文已清除。`);
-      await loadProviders(workspaceId);
+      await loadProviderData(workspaceId);
     } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
+  async function discoverModels(provider: Provider) {
+    if (!workspaceId || !canConfigure || !online || !provider.enabled) return;
+    if (
+      !window.confirm(
+        `将向“${provider.name}”发送一次最小认证请求以检查连接并读取模型列表。继续吗？`,
+      )
+    )
+      return;
+    try {
+      const result = await browserApiClient.request<{
+        model_count: number;
+      }>(
+        `/api/v1/workspaces/${workspaceId}/ai/providers/${provider.id}/discover-models`,
+        { method: "POST", csrf: true },
+      );
+      await loadProviderData(workspaceId);
+      setStatus(`连接检查成功，发现 ${result.model_count} 个模型。`);
+    } catch (error) {
+      await loadProviderData(workspaceId);
       setStatus(errorText(error));
     }
   }
@@ -183,7 +247,7 @@ export function ProviderCenter() {
         <p>
           Provider 密钥仅在服务端信封加密保存，不进入
           IndexedDB、导出、日志或浏览器响应。
-          本页面目前只保存配置，不会自动连接外部服务。
+          仅在你确认“测试并发现模型”后，服务端才会发送一次受限请求。
         </p>
         {!online ? (
           <p role="status">
@@ -264,10 +328,22 @@ export function ProviderCenter() {
                   <small>
                     {provider.base_url} ·{" "}
                     {provider.enabled ? "已启用" : "已停用"} · 密钥
-                    {provider.credential_configured ? "已配置" : "缺失"}
+                    {provider.credential_configured ? "已配置" : "缺失"} ·
+                    健康状态
+                    {provider.last_health_status}
+                    {provider.last_health_error_code
+                      ? `（${provider.last_health_error_code}）`
+                      : ""}
                   </small>
                 </span>
                 <span className="app-actions">
+                  <button
+                    type="button"
+                    disabled={!online || !canConfigure || !provider.enabled}
+                    onClick={() => void discoverModels(provider)}
+                  >
+                    测试并发现模型
+                  </button>
                   <button
                     type="button"
                     disabled={!online || !canConfigure}
@@ -289,6 +365,29 @@ export function ProviderCenter() {
           </ul>
         ) : (
           <p>没有可显示的 Provider 配置。</p>
+        )}
+      </section>
+      <section className="settings-card">
+        <h2>已发现模型</h2>
+        {visibleModels.length ? (
+          <ul className="item-list">
+            {visibleModels.map((model) => {
+              const provider = visibleProviderById.get(model.provider_id);
+              return (
+                <li key={model.id}>
+                  <span>
+                    <strong>{model.display_name}</strong>
+                    <small>
+                      {provider?.name ?? "未知 Provider"} · {model.source} ·
+                      最后发现 {new Date(model.last_seen_at).toLocaleString()}
+                    </small>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p>尚未发现模型。模型列表不会在离线状态下刷新。</p>
         )}
       </section>
     </main>

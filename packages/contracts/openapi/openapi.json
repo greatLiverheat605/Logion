@@ -1,6 +1,141 @@
 {
   "components": {
     "schemas": {
+      "AIModelDiscoveryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "health_status": {
+            "const": "healthy",
+            "title": "Health Status",
+            "type": "string"
+          },
+          "model_count": {
+            "title": "Model Count",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/AIModelResponse"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "health_status",
+          "model_count",
+          "models"
+        ],
+        "title": "AIModelDiscoveryResponse",
+        "type": "object"
+      },
+      "AIModelList": {
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/AIModelResponse"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "AIModelList",
+        "type": "object"
+      },
+      "AIModelResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "context_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "provider_model_id": {
+            "title": "Provider Model Id",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "discovered",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "supports_json": {
+            "title": "Supports Json",
+            "type": "boolean"
+          },
+          "supports_stream": {
+            "title": "Supports Stream",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "provider_id",
+          "provider_model_id",
+          "display_name",
+          "source",
+          "enabled",
+          "supports_json",
+          "supports_stream",
+          "context_window",
+          "version",
+          "last_seen_at"
+        ],
+        "title": "AIModelResponse",
+        "type": "object"
+      },
       "AIProviderCreate": {
         "additionalProperties": false,
         "properties": {
@@ -114,6 +249,39 @@
           "id": {
             "format": "uuid",
             "title": "Id",
+            "type": "string"
+          },
+          "last_health_checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Checked At"
+          },
+          "last_health_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Error Code"
+          },
+          "last_health_status": {
+            "default": "unknown",
+            "enum": [
+              "unknown",
+              "healthy",
+              "unhealthy"
+            ],
+            "title": "Last Health Status",
             "type": "string"
           },
           "max_retries": {
@@ -9906,6 +10074,79 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/ai/models": {
+      "get": {
+        "operationId": "ai_model_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/ai/providers": {
       "get": {
         "operationId": "ai_provider_list",
@@ -10370,6 +10611,135 @@
           }
         },
         "summary": "Update Provider",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai/providers/{provider_id}/discover-models": {
+      "post": {
+        "operationId": "ai_provider_discover_models",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIModelDiscoveryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Discover Models",
         "tags": [
           "ai"
         ]

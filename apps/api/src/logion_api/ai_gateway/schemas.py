@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -46,8 +47,37 @@ class AIProviderResponse(Strict):
     enabled: bool
     timeout_seconds: int
     max_retries: int
+    last_health_status: Literal["unknown", "healthy", "unhealthy"] = "unknown"
+    last_health_checked_at: datetime | None = None
+    last_health_error_code: str | None = None
     version: int
 
 
 class AIProviderList(Strict):
     providers: list[AIProviderResponse]
+
+
+class AIModelResponse(Strict):
+    id: UUID
+    workspace_id: UUID
+    provider_id: UUID
+    provider_model_id: str
+    display_name: str
+    source: Literal["discovered", "manual"]
+    enabled: bool
+    supports_json: bool
+    supports_stream: bool
+    context_window: int | None
+    version: int
+    last_seen_at: datetime
+
+
+class AIModelList(Strict):
+    models: list[AIModelResponse]
+
+
+class AIModelDiscoveryResponse(Strict):
+    provider_id: UUID
+    health_status: Literal["healthy"]
+    model_count: int
+    models: list[AIModelResponse]
