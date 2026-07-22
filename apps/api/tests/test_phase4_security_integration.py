@@ -86,7 +86,7 @@ async def test_phase4_guessed_ids_never_disclose_personal_or_private_content() -
             "exam": {
                 "id": str(exam_id),
                 "title": "victim secret exam",
-                "date_status": "unscheduled",
+                "date_status": "undetermined",
                 "exam_at": None,
                 "timezone": "UTC",
                 "target_score": None,
@@ -153,7 +153,7 @@ async def test_phase4_guessed_ids_never_disclose_personal_or_private_content() -
             "exam": {
                 "space_id": str(shared_id),
                 "title": "attacker exam",
-                "date_status": "unscheduled",
+                "date_status": "undetermined",
                 "exam_at": None,
                 "timezone": "UTC",
                 "target_score": None,
