@@ -1,0 +1,1 @@
+"""Personal self-study domain."""

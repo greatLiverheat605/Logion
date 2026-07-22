@@ -37,8 +37,10 @@ class PasswordRecoveryCompletionRequest(BaseModel):
     def validate_factor_shape(self) -> "PasswordRecoveryCompletionRequest":
         if (self.method is None) != (self.code is None):
             raise ValueError("Recovery method and code must be provided together")
-        if self.method == "totp" and self.code is not None and (
-            len(self.code) != 6 or not self.code.isascii() or not self.code.isdigit()
+        if (
+            self.method == "totp"
+            and self.code is not None
+            and (len(self.code) != 6 or not self.code.isascii() or not self.code.isdigit())
         ):
             raise ValueError("TOTP codes must contain exactly six ASCII digits")
         if self.method == "recovery_code" and self.code is not None:

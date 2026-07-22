@@ -64,8 +64,7 @@ async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     errors = [
-        {"type": error["type"], "loc": error["loc"], "msg": error["msg"]}
-        for error in exc.errors()
+        {"type": error["type"], "loc": error["loc"], "msg": error["msg"]} for error in exc.errors()
     ]
     payload = ErrorResponse(
         code="VALIDATION_ERROR",

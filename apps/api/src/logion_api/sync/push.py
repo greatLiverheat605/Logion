@@ -63,6 +63,14 @@ from logion_api.memory.schemas import (
 from logion_api.memory.service import MemoryService
 from logion_api.planning.schemas import GoalPlanCreateRequest
 from logion_api.planning.service import PlanningService
+from logion_api.self_study.models import Deliverable, InboxItem, LearningTrack, StudyProject
+from logion_api.self_study.schemas import (
+    DeliverableCreateRequest,
+    InboxItemCreateRequest,
+    ProjectCreateRequest,
+    TrackCreateRequest,
+)
+from logion_api.self_study.service import SelfStudyService
 from logion_api.sync.models import ProcessedSyncOperation
 from logion_api.sync.schemas import (
     AppliedOperationResult,
@@ -102,6 +110,7 @@ class SyncPushService:
         evidence: EvidenceService,
         memory: MemoryService,
         exams: ExamService,
+        self_study: SelfStudyService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
@@ -111,6 +120,7 @@ class SyncPushService:
         self._evidence = evidence
         self._memory = memory
         self._exams = exams
+        self._self_study = self_study
 
     async def push(
         self,
@@ -290,6 +300,14 @@ class SyncPushService:
             )
         if operation.entity_type == "score_record" and operation.operation_type == "create":
             return await self._create_score_record(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if (
+            operation.entity_type
+            in {"learning_track", "study_project", "inbox_item", "deliverable"}
+            and operation.operation_type == "create"
+        ):
+            return await self._create_self_study(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -1933,6 +1951,56 @@ class SyncPushService:
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
+    async def _create_self_study(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        definitions: dict[str, tuple[Any, Any, Any]] = {
+            "learning_track": (LearningTrack, TrackCreateRequest, self._self_study.create_track),
+            "study_project": (StudyProject, ProjectCreateRequest, self._self_study.create_project),
+            "inbox_item": (InboxItem, InboxItemCreateRequest, self._self_study.create_inbox_item),
+            "deliverable": (
+                Deliverable,
+                DeliverableCreateRequest,
+                self._self_study.create_deliverable,
+            ),
+        }
+        model, schema, create = definitions[operation.entity_type]
+        try:
+            payload = schema.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(model, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                item = await create(
+                    db, context, request.workspace_id, UUID(space_id), payload, request_id
+                )
+                projection = self_study_payload(item)
+                return await self._append_entity(
+                    db, request.workspace_id, identity, item.version, projection
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _causal_base_version(
         self, db: AsyncSession, request: PushRequest, operation: object
     ) -> int | None:
@@ -2076,6 +2144,10 @@ class SyncPushService:
             | SyllabusNode
             | MockExam
             | ScoreRecord
+            | LearningTrack
+            | StudyProject
+            | InboxItem
+            | Deliverable
             | None
         ) = None
         if operation.entity_type == "task":
@@ -2118,6 +2190,14 @@ class SyncPushService:
             remote = await db.get(MockExam, operation.entity_id)
         elif operation.entity_type == "score_record":
             remote = await db.get(ScoreRecord, operation.entity_id)
+        elif operation.entity_type == "learning_track":
+            remote = await db.get(LearningTrack, operation.entity_id)
+        elif operation.entity_type == "study_project":
+            remote = await db.get(StudyProject, operation.entity_id)
+        elif operation.entity_type == "inbox_item":
+            remote = await db.get(InboxItem, operation.entity_id)
+        elif operation.entity_type == "deliverable":
+            remote = await db.get(Deliverable, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -2158,6 +2238,8 @@ class SyncPushService:
             payload = mock_exam_payload(remote)
         elif isinstance(remote, ScoreRecord):
             payload = score_record_payload(remote)
+        elif isinstance(remote, (LearningTrack, StudyProject, InboxItem, Deliverable)):
+            payload = self_study_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -2424,5 +2506,29 @@ def score_record_payload(item: ScoreRecord) -> dict[str, object]:
         "score": item.score,
         "score_scale_max": item.score_scale_max,
         "duration_seconds": item.duration_seconds,
+        "completed_at": item.completed_at.isoformat(),
+    }
+
+
+def self_study_payload(
+    item: LearningTrack | StudyProject | InboxItem | Deliverable,
+) -> dict[str, object]:
+    common: dict[str, object] = {"space_id": str(item.space_id)}
+    if isinstance(item, LearningTrack):
+        return {**common, "title": item.title, "objective": item.objective}
+    if isinstance(item, StudyProject):
+        return {
+            **common,
+            "track_id": str(item.track_id),
+            "title": item.title,
+            "intended_outcome": item.intended_outcome,
+        }
+    if isinstance(item, InboxItem):
+        return {**common, "title": item.title, "note": item.note}
+    return {
+        **common,
+        "project_id": str(item.project_id),
+        "title": item.title,
+        "evidence_summary": item.evidence_summary,
         "completed_at": item.completed_at.isoformat(),
     }

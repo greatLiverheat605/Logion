@@ -1,4 +1,4 @@
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy import select
@@ -20,6 +20,7 @@ from logion_api.memory.models import (
     TopicDependency,
 )
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
+from logion_api.self_study.models import Deliverable, InboxItem, LearningTrack, StudyProject
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
 from logion_api.sync.push import (
     audit_review_payload,
@@ -37,6 +38,7 @@ from logion_api.sync.push import (
     review_finding_payload,
     review_schedule_payload,
     score_record_payload,
+    self_study_payload,
     session_payload,
     syllabus_node_payload,
     task_payload,
@@ -212,6 +214,20 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "score_record"},
         )
+        visible_self_study: dict[str, set[UUID]] = {}
+        for entity_type, self_study_model in (
+            ("learning_track", LearningTrack),
+            ("study_project", StudyProject),
+            ("inbox_item", InboxItem),
+            ("deliverable", Deliverable),
+        ):
+            visible_self_study[entity_type] = await self._visible_personal_memory_ids(
+                db,
+                cast(Any, self_study_model),
+                state.workspace_id,
+                user_id,
+                {row.entity_id for row in page if row.entity_type == entity_type},
+            )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -252,6 +268,10 @@ class SyncReadService:
             or (row.entity_type == "syllabus_node" and row.entity_id in visible_syllabus_nodes)
             or (row.entity_type == "mock_exam" and row.entity_id in visible_mock_exams)
             or (row.entity_type == "score_record" and row.entity_id in visible_score_records)
+            or (
+                row.entity_type in visible_self_study
+                and row.entity_id in visible_self_study[row.entity_type]
+            )
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -301,6 +321,10 @@ class SyncReadService:
             *(await self._personal_memory_records(db, SyllabusNode, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, MockExam, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, ScoreRecord, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, LearningTrack, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, StudyProject, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, InboxItem, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, Deliverable, state.workspace_id, user_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -843,6 +867,10 @@ class SyncReadService:
             | type[SyllabusNode]
             | type[MockExam]
             | type[ScoreRecord]
+            | type[LearningTrack]
+            | type[StudyProject]
+            | type[InboxItem]
+            | type[Deliverable]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -925,6 +953,10 @@ class SyncReadService:
             | type[SyllabusNode]
             | type[MockExam]
             | type[ScoreRecord]
+            | type[LearningTrack]
+            | type[StudyProject]
+            | type[InboxItem]
+            | type[Deliverable]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -952,6 +984,10 @@ class SyncReadService:
                 | SyllabusNode
                 | MockExam
                 | ScoreRecord
+                | LearningTrack
+                | StudyProject
+                | InboxItem
+                | Deliverable
             ],
             list((await db.scalars(statement)).all()),
         )
@@ -984,9 +1020,17 @@ class SyncReadService:
             elif isinstance(item, MockExam):
                 entity_type = "mock_exam"
                 payload = mock_exam_payload(item)
-            else:
+            elif isinstance(item, ScoreRecord):
                 entity_type = "score_record"
                 payload = score_record_payload(item)
+            else:
+                entity_type = {
+                    LearningTrack: "learning_track",
+                    StudyProject: "study_project",
+                    InboxItem: "inbox_item",
+                    Deliverable: "deliverable",
+                }[type(item)]
+                payload = self_study_payload(item)
             records.append(
                 EntityRecord(
                     entity_type=entity_type,

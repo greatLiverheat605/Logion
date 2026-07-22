@@ -452,6 +452,10 @@ describe("recoverable push/pull cycle", () => {
         | "syllabus_node"
         | "mock_exam"
         | "score_record"
+        | "learning_track"
+        | "study_project"
+        | "inbox_item"
+        | "deliverable"
         | "audit_review"
         | "mastery"
         | "note"
@@ -642,6 +646,41 @@ describe("recoverable push/pull cycle", () => {
           completed_at: now,
         },
       ],
+      [
+        "learning_track",
+        {
+          space_id: ids.entity,
+          title: "secret track",
+          objective: "secret objective",
+        },
+      ],
+      [
+        "study_project",
+        {
+          space_id: ids.entity,
+          track_id: ids.user,
+          title: "secret project",
+          intended_outcome: "secret outcome",
+        },
+      ],
+      [
+        "inbox_item",
+        {
+          space_id: ids.entity,
+          title: "secret inbox",
+          note: "secret inbox note",
+        },
+      ],
+      [
+        "deliverable",
+        {
+          space_id: ids.entity,
+          project_id: ids.user,
+          title: "secret deliverable",
+          evidence_summary: "secret evidence",
+          completed_at: now,
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -685,7 +724,11 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain("secret syllabus title");
     expect(durableRows).not.toContain("secret mock title");
     expect(durableRows).not.toContain('"duration_seconds":6900');
-    expect(await database.vaultRecords.count()).toBe(18);
+    expect(durableRows).not.toContain("secret objective");
+    expect(durableRows).not.toContain("secret outcome");
+    expect(durableRows).not.toContain("secret inbox note");
+    expect(durableRows).not.toContain("secret evidence");
+    expect(await database.vaultRecords.count()).toBe(22);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

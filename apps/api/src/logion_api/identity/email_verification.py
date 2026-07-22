@@ -74,8 +74,7 @@ class EmailDeliveryCipher:
             )
             values: Any = json.loads(plaintext)
             if not isinstance(values, dict) or not all(
-                isinstance(key, str) and isinstance(value, str)
-                for key, value in values.items()
+                isinstance(key, str) and isinstance(value, str) for key, value in values.items()
             ):
                 raise ValueError
             return values
@@ -351,8 +350,7 @@ class EmailVerificationService:
     ) -> User:
         now = datetime.now(UTC)
         candidate = await db.scalar(
-            select(IdentityActionToken)
-            .where(
+            select(IdentityActionToken).where(
                 IdentityActionToken.token_hash
                 == self._security.identity_action_token_hash(
                     self._RECOVERY_PURPOSE,
@@ -366,9 +364,7 @@ class EmailVerificationService:
         # Keep the lock order consistent with recovery start: user, then action.
         # Re-read and validate the action after both locks are held so a concurrent
         # replacement cannot consume a superseded token.
-        user = await db.scalar(
-            select(User).where(User.id == candidate.user_id).with_for_update()
-        )
+        user = await db.scalar(select(User).where(User.id == candidate.user_id).with_for_update())
         action = await db.scalar(
             select(IdentityActionToken)
             .where(IdentityActionToken.id == candidate.id)
