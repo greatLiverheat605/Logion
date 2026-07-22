@@ -16,6 +16,9 @@ from logion_api.content.schemas import (
 from logion_api.content.service import ContentService
 from logion_api.db import utc_now
 from logion_api.errors import APIError
+from logion_api.exam.models import Exam
+from logion_api.exam.schemas import ExamCreateRequest
+from logion_api.exam.service import ExamService
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.evidence_schemas import EvidenceSubmitRequest
 from logion_api.execution.evidence_service import EvidenceService
@@ -92,6 +95,7 @@ class SyncPushService:
         content: ContentService,
         evidence: EvidenceService,
         memory: MemoryService,
+        exams: ExamService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
@@ -100,6 +104,7 @@ class SyncPushService:
         self._content = content
         self._evidence = evidence
         self._memory = memory
+        self._exams = exams
 
     async def push(
         self,
@@ -259,6 +264,10 @@ class SyncPushService:
             )
         if operation.entity_type == "review_finding" and operation.operation_type == "update":
             return await self._resolve_review_finding(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "exam" and operation.operation_type == "create":
+            return await self._create_exam(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -1682,6 +1691,59 @@ class SyncPushService:
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
+    async def _create_exam(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        raw.pop("status", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = ExamCreateRequest.model_validate(
+                {**raw, "id": operation.entity_id}
+            )
+            current = await db.get(Exam, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id
+                or current.user_id != context.user.id
+            ):
+                return self._rejected(
+                    operation.operation_id, "SYNC_OPERATION_FORBIDDEN"
+                )
+            async with db.begin_nested():
+                exam = await self._exams.create_exam(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    exam.version,
+                    exam_payload(exam),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _causal_base_version(
         self, db: AsyncSession, request: PushRequest, operation: object
     ) -> int | None:
@@ -1820,6 +1882,7 @@ class SyncPushService:
             | ErrorPattern
             | AuditReview
             | ReviewFinding
+            | Exam
             | None
         ) = None
         if operation.entity_type == "task":
@@ -1852,6 +1915,8 @@ class SyncPushService:
             remote = await db.get(AuditReview, operation.entity_id)
         elif operation.entity_type == "review_finding":
             remote = await db.get(ReviewFinding, operation.entity_id)
+        elif operation.entity_type == "exam":
+            remote = await db.get(Exam, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -1882,6 +1947,8 @@ class SyncPushService:
             payload = review_finding_payload(remote)
         elif isinstance(remote, QuizAttempt):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+        elif isinstance(remote, Exam):
+            payload = exam_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -2094,5 +2161,18 @@ def review_finding_payload(item: ReviewFinding) -> dict[str, object]:
         "category": item.category,
         "description": item.description,
         "suggested_action": item.suggested_action,
+        "status": item.status,
+    }
+
+
+def exam_payload(item: Exam) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "title": item.title,
+        "date_status": item.date_status,
+        "exam_at": item.exam_at.isoformat() if item.exam_at is not None else None,
+        "timezone": item.timezone,
+        "target_score": item.target_score,
+        "score_scale_max": item.score_scale_max,
         "status": item.status,
     }

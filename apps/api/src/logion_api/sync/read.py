@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.content.models import Note, Resource
+from logion_api.exam.models import Exam
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.models import StudySession, Task
 from logion_api.memory.models import (
@@ -25,6 +26,7 @@ from logion_api.sync.push import (
     canonical_hash,
     error_pattern_payload,
     evidence_payload,
+    exam_payload,
     mastery_payload,
     note_payload,
     quiz_attempt_payload,
@@ -171,6 +173,13 @@ class SyncReadService:
                 user_id,
                 {row.entity_id for row in page if row.entity_type == entity_type},
             )
+        visible_exams = await self._visible_personal_memory_ids(
+            db,
+            Exam,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "exam"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -206,6 +215,7 @@ class SyncReadService:
                 row.entity_type in personal_visible
                 and row.entity_id in personal_visible[row.entity_type]
             )
+            or (row.entity_type == "exam" and row.entity_id in visible_exams)
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -250,6 +260,7 @@ class SyncReadService:
             *(await self._personal_memory_records(db, ErrorPattern, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, AuditReview, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, ReviewFinding, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, Exam, state.workspace_id, user_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -787,6 +798,7 @@ class SyncReadService:
             | type[ErrorPattern]
             | type[AuditReview]
             | type[ReviewFinding]
+            | type[Exam]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -864,6 +876,7 @@ class SyncReadService:
             | type[ErrorPattern]
             | type[AuditReview]
             | type[ReviewFinding]
+            | type[Exam]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -880,7 +893,14 @@ class SyncReadService:
             .order_by(model.id)
         )
         items = cast(
-            list[MasteryRecord | ReviewSchedule | ErrorPattern | AuditReview | ReviewFinding],
+            list[
+                MasteryRecord
+                | ReviewSchedule
+                | ErrorPattern
+                | AuditReview
+                | ReviewFinding
+                | Exam
+            ],
             list((await db.scalars(statement)).all()),
         )
         records: list[EntityRecord] = []
@@ -897,9 +917,12 @@ class SyncReadService:
             elif isinstance(item, AuditReview):
                 entity_type = "audit_review"
                 payload = audit_review_payload(item)
-            else:
+            elif isinstance(item, ReviewFinding):
                 entity_type = "review_finding"
                 payload = review_finding_payload(item)
+            else:
+                entity_type = "exam"
+                payload = exam_payload(item)
             records.append(
                 EntityRecord(
                     entity_type=entity_type,
