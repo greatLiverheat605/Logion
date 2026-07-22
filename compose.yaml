@@ -175,12 +175,17 @@ services:
       PGUSER: ${POSTGRES_USER:-logion}
       PGPASSWORD: ${POSTGRES_PASSWORD}
       LOGION_BACKUP_RETENTION_DAYS: ${LOGION_BACKUP_RETENTION_DAYS:-14}
+      LOGION_BACKUP_ONCE: ${LOGION_BACKUP_ONCE:-false}
+      LOGION_BACKUP_KEY_ID: ${LOGION_BACKUP_KEY_ID:-development-v1}
+      LOGION_VERSION: ${LOGION_VERSION:-0.1.0}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - backup_data:/backups
       - attachments_data:/attachments:ro
+    secrets:
+      - logion_backup_key
     networks: [backend]
     read_only: true
     tmpfs: [/tmp]
@@ -196,3 +201,7 @@ volumes:
   redis_data:
   attachments_data:
   backup_data:
+
+secrets:
+  logion_backup_key:
+    file: ${LOGION_BACKUP_SECRET_SOURCE:-./secrets/backup.key}
