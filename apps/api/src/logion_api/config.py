@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     search_limit_per_minute: int = Field(default=60, ge=1, le=1000)
     engagement_write_limit_per_hour: int = Field(default=240, ge=1, le=5000)
     public_calendar_read_limit_per_minute: int = Field(default=120, ge=1, le=2000)
+    data_portability_write_limit_per_hour: int = Field(default=10, ge=1, le=100)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
@@ -135,6 +136,14 @@ class Settings(BaseSettings):
     ai_credential_encryption_keys: dict[str, SecretStr] = Field(
         default_factory=lambda: {
             "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtYWkta2V5LTMyYnl0ZXMhISEhISE")
+        }
+    )
+    data_export_active_encryption_key_id: str = Field(
+        default="development-v1", min_length=1, max_length=64
+    )
+    data_export_encryption_keys: dict[str, SecretStr] = Field(
+        default_factory=lambda: {
+            "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtZXhwb3J0LWtleS0zMmJ5dGVzISE")
         }
     )
 
@@ -214,6 +223,31 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
                 )
+        if self.data_export_active_encryption_key_id not in self.data_export_encryption_keys:
+            raise ValueError(
+                "LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID must select a configured key"
+            )
+        for key_id, encoded_key in self.data_export_encryption_keys.items():
+            if not 1 <= len(key_id) <= 64:
+                raise ValueError(
+                    "LOGION_DATA_EXPORT_ENCRYPTION_KEYS key IDs must be 1-64 characters"
+                )
+            try:
+                value = encoded_key.get_secret_value()
+                padding = "=" * (-len(value) % 4)
+                decoded_key = base64.b64decode(
+                    value + padding,
+                    altchars=b"-_",
+                    validate=True,
+                )
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(
+                    f"LOGION_DATA_EXPORT_ENCRYPTION_KEYS contains invalid base64url for {key_id}"
+                ) from exc
+            if len(decoded_key) != 32:
+                raise ValueError(
+                    f"LOGION_DATA_EXPORT_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
+                )
         if not set(self.webauthn_origins).issubset(self.allowed_origins):
             raise ValueError("LOGION_WEBAUTHN_ORIGINS must be included in LOGION_ALLOWED_ORIGINS")
         for origin in self.webauthn_origins:
@@ -250,6 +284,10 @@ class Settings(BaseSettings):
             if self.ai_credential_active_encryption_key_id.startswith("development-"):
                 raise ValueError(
                     "LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS must be replaced in production"
+                )
+            if self.data_export_active_encryption_key_id.startswith("development-"):
+                raise ValueError(
+                    "LOGION_DATA_EXPORT_ENCRYPTION_KEYS must be replaced in production"
                 )
             if self.legacy_registration_enabled:
                 raise ValueError(

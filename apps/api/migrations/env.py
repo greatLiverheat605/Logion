@@ -15,6 +15,7 @@ from logion_api.growth import models as growth_models  # noqa: F401
 from logion_api.identity import models as identity_models  # noqa: F401
 from logion_api.memory import models as memory_models  # noqa: F401
 from logion_api.planning import models as planning_models  # noqa: F401
+from logion_api.portability import models as portability_models  # noqa: F401
 from logion_api.research import models as research_models  # noqa: F401
 from logion_api.self_study import models as self_study_models  # noqa: F401
 from logion_api.sync import models as sync_models  # noqa: F401
