@@ -34,3 +34,38 @@ class ExportList(Strict):
 
 class ExportCancel(Strict):
     expected_version: int = Field(ge=1)
+
+
+class ImportPreviewCreate(Strict):
+    id: UUID
+    source_format: Literal["logion_json", "markdown", "csv", "bibtex"]
+    source_filename: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+    ]
+    content: Annotated[str, StringConstraints(min_length=1, max_length=1_048_576)]
+
+
+class ImportPreviewResponse(Strict):
+    id: UUID
+    workspace_id: UUID
+    source_format: Literal["logion_json", "markdown", "csv", "bibtex"]
+    source_filename: str
+    source_sha256: str
+    counts: dict[str, int]
+    warnings: list[str]
+    status: Literal["previewed", "imported", "expired"]
+    imported_space_id: UUID | None
+    version: int
+    created_at: datetime
+    imported_at: datetime | None
+    expires_at: datetime
+
+
+class ImportPreviewList(Strict):
+    imports: list[ImportPreviewResponse]
+
+
+class ImportCommit(Strict):
+    target_space_id: UUID
+    expected_version: int = Field(ge=1)
+    confirmation: Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^IMPORT$")]

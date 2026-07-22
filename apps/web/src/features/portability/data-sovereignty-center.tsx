@@ -7,6 +7,8 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type DataExport = components["schemas"]["ExportResponse"];
+type DataImport = components["schemas"]["ImportPreviewResponse"];
+type Space = components["schemas"]["SpaceResponse"];
 
 function errorText(error: unknown) {
   if (error instanceof LogionApiError)
@@ -18,6 +20,9 @@ export function DataSovereigntyCenter() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [exports, setExports] = useState<DataExport[]>([]);
+  const [imports, setImports] = useState<DataImport[]>([]);
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [targetSpaceId, setTargetSpaceId] = useState("");
   const [dataWorkspaceId, setDataWorkspaceId] = useState("");
   const [status, setStatus] = useState(
     "导出在服务器后台生成并加密保存，24 小时后失效。",
@@ -40,15 +45,39 @@ export function DataSovereigntyCenter() {
     }
   }, []);
 
-  const loadExports = useCallback(async (selected: string) => {
+  const loadData = useCallback(async (selected: string) => {
     try {
-      const result = await browserApiClient.request<{
-        exports: DataExport[];
-      }>(`/api/v1/workspaces/${selected}/data-exports`);
-      setExports(Array.isArray(result.exports) ? result.exports : []);
+      const [exportResult, importResult, spaceResult] = await Promise.all([
+        browserApiClient.request<{ exports: DataExport[] }>(
+          `/api/v1/workspaces/${selected}/data-exports`,
+        ),
+        browserApiClient.request<{ imports: DataImport[] }>(
+          `/api/v1/workspaces/${selected}/data-imports`,
+        ),
+        browserApiClient.request<{ spaces: Space[] }>(
+          `/api/v1/workspaces/${selected}/spaces`,
+        ),
+      ]);
+      const nextSpaces = Array.isArray(spaceResult.spaces)
+        ? spaceResult.spaces.filter((space) => space.visibility === "private")
+        : [];
+      setExports(
+        Array.isArray(exportResult.exports) ? exportResult.exports : [],
+      );
+      setImports(
+        Array.isArray(importResult.imports) ? importResult.imports : [],
+      );
+      setSpaces(nextSpaces);
+      setTargetSpaceId((current) =>
+        nextSpaces.some((space) => space.id === current)
+          ? current
+          : (nextSpaces[0]?.id ?? ""),
+      );
       setDataWorkspaceId(selected);
     } catch (error) {
       setExports([]);
+      setImports([]);
+      setSpaces([]);
       setDataWorkspaceId(selected);
       setStatus(errorText(error));
     }
@@ -59,8 +88,8 @@ export function DataSovereigntyCenter() {
   }, [loadWorkspaces]);
 
   useEffect(() => {
-    if (workspaceId) queueMicrotask(() => void loadExports(workspaceId));
-  }, [loadExports, workspaceId]);
+    if (workspaceId) queueMicrotask(() => void loadData(workspaceId));
+  }, [loadData, workspaceId]);
 
   async function createExport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +107,7 @@ export function DataSovereigntyCenter() {
         },
       );
       event.currentTarget.reset();
-      await loadExports(workspaceId);
+      await loadData(workspaceId);
       setStatus("导出已进入后台队列；完成后会出现在列表中并发送站内通知。");
     } catch (error) {
       setStatus(errorText(error));
@@ -96,14 +125,67 @@ export function DataSovereigntyCenter() {
           body: JSON.stringify({ expected_version: item.version }),
         },
       );
-      await loadExports(workspaceId);
+      await loadData(workspaceId);
       setStatus("导出任务已取消，未完成的产物不会保留。");
     } catch (error) {
       setStatus(errorText(error));
     }
   }
 
+  async function previewImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId) return;
+    const data = new FormData(event.currentTarget);
+    try {
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/data-imports/preview`,
+        {
+          method: "POST",
+          csrf: true,
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            source_format: String(data.get("source_format") ?? "markdown"),
+            source_filename: String(data.get("source_filename") ?? "import.md"),
+            content: String(data.get("content") ?? ""),
+          }),
+        },
+      );
+      event.currentTarget.reset();
+      await loadData(workspaceId);
+      setStatus(
+        "导入源已安全解析；检查计数和警告后，再确认写入自己的私有 Space。",
+      );
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
+  async function commitImport(item: DataImport) {
+    if (!workspaceId || !targetSpaceId) return;
+    try {
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/data-imports/${item.id}/commit`,
+        {
+          method: "POST",
+          csrf: true,
+          body: JSON.stringify({
+            target_space_id: targetSpaceId,
+            expected_version: item.version,
+            confirmation: "IMPORT",
+          }),
+        },
+      );
+      await loadData(workspaceId);
+      setStatus(
+        "导入已在单个事务中完成；所有对象均使用新 ID。原权限和原 ID 未被恢复。",
+      );
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
   const visibleExports = dataWorkspaceId === workspaceId ? exports : [];
+  const visibleImports = dataWorkspaceId === workspaceId ? imports : [];
 
   return (
     <main id="main-content" className="settings-page">
@@ -163,6 +245,74 @@ export function DataSovereigntyCenter() {
               {item.status === "queued" || item.status === "running" ? (
                 <button type="button" onClick={() => void cancelExport(item)}>
                   取消
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="settings-card">
+        <h2>预览后导入</h2>
+        <p>
+          支持 Logion export v1 JSON、Markdown、带 title 列的 CSV 和保守解析的
+          BibTeX。解析过程不执行脚本、不访问链接，也不会恢复原权限或原始 ID。
+        </p>
+        <form className="planning-form" onSubmit={previewImport}>
+          <label>
+            格式
+            <select name="source_format" defaultValue="markdown">
+              <option value="logion_json">Logion JSON</option>
+              <option value="markdown">Markdown</option>
+              <option value="csv">CSV</option>
+              <option value="bibtex">BibTeX</option>
+            </select>
+          </label>
+          <label>
+            文件名
+            <input
+              name="source_filename"
+              defaultValue="import.md"
+              maxLength={255}
+              required
+            />
+          </label>
+          <label>
+            内容（最多 1 MiB）
+            <textarea name="content" maxLength={1_048_576} required />
+          </label>
+          <button>生成加密预览</button>
+        </form>
+        <label htmlFor="import-target-space">写入自己的私有 Space</label>
+        <select
+          id="import-target-space"
+          value={targetSpaceId}
+          onChange={(event) => setTargetSpaceId(event.target.value)}
+        >
+          {spaces.map((space) => (
+            <option key={space.id} value={space.id}>
+              {space.name}
+            </option>
+          ))}
+        </select>
+        <ul className="item-list">
+          {visibleImports.map((item) => (
+            <li key={item.id}>
+              <span>
+                <strong>
+                  {item.source_filename} · {item.status}
+                </strong>
+                <small>{JSON.stringify(item.counts)}</small>
+                {item.warnings.map((warning) => (
+                  <span key={warning}>{warning}</span>
+                ))}
+              </span>
+              {item.status === "previewed" ? (
+                <button
+                  type="button"
+                  disabled={!targetSpaceId}
+                  onClick={() => void commitImport(item)}
+                >
+                  确认 IMPORT
                 </button>
               ) : null}
             </li>
