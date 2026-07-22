@@ -28,6 +28,13 @@ from logion_api.execution.schemas import (
 )
 from logion_api.execution.service import ExecutionService
 from logion_api.identity.service import AuthContext
+from logion_api.memory.models import MasteryRecord, ReviewSchedule, Topic, TopicDependency
+from logion_api.memory.schemas import (
+    MasteryConfirmRequest,
+    TopicCreateRequest,
+    TopicDependencyCreateRequest,
+)
+from logion_api.memory.service import MemoryService
 from logion_api.planning.schemas import GoalPlanCreateRequest
 from logion_api.planning.service import PlanningService
 from logion_api.sync.models import ProcessedSyncOperation
@@ -67,6 +74,7 @@ class SyncPushService:
         execution: ExecutionService,
         content: ContentService,
         evidence: EvidenceService,
+        memory: MemoryService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
@@ -74,6 +82,7 @@ class SyncPushService:
         self._execution = execution
         self._content = content
         self._evidence = evidence
+        self._memory = memory
 
     async def push(
         self,
@@ -190,6 +199,21 @@ class SyncPushService:
             )
         if operation.entity_type == "verification" and operation.operation_type == "update":
             return await self._update_verification(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "topic" and operation.operation_type == "create":
+            return await self._create_topic(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "topic_dependency" and operation.operation_type == "create":
+            return await self._create_topic_dependency(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "mastery" and operation.operation_type in {
+            "create",
+            "update",
+        }:
+            return await self._confirm_mastery(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -1030,6 +1054,193 @@ class SyncPushService:
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
+    async def _create_topic(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = TopicCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                topic = await self._memory.create_topic(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, topic.version, topic_payload(topic)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_topic_dependency(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = TopicDependencyCreateRequest.model_validate(
+                {**raw, "id": operation.entity_id}
+            )
+            async with db.begin_nested():
+                dependency = await self._memory.add_dependency(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    dependency.version,
+                    topic_dependency_payload(dependency),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _confirm_mastery(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        action = raw.pop("action", None)
+        space_id = raw.pop("space_id", None)
+        topic_id = raw.pop("topic_id", None)
+        schedule_id = raw.pop("schedule_id", None)
+        confirmed_level = raw.pop("confirmed_level", None)
+        allowed_projection = {
+            "suggested_level",
+            "suggested_reason",
+            "suggested_at",
+            "confirmed_at",
+        }
+        if (
+            action != "confirm"
+            or not isinstance(space_id, str)
+            or not isinstance(topic_id, str)
+            or not isinstance(schedule_id, str)
+            or not set(raw).issubset(allowed_projection)
+        ):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = (
+                0
+                if operation.operation_type == "create"
+                else await self._causal_base_version(db, request, operation)
+            )
+            if expected is None or (
+                operation.operation_type == "create" and operation.base_version != 0
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            current = await db.get(MasteryRecord, operation.entity_id)
+            if current is not None:
+                if (
+                    current.workspace_id != request.workspace_id
+                    or current.user_id != context.user.id
+                ):
+                    return self._rejected(
+                        operation.operation_id, "SYNC_OPERATION_FORBIDDEN"
+                    )
+                projection = mastery_payload(current)
+                if any(
+                    key in raw and raw[key] != projection[key]
+                    for key in allowed_projection - {"confirmed_at"}
+                ):
+                    return self._rejected(
+                        operation.operation_id, "SYNC_OPERATION_INVALID"
+                    )
+            payload = MasteryConfirmRequest.model_validate(
+                {
+                    "mastery_id": operation.entity_id,
+                    "schedule_id": UUID(schedule_id),
+                    "expected_version": expected,
+                    "confirmed_level": confirmed_level,
+                }
+            )
+            async with db.begin_nested():
+                result = await self._memory.confirm_mastery(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    UUID(topic_id),
+                    payload,
+                    request_id,
+                )
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="review_schedule",
+                    entity_type="review_schedule",
+                    entity_id=result.review_schedule.id,
+                    operation_type="create"
+                    if result.review_schedule.version == 1
+                    else "update",
+                    version=result.review_schedule.version,
+                    payload=review_schedule_payload(result.review_schedule),
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    result.mastery.version,
+                    mastery_payload(result.mastery),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _causal_base_version(
         self, db: AsyncSession, request: PushRequest, operation: object
     ) -> int | None:
@@ -1085,6 +1296,35 @@ class SyncPushService:
                 if verification is not None and verification.workspace_id == request.workspace_id
                 else None
             )
+        if operation.entity_type == "topic":
+            topic = await db.get(Topic, operation.entity_id)
+            return (
+                topic.version
+                if topic is not None and topic.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "topic_dependency":
+            dependency = await db.get(TopicDependency, operation.entity_id)
+            return (
+                dependency.version
+                if dependency is not None
+                and dependency.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "mastery":
+            mastery = await db.get(MasteryRecord, operation.entity_id)
+            return (
+                mastery.version
+                if mastery is not None and mastery.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "review_schedule":
+            schedule = await db.get(ReviewSchedule, operation.entity_id)
+            return (
+                schedule.version
+                if schedule is not None and schedule.workspace_id == request.workspace_id
+                else None
+            )
         else:
             return None
 
@@ -1104,7 +1344,17 @@ class SyncPushService:
             )
             return self._rejected(operation.operation_id, code)
         remote: (
-            Task | StudySession | Note | Resource | EvidenceItem | VerificationRecord | None
+            Task
+            | StudySession
+            | Note
+            | Resource
+            | EvidenceItem
+            | VerificationRecord
+            | Topic
+            | TopicDependency
+            | MasteryRecord
+            | ReviewSchedule
+            | None
         ) = None
         if operation.entity_type == "task":
             remote = await db.get(Task, operation.entity_id)
@@ -1118,6 +1368,14 @@ class SyncPushService:
             remote = await db.get(EvidenceItem, operation.entity_id)
         elif operation.entity_type == "verification":
             remote = await db.get(VerificationRecord, operation.entity_id)
+        elif operation.entity_type == "topic":
+            remote = await db.get(Topic, operation.entity_id)
+        elif operation.entity_type == "topic_dependency":
+            remote = await db.get(TopicDependency, operation.entity_id)
+        elif operation.entity_type == "mastery":
+            remote = await db.get(MasteryRecord, operation.entity_id)
+        elif operation.entity_type == "review_schedule":
+            remote = await db.get(ReviewSchedule, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -1130,6 +1388,14 @@ class SyncPushService:
             payload = evidence_payload(remote)
         elif isinstance(remote, VerificationRecord):
             payload = verification_payload(remote)
+        elif isinstance(remote, Topic):
+            payload = topic_payload(remote)
+        elif isinstance(remote, TopicDependency):
+            payload = topic_dependency_payload(remote)
+        elif isinstance(remote, MasteryRecord):
+            payload = mastery_payload(remote)
+        elif isinstance(remote, ReviewSchedule):
+            payload = review_schedule_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -1141,7 +1407,8 @@ class SyncPushService:
                 ),
                 conflict_kind=(
                     "content"
-                    if operation.entity_type in {"note", "resource", "evidence"}
+                    if operation.entity_type
+                    in {"note", "resource", "evidence", "topic"}
                     else "status"
                 ),
                 entity_type=operation.entity_type,
@@ -1238,4 +1505,52 @@ def verification_payload(record: VerificationRecord) -> dict[str, object]:
         "reviewer_notes": record.reviewer_notes,
         "decided_by": str(record.decided_by) if record.decided_by is not None else None,
         "decided_at": record.decided_at.isoformat() if record.decided_at is not None else None,
+    }
+
+
+def topic_payload(topic: Topic) -> dict[str, object]:
+    return {
+        "space_id": str(topic.space_id),
+        "title": topic.title,
+        "description": topic.description,
+    }
+
+
+def topic_dependency_payload(dependency: TopicDependency) -> dict[str, object]:
+    return {
+        "space_id": str(dependency.space_id),
+        "prerequisite_topic_id": str(dependency.prerequisite_topic_id),
+        "dependent_topic_id": str(dependency.dependent_topic_id),
+    }
+
+
+def mastery_payload(record: MasteryRecord) -> dict[str, object]:
+    return {
+        "space_id": str(record.space_id),
+        "topic_id": str(record.topic_id),
+        "suggested_level": record.suggested_level,
+        "suggested_reason": record.suggested_reason,
+        "suggested_at": (
+            record.suggested_at.isoformat() if record.suggested_at is not None else None
+        ),
+        "confirmed_level": record.confirmed_level,
+        "confirmed_at": (
+            record.confirmed_at.isoformat() if record.confirmed_at is not None else None
+        ),
+    }
+
+
+def review_schedule_payload(schedule: ReviewSchedule) -> dict[str, object]:
+    return {
+        "space_id": str(schedule.space_id),
+        "topic_id": str(schedule.topic_id),
+        "status": schedule.status,
+        "source": schedule.source,
+        "interval_days": schedule.interval_days,
+        "next_review_at": schedule.next_review_at.isoformat(),
+        "last_reviewed_at": (
+            schedule.last_reviewed_at.isoformat()
+            if schedule.last_reviewed_at is not None
+            else None
+        ),
     }

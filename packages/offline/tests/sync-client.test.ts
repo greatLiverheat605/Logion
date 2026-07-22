@@ -444,7 +444,16 @@ describe("recoverable push/pull cycle", () => {
     const repository = new ProtectedOfflineRepository(database, vault);
     const now = "2026-07-21T00:00:00Z";
     const cases: [
-      "evidence" | "note" | "resource" | "verification",
+      (
+        | "evidence"
+        | "mastery"
+        | "note"
+        | "resource"
+        | "review_schedule"
+        | "topic"
+        | "topic_dependency"
+        | "verification"
+      ),
       JsonObject,
     ][] = [
       [
@@ -490,6 +499,41 @@ describe("recoverable push/pull cycle", () => {
           reviewer_notes: "secret reviewer note",
         },
       ],
+      [
+        "topic",
+        {
+          space_id: ids.entity,
+          title: "Private topic",
+          description: "secret topic description",
+        },
+      ],
+      [
+        "topic_dependency",
+        {
+          space_id: ids.entity,
+          prerequisite_topic_id: ids.user,
+          dependent_topic_id: ids.operation,
+        },
+      ],
+      [
+        "mastery",
+        {
+          space_id: ids.entity,
+          topic_id: ids.user,
+          suggested_level: "practicing",
+          suggested_reason: "secret suggestion reason",
+          confirmed_level: "exposed",
+        },
+      ],
+      [
+        "review_schedule",
+        {
+          space_id: ids.entity,
+          topic_id: ids.user,
+          status: "scheduled",
+          next_review_at: now,
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -519,7 +563,9 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain("secret page note");
     expect(durableRows).not.toContain("secret evidence summary");
     expect(durableRows).not.toContain("secret reviewer note");
-    expect(await database.vaultRecords.count()).toBe(4);
+    expect(durableRows).not.toContain("secret topic description");
+    expect(durableRows).not.toContain("secret suggestion reason");
+    expect(await database.vaultRecords.count()).toBe(8);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

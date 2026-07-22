@@ -46,10 +46,14 @@ export interface ProtectedMutationInput extends LocalMutationInput {
   entity_type:
     | "evidence"
     | "learning_goal"
+    | "mastery"
     | "note"
     | "resource"
+    | "review_schedule"
     | "study_session"
     | "task"
+    | "topic"
+    | "topic_dependency"
     | "verification";
 }
 

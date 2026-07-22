@@ -7,15 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logion_api.content.models import Note, Resource
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.models import StudySession, Task
+from logion_api.memory.models import MasteryRecord, ReviewSchedule, Topic, TopicDependency
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
 from logion_api.sync.push import (
     canonical_hash,
     evidence_payload,
+    mastery_payload,
     note_payload,
     resource_payload,
+    review_schedule_payload,
     session_payload,
     task_payload,
+    topic_dependency_payload,
+    topic_payload,
     verification_payload,
 )
 from logion_api.sync.schemas import BootstrapResponse, Change, EntityRecord, PullResponse
@@ -101,6 +106,34 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "verification"},
         )
+        visible_topics = await self._visible_memory_ids(
+            db,
+            Topic,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "topic"},
+        )
+        visible_dependencies = await self._visible_memory_ids(
+            db,
+            TopicDependency,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "topic_dependency"},
+        )
+        visible_mastery = await self._visible_personal_memory_ids(
+            db,
+            MasteryRecord,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "mastery"},
+        )
+        visible_schedules = await self._visible_personal_memory_ids(
+            db,
+            ReviewSchedule,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "review_schedule"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -128,6 +161,16 @@ class SyncReadService:
             or (row.entity_type == "evidence" and row.entity_id in visible_evidence)
             or (
                 row.entity_type == "verification" and row.entity_id in visible_verifications
+            )
+            or (row.entity_type == "topic" and row.entity_id in visible_topics)
+            or (
+                row.entity_type == "topic_dependency"
+                and row.entity_id in visible_dependencies
+            )
+            or (row.entity_type == "mastery" and row.entity_id in visible_mastery)
+            or (
+                row.entity_type == "review_schedule"
+                and row.entity_id in visible_schedules
             )
         ]
         return PullResponse(
@@ -162,6 +205,22 @@ class SyncReadService:
             *(
                 await self._verification_records(
                     db, VerificationRecord, state.workspace_id, user_id
+                )
+            ),
+            *(await self._memory_records(db, Topic, state.workspace_id, user_id)),
+            *(
+                await self._memory_records(
+                    db, TopicDependency, state.workspace_id, user_id
+                )
+            ),
+            *(
+                await self._personal_memory_records(
+                    db, MasteryRecord, state.workspace_id, user_id
+                )
+            ),
+            *(
+                await self._personal_memory_records(
+                    db, ReviewSchedule, state.workspace_id, user_id
                 )
             ),
         ]
@@ -663,6 +722,141 @@ class SyncReadService:
                     deleted_at=deleted_at,
                     created_by=created_by,
                     updated_by=updated_by,
+                    payload=payload,
+                    payload_hash=canonical_hash(payload),
+                )
+            )
+        return records
+
+    async def _visible_memory_ids(
+        self,
+        db: AsyncSession,
+        model: type[Topic] | type[TopicDependency],
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        statement = (
+            select(model.id)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                model.id.in_(entity_ids),
+                model.deleted_at.is_(None),
+                (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+            )
+        )
+        return set((await db.scalars(statement)).all())
+
+    async def _visible_personal_memory_ids(
+        self,
+        db: AsyncSession,
+        model: type[MasteryRecord] | type[ReviewSchedule],
+        workspace_id: UUID,
+        user_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        statement = (
+            select(model.id)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                model.user_id == user_id,
+                model.id.in_(entity_ids),
+                model.deleted_at.is_(None),
+                (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+            )
+        )
+        return set((await db.scalars(statement)).all())
+
+    async def _memory_records(
+        self,
+        db: AsyncSession,
+        model: type[Topic] | type[TopicDependency],
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[EntityRecord]:
+        statement = (
+            select(model)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                model.deleted_at.is_(None),
+                (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+            )
+            .order_by(model.id)
+        )
+        items = cast(
+            list[Topic | TopicDependency], list((await db.scalars(statement)).all())
+        )
+        records: list[EntityRecord] = []
+        for item in items:
+            if isinstance(item, Topic):
+                entity_type = "topic"
+                payload = topic_payload(item)
+            else:
+                entity_type = "topic_dependency"
+                payload = topic_dependency_payload(item)
+            records.append(
+                EntityRecord(
+                    entity_type=entity_type,
+                    entity_id=item.id,
+                    version=item.version,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    deleted_at=item.deleted_at,
+                    created_by=item.created_by,
+                    updated_by=item.updated_by,
+                    payload=payload,
+                    payload_hash=canonical_hash(payload),
+                )
+            )
+        return records
+
+    async def _personal_memory_records(
+        self,
+        db: AsyncSession,
+        model: type[MasteryRecord] | type[ReviewSchedule],
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[EntityRecord]:
+        statement = (
+            select(model)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                model.user_id == user_id,
+                model.deleted_at.is_(None),
+                (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+            )
+            .order_by(model.id)
+        )
+        items = cast(
+            list[MasteryRecord | ReviewSchedule],
+            list((await db.scalars(statement)).all()),
+        )
+        records: list[EntityRecord] = []
+        for item in items:
+            if isinstance(item, MasteryRecord):
+                entity_type = "mastery"
+                payload = mastery_payload(item)
+            else:
+                entity_type = "review_schedule"
+                payload = review_schedule_payload(item)
+            records.append(
+                EntityRecord(
+                    entity_type=entity_type,
+                    entity_id=item.id,
+                    version=item.version,
+                    created_at=item.created_at,
+                    updated_at=item.updated_at,
+                    deleted_at=item.deleted_at,
+                    created_by=item.created_by or item.user_id,
+                    updated_by=item.updated_by or item.user_id,
                     payload=payload,
                     payload_hash=canonical_hash(payload),
                 )
