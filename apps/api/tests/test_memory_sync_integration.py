@@ -263,6 +263,7 @@ async def test_offline_topic_mastery_review_sync_and_personal_visibility() -> No
         assert viewer_write.json()["results"][0] == {
             "operation_id": foreign_mastery["operation_id"],
             "status": "rejected",
+            "retryable": False,
             "error_code": "SYNC_OPERATION_FORBIDDEN",
         }
 
