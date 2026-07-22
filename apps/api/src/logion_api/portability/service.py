@@ -335,11 +335,23 @@ class PortabilityService:
             ).all()
         )
         space_ids = [row.id for row in spaces]
+        allowed_plan_ids = select(LearningPlan.id).where(
+            LearningPlan.workspace_id == job.workspace_id,
+            LearningPlan.space_id.in_(space_ids),
+        )
+        allowed_plan_version_ids = select(PlanVersion.id).where(
+            PlanVersion.workspace_id == job.workspace_id,
+            PlanVersion.plan_id.in_(allowed_plan_ids),
+        )
         objects: dict[str, list[dict[str, Any]]] = {"spaces": [self._record(row) for row in spaces]}
         for model in SHARED_MODELS:
             query = select(model).where(model.workspace_id == job.workspace_id)
             if hasattr(model, "space_id"):
                 query = query.where(model.space_id.in_(space_ids))
+            elif model is PlanVersion:
+                query = query.where(model.plan_id.in_(allowed_plan_ids))
+            elif model is PlanPhase:
+                query = query.where(model.plan_version_id.in_(allowed_plan_version_ids))
             if hasattr(model, "deleted_at"):
                 query = query.where(model.deleted_at.is_(None))
             objects[model.__tablename__] = [
@@ -407,7 +419,10 @@ class PortabilityService:
             extrasaction="ignore",
         )
         writer.writeheader()
-        writer.writerows(tasks)
+        writer.writerows(
+            {field: PortabilityService._csv_cell(row.get(field)) for field in writer.fieldnames}
+            for row in tasks
+        )
         bibtex = "\n\n".join(PortabilityService._bibtex(row) for row in papers)
         manifest = {
             "schema_version": package["schema_version"],
@@ -435,6 +450,12 @@ class PortabilityService:
         if url:
             fields.append(f"  url = {{{url}}}")
         return "@misc{" + key + ",\n" + ",\n".join(fields) + "\n}"
+
+    @staticmethod
+    def _csv_cell(value: Any) -> Any:
+        if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
+            return f"'{value}"
+        return value
 
     @staticmethod
     def _not_found() -> APIError:

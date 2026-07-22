@@ -68,14 +68,32 @@ class AccountDeletionService:
         owned = list(
             (
                 await db.scalars(
-                    select(WorkspaceMembership).where(
+                    select(WorkspaceMembership)
+                    .where(
                         WorkspaceMembership.user_id == user.id,
                         WorkspaceMembership.role == "owner",
                         WorkspaceMembership.status == "active",
                     )
+                    .with_for_update()
                 )
             ).all()
         )
+        owned_workspace_ids = [membership.workspace_id for membership in owned]
+        if owned_workspace_ids:
+            # Invitation acceptance locks the same row first. Holding these locks while
+            # recounting members closes the accept-vs-delete race for sole-owner workspaces.
+            list(
+                (
+                    await db.scalars(
+                        select(WorkspaceInvitation)
+                        .where(
+                            WorkspaceInvitation.workspace_id.in_(owned_workspace_ids),
+                            WorkspaceInvitation.status == "pending",
+                        )
+                        .with_for_update()
+                    )
+                ).all()
+            )
         deletable_workspace_ids: list[UUID] = []
         blocked_workspace_ids: list[UUID] = []
         for membership in owned:
@@ -255,6 +273,20 @@ class AccountDeletionService:
             update(CalendarFeed)
             .where(CalendarFeed.user_id == user_id, CalendarFeed.status == "active")
             .values(status="revoked", revoked_at=now, version=CalendarFeed.version + 1)
+        )
+        await db.execute(
+            update(WorkspaceInvitation)
+            .where(
+                WorkspaceInvitation.invited_by == user_id,
+                WorkspaceInvitation.status == "pending",
+            )
+            .values(
+                status="revoked",
+                revoked_by=user_id,
+                revoked_at=now,
+                updated_at=now,
+                version=WorkspaceInvitation.version + 1,
+            )
         )
         await db.execute(
             update(AIRun)

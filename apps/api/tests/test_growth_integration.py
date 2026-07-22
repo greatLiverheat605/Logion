@@ -173,6 +173,27 @@ async def test_private_template_install_and_revocable_minimal_share() -> None:
         assert token not in (await owner.get(shares_url)).text
         assert (await viewer.get(shares_url)).status_code == 403
 
+        async with session_factory() as db:
+            viewer_membership = await db.scalar(
+                select(WorkspaceMembership).where(
+                    WorkspaceMembership.workspace_id == workspace_id,
+                    WorkspaceMembership.user_id == viewer_id,
+                )
+            )
+            assert viewer_membership is not None
+            viewer_membership.role = "editor"
+            viewer_membership.version += 1
+            await db.commit()
+        editor_listing = await viewer.get(shares_url)
+        assert editor_listing.status_code == 200
+        assert editor_listing.json()["shares"] == []
+        editor_revoke = await viewer.post(
+            f"{shares_url}/{share_id}/revoke",
+            headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+            json={"expected_version": 1},
+        )
+        assert editor_revoke.status_code == 404
+
         public = await viewer.get(f"/api/v1/shares/{token}")
         assert public.status_code == 200, public.text
         assert public.headers["cache-control"] == "private, no-store"
