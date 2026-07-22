@@ -54,6 +54,10 @@ def _production_settings(**overrides: object) -> dict[str, object]:
         "ai_credential_encryption_keys": {
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"a" * 32).decode())
         },
+        "data_export_active_encryption_key_id": "production-v1",
+        "data_export_encryption_keys": {
+            "production-v1": SecretStr(base64.urlsafe_b64encode(b"x" * 32).decode())
+        },
         "legacy_registration_enabled": False,
     }
     values.update(overrides)

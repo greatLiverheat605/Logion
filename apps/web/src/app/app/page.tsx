@@ -41,6 +41,9 @@ export default function AuthenticatedShellPage() {
         <Link className="text-link" href="/app/search">
           搜索、通知与日历
         </Link>
+        <Link className="text-link" href="/app/data">
+          数据主权
+        </Link>
         <Link className="text-link" href="/app/workspaces">
           管理工作区
         </Link>
