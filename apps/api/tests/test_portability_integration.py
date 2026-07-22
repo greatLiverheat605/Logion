@@ -80,6 +80,7 @@ async def test_export_is_encrypted_complete_and_requester_scoped() -> None:
                         description="",
                         desired_outcome="",
                         created_by=viewer_id,
+                        updated_by=viewer_id,
                     ),
                     LearningPlan(
                         id=plan_id,
