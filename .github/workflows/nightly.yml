@@ -23,7 +23,7 @@ jobs:
         run: |
           printf '%s' 'Y2ktYmFja3VwLWVuY3J5cHRpb24ta2V5LTMyYnl0ZSE' > "$LOGION_BACKUP_SECRET_SOURCE"
           sudo chown 70:70 "$LOGION_BACKUP_SECRET_SOURCE"
-          chmod 400 "$LOGION_BACKUP_SECRET_SOURCE"
+          sudo chmod 400 "$LOGION_BACKUP_SECRET_SOURCE"
       - uses: pnpm/action-setup@v5
         with:
           version: 11.9.0
