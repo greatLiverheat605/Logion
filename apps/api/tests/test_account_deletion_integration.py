@@ -60,7 +60,9 @@ async def test_account_deletion_revokes_access_then_allows_explicit_cancel() -> 
         )
         assert login.status_code == 200, login.text
         assert login.json()["user"]["status"] == "pending_deletion"
-        assert (await client.get("/api/v1/workspaces")).status_code == 401
+        restricted = await client.get("/api/v1/workspaces")
+        assert restricted.status_code == 403
+        assert restricted.json()["code"] == "AUTH_ACCOUNT_PENDING_DELETION"
         status = await client.get("/api/v1/account-deletion")
         assert status.status_code == 200
         cancelled = await client.post(

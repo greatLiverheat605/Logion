@@ -222,12 +222,19 @@ class IdentityService:
                 AuthSession.access_token_hash == self._security.token_hash(access_token),
                 AuthSession.revoked_at.is_(None),
                 AuthSession.access_expires_at > now,
-                User.status == "active",
                 Device.revoked_at.is_(None),
             )
         )
         row = result.one_or_none()
         if row is None:
+            raise self._authentication_error()
+        if row[1].status == "pending_deletion":
+            raise APIError(
+                code="AUTH_ACCOUNT_PENDING_DELETION",
+                message="This account can only access the deletion recovery flow.",
+                status_code=403,
+            )
+        if row[1].status != "active":
             raise self._authentication_error()
         return AuthContext(session=row[0], user=row[1], device=row[2])
 
