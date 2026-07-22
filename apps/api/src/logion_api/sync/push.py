@@ -28,9 +28,26 @@ from logion_api.execution.schemas import (
 )
 from logion_api.execution.service import ExecutionService
 from logion_api.identity.service import AuthContext
-from logion_api.memory.models import MasteryRecord, ReviewSchedule, Topic, TopicDependency
+from logion_api.memory.models import (
+    AuditReview,
+    ErrorPattern,
+    MasteryRecord,
+    QuizAttempt,
+    QuizItem,
+    ReviewFinding,
+    ReviewSchedule,
+    Topic,
+    TopicDependency,
+)
 from logion_api.memory.schemas import (
+    AuditReviewCompleteRequest,
+    AuditReviewCreateRequest,
+    ErrorPatternResolveRequest,
     MasteryConfirmRequest,
+    QuizAttemptCreateRequest,
+    QuizItemCreateRequest,
+    ReviewFindingCreateRequest,
+    ReviewFindingResolveRequest,
     TopicCreateRequest,
     TopicDependencyCreateRequest,
 )
@@ -214,6 +231,34 @@ class SyncPushService:
             "update",
         }:
             return await self._confirm_mastery(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "quiz_item" and operation.operation_type == "create":
+            return await self._create_quiz_item(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "quiz_attempt" and operation.operation_type == "create":
+            return await self._create_quiz_attempt(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "error_pattern" and operation.operation_type == "update":
+            return await self._resolve_error_pattern(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "audit_review" and operation.operation_type == "create":
+            return await self._create_audit_review(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "audit_review" and operation.operation_type == "update":
+            return await self._complete_audit_review(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "review_finding" and operation.operation_type == "create":
+            return await self._create_review_finding(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "review_finding" and operation.operation_type == "update":
+            return await self._resolve_review_finding(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -765,9 +810,7 @@ class SyncPushService:
                 return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
             async with db.begin_nested():
                 if action == "decide":
-                    if not {"verdict", "reviewer_notes"}.issubset(raw) or not set(
-                        raw
-                    ).issubset(
+                    if not {"verdict", "reviewer_notes"}.issubset(raw) or not set(raw).issubset(
                         {
                             "verdict",
                             "reviewer_notes",
@@ -780,9 +823,11 @@ class SyncPushService:
                         return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
                     verdict = raw["verdict"]
                     reviewer_notes = raw["reviewer_notes"]
-                    if verdict not in {"passed", "failed", "needs_revision"} or not isinstance(
-                        reviewer_notes, str
-                    ) or len(reviewer_notes.strip()) > 10000:
+                    if (
+                        verdict not in {"passed", "failed", "needs_revision"}
+                        or not isinstance(reviewer_notes, str)
+                        or len(reviewer_notes.strip()) > 10000
+                    ):
                         return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
                     current = await db.get(VerificationRecord, operation.entity_id)
                     if current is None or current.workspace_id != request.workspace_id:
@@ -831,9 +876,7 @@ class SyncPushService:
                         or expected_task_version < 1
                     ):
                         return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
-                    found_verification = await db.get(
-                        VerificationRecord, operation.entity_id
-                    )
+                    found_verification = await db.get(VerificationRecord, operation.entity_id)
                     if (
                         found_verification is None
                         or found_verification.workspace_id != request.workspace_id
@@ -1185,17 +1228,13 @@ class SyncPushService:
                     current.workspace_id != request.workspace_id
                     or current.user_id != context.user.id
                 ):
-                    return self._rejected(
-                        operation.operation_id, "SYNC_OPERATION_FORBIDDEN"
-                    )
+                    return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
                 projection = mastery_payload(current)
                 if any(
                     key in raw and raw[key] != projection[key]
                     for key in allowed_projection - {"confirmed_at"}
                 ):
-                    return self._rejected(
-                        operation.operation_id, "SYNC_OPERATION_INVALID"
-                    )
+                    return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
             payload = MasteryConfirmRequest.model_validate(
                 {
                     "mastery_id": operation.entity_id,
@@ -1221,9 +1260,7 @@ class SyncPushService:
                     suffix="review_schedule",
                     entity_type="review_schedule",
                     entity_id=result.review_schedule.id,
-                    operation_type="create"
-                    if result.review_schedule.version == 1
-                    else "update",
+                    operation_type="create" if result.review_schedule.version == 1 else "update",
                     version=result.review_schedule.version,
                     payload=review_schedule_payload(result.review_schedule),
                 )
@@ -1233,6 +1270,410 @@ class SyncPushService:
                     identity,
                     result.mastery.version,
                     mastery_payload(result.mastery),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_quiz_item(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = QuizItemCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                item = await self._memory.create_quiz_item(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    item.version,
+                    quiz_item_payload(item),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_quiz_attempt(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        quiz_item_id = raw.pop("quiz_item_id", None)
+        raw.pop("topic_id", None)
+        raw.pop("is_correct", None)
+        raw.pop("attempted_at", None)
+        raw.pop("answer_key", None)
+        raw.pop("explanation", None)
+        if (
+            operation.base_version != 0
+            or not isinstance(space_id, str)
+            or not isinstance(quiz_item_id, str)
+        ):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = QuizAttemptCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                result = await self._memory.submit_quiz_attempt(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    UUID(quiz_item_id),
+                    payload,
+                    request_id,
+                )
+                if result.error_pattern is not None:
+                    await self._append_derived(
+                        db,
+                        request.workspace_id,
+                        identity,
+                        suffix="error_pattern",
+                        entity_type="error_pattern",
+                        entity_id=result.error_pattern.id,
+                        operation_type=(
+                            "create" if result.error_pattern.version == 1 else "update"
+                        ),
+                        version=result.error_pattern.version,
+                        payload=error_pattern_payload(result.error_pattern),
+                    )
+                if result.review_schedule is not None:
+                    await self._append_derived(
+                        db,
+                        request.workspace_id,
+                        identity,
+                        suffix="review_schedule",
+                        entity_type="review_schedule",
+                        entity_id=result.review_schedule.id,
+                        operation_type=(
+                            "create" if result.review_schedule.version == 1 else "update"
+                        ),
+                        version=result.review_schedule.version,
+                        payload=review_schedule_payload(result.review_schedule),
+                    )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    result.attempt.version,
+                    quiz_attempt_payload(result.attempt, result.item),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _resolve_error_pattern(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        action = raw.pop("action", None)
+        space_id = raw.pop("space_id", None)
+        raw.pop("topic_id", None)
+        raw.pop("cause", None)
+        raw.pop("occurrence_count", None)
+        raw.pop("status", None)
+        raw.pop("latest_attempt_id", None)
+        if action != "resolve" or not isinstance(space_id, str) or raw:
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            current = await db.get(ErrorPattern, operation.entity_id)
+            if (
+                expected is None
+                or current is None
+                or current.workspace_id != request.workspace_id
+                or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                pattern = await self._memory.resolve_error_pattern(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    operation.entity_id,
+                    ErrorPatternResolveRequest(expected_version=expected),
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    pattern.version,
+                    error_pattern_payload(pattern),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_audit_review(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        raw.pop("status", None)
+        raw.pop("completed_at", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = AuditReviewCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(AuditReview, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                result = await self._memory.create_audit_review(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    result.review.version,
+                    audit_review_payload(result.review),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _complete_audit_review(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        action = raw.pop("action", None)
+        space_id = raw.pop("space_id", None)
+        summary = raw.pop("summary", None)
+        for key in ("cadence", "period_start", "period_end", "status", "completed_at"):
+            raw.pop(key, None)
+        if (
+            action != "complete"
+            or not isinstance(space_id, str)
+            or not isinstance(summary, str)
+            or raw
+        ):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            current = await db.get(AuditReview, operation.entity_id)
+            if (
+                expected is None
+                or current is None
+                or current.workspace_id != request.workspace_id
+                or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                result = await self._memory.complete_audit_review(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    operation.entity_id,
+                    AuditReviewCompleteRequest(expected_version=expected, summary=summary),
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    result.review.version,
+                    audit_review_payload(result.review),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _create_review_finding(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        review_id = raw.pop("audit_review_id", None)
+        raw.pop("status", None)
+        if (
+            operation.base_version != 0
+            or not isinstance(space_id, str)
+            or not isinstance(review_id, str)
+        ):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = ReviewFindingCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(ReviewFinding, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                finding = await self._memory.add_review_finding(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    UUID(review_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    finding.version,
+                    review_finding_payload(finding),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _resolve_review_finding(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        action = raw.pop("action", None)
+        space_id = raw.pop("space_id", None)
+        review_id = raw.pop("audit_review_id", None)
+        for key in ("category", "description", "suggested_action", "status"):
+            raw.pop(key, None)
+        if (
+            action != "resolve"
+            or not isinstance(space_id, str)
+            or not isinstance(review_id, str)
+            or raw
+        ):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            current = await db.get(ReviewFinding, operation.entity_id)
+            if (
+                expected is None
+                or current is None
+                or current.workspace_id != request.workspace_id
+                or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                finding = await self._memory.resolve_review_finding(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    UUID(review_id),
+                    operation.entity_id,
+                    ReviewFindingResolveRequest(expected_version=expected),
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    finding.version,
+                    review_finding_payload(finding),
                 )
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
@@ -1307,8 +1748,7 @@ class SyncPushService:
             dependency = await db.get(TopicDependency, operation.entity_id)
             return (
                 dependency.version
-                if dependency is not None
-                and dependency.workspace_id == request.workspace_id
+                if dependency is not None and dependency.workspace_id == request.workspace_id
                 else None
             )
         if operation.entity_type == "mastery":
@@ -1323,6 +1763,27 @@ class SyncPushService:
             return (
                 schedule.version
                 if schedule is not None and schedule.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "error_pattern":
+            pattern = await db.get(ErrorPattern, operation.entity_id)
+            return (
+                pattern.version
+                if pattern is not None and pattern.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "audit_review":
+            review = await db.get(AuditReview, operation.entity_id)
+            return (
+                review.version
+                if review is not None and review.workspace_id == request.workspace_id
+                else None
+            )
+        if operation.entity_type == "review_finding":
+            finding = await db.get(ReviewFinding, operation.entity_id)
+            return (
+                finding.version
+                if finding is not None and finding.workspace_id == request.workspace_id
                 else None
             )
         else:
@@ -1354,6 +1815,11 @@ class SyncPushService:
             | TopicDependency
             | MasteryRecord
             | ReviewSchedule
+            | QuizItem
+            | QuizAttempt
+            | ErrorPattern
+            | AuditReview
+            | ReviewFinding
             | None
         ) = None
         if operation.entity_type == "task":
@@ -1376,6 +1842,16 @@ class SyncPushService:
             remote = await db.get(MasteryRecord, operation.entity_id)
         elif operation.entity_type == "review_schedule":
             remote = await db.get(ReviewSchedule, operation.entity_id)
+        elif operation.entity_type == "quiz_item":
+            remote = await db.get(QuizItem, operation.entity_id)
+        elif operation.entity_type == "quiz_attempt":
+            remote = await db.get(QuizAttempt, operation.entity_id)
+        elif operation.entity_type == "error_pattern":
+            remote = await db.get(ErrorPattern, operation.entity_id)
+        elif operation.entity_type == "audit_review":
+            remote = await db.get(AuditReview, operation.entity_id)
+        elif operation.entity_type == "review_finding":
+            remote = await db.get(ReviewFinding, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -1396,6 +1872,16 @@ class SyncPushService:
             payload = mastery_payload(remote)
         elif isinstance(remote, ReviewSchedule):
             payload = review_schedule_payload(remote)
+        elif isinstance(remote, QuizItem):
+            payload = quiz_item_payload(remote)
+        elif isinstance(remote, ErrorPattern):
+            payload = error_pattern_payload(remote)
+        elif isinstance(remote, AuditReview):
+            payload = audit_review_payload(remote)
+        elif isinstance(remote, ReviewFinding):
+            payload = review_finding_payload(remote)
+        elif isinstance(remote, QuizAttempt):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -1407,8 +1893,7 @@ class SyncPushService:
                 ),
                 conflict_kind=(
                     "content"
-                    if operation.entity_type
-                    in {"note", "resource", "evidence", "topic"}
+                    if operation.entity_type in {"note", "resource", "evidence", "topic"}
                     else "status"
                 ),
                 entity_type=operation.entity_type,
@@ -1549,8 +2034,65 @@ def review_schedule_payload(schedule: ReviewSchedule) -> dict[str, object]:
         "interval_days": schedule.interval_days,
         "next_review_at": schedule.next_review_at.isoformat(),
         "last_reviewed_at": (
-            schedule.last_reviewed_at.isoformat()
-            if schedule.last_reviewed_at is not None
-            else None
+            schedule.last_reviewed_at.isoformat() if schedule.last_reviewed_at is not None else None
         ),
+    }
+
+
+def quiz_item_payload(item: QuizItem) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "topic_id": str(item.topic_id),
+        "prompt": item.prompt,
+        "evaluation_mode": item.evaluation_mode,
+    }
+
+
+def quiz_attempt_payload(attempt: QuizAttempt, item: QuizItem) -> dict[str, object]:
+    return {
+        "space_id": str(attempt.space_id),
+        "topic_id": str(attempt.topic_id),
+        "quiz_item_id": str(attempt.quiz_item_id),
+        "response_text": attempt.response_text,
+        "is_correct": attempt.is_correct,
+        "confidence": attempt.confidence,
+        "duration_seconds": attempt.duration_seconds,
+        "error_cause": attempt.error_cause,
+        "attempted_at": attempt.attempted_at.isoformat(),
+        "answer_key": item.answer_key,
+        "explanation": item.explanation,
+    }
+
+
+def error_pattern_payload(item: ErrorPattern) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "topic_id": str(item.topic_id),
+        "cause": item.cause,
+        "occurrence_count": item.occurrence_count,
+        "status": item.status,
+        "latest_attempt_id": str(item.latest_attempt_id),
+    }
+
+
+def audit_review_payload(item: AuditReview) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "cadence": item.cadence,
+        "period_start": item.period_start.isoformat(),
+        "period_end": item.period_end.isoformat(),
+        "status": item.status,
+        "summary": item.summary,
+        "completed_at": (item.completed_at.isoformat() if item.completed_at is not None else None),
+    }
+
+
+def review_finding_payload(item: ReviewFinding) -> dict[str, object]:
+    return {
+        "space_id": str(item.space_id),
+        "audit_review_id": str(item.audit_review_id),
+        "category": item.category,
+        "description": item.description,
+        "suggested_action": item.suggested_action,
+        "status": item.status,
     }
