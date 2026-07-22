@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from logion_api.config import get_settings
 from logion_api.db import session_factory
 from logion_api.main import app
+from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.portability.models import DataExportJob
 from logion_api.portability.service import PortabilityService
 from logion_api.workspaces.models import WorkspaceMembership
@@ -59,6 +60,64 @@ async def test_export_is_encrypted_complete_and_requester_scoped() -> None:
             )
             await db.commit()
 
+        viewer_private = await viewer.post(
+            f"/api/v1/workspaces/{workspace_id}/spaces",
+            headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+            json={"name": "Viewer private export boundary", "visibility": "private"},
+        )
+        assert viewer_private.status_code == 201, viewer_private.text
+        viewer_private_space_id = UUID(viewer_private.json()["id"])
+        private_plan_marker = f"other-private-plan-{uuid4().hex}"
+        goal_id, plan_id, version_id = uuid4(), uuid4(), uuid4()
+        async with session_factory() as db:
+            db.add(
+                LearningGoal(
+                    id=goal_id,
+                    workspace_id=workspace_id,
+                    space_id=viewer_private_space_id,
+                    title="Other member private goal",
+                    description="",
+                    desired_outcome="",
+                    created_by=viewer_id,
+                    updated_by=viewer_id,
+                )
+            )
+            await db.flush()
+            db.add(
+                LearningPlan(
+                    id=plan_id,
+                    workspace_id=workspace_id,
+                    space_id=viewer_private_space_id,
+                    goal_id=goal_id,
+                    title="Other member private plan",
+                    status="draft",
+                    created_by=viewer_id,
+                )
+            )
+            await db.flush()
+            db.add(
+                PlanVersion(
+                    id=version_id,
+                    workspace_id=workspace_id,
+                    plan_id=plan_id,
+                    version_number=1,
+                    status="draft",
+                    change_summary=private_plan_marker,
+                    created_by=viewer_id,
+                )
+            )
+            await db.flush()
+            db.add(
+                PlanPhase(
+                    workspace_id=workspace_id,
+                    plan_version_id=version_id,
+                    title="Other member private phase",
+                    description=private_plan_marker,
+                    position=0,
+                )
+            )
+            await db.commit()
+
         marker = f"export-private-{uuid4().hex}"
         csrf = {"X-CSRF-Token": owner.cookies["logion_csrf"]}
         note = await owner.post(
@@ -104,6 +163,7 @@ async def test_export_is_encrypted_complete_and_requester_scoped() -> None:
             package = json.loads(archive.read("data.json"))
             assert package["schema_version"] == "logion-export-v1"
             assert package["objects"]["notes"][0]["markdown_body"] == marker
+            assert private_plan_marker not in json.dumps(package, ensure_ascii=False)
             assert "credentials" in package["excluded"]
 
     async with session_factory() as db:

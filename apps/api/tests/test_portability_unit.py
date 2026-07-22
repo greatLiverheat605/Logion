@@ -22,7 +22,10 @@ def test_export_derivatives_escape_bibtex_and_preserve_utf8() -> None:
         "excluded": ["credentials"],
         "objects": {
             "notes": [{"title": "中文笔记", "markdown_body": "# 内容"}],
-            "tasks": [{"id": "task", "title": "T", "status": "planned"}],
+            "tasks": [
+                {"id": "task", "title": "T", "status": "planned"},
+                {"id": "formula", "title": '=HYPERLINK("https://invalid")', "status": "planned"},
+            ],
             "paper_records": [
                 {
                     "citation_key": "unsafe key{}",
@@ -38,6 +41,9 @@ def test_export_derivatives_escape_bibtex_and_preserve_utf8() -> None:
         bibtex = archive.read("papers.bib").decode()
         assert "@misc{unsafe_key__" in bibtex
         assert "{safe}" not in bibtex
+        tasks_csv = archive.read("tasks.csv").decode()
+        assert "'=HYPERLINK" in tasks_csv
+        assert "\nformula,=HYPERLINK" not in tasks_csv
         assert json.loads(archive.read("manifest.json"))["counts"]["notes"] == 1
 
 

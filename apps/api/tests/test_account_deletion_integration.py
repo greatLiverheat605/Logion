@@ -88,6 +88,49 @@ async def test_account_deletion_revokes_access_then_allows_explicit_cancel() -> 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_account_deletion_revokes_pending_workspace_invitations() -> None:
+    origin = "http://test"
+    async with (
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.177", 49017)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as owner,
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.178", 49018)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as recipient,
+    ):
+        await register(owner, "invitation-owner")
+        _recipient_id, recipient_email = await register(recipient, "invitation-recipient")
+        workspace_id = (await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+        invitation = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/invitations",
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={"email": recipient_email, "role": "viewer"},
+        )
+        assert invitation.status_code == 201, invitation.text
+        token = invitation.json()["token"]
+
+        requested = await owner.post(
+            "/api/v1/account-deletion",
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={"confirmation": "DELETE MY ACCOUNT"},
+        )
+        assert requested.status_code == 202, requested.text
+
+        accepted = await recipient.post(
+            "/api/v1/invitations/accept",
+            headers={"X-CSRF-Token": recipient.cookies["logion_csrf"]},
+            json={"token": token},
+        )
+        assert accepted.status_code == 404
+        assert accepted.json()["code"] == "INVITATION_INVALID"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_grace() -> None:
     origin = "http://test"
     async with (

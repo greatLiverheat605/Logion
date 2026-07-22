@@ -409,7 +409,19 @@ class GrowthService:
             (
                 await db.scalars(
                     select(ShareSnapshot)
-                    .where(ShareSnapshot.workspace_id == workspace_id)
+                    .join(
+                        Space,
+                        (Space.id == ShareSnapshot.space_id)
+                        & (Space.workspace_id == ShareSnapshot.workspace_id),
+                    )
+                    .where(
+                        ShareSnapshot.workspace_id == workspace_id,
+                        Space.status == "active",
+                        or_(
+                            Space.visibility == "shared",
+                            Space.owner_user_id == context.user.id,
+                        ),
+                    )
                     .order_by(ShareSnapshot.created_at.desc(), ShareSnapshot.id.desc())
                     .limit(500)
                 )
@@ -430,9 +442,16 @@ class GrowthService:
         )
         row = await db.scalar(
             select(ShareSnapshot)
+            .join(
+                Space,
+                (Space.id == ShareSnapshot.space_id)
+                & (Space.workspace_id == ShareSnapshot.workspace_id),
+            )
             .where(
                 ShareSnapshot.id == share_id,
                 ShareSnapshot.workspace_id == workspace_id,
+                Space.status == "active",
+                or_(Space.visibility == "shared", Space.owner_user_id == context.user.id),
             )
             .with_for_update()
         )
