@@ -4,8 +4,12 @@ version = "0.1.0"
 description = "Logion background worker entry point"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "logion-api",
   "pydantic-settings>=2.13,<3",
 ]
+
+[tool.uv.sources]
+logion-api = { workspace = true }
 
 [build-system]
 requires = ["hatchling>=1.27,<2"]

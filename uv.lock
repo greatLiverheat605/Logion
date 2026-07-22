@@ -499,11 +499,15 @@ name = "logion-worker"
 version = "0.1.0"
 source = { editable = "apps/worker" }
 dependencies = [
+    { name = "logion-api" },
     { name = "pydantic-settings" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic-settings", specifier = ">=2.13,<3" }]
+requires-dist = [
+    { name = "logion-api", editable = "apps/api" },
+    { name = "pydantic-settings", specifier = ">=2.13,<3" },
+]
 
 [[package]]
 name = "logion-workspace"

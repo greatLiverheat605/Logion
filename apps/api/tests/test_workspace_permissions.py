@@ -120,8 +120,8 @@ def test_non_managers_cannot_change_memberships(actor_role: WorkspaceRole) -> No
     )
 
 
-def test_permission_contract_v3_matches_server_registry_exactly() -> None:
-    assert PERMISSION_CONTRACT["schema_version"] == 3
+def test_permission_contract_v4_matches_server_registry_exactly() -> None:
+    assert PERMISSION_CONTRACT["schema_version"] == 4
     assert PERMISSION_CONTRACT["roles"] == [role.value for role in WorkspaceRole]
     assert PERMISSION_CONTRACT["legacy_role_aliases"] == {"member": "contributor"}
     assert PERMISSION_CONTRACT["permissions"] == [permission.value for permission in Permission]
