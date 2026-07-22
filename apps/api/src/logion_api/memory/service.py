@@ -10,10 +10,27 @@ from logion_api.db import utc_now
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.service import AuthContext
-from logion_api.memory.models import MasteryRecord, ReviewSchedule, Topic, TopicDependency
+from logion_api.memory.models import (
+    AuditReview,
+    ErrorPattern,
+    MasteryRecord,
+    QuizAttempt,
+    QuizItem,
+    ReviewFinding,
+    ReviewSchedule,
+    Topic,
+    TopicDependency,
+)
 from logion_api.memory.schemas import (
+    AuditReviewCompleteRequest,
+    AuditReviewCreateRequest,
+    ErrorPatternResolveRequest,
     MasteryConfirmRequest,
     MasteryLevel,
+    QuizAttemptCreateRequest,
+    QuizItemCreateRequest,
+    ReviewFindingCreateRequest,
+    ReviewFindingResolveRequest,
     TopicCreateRequest,
     TopicDependencyCreateRequest,
 )
@@ -29,6 +46,13 @@ REVIEW_INTERVAL_DAYS: dict[str, int] = {
     "proficient": 7,
     "mastered": 14,
 }
+READ_PAGE_LIMIT = 500
+REVIEW_PAGE_LIMIT = 100
+FINDING_PAGE_LIMIT = 1000
+
+
+def _normalized_answer(value: str) -> str:
+    return " ".join(value.casefold().split())
 
 
 @dataclass(frozen=True)
@@ -42,6 +66,20 @@ class TopicView:
 class MasteryConfirmation:
     mastery: MasteryRecord
     review_schedule: ReviewSchedule
+
+
+@dataclass(frozen=True)
+class QuizAttemptResult:
+    attempt: QuizAttempt
+    item: QuizItem
+    error_pattern: ErrorPattern | None
+    review_schedule: ReviewSchedule | None
+
+
+@dataclass(frozen=True)
+class AuditReviewView:
+    review: AuditReview
+    findings: list[ReviewFinding]
 
 
 class MemoryService:
@@ -206,9 +244,7 @@ class MemoryService:
                     select(Topic).where(
                         Topic.workspace_id == workspace_id,
                         Topic.space_id == space_id,
-                        Topic.id.in_(
-                            [payload.prerequisite_topic_id, payload.dependent_topic_id]
-                        ),
+                        Topic.id.in_([payload.prerequisite_topic_id, payload.dependent_topic_id]),
                         Topic.deleted_at.is_(None),
                     )
                 )
@@ -288,6 +324,763 @@ class MemoryService:
         )
         return dependency
 
+    async def create_quiz_item(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: QuizItemCreateRequest,
+        request_id: str,
+    ) -> QuizItem:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=True
+        )
+        topic = await db.scalar(
+            select(Topic).where(
+                Topic.id == payload.topic_id,
+                Topic.workspace_id == workspace_id,
+                Topic.space_id == space_id,
+                Topic.deleted_at.is_(None),
+            )
+        )
+        if topic is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
+        item_count = int(
+            await db.scalar(
+                select(func.count(QuizItem.id)).where(
+                    QuizItem.workspace_id == workspace_id,
+                    QuizItem.space_id == space_id,
+                    QuizItem.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if item_count >= self._settings.quiz_item_per_space_quota:
+            raise APIError(
+                code="RESOURCE_QUOTA_EXCEEDED",
+                message="The Space has reached its quiz-item limit.",
+                status_code=409,
+            )
+        if await db.get(QuizItem, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        item = QuizItem(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            topic_id=payload.topic_id,
+            prompt=payload.prompt,
+            answer_key=payload.answer_key,
+            explanation=payload.explanation,
+            evaluation_mode=payload.evaluation_mode,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(item)
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.quiz_item_created",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="quiz_item",
+                target_id=item.id,
+                metadata={"topic_id": str(item.topic_id)},
+            )
+        )
+        return item
+
+    async def list_quiz_items(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> list[QuizItem]:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        return list(
+            (
+                await db.scalars(
+                    select(QuizItem)
+                    .where(
+                        QuizItem.workspace_id == workspace_id,
+                        QuizItem.space_id == space_id,
+                        QuizItem.deleted_at.is_(None),
+                    )
+                    .order_by(QuizItem.updated_at.desc(), QuizItem.id)
+                    .limit(READ_PAGE_LIMIT)
+                )
+            ).all()
+        )
+
+    async def submit_quiz_attempt(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        quiz_item_id: UUID,
+        payload: QuizAttemptCreateRequest,
+        request_id: str,
+    ) -> QuizAttemptResult:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        item = await db.scalar(
+            select(QuizItem)
+            .where(
+                QuizItem.id == quiz_item_id,
+                QuizItem.workspace_id == workspace_id,
+                QuizItem.space_id == space_id,
+                QuizItem.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if item is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        await db.scalar(
+            select(WorkspaceMembership.id)
+            .where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.user_id == context.user.id,
+                WorkspaceMembership.status == "active",
+            )
+            .with_for_update()
+        )
+        if await db.get(QuizAttempt, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        attempt_count = int(
+            await db.scalar(
+                select(func.count(QuizAttempt.id)).where(
+                    QuizAttempt.workspace_id == workspace_id,
+                    QuizAttempt.user_id == context.user.id,
+                    QuizAttempt.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if attempt_count >= self._settings.quiz_attempt_per_user_quota:
+            raise APIError(
+                code="RESOURCE_QUOTA_EXCEEDED",
+                message="The account has reached its quiz-attempt limit.",
+                status_code=409,
+            )
+        if item.evaluation_mode == "exact_match":
+            if payload.self_assessed_correct is not None:
+                raise APIError(
+                    code="RESOURCE_INPUT_INVALID",
+                    message="Exact-match items are evaluated by the server.",
+                    status_code=422,
+                )
+            is_correct = _normalized_answer(payload.response_text) == _normalized_answer(
+                item.answer_key
+            )
+        else:
+            if payload.self_assessed_correct is None:
+                raise APIError(
+                    code="RESOURCE_INPUT_INVALID",
+                    message="A self-assessed result is required.",
+                    status_code=422,
+                )
+            is_correct = payload.self_assessed_correct
+        if is_correct and payload.error_cause is not None:
+            raise APIError(
+                code="RESOURCE_INPUT_INVALID",
+                message="A correct attempt cannot have an error cause.",
+                status_code=422,
+            )
+        if not is_correct and payload.error_cause is None:
+            raise APIError(
+                code="RESOURCE_INPUT_INVALID",
+                message="An incorrect attempt requires an error cause.",
+                status_code=422,
+            )
+        now = utc_now()
+        attempt = QuizAttempt(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            topic_id=item.topic_id,
+            quiz_item_id=item.id,
+            user_id=context.user.id,
+            response_text=payload.response_text,
+            is_correct=is_correct,
+            confidence=payload.confidence,
+            duration_seconds=payload.duration_seconds,
+            error_cause=payload.error_cause,
+            attempted_at=now,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(attempt)
+        await db.flush()
+        pattern: ErrorPattern | None = None
+        schedule: ReviewSchedule | None = None
+        if not is_correct:
+            assert payload.error_cause is not None
+            pattern = await db.scalar(
+                select(ErrorPattern)
+                .where(
+                    ErrorPattern.workspace_id == workspace_id,
+                    ErrorPattern.topic_id == item.topic_id,
+                    ErrorPattern.user_id == context.user.id,
+                    ErrorPattern.cause == payload.error_cause,
+                    ErrorPattern.deleted_at.is_(None),
+                )
+                .with_for_update()
+            )
+            if pattern is None:
+                if await db.get(ErrorPattern, payload.error_pattern_id) is not None:
+                    raise APIError(
+                        code="RESOURCE_VERSION_CONFLICT",
+                        message="The error pattern changed.",
+                        status_code=409,
+                    )
+                pattern = ErrorPattern(
+                    id=payload.error_pattern_id,
+                    workspace_id=workspace_id,
+                    space_id=space_id,
+                    topic_id=item.topic_id,
+                    user_id=context.user.id,
+                    cause=payload.error_cause,
+                    latest_attempt_id=attempt.id,
+                    created_by=context.user.id,
+                    updated_by=context.user.id,
+                )
+                db.add(pattern)
+            elif pattern.id != payload.error_pattern_id:
+                raise APIError(
+                    code="RESOURCE_VERSION_CONFLICT",
+                    message="The error pattern changed.",
+                    status_code=409,
+                )
+            else:
+                pattern.occurrence_count += 1
+                pattern.latest_attempt_id = attempt.id
+                pattern.status = "open"
+                pattern.version += 1
+                pattern.updated_by = context.user.id
+                pattern.updated_at = now
+            schedule = await db.scalar(
+                select(ReviewSchedule)
+                .where(
+                    ReviewSchedule.workspace_id == workspace_id,
+                    ReviewSchedule.topic_id == item.topic_id,
+                    ReviewSchedule.user_id == context.user.id,
+                    ReviewSchedule.deleted_at.is_(None),
+                )
+                .with_for_update()
+            )
+            if schedule is None:
+                if await db.get(ReviewSchedule, payload.schedule_id) is not None:
+                    raise APIError(
+                        code="RESOURCE_VERSION_CONFLICT",
+                        message="The review schedule changed.",
+                        status_code=409,
+                    )
+                schedule = ReviewSchedule(
+                    id=payload.schedule_id,
+                    workspace_id=workspace_id,
+                    space_id=space_id,
+                    topic_id=item.topic_id,
+                    user_id=context.user.id,
+                    status="due",
+                    source="quiz_error",
+                    interval_days=1,
+                    next_review_at=now,
+                    created_by=context.user.id,
+                    updated_by=context.user.id,
+                )
+                db.add(schedule)
+            elif schedule.id != payload.schedule_id:
+                raise APIError(
+                    code="RESOURCE_VERSION_CONFLICT",
+                    message="The review schedule changed.",
+                    status_code=409,
+                )
+            else:
+                schedule.status = "due"
+                schedule.source = "quiz_error"
+                schedule.interval_days = 1
+                schedule.next_review_at = now
+                schedule.version += 1
+                schedule.updated_by = context.user.id
+                schedule.updated_at = now
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.quiz_attempt_recorded",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="quiz_attempt",
+                target_id=attempt.id,
+                metadata={"quiz_item_id": str(item.id), "topic_id": str(item.topic_id)},
+            )
+        )
+        return QuizAttemptResult(attempt, item, pattern, schedule)
+
+    async def list_quiz_attempts(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> list[QuizAttemptResult]:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        attempts = list(
+            (
+                await db.scalars(
+                    select(QuizAttempt)
+                    .where(
+                        QuizAttempt.workspace_id == workspace_id,
+                        QuizAttempt.space_id == space_id,
+                        QuizAttempt.user_id == context.user.id,
+                        QuizAttempt.deleted_at.is_(None),
+                    )
+                    .order_by(QuizAttempt.attempted_at.desc(), QuizAttempt.id)
+                    .limit(READ_PAGE_LIMIT)
+                )
+            ).all()
+        )
+        if not attempts:
+            return []
+        items = {
+            item.id: item
+            for item in (
+                await db.scalars(
+                    select(QuizItem).where(
+                        QuizItem.id.in_([attempt.quiz_item_id for attempt in attempts])
+                    )
+                )
+            ).all()
+        }
+        return [
+            QuizAttemptResult(attempt, items[attempt.quiz_item_id], None, None)
+            for attempt in attempts
+        ]
+
+    async def list_error_patterns(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> list[ErrorPattern]:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        return list(
+            (
+                await db.scalars(
+                    select(ErrorPattern)
+                    .where(
+                        ErrorPattern.workspace_id == workspace_id,
+                        ErrorPattern.space_id == space_id,
+                        ErrorPattern.user_id == context.user.id,
+                        ErrorPattern.deleted_at.is_(None),
+                    )
+                    .order_by(ErrorPattern.updated_at.desc(), ErrorPattern.id)
+                    .limit(READ_PAGE_LIMIT)
+                )
+            ).all()
+        )
+
+    async def resolve_error_pattern(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        pattern_id: UUID,
+        payload: ErrorPatternResolveRequest,
+        request_id: str,
+    ) -> ErrorPattern:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        pattern = await db.scalar(
+            select(ErrorPattern)
+            .where(
+                ErrorPattern.id == pattern_id,
+                ErrorPattern.workspace_id == workspace_id,
+                ErrorPattern.space_id == space_id,
+                ErrorPattern.user_id == context.user.id,
+                ErrorPattern.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if pattern is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if pattern.status != "open" or pattern.version != payload.expected_version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The error pattern changed.",
+                status_code=409,
+            )
+        pattern.status = "resolved"
+        pattern.version += 1
+        pattern.updated_by = context.user.id
+        pattern.updated_at = utc_now()
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.error_pattern_resolved",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="error_pattern",
+                target_id=pattern.id,
+            )
+        )
+        return pattern
+
+    async def create_audit_review(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: AuditReviewCreateRequest,
+        request_id: str,
+    ) -> AuditReviewView:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        await db.scalar(
+            select(WorkspaceMembership.id)
+            .where(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.user_id == context.user.id,
+                WorkspaceMembership.status == "active",
+            )
+            .with_for_update()
+        )
+        if await db.get(AuditReview, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        review_count = int(
+            await db.scalar(
+                select(func.count(AuditReview.id)).where(
+                    AuditReview.workspace_id == workspace_id,
+                    AuditReview.user_id == context.user.id,
+                    AuditReview.deleted_at.is_(None),
+                )
+            )
+            or 0
+        )
+        if review_count >= self._settings.audit_review_per_user_quota:
+            raise APIError(
+                code="RESOURCE_QUOTA_EXCEEDED",
+                message="The account has reached its audit-review limit.",
+                status_code=409,
+            )
+        existing_period = await db.scalar(
+            select(AuditReview.id).where(
+                AuditReview.workspace_id == workspace_id,
+                AuditReview.space_id == space_id,
+                AuditReview.user_id == context.user.id,
+                AuditReview.cadence == payload.cadence,
+                AuditReview.period_start == payload.period_start,
+                AuditReview.period_end == payload.period_end,
+                AuditReview.deleted_at.is_(None),
+            )
+        )
+        if existing_period is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="A review already exists for this period.",
+                status_code=409,
+            )
+        review = AuditReview(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            user_id=context.user.id,
+            cadence=payload.cadence,
+            period_start=payload.period_start,
+            period_end=payload.period_end,
+            summary=payload.summary,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(review)
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.audit_review_created",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="audit_review",
+                target_id=review.id,
+                metadata={"cadence": review.cadence},
+            )
+        )
+        return AuditReviewView(review, [])
+
+    async def list_audit_reviews(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> list[AuditReviewView]:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        reviews = list(
+            (
+                await db.scalars(
+                    select(AuditReview)
+                    .where(
+                        AuditReview.workspace_id == workspace_id,
+                        AuditReview.space_id == space_id,
+                        AuditReview.user_id == context.user.id,
+                        AuditReview.deleted_at.is_(None),
+                    )
+                    .order_by(AuditReview.period_end.desc(), AuditReview.id)
+                    .limit(REVIEW_PAGE_LIMIT)
+                )
+            ).all()
+        )
+        findings = (
+            list(
+                (
+                    await db.scalars(
+                        select(ReviewFinding)
+                        .where(
+                            ReviewFinding.workspace_id == workspace_id,
+                            ReviewFinding.user_id == context.user.id,
+                            ReviewFinding.audit_review_id.in_([item.id for item in reviews]),
+                            ReviewFinding.deleted_at.is_(None),
+                        )
+                        .limit(FINDING_PAGE_LIMIT)
+                    )
+                ).all()
+            )
+            if reviews
+            else []
+        )
+        by_review: dict[UUID, list[ReviewFinding]] = {}
+        for finding in findings:
+            by_review.setdefault(finding.audit_review_id, []).append(finding)
+        return [AuditReviewView(review, by_review.get(review.id, [])) for review in reviews]
+
+    async def add_review_finding(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        review_id: UUID,
+        payload: ReviewFindingCreateRequest,
+        request_id: str,
+    ) -> ReviewFinding:
+        review = await self._owned_review(
+            db, context, workspace_id, space_id, review_id, request_id, lock=True
+        )
+        if review.status != "draft":
+            raise APIError(
+                code="RESOURCE_STATE_CONFLICT",
+                message="Completed reviews cannot be edited.",
+                status_code=409,
+            )
+        if await db.get(ReviewFinding, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        finding = ReviewFinding(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            audit_review_id=review.id,
+            user_id=context.user.id,
+            category=payload.category,
+            description=payload.description,
+            suggested_action=payload.suggested_action,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(finding)
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.review_finding_created",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="review_finding",
+                target_id=finding.id,
+                metadata={"audit_review_id": str(review.id)},
+            )
+        )
+        return finding
+
+    async def complete_audit_review(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        review_id: UUID,
+        payload: AuditReviewCompleteRequest,
+        request_id: str,
+    ) -> AuditReviewView:
+        review = await self._owned_review(
+            db, context, workspace_id, space_id, review_id, request_id, lock=True
+        )
+        if review.status != "draft" or review.version != payload.expected_version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The audit review changed.",
+                status_code=409,
+            )
+        now = utc_now()
+        review.status = "completed"
+        review.summary = payload.summary
+        review.completed_by = context.user.id
+        review.completed_at = now
+        review.version += 1
+        review.updated_by = context.user.id
+        review.updated_at = now
+        findings = list(
+            (
+                await db.scalars(
+                    select(ReviewFinding)
+                    .where(
+                        ReviewFinding.audit_review_id == review.id,
+                        ReviewFinding.user_id == context.user.id,
+                        ReviewFinding.deleted_at.is_(None),
+                    )
+                    .limit(FINDING_PAGE_LIMIT)
+                )
+            ).all()
+        )
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.audit_review_completed",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="audit_review",
+                target_id=review.id,
+            )
+        )
+        return AuditReviewView(review, findings)
+
+    async def resolve_review_finding(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        review_id: UUID,
+        finding_id: UUID,
+        payload: ReviewFindingResolveRequest,
+        request_id: str,
+    ) -> ReviewFinding:
+        await self._owned_review(
+            db, context, workspace_id, space_id, review_id, request_id, lock=False
+        )
+        finding = await db.scalar(
+            select(ReviewFinding)
+            .where(
+                ReviewFinding.id == finding_id,
+                ReviewFinding.workspace_id == workspace_id,
+                ReviewFinding.space_id == space_id,
+                ReviewFinding.audit_review_id == review_id,
+                ReviewFinding.user_id == context.user.id,
+                ReviewFinding.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if finding is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if finding.status != "open" or finding.version != payload.expected_version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The review finding changed.",
+                status_code=409,
+            )
+        finding.status = "resolved"
+        finding.version += 1
+        finding.updated_by = context.user.id
+        finding.updated_at = utc_now()
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.review_finding_resolved",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="review_finding",
+                target_id=finding.id,
+            )
+        )
+        return finding
+
+    async def _owned_review(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        review_id: UUID,
+        request_id: str,
+        *,
+        lock: bool,
+    ) -> AuditReview:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        statement = select(AuditReview).where(
+            AuditReview.id == review_id,
+            AuditReview.workspace_id == workspace_id,
+            AuditReview.space_id == space_id,
+            AuditReview.user_id == context.user.id,
+            AuditReview.deleted_at.is_(None),
+        )
+        if lock:
+            statement = statement.with_for_update()
+        review = await db.scalar(statement)
+        if review is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        return review
+
     async def confirm_mastery(
         self,
         db: AsyncSession,
@@ -327,9 +1120,10 @@ class MemoryService:
         )
         now = utc_now()
         if mastery is None:
-            if payload.expected_version != 0 or (
-                await db.get(MasteryRecord, payload.mastery_id)
-            ) is not None:
+            if (
+                payload.expected_version != 0
+                or (await db.get(MasteryRecord, payload.mastery_id)) is not None
+            ):
                 raise APIError(
                     code="RESOURCE_VERSION_CONFLICT",
                     message="The mastery record changed.",
@@ -483,9 +1277,7 @@ class MemoryService:
             .with_for_update()
         )
         if mastery is None:
-            if expected_version != 0 or (
-                await db.get(MasteryRecord, mastery_id)
-            ) is not None:
+            if expected_version != 0 or (await db.get(MasteryRecord, mastery_id)) is not None:
                 raise APIError(
                     code="RESOURCE_VERSION_CONFLICT",
                     message="The mastery record changed.",
