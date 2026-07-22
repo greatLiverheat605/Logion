@@ -8,6 +8,7 @@ from logion_api.db import Base
 from logion_api.execution import evidence_models as evidence_models  # noqa: F401
 from logion_api.execution import models as execution_models  # noqa: F401
 from logion_api.identity import models as identity_models  # noqa: F401
+from logion_api.memory import models as memory_models  # noqa: F401
 from logion_api.planning import models as planning_models  # noqa: F401
 from logion_api.sync import models as sync_models  # noqa: F401
 from logion_api.workspaces import models as workspace_models  # noqa: F401
