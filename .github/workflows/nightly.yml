@@ -87,26 +87,18 @@ jobs:
           VALUES ('00000000-0000-7000-8000-000000000002','00000000-0000-7000-8000-000000000004',0,0,1,now(),now());
           SQL
           docker compose build backup
-          docker compose create backup
-          backup_container="$(docker compose ps --all -q backup)"
-          test -n "$backup_container"
+          docker compose run --name logion-backup-tools -d --entrypoint sh backup -c 'sleep 600'
+          backup_container="logion-backup-tools"
           attachments_volume="$(docker inspect "$backup_container" --format '{{range .Mounts}}{{if eq .Destination "/attachments"}}{{.Name}}{{end}}{{end}}')"
           test -n "$attachments_volume"
           docker run --rm -v "$attachments_volume:/attachments" alpine:3.22 \
             sh -c 'printf "%s" "phase5-attachment-marker" > /attachments/restore-marker.txt'
-          docker compose start backup
-          latest=""
-          for attempt in $(seq 1 12); do
-            latest="$(docker compose exec -T backup sh -c 'find /backups -type f -name "logion-*.backup" | sort | tail -n 1')"
-            if [ -n "$latest" ]; then
-              break
-            fi
-            sleep 5
-          done
+          docker exec -e LOGION_BACKUP_ONCE=true "$backup_container" logion-backup
+          latest="$(docker exec "$backup_container" sh -c 'find /backups -type f -name "logion-*.backup" | sort | tail -n 1')"
           test -n "$latest"
-          docker compose exec -T backup logion-verify-backup "$latest"
+          docker exec "$backup_container" logion-verify-backup "$latest"
           docker compose exec -T postgres createdb -U logion logion_restore
-          docker compose exec -T backup logion-restore-backup \
+          docker exec "$backup_container" logion-restore-backup \
             "$latest" logion_restore /tmp/logion-restore-attachments
           source_version="$(docker compose exec -T postgres \
             psql -U logion -d logion -Atc 'SELECT version_num FROM alembic_version')"
@@ -128,7 +120,7 @@ jobs:
           restored_workspaces="$(docker compose exec -T postgres \
             psql -U logion -d logion_restore -Atc 'SELECT count(*) FROM workspaces')"
           test "$restored_workspaces" = "1"
-          restored_marker="$(docker compose exec -T backup \
+          restored_marker="$(docker exec "$backup_container" \
             sh -c 'cat /tmp/logion-restore-attachments/restore-marker.txt')"
           test "$restored_marker" = "phase5-attachment-marker"
       - if: always()
@@ -142,4 +134,4 @@ jobs:
           LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
-        run: docker compose down --volumes
+        run: docker compose down --volumes --remove-orphans
