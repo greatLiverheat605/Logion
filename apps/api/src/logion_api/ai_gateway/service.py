@@ -5,8 +5,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.ai_gateway.adapter import OpenAICompatibleDiscoveryAdapter
 from logion_api.ai_gateway.crypto import AIProviderCredentialCipher, validate_provider_base_url
-from logion_api.ai_gateway.models import AIProvider
+from logion_api.ai_gateway.models import AIModel, AIProvider
 from logion_api.ai_gateway.schemas import AIProviderCreate, AIProviderUpdate
 from logion_api.config import Settings
 from logion_api.db import utc_now
@@ -110,7 +111,7 @@ class AIProviderService:
         db.add(self._audit(provider, context, request_id, "created"))
         return provider
 
-    async def list(
+    async def list_providers(
         self,
         db: AsyncSession,
         context: AuthContext,
@@ -131,6 +132,128 @@ class AIProviderService:
                 )
             ).all()
         )
+
+    async def list_models(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        request_id: str,
+    ) -> list[AIModel]:
+        await self.authorize(db, context, workspace_id, request_id)
+        return list(
+            (
+                await db.scalars(
+                    select(AIModel)
+                    .where(AIModel.workspace_id == workspace_id, AIModel.deleted_at.is_(None))
+                    .order_by(AIModel.provider_id, AIModel.provider_model_id)
+                    .limit(
+                        self._settings.ai_provider_per_workspace_quota
+                        * self._settings.ai_provider_discovery_model_limit
+                    )
+                )
+            ).all()
+        )
+
+    async def discover_models(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        provider_id: UUID,
+        adapter: OpenAICompatibleDiscoveryAdapter,
+        request_id: str,
+    ) -> list[AIModel]:
+        await self.authorize(db, context, workspace_id, request_id)
+        provider = await self._provider(db, workspace_id, provider_id, lock=False)
+        if not provider.enabled:
+            raise APIError(
+                code="AI_PROVIDER_DISABLED",
+                message="The AI Provider is disabled.",
+                status_code=409,
+            )
+        provider_version = provider.version
+        credential = self._cipher.decrypt(provider)
+        try:
+            discovered = await adapter.discover(
+                base_url=provider.base_url,
+                credential=credential,
+                timeout_seconds=provider.timeout_seconds,
+            )
+        except APIError as exc:
+            current = await self._provider(db, workspace_id, provider_id, lock=True)
+            if current.version == provider_version:
+                current.last_health_status = "unhealthy"
+                current.last_health_checked_at = utc_now()
+                current.last_health_error_code = exc.code
+                current.updated_at = utc_now()
+                db.add(
+                    self._discovery_audit(
+                        current, context, request_id, result="failure", code=exc.code, count=0
+                    )
+                )
+                await db.flush()
+            raise
+        finally:
+            credential = ""
+
+        provider = await self._provider(db, workspace_id, provider_id, lock=True)
+        if provider.version != provider_version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The AI Provider changed during discovery.",
+                status_code=409,
+            )
+        now = utc_now()
+        identifiers = [item.provider_model_id for item in discovered]
+        existing = (
+            {
+                row.provider_model_id: row
+                for row in (
+                    await db.scalars(
+                        select(AIModel)
+                        .where(
+                            AIModel.workspace_id == workspace_id,
+                            AIModel.provider_id == provider_id,
+                            AIModel.provider_model_id.in_(identifiers),
+                            AIModel.deleted_at.is_(None),
+                        )
+                        .with_for_update()
+                    )
+                ).all()
+            }
+            if identifiers
+            else {}
+        )
+        rows: list[AIModel] = []
+        for item in discovered:
+            model = existing.get(item.provider_model_id)
+            if model is None:
+                model = AIModel(
+                    workspace_id=workspace_id,
+                    provider_id=provider_id,
+                    provider_model_id=item.provider_model_id,
+                    display_name=item.display_name,
+                    source="discovered",
+                    last_seen_at=now,
+                )
+                db.add(model)
+            else:
+                model.display_name = item.display_name
+                model.last_seen_at = now
+                model.updated_at = now
+            rows.append(model)
+        provider.last_health_status = "healthy"
+        provider.last_health_checked_at = now
+        provider.last_health_error_code = None
+        provider.updated_at = now
+        db.add(
+            self._discovery_audit(
+                provider, context, request_id, result="success", code=None, count=len(rows)
+            )
+        )
+        await db.flush()
+        return rows
 
     async def update(
         self,
@@ -261,4 +384,25 @@ class AIProviderService:
             target_type="ai_provider",
             target_id=provider.id,
             metadata={},
+        )
+
+    @staticmethod
+    def _discovery_audit(
+        provider: AIProvider,
+        context: AuthContext,
+        request_id: str,
+        *,
+        result: str,
+        code: str | None,
+        count: int,
+    ) -> AuditEvent:
+        return new_audit_event(
+            request_id=request_id,
+            event_type="ai.provider_models_discovered",
+            result=result,
+            actor_id=context.user.id,
+            workspace_id=provider.workspace_id,
+            target_type="ai_provider",
+            target_id=provider.id,
+            metadata={"model_count": count, "error_code": code},
         )

@@ -1,7 +1,10 @@
+import asyncio
 import base64
 from uuid import uuid4
 
+import httpx
 import pytest
+from logion_api.ai_gateway.adapter import OpenAICompatibleDiscoveryAdapter
 from logion_api.ai_gateway.crypto import AIProviderCredentialCipher, validate_provider_base_url
 from logion_api.ai_gateway.models import AIProvider
 from logion_api.ai_gateway.schemas import AIProviderResponse
@@ -101,8 +104,142 @@ def test_provider_response_schema_has_no_secret_fields() -> None:
         enabled=True,
         timeout_seconds=30,
         max_retries=2,
+        last_health_status="unknown",
+        last_health_checked_at=None,
+        last_health_error_code=None,
         version=1,
     )
     serialized = response.model_dump()
     assert "credential" not in serialized
     assert all("cipher" not in key and "nonce" not in key for key in serialized)
+
+
+@pytest.mark.asyncio
+async def test_discovery_pins_public_ip_and_preserves_host_and_sni() -> None:
+    async def resolver(hostname: str, port: int) -> list[str]:
+        assert (hostname, port) == ("api.example.com", 443)
+        return ["93.184.216.34"]
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "https://93.184.216.34/v1/models"
+        assert request.headers["host"] == "api.example.com"
+        assert request.extensions["sni_hostname"] == b"api.example.com"
+        assert request.headers["authorization"] == "Bearer provider-test-secret"
+        return httpx.Response(200, json={"data": [{"id": "model-a"}]})
+
+    adapter = OpenAICompatibleDiscoveryAdapter(
+        resolver=resolver,
+        transport_factory=lambda: httpx.MockTransport(handler),
+    )
+    rows = await adapter.discover(
+        base_url="https://api.example.com/v1",
+        credential="provider-test-secret",
+        timeout_seconds=30,
+    )
+    assert [row.provider_model_id for row in rows] == ["model-a"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("addresses", [["127.0.0.1"], ["93.184.216.34", "10.0.0.2"]])
+async def test_discovery_rejects_non_public_or_mixed_dns(addresses: list[str]) -> None:
+    async def resolver(_hostname: str, _port: int) -> list[str]:
+        return addresses
+
+    adapter = OpenAICompatibleDiscoveryAdapter(resolver=resolver)
+    with pytest.raises(APIError) as raised:
+        await adapter.discover(
+            base_url="https://api.example.com/v1",
+            credential="provider-test-secret",
+            timeout_seconds=30,
+        )
+    assert raised.value.code == "AI_PROVIDER_DNS_BLOCKED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (302, "AI_PROVIDER_REDIRECT_BLOCKED"),
+        (401, "AI_PROVIDER_AUTH_FAILED"),
+        (429, "AI_PROVIDER_RATE_LIMITED"),
+        (503, "AI_PROVIDER_UNAVAILABLE"),
+    ],
+)
+async def test_discovery_normalizes_provider_status(status: int, expected: str) -> None:
+    async def resolver(_hostname: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    adapter = OpenAICompatibleDiscoveryAdapter(
+        resolver=resolver,
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _request: httpx.Response(status, text="sensitive upstream details")
+        ),
+    )
+    with pytest.raises(APIError) as raised:
+        await adapter.discover(
+            base_url="https://api.example.com/v1",
+            credential="provider-test-secret",
+            timeout_seconds=30,
+        )
+    assert raised.value.code == expected
+    assert "sensitive" not in str(raised.value)
+    assert "provider-test-secret" not in str(raised.value)
+
+
+@pytest.mark.asyncio
+async def test_discovery_enforces_response_and_model_bounds() -> None:
+    async def resolver(_hostname: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    oversized = OpenAICompatibleDiscoveryAdapter(
+        resolver=resolver,
+        max_response_bytes=16,
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                content=b"{" + b"x" * 32 + b"}",
+                headers={"Content-Type": "application/json"},
+            )
+        ),
+    )
+    with pytest.raises(APIError) as raised:
+        await oversized.discover(
+            base_url="https://api.example.com/v1",
+            credential="provider-test-secret",
+            timeout_seconds=30,
+        )
+    assert raised.value.code == "AI_PROVIDER_RESPONSE_TOO_LARGE"
+
+    invalid_model = OpenAICompatibleDiscoveryAdapter(
+        resolver=resolver,
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _request: httpx.Response(200, json={"data": [{"id": "x" * 256}]})
+        ),
+    )
+    with pytest.raises(APIError) as invalid:
+        await invalid_model.discover(
+            base_url="https://api.example.com/v1",
+            credential="provider-test-secret",
+            timeout_seconds=30,
+        )
+    assert invalid.value.code == "AI_PROVIDER_RESPONSE_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_discovery_does_not_swallow_cancellation() -> None:
+    async def resolver(_hostname: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    async def cancelled(_request: httpx.Request) -> httpx.Response:
+        raise asyncio.CancelledError
+
+    adapter = OpenAICompatibleDiscoveryAdapter(
+        resolver=resolver,
+        transport_factory=lambda: httpx.MockTransport(cancelled),
+    )
+    with pytest.raises(asyncio.CancelledError):
+        await adapter.discover(
+            base_url="https://api.example.com/v1",
+            credential="provider-test-secret",
+            timeout_seconds=30,
+        )

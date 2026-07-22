@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ExceptionHandler
 
 from logion_api import __version__
+from logion_api.ai_gateway.routes import model_router as ai_model_router
 from logion_api.ai_gateway.routes import router as ai_router
 from logion_api.audit.routes import router as audit_router
 from logion_api.audit.routes import workspace_router as workspace_audit_router
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     application.include_router(research_router)
     application.include_router(collaboration_router)
     application.include_router(ai_router)
+    application.include_router(ai_model_router)
     return application
 
 
