@@ -22,6 +22,6 @@
     "json-schema-to-typescript": "15.0.4",
     "openapi-typescript": "7.13.0",
     "prettier": "3.8.2",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
