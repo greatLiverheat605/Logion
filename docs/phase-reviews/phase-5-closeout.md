@@ -28,6 +28,8 @@ portability paths do not depend on an AI Provider.
 
 The backup candidate passed [Nightly run 29942294757](https://github.com/greatLiverheat605/Logion/actions/runs/29942294757), including migration to head, encrypted bundle verification, restore into an empty database, attachment marker recovery and mandatory `sync_epoch` replacement.
 
+The integrated closeout candidate is [PR #132](https://github.com/greatLiverheat605/Logion/pull/132). Its latest code candidate passed [Fast](https://github.com/greatLiverheat605/Logion/actions/runs/29944066963/job/89004888310) and [PostgreSQL/Redis Integration](https://github.com/greatLiverheat605/Logion/actions/runs/29944066963/job/89004888179), including the new cross-private-Space and invitation-lifecycle negative tests.
+
 ## Baseline mapping
 
 | Baseline requirement                            | Evidence and boundary                                                                                                                                                                                                                                                                                                                     |
@@ -80,8 +82,8 @@ No SQL is assembled from user input; identifiers and sorting remain parameterize
 | Supply chain                 | Secret scan, dependency audit and locked dependency installation pass in CI.                                                            |
 | Recovery                     | Nightly encrypted backup → verify → empty-database restore → attachment check → new sync epoch passes.                                  |
 
-The final closeout PR and latest `main` check URLs are recorded in the pull request and Phase 5 issue
-before closure; failed or superseded runs are not completion evidence.
+The latest `main` check URL is recorded in the Phase 5 issue before closure; failed or superseded
+runs are not completion evidence.
 
 ## Data compatibility and rollback
 
