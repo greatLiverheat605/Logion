@@ -88,7 +88,8 @@ jobs:
           SQL
           docker compose build backup
           docker compose create backup
-          backup_container="$(docker compose ps -q backup)"
+          backup_container="$(docker compose ps --all -q backup)"
+          test -n "$backup_container"
           attachments_volume="$(docker inspect "$backup_container" --format '{{range .Mounts}}{{if eq .Destination "/attachments"}}{{.Name}}{{end}}{{end}}')"
           test -n "$attachments_volume"
           docker run --rm -v "$attachments_volume:/attachments" alpine:3.22 \
