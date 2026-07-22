@@ -45,6 +45,7 @@ class Permission(StrEnum):
     SHARED_PLAN_WRITE = "shared_plan.write"
     EVIDENCE_SUBMIT = "evidence.submit"
     REVIEW_WRITE = "review.write"
+    AI_CONFIGURE = "ai.configure"
     SHARE_CREATE = "share.create"
 
 
@@ -61,6 +62,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.SHARED_PLAN_WRITE,
             Permission.EVIDENCE_SUBMIT,
             Permission.REVIEW_WRITE,
+            Permission.AI_CONFIGURE,
             Permission.SHARE_CREATE,
         }
     ),

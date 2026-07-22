@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "roles": ["owner", "admin", "editor", "contributor", "reviewer", "viewer"],
   "legacy_role_aliases": {
     "member": "contributor"
@@ -15,6 +15,7 @@
     "shared_plan.write",
     "evidence.submit",
     "review.write",
+    "ai.configure",
     "share.create"
   ],
   "role_permissions": {
@@ -29,6 +30,7 @@
       "shared_plan.write",
       "evidence.submit",
       "review.write",
+      "ai.configure",
       "share.create"
     ],
     "admin": [
@@ -41,6 +43,7 @@
       "shared_plan.write",
       "evidence.submit",
       "review.write",
+      "ai.configure",
       "share.create"
     ],
     "editor": [

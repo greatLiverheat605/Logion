@@ -57,7 +57,9 @@ def test_named_permission_matrix_matches_privacy_baseline() -> None:
         Permission.WORKSPACE_MANAGE_SECURITY,
     )
     assert role_has_permission(WorkspaceRole.ADMIN, Permission.WORKSPACE_MANAGE_MEMBERS)
+    assert role_has_permission(WorkspaceRole.ADMIN, Permission.AI_CONFIGURE)
     assert role_has_permission(WorkspaceRole.EDITOR, Permission.SPACE_CREATE_SHARED)
+    assert not role_has_permission(WorkspaceRole.EDITOR, Permission.AI_CONFIGURE)
     assert not role_has_permission(
         WorkspaceRole.CONTRIBUTOR,
         Permission.SPACE_CREATE_SHARED,
@@ -118,8 +120,8 @@ def test_non_managers_cannot_change_memberships(actor_role: WorkspaceRole) -> No
     )
 
 
-def test_permission_contract_v2_matches_server_registry_exactly() -> None:
-    assert PERMISSION_CONTRACT["schema_version"] == 2
+def test_permission_contract_v3_matches_server_registry_exactly() -> None:
+    assert PERMISSION_CONTRACT["schema_version"] == 3
     assert PERMISSION_CONTRACT["roles"] == [role.value for role in WorkspaceRole]
     assert PERMISSION_CONTRACT["legacy_role_aliases"] == {"member": "contributor"}
     assert PERMISSION_CONTRACT["permissions"] == [permission.value for permission in Permission]
