@@ -119,9 +119,14 @@ async def test_preview_first_import_is_private_new_id_and_single_use() -> None:
             },
         )
         assert repeated.status_code == 409
-        notes = await owner.get(f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/notes")
-        imported = next(row for row in notes.json()["notes"] if row["markdown_body"] == marker)
-        assert imported["id"] != str(source_id)
+        search = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/search",
+            headers=csrf,
+            json={"query": marker, "object_types": ["note"], "limit": 10},
+        )
+        assert search.status_code == 200, search.text
+        imported = search.json()["results"][0]
+        assert imported["object_id"] != str(source_id)
 
     async with session_factory() as db:
         stored = await db.get(DataImportPreview, preview_id)
