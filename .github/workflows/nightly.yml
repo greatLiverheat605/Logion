@@ -11,6 +11,7 @@ permissions:
 env:
   NEXT_TELEMETRY_DISABLED: "1"
   POSTGRES_PASSWORD: phase0-nightly
+  LOGION_BACKUP_SECRET_SOURCE: /tmp/logion-backup-ci.key
 
 jobs:
   assurance:
@@ -18,6 +19,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+      - name: Create ephemeral backup encryption key
+        run: |
+          printf '%s' 'Y2ktYmFja3VwLWVuY3J5cHRpb24ta2V5LTMyYnl0ZSE' > "$LOGION_BACKUP_SECRET_SOURCE"
+          chmod 600 "$LOGION_BACKUP_SECRET_SOURCE"
       - uses: pnpm/action-setup@v5
         with:
           version: 11.9.0
@@ -71,10 +76,27 @@ jobs:
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: |
           docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
-          docker compose up --build -d backup
+          docker compose exec -T postgres psql -U logion -d logion -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO users (id,email,email_normalized,status,version,created_at,updated_at)
+          VALUES ('00000000-0000-7000-8000-000000000001','restore@example.invalid','restore@example.invalid','active',1,now(),now());
+          INSERT INTO workspaces (id,name,status,version,created_by,created_at,updated_at)
+          VALUES ('00000000-0000-7000-8000-000000000002','Restore fixture','active',1,'00000000-0000-7000-8000-000000000001',now(),now());
+          INSERT INTO workspace_memberships (id,workspace_id,user_id,role,status,version,joined_at,created_at,updated_at)
+          VALUES ('00000000-0000-7000-8000-000000000003','00000000-0000-7000-8000-000000000002','00000000-0000-7000-8000-000000000001','owner','active',1,now(),now(),now());
+          INSERT INTO workspace_sync_states (workspace_id,sync_epoch,last_sequence,min_retained_sequence,snapshot_schema_version,created_at,updated_at)
+          VALUES ('00000000-0000-7000-8000-000000000002','00000000-0000-7000-8000-000000000004',0,0,1,now(),now());
+          SQL
+          docker compose build backup
+          docker compose create backup
+          backup_container="$(docker compose ps -q backup)"
+          attachments_volume="$(docker inspect "$backup_container" --format '{{range .Mounts}}{{if eq .Destination "/attachments"}}{{.Name}}{{end}}{{end}}')"
+          test -n "$attachments_volume"
+          docker run --rm -v "$attachments_volume:/attachments" alpine:3.22 \
+            sh -c 'printf "%s" "phase5-attachment-marker" > /attachments/restore-marker.txt'
+          docker compose start backup
           latest=""
           for attempt in $(seq 1 12); do
-            latest="$(docker compose exec -T backup sh -c 'find /backups -type f -name "logion-*.dump" | sort | tail -n 1')"
+            latest="$(docker compose exec -T backup sh -c 'find /backups -type f -name "logion-*.backup" | sort | tail -n 1')"
             if [ -n "$latest" ]; then
               break
             fi
@@ -83,12 +105,8 @@ jobs:
           test -n "$latest"
           docker compose exec -T backup logion-verify-backup "$latest"
           docker compose exec -T postgres createdb -U logion logion_restore
-          docker compose exec -T backup pg_restore \
-            --exit-on-error \
-            --no-owner \
-            --no-privileges \
-            --dbname=logion_restore \
-            "$latest"
+          docker compose exec -T backup logion-restore-backup \
+            "$latest" logion_restore /tmp/logion-restore-attachments
           source_version="$(docker compose exec -T postgres \
             psql -U logion -d logion -Atc 'SELECT version_num FROM alembic_version')"
           restored_version="$(docker compose exec -T postgres \
@@ -99,6 +117,19 @@ jobs:
             echo "::error title=Restore migration mismatch::Source is $source_version; restored is $restored_version"
             exit 1
           fi
+          source_epoch="$(docker compose exec -T postgres psql -U logion -d logion -Atc \
+            "SELECT sync_epoch FROM workspace_sync_states WHERE workspace_id='00000000-0000-7000-8000-000000000002'")"
+          restored_epoch="$(docker compose exec -T postgres psql -U logion -d logion_restore -Atc \
+            "SELECT sync_epoch FROM workspace_sync_states WHERE workspace_id='00000000-0000-7000-8000-000000000002'")"
+          test -n "$source_epoch"
+          test -n "$restored_epoch"
+          test "$source_epoch" != "$restored_epoch"
+          restored_workspaces="$(docker compose exec -T postgres \
+            psql -U logion -d logion_restore -Atc 'SELECT count(*) FROM workspaces')"
+          test "$restored_workspaces" = "1"
+          restored_marker="$(docker compose exec -T backup \
+            sh -c 'cat /tmp/logion-restore-attachments/restore-marker.txt')"
+          test "$restored_marker" = "phase5-attachment-marker"
       - if: always()
         env:
           LOGION_SECRET_KEY: ${{ github.sha }}

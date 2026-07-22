@@ -337,9 +337,12 @@ export function DataSovereigntyCenter() {
         </ul>
       </section>
       <section className="settings-card">
-        <h2>迁移与删除</h2>
+        <h2>服务器备份与恢复</h2>
         <p>
-          导入预览、账户删除生命周期与工作区备份恢复将在本阶段后续工作包中启用。
+          管理员会把 PostgreSQL、附件和版本清单组成 AES-256-GCM
+          加密备份，并在隔离空环境定期验证恢复。恢复会更换同步
+          epoch，旧设备必须重新同步。
+          本页的数据导出用于个人迁移，不能代替服务器灾难恢复备份。
         </p>
       </section>
       <section className="settings-card">

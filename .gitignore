@@ -27,6 +27,7 @@ coverage/
 .data/
 attachments/
 backups/
+secrets/
 tmp/
 
 # Test and build artifacts
