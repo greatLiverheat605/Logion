@@ -24,6 +24,8 @@ from logion_api.errors import (
 from logion_api.exam.routes import router as exam_router
 from logion_api.execution.evidence_routes import router as evidence_router
 from logion_api.execution.routes import router as execution_router
+from logion_api.growth.routes import public_router as public_share_router
+from logion_api.growth.routes import router as growth_router
 from logion_api.health import router as health_router
 from logion_api.identity.passkey_routes import router as passkey_router
 from logion_api.identity.routes import router as identity_router
@@ -90,6 +92,8 @@ def create_app() -> FastAPI:
     application.include_router(ai_model_router)
     application.include_router(ai_routing_router)
     application.include_router(ai_run_router)
+    application.include_router(growth_router)
+    application.include_router(public_share_router)
     return application
 
 
