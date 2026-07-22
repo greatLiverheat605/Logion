@@ -456,6 +456,12 @@ describe("recoverable push/pull cycle", () => {
         | "study_project"
         | "inbox_item"
         | "deliverable"
+        | "paper_record"
+        | "research_claim"
+        | "research_question"
+        | "experiment_run"
+        | "metric_record"
+        | "research_feedback"
         | "audit_review"
         | "mastery"
         | "note"
@@ -681,6 +687,61 @@ describe("recoverable push/pull cycle", () => {
           completed_at: now,
         },
       ],
+      [
+        "paper_record",
+        {
+          space_id: ids.entity,
+          title: "secret paper",
+          citation_key: "secret citation",
+          source_url: null,
+        },
+      ],
+      [
+        "research_claim",
+        {
+          space_id: ids.entity,
+          paper_id: ids.user,
+          statement: "secret claim",
+          stance: "supports",
+        },
+      ],
+      [
+        "research_question",
+        {
+          space_id: ids.entity,
+          question: "secret question",
+          rationale: "secret rationale",
+        },
+      ],
+      [
+        "experiment_run",
+        {
+          space_id: ids.entity,
+          question_id: ids.user,
+          title: "secret run",
+          method_summary: "secret method",
+          completed_at: now,
+        },
+      ],
+      [
+        "metric_record",
+        {
+          space_id: ids.entity,
+          run_id: ids.user,
+          name: "secret metric",
+          value: 0.9,
+          unit: "score",
+        },
+      ],
+      [
+        "research_feedback",
+        {
+          space_id: ids.entity,
+          claim_id: ids.user,
+          description: "secret feedback",
+          requested_action: "secret action",
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -728,7 +789,10 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain("secret outcome");
     expect(durableRows).not.toContain("secret inbox note");
     expect(durableRows).not.toContain("secret evidence");
-    expect(await database.vaultRecords.count()).toBe(22);
+    expect(durableRows).not.toContain("secret claim");
+    expect(durableRows).not.toContain("secret method");
+    expect(durableRows).not.toContain("secret feedback");
+    expect(await database.vaultRecords.count()).toBe(28);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

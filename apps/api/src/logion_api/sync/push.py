@@ -63,6 +63,23 @@ from logion_api.memory.schemas import (
 from logion_api.memory.service import MemoryService
 from logion_api.planning.schemas import GoalPlanCreateRequest
 from logion_api.planning.service import PlanningService
+from logion_api.research.models import (
+    ExperimentRun,
+    MetricRecord,
+    PaperRecord,
+    ResearchClaim,
+    ResearchFeedback,
+    ResearchQuestion,
+)
+from logion_api.research.schemas import (
+    ClaimCreate,
+    FeedbackCreate,
+    MetricCreate,
+    PaperCreate,
+    QuestionCreate,
+    RunCreate,
+)
+from logion_api.research.service import ResearchService
 from logion_api.self_study.models import Deliverable, InboxItem, LearningTrack, StudyProject
 from logion_api.self_study.schemas import (
     DeliverableCreateRequest,
@@ -111,6 +128,7 @@ class SyncPushService:
         memory: MemoryService,
         exams: ExamService,
         self_study: SelfStudyService,
+        research: ResearchService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
@@ -121,6 +139,7 @@ class SyncPushService:
         self._memory = memory
         self._exams = exams
         self._self_study = self_study
+        self._research = research
 
     async def push(
         self,
@@ -308,6 +327,21 @@ class SyncPushService:
             and operation.operation_type == "create"
         ):
             return await self._create_self_study(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if (
+            operation.entity_type
+            in {
+                "paper_record",
+                "research_claim",
+                "research_question",
+                "experiment_run",
+                "metric_record",
+                "research_feedback",
+            }
+            and operation.operation_type == "create"
+        ):
+            return await self._create_research(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -2001,6 +2035,61 @@ class SyncPushService:
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
+    async def _create_research(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        definitions: dict[str, tuple[Any, Any]] = {
+            "paper_record": (PaperRecord, PaperCreate),
+            "research_claim": (ResearchClaim, ClaimCreate),
+            "research_question": (ResearchQuestion, QuestionCreate),
+            "experiment_run": (ExperimentRun, RunCreate),
+            "metric_record": (MetricRecord, MetricCreate),
+            "research_feedback": (ResearchFeedback, FeedbackCreate),
+        }
+        model, schema = definitions[operation.entity_type]
+        try:
+            payload = schema.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(model, operation.entity_id)
+            if current is not None and (
+                current.workspace_id != request.workspace_id or current.user_id != context.user.id
+            ):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                item = await self._research.create(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    model,
+                    payload.model_dump(mode="python"),
+                    request_id,
+                    operation.entity_type,
+                )
+                projection = research_payload(item)
+                return await self._append_entity(
+                    db, request.workspace_id, identity, item.version, projection
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _causal_base_version(
         self, db: AsyncSession, request: PushRequest, operation: object
     ) -> int | None:
@@ -2148,6 +2237,12 @@ class SyncPushService:
             | StudyProject
             | InboxItem
             | Deliverable
+            | PaperRecord
+            | ResearchClaim
+            | ResearchQuestion
+            | ExperimentRun
+            | MetricRecord
+            | ResearchFeedback
             | None
         ) = None
         if operation.entity_type == "task":
@@ -2198,6 +2293,18 @@ class SyncPushService:
             remote = await db.get(InboxItem, operation.entity_id)
         elif operation.entity_type == "deliverable":
             remote = await db.get(Deliverable, operation.entity_id)
+        elif operation.entity_type == "paper_record":
+            remote = await db.get(PaperRecord, operation.entity_id)
+        elif operation.entity_type == "research_claim":
+            remote = await db.get(ResearchClaim, operation.entity_id)
+        elif operation.entity_type == "research_question":
+            remote = await db.get(ResearchQuestion, operation.entity_id)
+        elif operation.entity_type == "experiment_run":
+            remote = await db.get(ExperimentRun, operation.entity_id)
+        elif operation.entity_type == "metric_record":
+            remote = await db.get(MetricRecord, operation.entity_id)
+        elif operation.entity_type == "research_feedback":
+            remote = await db.get(ResearchFeedback, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -2240,6 +2347,18 @@ class SyncPushService:
             payload = score_record_payload(remote)
         elif isinstance(remote, (LearningTrack, StudyProject, InboxItem, Deliverable)):
             payload = self_study_payload(remote)
+        elif isinstance(
+            remote,
+            (
+                PaperRecord,
+                ResearchClaim,
+                ResearchQuestion,
+                ExperimentRun,
+                MetricRecord,
+                ResearchFeedback,
+            ),
+        ):
+            payload = research_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -2531,4 +2650,53 @@ def self_study_payload(
         "title": item.title,
         "evidence_summary": item.evidence_summary,
         "completed_at": item.completed_at.isoformat(),
+    }
+
+
+def research_payload(
+    item: PaperRecord
+    | ResearchClaim
+    | ResearchQuestion
+    | ExperimentRun
+    | MetricRecord
+    | ResearchFeedback,
+) -> dict[str, object]:
+    common: dict[str, object] = {"space_id": str(item.space_id)}
+    if isinstance(item, PaperRecord):
+        return {
+            **common,
+            "title": item.title,
+            "citation_key": item.citation_key,
+            "source_url": item.source_url,
+        }
+    if isinstance(item, ResearchClaim):
+        return {
+            **common,
+            "paper_id": str(item.paper_id),
+            "statement": item.statement,
+            "stance": item.stance,
+        }
+    if isinstance(item, ResearchQuestion):
+        return {**common, "question": item.question, "rationale": item.rationale}
+    if isinstance(item, ExperimentRun):
+        return {
+            **common,
+            "question_id": str(item.question_id),
+            "title": item.title,
+            "method_summary": item.method_summary,
+            "completed_at": item.completed_at.isoformat(),
+        }
+    if isinstance(item, MetricRecord):
+        return {
+            **common,
+            "run_id": str(item.run_id),
+            "name": item.name,
+            "value": item.value,
+            "unit": item.unit,
+        }
+    return {
+        **common,
+        "claim_id": str(item.claim_id),
+        "description": item.description,
+        "requested_action": item.requested_action,
     }

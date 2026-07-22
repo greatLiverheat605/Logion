@@ -20,6 +20,14 @@ from logion_api.memory.models import (
     TopicDependency,
 )
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
+from logion_api.research.models import (
+    ExperimentRun,
+    MetricRecord,
+    PaperRecord,
+    ResearchClaim,
+    ResearchFeedback,
+    ResearchQuestion,
+)
 from logion_api.self_study.models import Deliverable, InboxItem, LearningTrack, StudyProject
 from logion_api.sync.models import SyncChange, WorkspaceSyncState
 from logion_api.sync.push import (
@@ -34,6 +42,7 @@ from logion_api.sync.push import (
     note_payload,
     quiz_attempt_payload,
     quiz_item_payload,
+    research_payload,
     resource_payload,
     review_finding_payload,
     review_schedule_payload,
@@ -228,6 +237,22 @@ class SyncReadService:
                 user_id,
                 {row.entity_id for row in page if row.entity_type == entity_type},
             )
+        visible_research: dict[str, set[UUID]] = {}
+        for entity_type, research_model in (
+            ("paper_record", PaperRecord),
+            ("research_claim", ResearchClaim),
+            ("research_question", ResearchQuestion),
+            ("experiment_run", ExperimentRun),
+            ("metric_record", MetricRecord),
+            ("research_feedback", ResearchFeedback),
+        ):
+            visible_research[entity_type] = await self._visible_personal_memory_ids(
+                db,
+                cast(Any, research_model),
+                state.workspace_id,
+                user_id,
+                {row.entity_id for row in page if row.entity_type == entity_type},
+            )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -271,6 +296,10 @@ class SyncReadService:
             or (
                 row.entity_type in visible_self_study
                 and row.entity_id in visible_self_study[row.entity_type]
+            )
+            or (
+                row.entity_type in visible_research
+                and row.entity_id in visible_research[row.entity_type]
             )
         ]
         return PullResponse(
@@ -325,6 +354,20 @@ class SyncReadService:
             *(await self._personal_memory_records(db, StudyProject, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, InboxItem, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, Deliverable, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, PaperRecord, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, ResearchClaim, state.workspace_id, user_id)),
+            *(
+                await self._personal_memory_records(
+                    db, ResearchQuestion, state.workspace_id, user_id
+                )
+            ),
+            *(await self._personal_memory_records(db, ExperimentRun, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, MetricRecord, state.workspace_id, user_id)),
+            *(
+                await self._personal_memory_records(
+                    db, ResearchFeedback, state.workspace_id, user_id
+                )
+            ),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -871,6 +914,12 @@ class SyncReadService:
             | type[StudyProject]
             | type[InboxItem]
             | type[Deliverable]
+            | type[PaperRecord]
+            | type[ResearchClaim]
+            | type[ResearchQuestion]
+            | type[ExperimentRun]
+            | type[MetricRecord]
+            | type[ResearchFeedback]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -957,6 +1006,12 @@ class SyncReadService:
             | type[StudyProject]
             | type[InboxItem]
             | type[Deliverable]
+            | type[PaperRecord]
+            | type[ResearchClaim]
+            | type[ResearchQuestion]
+            | type[ExperimentRun]
+            | type[MetricRecord]
+            | type[ResearchFeedback]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -988,6 +1043,12 @@ class SyncReadService:
                 | StudyProject
                 | InboxItem
                 | Deliverable
+                | PaperRecord
+                | ResearchClaim
+                | ResearchQuestion
+                | ExperimentRun
+                | MetricRecord
+                | ResearchFeedback
             ],
             list((await db.scalars(statement)).all()),
         )
@@ -1023,7 +1084,7 @@ class SyncReadService:
             elif isinstance(item, ScoreRecord):
                 entity_type = "score_record"
                 payload = score_record_payload(item)
-            else:
+            elif isinstance(item, (LearningTrack, StudyProject, InboxItem, Deliverable)):
                 entity_type = {
                     LearningTrack: "learning_track",
                     StudyProject: "study_project",
@@ -1031,6 +1092,16 @@ class SyncReadService:
                     Deliverable: "deliverable",
                 }[type(item)]
                 payload = self_study_payload(item)
+            else:
+                entity_type = {
+                    PaperRecord: "paper_record",
+                    ResearchClaim: "research_claim",
+                    ResearchQuestion: "research_question",
+                    ExperimentRun: "experiment_run",
+                    MetricRecord: "metric_record",
+                    ResearchFeedback: "research_feedback",
+                }[type(item)]
+                payload = research_payload(item)
             records.append(
                 EntityRecord(
                     entity_type=entity_type,
