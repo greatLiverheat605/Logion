@@ -14,6 +14,8 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Provider = components["schemas"]["AIProviderResponse"];
 type Model = components["schemas"]["AIModelResponse"];
+type Route = components["schemas"]["AITaskRouteResponse"];
+type Budget = components["schemas"]["AIWorkspaceBudgetResponse"];
 
 function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
@@ -36,6 +38,8 @@ export function ProviderCenter() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [models, setModels] = useState<Model[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [budget, setBudget] = useState<Budget | null>(null);
   const [providerWorkspaceId, setProviderWorkspaceId] = useState("");
   const [modelsWorkspaceId, setModelsWorkspaceId] = useState("");
   const [online, setOnline] = useState(true);
@@ -63,14 +67,21 @@ export function ProviderCenter() {
 
   const loadProviderData = useCallback(async (selected: string) => {
     try {
-      const [providerResult, modelResult] = await Promise.all([
-        browserApiClient.request<{ providers: Provider[] }>(
-          `/api/v1/workspaces/${selected}/ai/providers`,
-        ),
-        browserApiClient.request<{ models: Model[] }>(
-          `/api/v1/workspaces/${selected}/ai/models`,
-        ),
-      ]);
+      const [providerResult, modelResult, routeResult, budgetResult] =
+        await Promise.all([
+          browserApiClient.request<{ providers: Provider[] }>(
+            `/api/v1/workspaces/${selected}/ai/providers`,
+          ),
+          browserApiClient.request<{ models: Model[] }>(
+            `/api/v1/workspaces/${selected}/ai/models`,
+          ),
+          browserApiClient.request<{ routes: Route[] }>(
+            `/api/v1/workspaces/${selected}/ai/routes`,
+          ),
+          browserApiClient.request<Budget>(
+            `/api/v1/workspaces/${selected}/ai/budget`,
+          ),
+        ]);
       const nextProviders = Array.isArray(providerResult.providers)
         ? providerResult.providers
         : [];
@@ -79,6 +90,8 @@ export function ProviderCenter() {
         : [];
       setProviders(nextProviders);
       setModels(nextModels);
+      setRoutes(Array.isArray(routeResult.routes) ? routeResult.routes : []);
+      setBudget(budgetResult);
       setProviderWorkspaceId(selected);
       setModelsWorkspaceId(selected);
       setStatus(
@@ -89,6 +102,8 @@ export function ProviderCenter() {
     } catch (error) {
       setProviders([]);
       setModels([]);
+      setRoutes([]);
+      setBudget(null);
       setProviderWorkspaceId(selected);
       setModelsWorkspaceId(selected);
       setStatus(errorText(error));
@@ -235,6 +250,120 @@ export function ProviderCenter() {
     }
   }
 
+  async function updateBudget(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId || !canConfigure || !online) return;
+    const data = new FormData(event.currentTarget);
+    const tokenValue = String(data.get("monthly_token_budget") ?? "").trim();
+    const costValue = String(
+      data.get("monthly_cost_budget_minor") ?? "",
+    ).trim();
+    try {
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/ai/budget`,
+        {
+          method: "PUT",
+          csrf: true,
+          body: JSON.stringify({
+            expected_version: budget?.version ? budget.version : null,
+            monthly_token_budget: tokenValue ? Number(tokenValue) : null,
+            monthly_cost_budget_minor: costValue ? Number(costValue) : null,
+            currency: String(data.get("currency") ?? "USD"),
+          }),
+        },
+      );
+      await loadProviderData(workspaceId);
+      setStatus("AI 月度预算已更新。正式运行会在服务端再次校验余额。");
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
+  async function updateModel(event: FormEvent<HTMLFormElement>, model: Model) {
+    event.preventDefault();
+    if (!workspaceId || !canConfigure || !online) return;
+    const data = new FormData(event.currentTarget);
+    try {
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/ai/models/${model.id}`,
+        {
+          method: "PUT",
+          csrf: true,
+          body: JSON.stringify({
+            expected_version: model.version,
+            display_name: String(data.get("display_name") ?? ""),
+            enabled: data.get("enabled") === "on",
+            supports_json: data.get("supports_json") === "on",
+            supports_stream: data.get("supports_stream") === "on",
+            context_window: Number(data.get("context_window")) || null,
+            pricing_currency: String(data.get("pricing_currency") ?? "USD"),
+            input_cost_per_million_minor: Number(
+              data.get("input_cost_per_million_minor") ?? 0,
+            ),
+            output_cost_per_million_minor: Number(
+              data.get("output_cost_per_million_minor") ?? 0,
+            ),
+          }),
+        },
+      );
+      await loadProviderData(workspaceId);
+      setStatus(`${model.display_name} 的能力与价格覆盖已更新。`);
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
+  async function createRoute(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId || !canConfigure || !online) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/ai/routes`,
+        {
+          method: "POST",
+          csrf: true,
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            name: String(data.get("name") ?? ""),
+            task_type: String(data.get("task_type") ?? ""),
+            requires_json: data.get("requires_json") === "on",
+            requires_stream: data.get("requires_stream") === "on",
+            max_input_tokens: Number(data.get("max_input_tokens") ?? 1),
+            max_output_tokens: Number(data.get("max_output_tokens") ?? 1),
+            enabled: true,
+            model_ids: data.getAll("model_ids").map(String),
+          }),
+        },
+      );
+      form.reset();
+      await loadProviderData(workspaceId);
+      setStatus("AI 任务路由已创建；模型顺序决定主选与降级顺序。");
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
+  async function deleteRoute(route: Route) {
+    if (!workspaceId || !canConfigure || !online) return;
+    if (!window.confirm(`删除路由“${route.name}”？`)) return;
+    try {
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/ai/routes/${route.id}`,
+        {
+          method: "DELETE",
+          csrf: true,
+          body: JSON.stringify({ expected_version: route.version }),
+        },
+      );
+      await loadProviderData(workspaceId);
+      setStatus("AI 任务路由已删除。");
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
   return (
     <main id="main-content" className="settings-page">
       <header>
@@ -374,7 +503,7 @@ export function ProviderCenter() {
             {visibleModels.map((model) => {
               const provider = visibleProviderById.get(model.provider_id);
               return (
-                <li key={model.id}>
+                <li key={`${model.id}:${model.version}`}>
                   <span>
                     <strong>{model.display_name}</strong>
                     <small>
@@ -382,12 +511,228 @@ export function ProviderCenter() {
                       最后发现 {new Date(model.last_seen_at).toLocaleString()}
                     </small>
                   </span>
+                  <details>
+                    <summary>能力与价格覆盖</summary>
+                    <form
+                      className="planning-form"
+                      onSubmit={(event) => void updateModel(event, model)}
+                    >
+                      <label>
+                        显示名称
+                        <input
+                          name="display_name"
+                          defaultValue={model.display_name}
+                          maxLength={255}
+                          required
+                        />
+                      </label>
+                      <label>
+                        <input
+                          name="enabled"
+                          type="checkbox"
+                          defaultChecked={model.enabled}
+                        />
+                        启用
+                      </label>
+                      <label>
+                        <input
+                          name="supports_json"
+                          type="checkbox"
+                          defaultChecked={model.supports_json}
+                        />
+                        支持结构化 JSON
+                      </label>
+                      <label>
+                        <input
+                          name="supports_stream"
+                          type="checkbox"
+                          defaultChecked={model.supports_stream}
+                        />
+                        支持流式输出
+                      </label>
+                      <label>
+                        上下文窗口
+                        <input
+                          name="context_window"
+                          type="number"
+                          min={1}
+                          max={10_000_000}
+                          defaultValue={model.context_window ?? ""}
+                        />
+                      </label>
+                      <label>
+                        计价币种
+                        <input
+                          name="pricing_currency"
+                          pattern="[A-Za-z]{3}"
+                          defaultValue={model.pricing_currency}
+                          required
+                        />
+                      </label>
+                      <label>
+                        每百万输入 Token（最小货币单位）
+                        <input
+                          name="input_cost_per_million_minor"
+                          type="number"
+                          min={0}
+                          defaultValue={model.input_cost_per_million_minor}
+                          required
+                        />
+                      </label>
+                      <label>
+                        每百万输出 Token（最小货币单位）
+                        <input
+                          name="output_cost_per_million_minor"
+                          type="number"
+                          min={0}
+                          defaultValue={model.output_cost_per_million_minor}
+                          required
+                        />
+                      </label>
+                      <button disabled={!online || !canConfigure}>
+                        保存模型覆盖
+                      </button>
+                    </form>
+                  </details>
                 </li>
               );
             })}
           </ul>
         ) : (
           <p>尚未发现模型。模型列表不会在离线状态下刷新。</p>
+        )}
+      </section>
+      <section className="settings-card">
+        <h2>月度预算</h2>
+        <p>
+          留空表示不设置该项上限。金额使用币种的最小单位，例如 USD 使用美分。
+        </p>
+        <form
+          key={budget?.version ?? 0}
+          className="planning-form"
+          onSubmit={updateBudget}
+        >
+          <label>
+            Token 上限
+            <input
+              name="monthly_token_budget"
+              type="number"
+              min={1}
+              defaultValue={budget?.monthly_token_budget ?? ""}
+            />
+          </label>
+          <label>
+            成本上限（最小货币单位）
+            <input
+              name="monthly_cost_budget_minor"
+              type="number"
+              min={1}
+              defaultValue={budget?.monthly_cost_budget_minor ?? ""}
+            />
+          </label>
+          <label>
+            币种
+            <input
+              name="currency"
+              pattern="[A-Za-z]{3}"
+              defaultValue={budget?.currency ?? "USD"}
+              required
+            />
+          </label>
+          <button disabled={!online || !canConfigure || !workspaceId}>
+            保存预算
+          </button>
+        </form>
+      </section>
+      <section className="settings-card">
+        <h2>任务路由</h2>
+        <p>
+          任务类型由你定义；按列表顺序使用已勾选模型，首个为主选，其余为降级候选。
+        </p>
+        <form className="planning-form" onSubmit={createRoute}>
+          <label>
+            路由名称
+            <input name="name" maxLength={120} required />
+          </label>
+          <label>
+            任务类型
+            <input
+              name="task_type"
+              pattern="[a-z][a-z0-9_.-]*"
+              placeholder="user.my-task"
+              maxLength={64}
+              required
+            />
+          </label>
+          <label>
+            最大输入 Token
+            <input
+              name="max_input_tokens"
+              type="number"
+              min={1}
+              defaultValue={4000}
+              required
+            />
+          </label>
+          <label>
+            最大输出 Token
+            <input
+              name="max_output_tokens"
+              type="number"
+              min={1}
+              defaultValue={1000}
+              required
+            />
+          </label>
+          <label>
+            <input name="requires_json" type="checkbox" />
+            要求结构化 JSON
+          </label>
+          <label>
+            <input name="requires_stream" type="checkbox" />
+            要求流式输出
+          </label>
+          <fieldset>
+            <legend>模型顺序</legend>
+            {visibleModels.map((model) => (
+              <label key={model.id}>
+                <input name="model_ids" type="checkbox" value={model.id} />
+                {model.display_name}
+              </label>
+            ))}
+          </fieldset>
+          <button
+            disabled={
+              !online || !canConfigure || !workspaceId || !visibleModels.length
+            }
+          >
+            创建路由
+          </button>
+        </form>
+        {routes.length ? (
+          <ul className="item-list">
+            {routes.map((route) => (
+              <li key={route.id}>
+                <span>
+                  <strong>{route.name}</strong>
+                  <small>
+                    {route.task_type} · {route.model_ids.length} 个主备模型 ·
+                    输入 {route.max_input_tokens} / 输出{" "}
+                    {route.max_output_tokens}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  disabled={!online || !canConfigure}
+                  onClick={() => void deleteRoute(route)}
+                >
+                  删除路由
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>尚未配置任务路由。</p>
         )}
       </section>
     </main>

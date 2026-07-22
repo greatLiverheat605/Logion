@@ -68,6 +68,9 @@ class AIModelResponse(Strict):
     supports_json: bool
     supports_stream: bool
     context_window: int | None
+    pricing_currency: str = "USD"
+    input_cost_per_million_minor: int = 0
+    output_cost_per_million_minor: int = 0
     version: int
     last_seen_at: datetime
 

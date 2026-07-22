@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from logion_api.ai_gateway.adapter import OpenAICompatibleDiscoveryAdapter
+from logion_api.ai_gateway.routing_service import AIRoutingService
 from logion_api.ai_gateway.service import AIProviderService
 from logion_api.identity.dependencies import SettingsDependency
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
@@ -27,3 +28,10 @@ def get_ai_discovery_adapter(settings: SettingsDependency) -> OpenAICompatibleDi
 AIProviderDiscoveryAdapterDependency = Annotated[
     OpenAICompatibleDiscoveryAdapter, Depends(get_ai_discovery_adapter)
 ]
+
+
+def get_ai_routing_service(workspaces: WorkspaceServiceDependency) -> AIRoutingService:
+    return AIRoutingService(workspaces)
+
+
+AIRoutingServiceDependency = Annotated[AIRoutingService, Depends(get_ai_routing_service)]
