@@ -462,6 +462,10 @@ describe("recoverable push/pull cycle", () => {
         | "experiment_run"
         | "metric_record"
         | "research_feedback"
+        | "rubric"
+        | "group_review"
+        | "group_feedback"
+        | "report_snapshot"
         | "audit_review"
         | "mastery"
         | "note"
@@ -742,6 +746,41 @@ describe("recoverable push/pull cycle", () => {
           requested_action: "secret action",
         },
       ],
+      [
+        "rubric",
+        {
+          space_id: ids.entity,
+          title: "secret rubric",
+          criteria: "secret criteria",
+        },
+      ],
+      [
+        "group_review",
+        {
+          space_id: ids.entity,
+          rubric_id: ids.user,
+          subject_title: "secret subject",
+          submission_summary: "secret submission",
+        },
+      ],
+      [
+        "group_feedback",
+        {
+          space_id: ids.entity,
+          review_id: ids.user,
+          feedback: "secret group feedback",
+          recommended_action: "secret group action",
+        },
+      ],
+      [
+        "report_snapshot",
+        {
+          space_id: ids.entity,
+          review_id: ids.user,
+          summary: "secret report summary",
+          published_at: now,
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -792,7 +831,11 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain("secret claim");
     expect(durableRows).not.toContain("secret method");
     expect(durableRows).not.toContain("secret feedback");
-    expect(await database.vaultRecords.count()).toBe(28);
+    expect(durableRows).not.toContain("secret criteria");
+    expect(durableRows).not.toContain("secret submission");
+    expect(durableRows).not.toContain("secret group feedback");
+    expect(durableRows).not.toContain("secret report summary");
+    expect(await database.vaultRecords.count()).toBe(32);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

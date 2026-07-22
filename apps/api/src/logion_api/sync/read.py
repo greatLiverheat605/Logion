@@ -4,6 +4,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.collaboration.models import GroupFeedback, ReportSnapshot, ReviewRequest, Rubric
 from logion_api.content.models import Note, Resource
 from logion_api.exam.models import Exam, MockExam, ScoreRecord, Subject, SyllabusNode
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
@@ -33,6 +34,7 @@ from logion_api.sync.models import SyncChange, WorkspaceSyncState
 from logion_api.sync.push import (
     audit_review_payload,
     canonical_hash,
+    collaboration_payload,
     error_pattern_payload,
     evidence_payload,
     exam_payload,
@@ -253,6 +255,19 @@ class SyncReadService:
                 user_id,
                 {row.entity_id for row in page if row.entity_type == entity_type},
             )
+        visible_collaboration: dict[str, set[UUID]] = {}
+        for entity_type, shared_model in (
+            ("rubric", Rubric),
+            ("group_review", ReviewRequest),
+            ("group_feedback", GroupFeedback),
+            ("report_snapshot", ReportSnapshot),
+        ):
+            visible_collaboration[entity_type] = await self._visible_shared_ids(
+                db,
+                cast(Any, shared_model),
+                state.workspace_id,
+                {row.entity_id for row in page if row.entity_type == entity_type},
+            )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -300,6 +315,10 @@ class SyncReadService:
             or (
                 row.entity_type in visible_research
                 and row.entity_id in visible_research[row.entity_type]
+            )
+            or (
+                row.entity_type in visible_collaboration
+                and row.entity_id in visible_collaboration[row.entity_type]
             )
         ]
         return PullResponse(
@@ -368,6 +387,10 @@ class SyncReadService:
                     db, ResearchFeedback, state.workspace_id, user_id
                 )
             ),
+            *(await self._shared_collaboration_records(db, Rubric, state.workspace_id)),
+            *(await self._shared_collaboration_records(db, ReviewRequest, state.workspace_id)),
+            *(await self._shared_collaboration_records(db, GroupFeedback, state.workspace_id)),
+            *(await self._shared_collaboration_records(db, ReportSnapshot, state.workspace_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -876,7 +899,13 @@ class SyncReadService:
     async def _visible_memory_ids(
         self,
         db: AsyncSession,
-        model: type[Topic] | type[TopicDependency] | type[QuizItem],
+        model: type[Topic]
+        | type[TopicDependency]
+        | type[QuizItem]
+        | type[Rubric]
+        | type[ReviewRequest]
+        | type[GroupFeedback]
+        | type[ReportSnapshot],
         workspace_id: UUID,
         user_id: UUID,
         entity_ids: set[UUID],
@@ -939,6 +968,72 @@ class SyncReadService:
             )
         )
         return set((await db.scalars(statement)).all())
+
+    async def _visible_shared_ids(
+        self,
+        db: AsyncSession,
+        model: type[Rubric] | type[ReviewRequest] | type[GroupFeedback] | type[ReportSnapshot],
+        workspace_id: UUID,
+        entity_ids: set[UUID],
+    ) -> set[UUID]:
+        if not entity_ids:
+            return set()
+        statement = (
+            select(model.id)
+            .join(Space, Space.id == model.space_id)
+            .where(
+                model.workspace_id == workspace_id,
+                model.id.in_(entity_ids),
+                model.deleted_at.is_(None),
+                Space.visibility == "shared",
+            )
+        )
+        return set((await db.scalars(statement)).all())
+
+    async def _shared_collaboration_records(
+        self,
+        db: AsyncSession,
+        model: type[Rubric] | type[ReviewRequest] | type[GroupFeedback] | type[ReportSnapshot],
+        workspace_id: UUID,
+    ) -> list[EntityRecord]:
+        items = cast(
+            list[Rubric | ReviewRequest | GroupFeedback | ReportSnapshot],
+            list(
+                (
+                    await db.scalars(
+                        select(model)
+                        .join(Space, Space.id == model.space_id)
+                        .where(
+                            model.workspace_id == workspace_id,
+                            model.deleted_at.is_(None),
+                            Space.visibility == "shared",
+                        )
+                        .order_by(model.id)
+                    )
+                ).all()
+            ),
+        )
+        entity_types = {
+            Rubric: "rubric",
+            ReviewRequest: "group_review",
+            GroupFeedback: "group_feedback",
+            ReportSnapshot: "report_snapshot",
+        }
+        return [
+            EntityRecord(
+                entity_type=entity_types[type(item)],
+                entity_id=item.id,
+                version=item.version,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+                deleted_at=item.deleted_at,
+                created_by=item.created_by,
+                updated_by=item.updated_by,
+                payload=collaboration_payload(item),
+                payload_hash=canonical_hash(collaboration_payload(item)),
+            )
+            for item in items
+        ]
 
     async def _memory_records(
         self,

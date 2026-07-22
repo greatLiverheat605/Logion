@@ -8,6 +8,7 @@ from starlette.types import ExceptionHandler
 from logion_api import __version__
 from logion_api.audit.routes import router as audit_router
 from logion_api.audit.routes import workspace_router as workspace_audit_router
+from logion_api.collaboration.routes import router as collaboration_router
 from logion_api.config import get_settings
 from logion_api.content.routes import router as content_router
 from logion_api.errors import (
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     application.include_router(exam_router)
     application.include_router(self_study_router)
     application.include_router(research_router)
+    application.include_router(collaboration_router)
     return application
 
 

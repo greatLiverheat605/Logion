@@ -29,6 +29,9 @@ export default function AuthenticatedShellPage() {
         <Link className="text-link" href="/app/research">
           研究证据
         </Link>
+        <Link className="text-link" href="/app/collaboration">
+          导师与小组
+        </Link>
         <Link className="text-link" href="/app/workspaces">
           管理工作区
         </Link>
