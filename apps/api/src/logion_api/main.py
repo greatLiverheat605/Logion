@@ -27,6 +27,7 @@ from logion_api.identity.verification_routes import router as verification_route
 from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
 from logion_api.planning.routes import router as planning_router
+from logion_api.self_study.routes import router as self_study_router
 from logion_api.sync.routes import router as sync_router
 from logion_api.workspaces.invitation_routes import (
     invitation_router,
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     application.include_router(evidence_router)
     application.include_router(memory_router)
     application.include_router(exam_router)
+    application.include_router(self_study_router)
     return application
 
 
