@@ -64,6 +64,9 @@ def model_response(model: AIModel) -> AIModelResponse:
         supports_json=model.supports_json,
         supports_stream=model.supports_stream,
         context_window=model.context_window,
+        pricing_currency=model.pricing_currency,
+        input_cost_per_million_minor=model.input_cost_per_million_minor,
+        output_cost_per_million_minor=model.output_cost_per_million_minor,
         version=model.version,
         last_seen_at=model.last_seen_at,
     )

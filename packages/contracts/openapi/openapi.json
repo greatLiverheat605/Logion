@@ -1,6 +1,89 @@
 {
   "components": {
     "schemas": {
+      "AIModelCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "context_window": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
+          },
+          "display_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input_cost_per_million_minor": {
+            "default": 0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Input Cost Per Million Minor",
+            "type": "integer"
+          },
+          "output_cost_per_million_minor": {
+            "default": 0,
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Output Cost Per Million Minor",
+            "type": "integer"
+          },
+          "pricing_currency": {
+            "default": "USD",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Pricing Currency",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "provider_model_id": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Provider Model Id",
+            "type": "string"
+          },
+          "supports_json": {
+            "default": false,
+            "title": "Supports Json",
+            "type": "boolean"
+          },
+          "supports_stream": {
+            "default": false,
+            "title": "Supports Stream",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "provider_model_id",
+          "display_name"
+        ],
+        "title": "AIModelCreate",
+        "type": "object"
+      },
       "AIModelDiscoveryResponse": {
         "additionalProperties": false,
         "properties": {
@@ -79,9 +162,24 @@
             "title": "Id",
             "type": "string"
           },
+          "input_cost_per_million_minor": {
+            "default": 0,
+            "title": "Input Cost Per Million Minor",
+            "type": "integer"
+          },
           "last_seen_at": {
             "format": "date-time",
             "title": "Last Seen At",
+            "type": "string"
+          },
+          "output_cost_per_million_minor": {
+            "default": 0,
+            "title": "Output Cost Per Million Minor",
+            "type": "integer"
+          },
+          "pricing_currency": {
+            "default": "USD",
+            "title": "Pricing Currency",
             "type": "string"
           },
           "provider_id": {
@@ -134,6 +232,76 @@
           "last_seen_at"
         ],
         "title": "AIModelResponse",
+        "type": "object"
+      },
+      "AIModelUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "context_window": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
+          },
+          "display_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "input_cost_per_million_minor": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Input Cost Per Million Minor",
+            "type": "integer"
+          },
+          "output_cost_per_million_minor": {
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Output Cost Per Million Minor",
+            "type": "integer"
+          },
+          "pricing_currency": {
+            "pattern": "^[A-Z]{3}$",
+            "title": "Pricing Currency",
+            "type": "string"
+          },
+          "supports_json": {
+            "title": "Supports Json",
+            "type": "boolean"
+          },
+          "supports_stream": {
+            "title": "Supports Stream",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expected_version",
+          "display_name",
+          "enabled",
+          "supports_json",
+          "supports_stream",
+          "pricing_currency",
+          "input_cost_per_million_minor",
+          "output_cost_per_million_minor"
+        ],
+        "title": "AIModelUpdate",
         "type": "object"
       },
       "AIProviderCreate": {
@@ -387,6 +555,486 @@
           "max_retries"
         ],
         "title": "AIProviderUpdate",
+        "type": "object"
+      },
+      "AIRouteCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "estimated_cost_minor": {
+            "title": "Estimated Cost Minor",
+            "type": "integer"
+          },
+          "estimated_tokens": {
+            "title": "Estimated Tokens",
+            "type": "integer"
+          },
+          "model_id": {
+            "format": "uuid",
+            "title": "Model Id",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "selection": {
+            "enum": [
+              "primary",
+              "fallback"
+            ],
+            "title": "Selection",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id",
+          "provider_id",
+          "position",
+          "estimated_tokens",
+          "estimated_cost_minor",
+          "currency",
+          "selection"
+        ],
+        "title": "AIRouteCandidate",
+        "type": "object"
+      },
+      "AIRouteResolveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "estimated_input_tokens": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Estimated Input Tokens",
+            "type": "integer"
+          },
+          "requested_output_tokens": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Requested Output Tokens",
+            "type": "integer"
+          },
+          "task_type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_type",
+          "estimated_input_tokens",
+          "requested_output_tokens"
+        ],
+        "title": "AIRouteResolveRequest",
+        "type": "object"
+      },
+      "AIRouteResolveResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/AIRouteCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "monthly_cost_budget_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Cost Budget Minor"
+          },
+          "monthly_token_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Token Budget"
+          },
+          "route_id": {
+            "format": "uuid",
+            "title": "Route Id",
+            "type": "string"
+          },
+          "task_type": {
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "route_id",
+          "task_type",
+          "candidates",
+          "monthly_token_budget",
+          "monthly_cost_budget_minor",
+          "currency"
+        ],
+        "title": "AIRouteResolveResponse",
+        "type": "object"
+      },
+      "AITaskRouteCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_input_tokens": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Max Input Tokens",
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Model Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_json": {
+            "default": false,
+            "title": "Requires Json",
+            "type": "boolean"
+          },
+          "requires_stream": {
+            "default": false,
+            "title": "Requires Stream",
+            "type": "boolean"
+          },
+          "task_type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "task_type",
+          "max_input_tokens",
+          "max_output_tokens",
+          "model_ids",
+          "id"
+        ],
+        "title": "AITaskRouteCreate",
+        "type": "object"
+      },
+      "AITaskRouteDelete": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "title": "AITaskRouteDelete",
+        "type": "object"
+      },
+      "AITaskRouteList": {
+        "additionalProperties": false,
+        "properties": {
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/AITaskRouteResponse"
+            },
+            "title": "Routes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "routes"
+        ],
+        "title": "AITaskRouteList",
+        "type": "object"
+      },
+      "AITaskRouteResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_input_tokens": {
+            "title": "Max Input Tokens",
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Model Ids",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_json": {
+            "title": "Requires Json",
+            "type": "boolean"
+          },
+          "requires_stream": {
+            "title": "Requires Stream",
+            "type": "boolean"
+          },
+          "task_type": {
+            "title": "Task Type",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "task_type",
+          "requires_json",
+          "requires_stream",
+          "max_input_tokens",
+          "max_output_tokens",
+          "enabled",
+          "model_ids",
+          "version"
+        ],
+        "title": "AITaskRouteResponse",
+        "type": "object"
+      },
+      "AITaskRouteUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "max_input_tokens": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Max Input Tokens",
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Model Ids",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "requires_json": {
+            "default": false,
+            "title": "Requires Json",
+            "type": "boolean"
+          },
+          "requires_stream": {
+            "default": false,
+            "title": "Requires Stream",
+            "type": "boolean"
+          },
+          "task_type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Task Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "task_type",
+          "max_input_tokens",
+          "max_output_tokens",
+          "model_ids",
+          "expected_version"
+        ],
+        "title": "AITaskRouteUpdate",
+        "type": "object"
+      },
+      "AIWorkspaceBudgetResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "monthly_cost_budget_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Cost Budget Minor"
+          },
+          "monthly_token_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Token Budget"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "monthly_token_budget",
+          "monthly_cost_budget_minor",
+          "currency",
+          "version"
+        ],
+        "title": "AIWorkspaceBudgetResponse",
+        "type": "object"
+      },
+      "AIWorkspaceBudgetUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "default": "USD",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "monthly_cost_budget_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Cost Budget Minor"
+          },
+          "monthly_token_budget": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Token Budget"
+          }
+        },
+        "title": "AIWorkspaceBudgetUpdate",
         "type": "object"
       },
       "AppliedOperationResult": {
@@ -10074,6 +10722,196 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/ai/budget": {
+      "get": {
+        "operationId": "ai_budget_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIWorkspaceBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Budget",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "operationId": "ai_budget_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIWorkspaceBudgetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIWorkspaceBudgetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Update Budget",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/ai/models": {
       "get": {
         "operationId": "ai_model_list",
@@ -10142,6 +10980,252 @@
           }
         },
         "summary": "List Models",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "ai_model_create_manual",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIModelCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIModelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Model",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai/models/{model_id}": {
+      "put": {
+        "operationId": "ai_model_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIModelUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIModelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Update Model",
         "tags": [
           "ai"
         ]
@@ -10740,6 +11824,574 @@
           }
         },
         "summary": "Discover Models",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai/route-resolution-preview": {
+      "post": {
+        "operationId": "ai_route_resolve_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIRouteResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIRouteResolveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Resolve Route",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai/routes": {
+      "get": {
+        "operationId": "ai_route_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AITaskRouteList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Routes",
+        "tags": [
+          "ai"
+        ]
+      },
+      "post": {
+        "operationId": "ai_route_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AITaskRouteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AITaskRouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Route",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/ai/routes/{route_id}": {
+      "delete": {
+        "operationId": "ai_route_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "route_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Route Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AITaskRouteDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Delete Route",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "operationId": "ai_route_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "route_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Route Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AITaskRouteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AITaskRouteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Update Route",
         "tags": [
           "ai"
         ]

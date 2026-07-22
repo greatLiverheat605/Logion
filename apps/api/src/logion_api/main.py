@@ -8,6 +8,7 @@ from starlette.types import ExceptionHandler
 from logion_api import __version__
 from logion_api.ai_gateway.routes import model_router as ai_model_router
 from logion_api.ai_gateway.routes import router as ai_router
+from logion_api.ai_gateway.routing_routes import router as ai_routing_router
 from logion_api.audit.routes import router as audit_router
 from logion_api.audit.routes import workspace_router as workspace_audit_router
 from logion_api.collaboration.routes import router as collaboration_router
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     application.include_router(collaboration_router)
     application.include_router(ai_router)
     application.include_router(ai_model_router)
+    application.include_router(ai_routing_router)
     return application
 
 
