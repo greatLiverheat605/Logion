@@ -87,7 +87,9 @@ class WorkspaceService:
         *,
         request_id: str,
     ) -> WorkspaceAccess:
-        await db.scalar(select(User.id).where(User.id == context.user.id).with_for_update(of=User))
+        await db.scalar(
+            select(User.id).where(User.id == context.user.id).with_for_update(of=User)
+        )
         owned_count = int(
             await db.scalar(
                 select(func.count(WorkspaceMembership.id))
@@ -438,7 +440,9 @@ class WorkspaceService:
             permission=Permission.WORKSPACE_MANAGE_MEMBERS,
         )
         await db.scalar(
-            select(Workspace.id).where(Workspace.id == workspace_id).with_for_update(of=Workspace)
+            select(Workspace.id)
+            .where(Workspace.id == workspace_id)
+            .with_for_update(of=Workspace)
         )
         access = await self.resolve_workspace(
             db,
@@ -596,7 +600,9 @@ class WorkspaceService:
             .join(User, User.id == WorkspaceMembership.user_id)
             .where(
                 WorkspaceMembership.workspace_id == workspace_id,
-                WorkspaceMembership.id.in_((live_access.membership.id, target_membership_id)),
+                WorkspaceMembership.id.in_(
+                    (live_access.membership.id, target_membership_id)
+                ),
             )
             .order_by(WorkspaceMembership.id.asc())
             .with_for_update(of=WorkspaceMembership)

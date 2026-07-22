@@ -182,7 +182,9 @@ class PasskeyService:
         user_id: UUID | None = None,
     ) -> WebAuthnChallenge:
         challenge = await db.scalar(
-            select(WebAuthnChallenge).where(WebAuthnChallenge.id == challenge_id).with_for_update()
+            select(WebAuthnChallenge)
+            .where(WebAuthnChallenge.id == challenge_id)
+            .with_for_update()
         )
         now = datetime.now(UTC)
         valid = (

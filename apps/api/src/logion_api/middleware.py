@@ -14,7 +14,9 @@ async def request_id_middleware(
 ) -> Response:
     supplied_request_id = request.headers.get("x-request-id", "")
     request_id = (
-        supplied_request_id if REQUEST_ID_PATTERN.fullmatch(supplied_request_id) else str(uuid4())
+        supplied_request_id
+        if REQUEST_ID_PATTERN.fullmatch(supplied_request_id)
+        else str(uuid4())
     )
     request.state.request_id = request_id
     response = await call_next(request)
