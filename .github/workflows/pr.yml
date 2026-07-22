@@ -102,6 +102,8 @@ jobs:
       LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
       LOGION_AI_CREDENTIAL_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
       LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
+      LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+      LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
