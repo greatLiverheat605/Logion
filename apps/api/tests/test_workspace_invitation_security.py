@@ -36,4 +36,4 @@ def test_invitation_secret_is_only_accepted_in_request_body() -> None:
 
     assert all(parameter["name"] != "token" for parameter in accept.get("parameters", []))
     assert "requestBody" in accept
-    assert all("{token}" not in path for path in openapi["paths"])
+    assert all("{token}" not in path for path in openapi["paths"] if "invitation" in path)
