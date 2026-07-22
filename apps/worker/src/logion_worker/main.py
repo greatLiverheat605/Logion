@@ -5,6 +5,7 @@ from contextlib import suppress
 
 from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.config import get_settings
+from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.service import PortabilityService
 from logion_api.workspaces.service import WorkspaceService
 
@@ -23,12 +24,15 @@ async def run_worker() -> None:
     settings = get_settings()
     execution = AIExecutionService(settings)
     portability = PortabilityService(settings, WorkspaceService(settings))
+    deletion = AccountDeletionService(settings)
     print(json.dumps({**health_payload(), "event": "worker_started"}))
     while not stop.is_set():
         try:
             handled = await portability.execute_next()
             if not handled:
                 handled = await execution.execute_next()
+            if not handled:
+                handled = await deletion.execute_next()
         except Exception as exc:  # noqa: BLE001
             print(
                 json.dumps(

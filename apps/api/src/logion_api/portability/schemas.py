@@ -69,3 +69,28 @@ class ImportCommit(Strict):
     target_space_id: UUID
     expected_version: int = Field(ge=1)
     confirmation: Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^IMPORT$")]
+
+
+class AccountDeletionCreate(Strict):
+    confirmation: Annotated[
+        str, StringConstraints(strip_whitespace=True, pattern=r"^DELETE MY ACCOUNT$")
+    ]
+
+
+class AccountDeletionCancel(Strict):
+    expected_version: int = Field(ge=1)
+    confirmation: Annotated[
+        str, StringConstraints(strip_whitespace=True, pattern=r"^KEEP MY ACCOUNT$")
+    ]
+
+
+class AccountDeletionResponse(Strict):
+    id: UUID
+    status: Literal["pending", "cancelled", "completed"]
+    owned_workspace_ids: list[UUID]
+    policy_version: str
+    version: int
+    requested_at: datetime
+    delete_after: datetime
+    cancelled_at: datetime | None
+    completed_at: datetime | None

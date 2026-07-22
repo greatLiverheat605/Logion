@@ -147,4 +147,16 @@ async def get_current_context(
     return await service.authenticate_access(db, request.cookies.get(settings.access_cookie_name))
 
 
+async def get_deletion_context(
+    request: Request,
+    db: DatabaseSession,
+    service: IdentityServiceDependency,
+    settings: SettingsDependency,
+) -> AuthContext:
+    return await service.authenticate_deletion_access(
+        db, request.cookies.get(settings.access_cookie_name)
+    )
+
+
 AuthContextDependency = Annotated[AuthContext, Depends(get_current_context)]
+DeletionAuthContextDependency = Annotated[AuthContext, Depends(get_deletion_context)]

@@ -139,7 +139,7 @@ class IdentityService:
             user is None
             or credential is None
             or not password_valid
-            or user.status != "active"
+            or user.status not in {"active", "pending_deletion"}
             or user.email_verified_at is None
         ):
             db.add(
@@ -222,7 +222,37 @@ class IdentityService:
                 AuthSession.access_token_hash == self._security.token_hash(access_token),
                 AuthSession.revoked_at.is_(None),
                 AuthSession.access_expires_at > now,
-                User.status == "active",
+                Device.revoked_at.is_(None),
+            )
+        )
+        row = result.one_or_none()
+        if row is None:
+            raise self._authentication_error()
+        if row[1].status == "pending_deletion":
+            raise APIError(
+                code="AUTH_ACCOUNT_PENDING_DELETION",
+                message="This account can only access the deletion recovery flow.",
+                status_code=403,
+            )
+        if row[1].status != "active":
+            raise self._authentication_error()
+        return AuthContext(session=row[0], user=row[1], device=row[2])
+
+    async def authenticate_deletion_access(
+        self, db: AsyncSession, access_token: str | None
+    ) -> AuthContext:
+        if not access_token:
+            raise self._authentication_error()
+        now = datetime.now(UTC)
+        result = await db.execute(
+            select(AuthSession, User, Device)
+            .join(User, User.id == AuthSession.user_id)
+            .join(Device, Device.id == AuthSession.device_id)
+            .where(
+                AuthSession.access_token_hash == self._security.token_hash(access_token),
+                AuthSession.revoked_at.is_(None),
+                AuthSession.access_expires_at > now,
+                User.status == "pending_deletion",
                 Device.revoked_at.is_(None),
             )
         )
@@ -285,7 +315,7 @@ class IdentityService:
             or auth_session.refresh_expires_at <= now
             or auth_session.revoked_at is not None
             or device.revoked_at is not None
-            or user.status != "active"
+            or user.status not in {"active", "pending_deletion"}
             or user.email_verified_at is None
         ):
             await self._revoke_session(db, auth_session, reason="expired", now=now)

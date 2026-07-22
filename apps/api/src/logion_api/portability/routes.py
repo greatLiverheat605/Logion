@@ -6,19 +6,25 @@ from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
+    DeletionAuthContextDependency,
     IdentityServiceDependency,
     RateLimiterDependency,
     SettingsDependency,
+    clear_auth_cookies,
     get_security,
     request_id,
     require_trusted_origin,
 )
 from logion_api.portability.dependencies import (
+    AccountDeletionServiceDependency,
     ImportServiceDependency,
     PortabilityServiceDependency,
 )
-from logion_api.portability.models import DataExportJob, DataImportPreview
+from logion_api.portability.models import AccountDeletionRequest, DataExportJob, DataImportPreview
 from logion_api.portability.schemas import (
+    AccountDeletionCancel,
+    AccountDeletionCreate,
+    AccountDeletionResponse,
     ExportCancel,
     ExportCreate,
     ExportList,
@@ -33,6 +39,7 @@ router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/data-exports", tags
 import_router = APIRouter(
     prefix="/api/v1/workspaces/{workspace_id}/data-imports", tags=["portability"]
 )
+account_router = APIRouter(prefix="/api/v1/account-deletion", tags=["portability"])
 ERROR = {"model": ErrorResponse}
 
 
@@ -67,6 +74,20 @@ def import_response(row: DataImportPreview) -> ImportPreviewResponse:
         created_at=row.created_at,
         imported_at=row.imported_at,
         expires_at=row.expires_at,
+    )
+
+
+def deletion_response(row: AccountDeletionRequest) -> AccountDeletionResponse:
+    return AccountDeletionResponse(
+        id=row.id,
+        status=row.status,
+        owned_workspace_ids=[UUID(value) for value in row.owned_workspace_ids],
+        policy_version=row.policy_version,
+        version=row.version,
+        requested_at=row.requested_at,
+        delete_after=row.delete_after,
+        cancelled_at=row.cancelled_at,
+        completed_at=row.completed_at,
     )
 
 
@@ -287,3 +308,94 @@ async def commit_import(
         await db.commit()
         raise
     return import_response(row)
+
+
+async def account_write_boundary(
+    request: Request,
+    context: AuthContextDependency | DeletionAuthContextDependency,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    csrf: str | None,
+) -> None:
+    require_trusted_origin(request, settings)
+    identity.validate_csrf(context.session, csrf, request.cookies.get(settings.csrf_cookie_name))
+    identity.require_recent_authentication(context)
+    subject = get_security().privacy_hash(str(context.user.id)) or "unknown"
+    await limiter.enforce(
+        scope="account_deletion_write",
+        subject_hash=subject,
+        limit=settings.data_portability_write_limit_per_hour,
+        window=3600,
+    )
+
+
+@account_router.post(
+    "",
+    response_model=AccountDeletionResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="account_deletion_request",
+    responses={401: ERROR, 403: ERROR, 404: ERROR, 409: ERROR, 422: ERROR, 429: ERROR},
+)
+async def request_account_deletion(
+    payload: AccountDeletionCreate,
+    request: Request,
+    response: Response,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    deletion: AccountDeletionServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> AccountDeletionResponse:
+    await account_write_boundary(request, context, identity, limiter, settings, x_csrf_token)
+    try:
+        row = await deletion.request(db, context, request_id(request))
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    clear_auth_cookies(response, settings)
+    return deletion_response(row)
+
+
+@account_router.get(
+    "",
+    response_model=AccountDeletionResponse,
+    operation_id="account_deletion_status",
+    responses={401: ERROR, 404: ERROR},
+)
+async def account_deletion_status(
+    context: DeletionAuthContextDependency,
+    db: DatabaseSession,
+    deletion: AccountDeletionServiceDependency,
+) -> AccountDeletionResponse:
+    return deletion_response(await deletion.get_pending(db, context))
+
+
+@account_router.post(
+    "/cancel",
+    response_model=AccountDeletionResponse,
+    operation_id="account_deletion_cancel",
+    responses={401: ERROR, 403: ERROR, 404: ERROR, 409: ERROR, 422: ERROR, 429: ERROR},
+)
+async def cancel_account_deletion(
+    payload: AccountDeletionCancel,
+    request: Request,
+    context: DeletionAuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    deletion: AccountDeletionServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> AccountDeletionResponse:
+    await account_write_boundary(request, context, identity, limiter, settings, x_csrf_token)
+    try:
+        row = await deletion.cancel(db, context, payload.expected_version, request_id(request))
+        await db.commit()
+    except APIError:
+        await db.commit()
+        raise
+    return deletion_response(row)

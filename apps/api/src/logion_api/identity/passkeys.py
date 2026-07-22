@@ -65,7 +65,7 @@ def _authentication_credential_statement(
         .where(
             PasskeyCredential.credential_id == credential_id,
             PasskeyCredential.revoked_at.is_(None),
-            User.status == "active",
+            User.status.in_(("active", "pending_deletion")),
             User.email_verified_at.is_not(None),
         )
         .with_for_update(of=PasskeyCredential)

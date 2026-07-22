@@ -26,7 +26,10 @@ from logion_api.db import Base, utc_now
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("status IN ('active', 'suspended', 'deleted')", name="ck_users_status"),
+        CheckConstraint(
+            "status IN ('active', 'suspended', 'pending_deletion', 'deleted')",
+            name="ck_users_status",
+        ),
         Index("ix_users_email_normalized", "email_normalized", unique=True),
     )
 

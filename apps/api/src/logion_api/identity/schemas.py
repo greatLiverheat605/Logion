@@ -60,7 +60,7 @@ class UserResponse(BaseModel):
 
     id: UUID
     email: EmailStr
-    status: Literal["active", "suspended", "deleted"]
+    status: Literal["active", "suspended", "pending_deletion", "deleted"]
     email_verified_at: datetime | None
     created_at: datetime
 
