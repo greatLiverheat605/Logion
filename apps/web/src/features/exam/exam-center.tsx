@@ -45,6 +45,49 @@ interface ExamView {
   payload: ExamPayload;
 }
 
+interface SubjectPayload extends JsonObject {
+  space_id: string;
+  exam_id: string;
+  name: string;
+  weight_basis_points: number;
+  status: "active" | "archived";
+}
+
+interface SyllabusNodePayload extends JsonObject {
+  space_id: string;
+  subject_id: string;
+  parent_id: string | null;
+  title: string;
+  importance: number;
+  coverage_status: "not_started" | "in_progress" | "covered";
+}
+
+interface ProtectedView<T extends JsonObject> {
+  entity: LocalEntity;
+  payload: T;
+}
+
+function SyllabusTree({
+  nodes,
+  parentId = null,
+}: {
+  nodes: ProtectedView<SyllabusNodePayload>[];
+  parentId?: string | null;
+}) {
+  const children = nodes.filter((node) => node.payload.parent_id === parentId);
+  if (children.length === 0) return null;
+  return (
+    <ul>
+      {children.map((node) => (
+        <li key={node.entity.entity_id}>
+          {node.payload.title} · 重要度 {node.payload.importance} · 未开始
+          <SyllabusTree nodes={nodes} parentId={node.entity.entity_id} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const EXAM_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const EXAM_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -93,9 +136,14 @@ export function ExamCenter() {
   const [dateStatus, setDateStatus] = useState<"scheduled" | "undetermined">(
     "scheduled",
   );
+  const [syllabusSubjectId, setSyllabusSubjectId] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [status, setStatus] = useState("正在准备备考空间……");
   const [exams, setExams] = useState<ExamView[]>([]);
+  const [subjects, setSubjects] = useState<ProtectedView<SubjectPayload>[]>([]);
+  const [syllabusNodes, setSyllabusNodes] = useState<
+    ProtectedView<SyllabusNodePayload>[]
+  >([]);
   const database = useRef<LogionOfflineDatabase | null>(null);
   const vault = useRef<OfflineVault | null>(null);
 
@@ -206,22 +254,34 @@ export function ExamCenter() {
     localVault = vault.current,
   ): Promise<void> {
     if (db === null || localVault === null || !workspaceId) return;
-    const rows = await db.entities
-      .where("[workspace_id+entity_type]")
-      .equals([workspaceId, "exam"])
-      .toArray();
-    const next = await Promise.all(
-      rows.map(async (entity) => {
-        const reference = entity.payload.encrypted_payload_ref;
-        const payload =
-          typeof reference === "string"
-            ? await localVault.get(reference, workspaceId)
-            : entity.payload;
-        if (payload === null) throw new Error("protected payload unavailable");
-        return { entity, payload: payload as ExamPayload };
-      }),
-    );
-    setExams(next);
+    const activeDatabase = db;
+    const activeVault = localVault;
+    async function readProtected<T extends JsonObject>(entityType: string) {
+      const rows = await activeDatabase.entities
+        .where("[workspace_id+entity_type]")
+        .equals([workspaceId, entityType])
+        .toArray();
+      return Promise.all(
+        rows.map(async (entity) => {
+          const reference = entity.payload.encrypted_payload_ref;
+          const payload =
+            typeof reference === "string"
+              ? await activeVault.get(reference, workspaceId)
+              : entity.payload;
+          if (payload === null)
+            throw new Error("protected payload unavailable");
+          return { entity, payload: payload as T };
+        }),
+      );
+    }
+    const [nextExams, nextSubjects, nextNodes] = await Promise.all([
+      readProtected<ExamPayload>("exam"),
+      readProtected<SubjectPayload>("exam_subject"),
+      readProtected<SyllabusNodePayload>("syllabus_node"),
+    ]);
+    setExams(nextExams);
+    setSubjects(nextSubjects);
+    setSyllabusNodes(nextNodes);
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -327,8 +387,131 @@ export function ExamCenter() {
     }
   }
 
+  async function pendingDependencies(entityIds: string[]): Promise<string[]> {
+    const db = database.current;
+    if (db === null) return [];
+    const pending = await db.outbox
+      .filter(
+        (item) =>
+          entityIds.includes(item.entity_id) &&
+          ["pending", "retrying"].includes(item.outbox_state),
+      )
+      .toArray();
+    return pending.map((item) => item.operation_id);
+  }
+
+  async function createSubject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (session.status !== "authenticated") return;
+    const db = database.current;
+    const localVault = vault.current;
+    if (db === null || localVault === null) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const examId = String(data.get("exam_id") ?? "");
+    const now = new Date().toISOString();
+    try {
+      await new ProtectedOfflineRepository(db, localVault).commitMutation({
+        operation_id: crypto.randomUUID(),
+        protocol_version: "sync-v1",
+        workspace_id: workspaceId,
+        device_id: deviceId,
+        entity_type: "exam_subject",
+        entity_id: crypto.randomUUID(),
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: now,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        created_by: session.user.id,
+        updated_by: session.user.id,
+        payload: {
+          space_id: spaceId,
+          exam_id: examId,
+          name: String(data.get("name") ?? "").trim(),
+          weight_basis_points: Math.round(
+            Number(data.get("weight_percent") ?? 0) * 100,
+          ),
+          status: "active",
+        },
+        dependencies: await pendingDependencies([examId]),
+      });
+      form.reset();
+      setStatus("科目已加密保存，正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(message(error));
+      await refresh();
+    }
+  }
+
+  async function createSyllabusNode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (session.status !== "authenticated") return;
+    const db = database.current;
+    const localVault = vault.current;
+    if (db === null || localVault === null) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const subjectId = String(data.get("subject_id") ?? "");
+    const parentId = String(data.get("parent_id") ?? "") || null;
+    const now = new Date().toISOString();
+    try {
+      await new ProtectedOfflineRepository(db, localVault).commitMutation({
+        operation_id: crypto.randomUUID(),
+        protocol_version: "sync-v1",
+        workspace_id: workspaceId,
+        device_id: deviceId,
+        entity_type: "syllabus_node",
+        entity_id: crypto.randomUUID(),
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: now,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+        created_by: session.user.id,
+        updated_by: session.user.id,
+        payload: {
+          space_id: spaceId,
+          subject_id: subjectId,
+          parent_id: parentId,
+          title: String(data.get("title") ?? "").trim(),
+          importance: Number(data.get("importance") ?? 3),
+          coverage_status: "not_started",
+        },
+        dependencies: await pendingDependencies(
+          parentId === null ? [subjectId] : [subjectId, parentId],
+        ),
+      });
+      form.reset();
+      setStatus("大纲节点已加密保存，正在尝试同步。");
+      await synchronize();
+    } catch (error) {
+      setStatus(message(error));
+      await refresh();
+    }
+  }
+
   const visibleExams = exams.filter(
     (item) => item.payload.space_id === spaceId,
+  );
+  const visibleSubjects = subjects.filter(
+    (item) =>
+      item.payload.space_id === spaceId &&
+      visibleExams.some(
+        (exam) => exam.entity.entity_id === item.payload.exam_id,
+      ),
+  );
+  const visibleNodes = syllabusNodes.filter(
+    (item) =>
+      item.payload.space_id === spaceId &&
+      visibleSubjects.some(
+        (subject) => subject.entity.entity_id === item.payload.subject_id,
+      ),
   );
 
   return (
@@ -430,6 +613,91 @@ export function ExamCenter() {
         </form>
       </section>
 
+      <section className="settings-card">
+        <h2>科目与权重</h2>
+        <form className="planning-form" onSubmit={createSubject}>
+          <label htmlFor="subject-exam">所属考试</label>
+          <select id="subject-exam" name="exam_id" required>
+            <option value="">请选择</option>
+            {visibleExams.map((exam) => (
+              <option key={exam.entity.entity_id} value={exam.entity.entity_id}>
+                {exam.payload.title}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="subject-name">科目名称</label>
+          <input id="subject-name" name="name" maxLength={160} required />
+          <label htmlFor="subject-weight">权重（百分比，可为 0）</label>
+          <input
+            id="subject-weight"
+            name="weight_percent"
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            defaultValue={0}
+            required
+          />
+          <button
+            type="submit"
+            disabled={!unlocked || visibleExams.length === 0}
+          >
+            加密保存科目
+          </button>
+        </form>
+      </section>
+
+      <section className="settings-card">
+        <h2>考试大纲</h2>
+        <form className="planning-form" onSubmit={createSyllabusNode}>
+          <label htmlFor="syllabus-subject">所属科目</label>
+          <select
+            id="syllabus-subject"
+            name="subject_id"
+            value={syllabusSubjectId}
+            onChange={(event) => setSyllabusSubjectId(event.target.value)}
+            required
+          >
+            <option value="">请选择</option>
+            {visibleSubjects.map((subject) => (
+              <option
+                key={subject.entity.entity_id}
+                value={subject.entity.entity_id}
+              >
+                {subject.payload.name}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="syllabus-parent">父节点（可选）</label>
+          <select id="syllabus-parent" name="parent_id">
+            <option value="">顶层节点</option>
+            {visibleNodes
+              .filter((node) => node.payload.subject_id === syllabusSubjectId)
+              .map((node) => (
+                <option
+                  key={node.entity.entity_id}
+                  value={node.entity.entity_id}
+                >
+                  {node.payload.title}
+                </option>
+              ))}
+          </select>
+          <label htmlFor="syllabus-title">节点名称</label>
+          <input id="syllabus-title" name="title" maxLength={240} required />
+          <label htmlFor="syllabus-importance">重要度</label>
+          <select id="syllabus-importance" name="importance" defaultValue="3">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+          <button type="submit" disabled={!unlocked || !syllabusSubjectId}>
+            加密保存大纲节点
+          </button>
+        </form>
+      </section>
+
       <section className="settings-card sync-wide-card">
         <h2>我的考试</h2>
         <div className="task-grid">
@@ -451,6 +719,26 @@ export function ExamCenter() {
                   : "未设置"}
               </p>
               <small>{exam.entity.sync_status}</small>
+              <ul>
+                {visibleSubjects
+                  .filter(
+                    (subject) =>
+                      subject.payload.exam_id === exam.entity.entity_id,
+                  )
+                  .map((subject) => (
+                    <li key={subject.entity.entity_id}>
+                      {subject.payload.name} ·{" "}
+                      {subject.payload.weight_basis_points / 100}%
+                      <SyllabusTree
+                        nodes={visibleNodes.filter(
+                          (node) =>
+                            node.payload.subject_id ===
+                            subject.entity.entity_id,
+                        )}
+                      />
+                    </li>
+                  ))}
+              </ul>
             </article>
           ))}
           {visibleExams.length === 0 ? (

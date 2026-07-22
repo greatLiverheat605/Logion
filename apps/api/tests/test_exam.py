@@ -2,7 +2,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from logion_api.exam.schemas import ExamCreateRequest
+from logion_api.exam.schemas import (
+    ExamCreateRequest,
+    SubjectCreateRequest,
+    SyllabusNodeCreateRequest,
+)
 from pydantic import ValidationError
 
 
@@ -38,8 +42,21 @@ def test_exam_schema_rejects_ambiguous_date_and_score(overrides: dict[str, objec
 
 
 def test_exam_schema_accepts_a_date_without_a_target_score() -> None:
-    exam = ExamCreateRequest.model_validate(
-        valid_exam(target_score=None, score_scale_max=None)
-    )
+    exam = ExamCreateRequest.model_validate(valid_exam(target_score=None, score_scale_max=None))
     assert exam.timezone == "Asia/Shanghai"
 
+
+def test_subject_and_syllabus_schemas_bound_user_structure() -> None:
+    with pytest.raises(ValidationError):
+        SubjectCreateRequest(id=uuid4(), exam_id=uuid4(), name="Subject", weight_basis_points=10001)
+    shared_id = uuid4()
+    with pytest.raises(ValidationError):
+        SyllabusNodeCreateRequest(
+            id=shared_id,
+            subject_id=uuid4(),
+            parent_id=shared_id,
+            title="Node",
+            importance=3,
+        )
+    with pytest.raises(ValidationError):
+        SyllabusNodeCreateRequest(id=uuid4(), subject_id=uuid4(), title="Node", importance=6)

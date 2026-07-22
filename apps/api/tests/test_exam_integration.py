@@ -101,6 +101,36 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
         assert learner_list.status_code == 200
         assert learner_list.json()["exams"] == []
 
+        subject_id = uuid4()
+        subject_endpoint = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/exam-subjects"
+        subject = await owner.post(
+            subject_endpoint,
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={
+                "id": str(subject_id),
+                "exam_id": str(rest_exam_id),
+                "name": "Private user supplied subject",
+                "weight_basis_points": 2500,
+            },
+        )
+        assert subject.status_code == 201, subject.text
+        assert (await learner.get(subject_endpoint)).json()["subjects"] == []
+        node_id = uuid4()
+        node_endpoint = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/syllabus-nodes"
+        node = await owner.post(
+            node_endpoint,
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={
+                "id": str(node_id),
+                "subject_id": str(subject_id),
+                "parent_id": None,
+                "title": "Private syllabus node",
+                "importance": 5,
+            },
+        )
+        assert node.status_code == 201, node.text
+        assert (await learner.get(node_endpoint)).json()["nodes"] == []
+
         async def current_device(client: AsyncClient) -> UUID:
             devices = (await client.get("/api/v1/auth/devices")).json()["devices"]
             return UUID(next(item["id"] for item in devices if item["current"]))
@@ -128,12 +158,19 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
             json=bootstrap_body(learner_device),
         )
         assert any(
-            record["entity_type"] == "exam"
-            and record["entity_id"] == str(rest_exam_id)
+            record["entity_type"] == "exam" and record["entity_id"] == str(rest_exam_id)
+            for record in owner_bootstrap.json()["records"]
+        )
+        assert any(
+            record["entity_type"] == "exam_subject" and record["entity_id"] == str(subject_id)
+            for record in owner_bootstrap.json()["records"]
+        )
+        assert any(
+            record["entity_type"] == "syllabus_node" and record["entity_id"] == str(node_id)
             for record in owner_bootstrap.json()["records"]
         )
         assert not any(
-            record["entity_type"] == "exam"
+            record["entity_type"] in {"exam", "exam_subject", "syllabus_node"}
             for record in learner_bootstrap.json()["records"]
         )
         epoch = learner_bootstrap.json()["sync_epoch"]
@@ -185,6 +222,64 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
         assert replayed.status_code == 200
         assert replayed.json()["results"][0]["status"] == "duplicate"
 
+        offline_subject_id, subject_operation_id = uuid4(), uuid4()
+        subject_payload = {
+            "space_id": str(space_id),
+            "exam_id": str(exam_id),
+            "name": "Learner private offline subject",
+            "weight_basis_points": 5000,
+            "status": "active",
+        }
+        subject_operation = {
+            **operation,
+            "operation_id": str(subject_operation_id),
+            "entity_type": "exam_subject",
+            "entity_id": str(offline_subject_id),
+            "payload": subject_payload,
+            "payload_hash": canonical_hash(subject_payload),
+            "dependencies": [str(operation_id)],
+        }
+        offline_node_id, node_operation_id = uuid4(), uuid4()
+        node_payload = {
+            "space_id": str(space_id),
+            "subject_id": str(offline_subject_id),
+            "parent_id": None,
+            "title": "Learner private offline syllabus node",
+            "importance": 4,
+            "coverage_status": "not_started",
+        }
+        node_operation = {
+            **operation,
+            "operation_id": str(node_operation_id),
+            "entity_type": "syllabus_node",
+            "entity_id": str(offline_node_id),
+            "payload": node_payload,
+            "payload_hash": canonical_hash(node_payload),
+            "dependencies": [str(subject_operation_id)],
+        }
+        hierarchy_push = await learner.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/push",
+            headers={"X-CSRF-Token": learner.cookies["logion_csrf"]},
+            json={**push_body, "operations": [subject_operation, node_operation]},
+        )
+        assert hierarchy_push.status_code == 200, hierarchy_push.text
+        assert [item["status"] for item in hierarchy_push.json()["results"]] == [
+            "applied",
+            "applied",
+        ]
+        foreign_parent = await owner.post(
+            node_endpoint,
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={
+                "id": str(uuid4()),
+                "subject_id": str(offline_subject_id),
+                "parent_id": str(offline_node_id),
+                "title": "Must not be accepted",
+                "importance": 3,
+            },
+        )
+        assert foreign_parent.status_code == 404
+
         def pull_body(device_id: UUID) -> dict[str, object]:
             return {
                 "message_type": "pull_request",
@@ -204,24 +299,28 @@ async def test_personal_exam_rest_and_sync_are_owner_only() -> None:
             f"/api/v1/workspaces/{workspace_id}/sync/pull",
             json=pull_body(owner_device),
         )
-        assert any(change["entity_id"] == str(exam_id) for change in learner_pull.json()["changes"])
-        assert not any(
-            change["entity_id"] == str(exam_id)
-            for change in owner_pull.json()["changes"]
+        personal_ids = {str(exam_id), str(offline_subject_id), str(offline_node_id)}
+        assert personal_ids.issubset(
+            {change["entity_id"] for change in learner_pull.json()["changes"]}
         )
-        assert owner_pull.json()["next_cursor"] >= pushed.json()["results"][0]["sequence"]
+        assert not any(
+            change["entity_id"] in personal_ids for change in owner_pull.json()["changes"]
+        )
+        assert owner_pull.json()["next_cursor"] >= hierarchy_push.json()["results"][-1]["sequence"]
 
     async with session_factory() as db:
         audits = list(
             (
-                await db.scalars(
-                    select(AuditEvent).where(AuditEvent.workspace_id == workspace_id)
-                )
+                await db.scalars(select(AuditEvent).where(AuditEvent.workspace_id == workspace_id))
             ).all()
         )
         serialized = " ".join(str(item.event_metadata) for item in audits)
         assert private_title not in serialized
         assert private_date not in serialized
+        assert "Private user supplied subject" not in serialized
+        assert "Private syllabus node" not in serialized
+        assert "Learner private offline subject" not in serialized
+        assert "Learner private offline syllabus node" not in serialized
         assert all(
             {"title", "exam_at", "timezone", "target_score", "score_scale_max"}.isdisjoint(
                 item.event_metadata

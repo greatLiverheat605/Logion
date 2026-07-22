@@ -448,6 +448,8 @@ describe("recoverable push/pull cycle", () => {
         | "evidence"
         | "error_pattern"
         | "exam"
+        | "exam_subject"
+        | "syllabus_node"
         | "audit_review"
         | "mastery"
         | "note"
@@ -597,6 +599,27 @@ describe("recoverable push/pull cycle", () => {
           status: "planning",
         },
       ],
+      [
+        "exam_subject",
+        {
+          space_id: ids.entity,
+          exam_id: ids.user,
+          name: "secret subject name",
+          weight_basis_points: 2500,
+          status: "active",
+        },
+      ],
+      [
+        "syllabus_node",
+        {
+          space_id: ids.entity,
+          subject_id: ids.user,
+          parent_id: null,
+          title: "secret syllabus title",
+          importance: 5,
+          coverage_status: "not_started",
+        },
+      ],
     ];
     for (const [entityType, payload] of cases) {
       await repository.commitMutation({
@@ -636,7 +659,9 @@ describe("recoverable push/pull cycle", () => {
     expect(durableRows).not.toContain("secret exam title");
     expect(durableRows).not.toContain("2026-09-05T01:00:00Z");
     expect(durableRows).not.toContain('"target_score":85');
-    expect(await database.vaultRecords.count()).toBe(14);
+    expect(durableRows).not.toContain("secret subject name");
+    expect(durableRows).not.toContain("secret syllabus title");
+    expect(await database.vaultRecords.count()).toBe(16);
   });
 
   it("keeps task conflict payloads encrypted while exposing an explicit conflict", async () => {

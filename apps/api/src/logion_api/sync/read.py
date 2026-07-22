@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.content.models import Note, Resource
-from logion_api.exam.models import Exam
+from logion_api.exam.models import Exam, Subject, SyllabusNode
 from logion_api.execution.evidence_models import EvidenceItem, VerificationRecord
 from logion_api.execution.models import StudySession, Task
 from logion_api.memory.models import (
@@ -27,6 +27,7 @@ from logion_api.sync.push import (
     error_pattern_payload,
     evidence_payload,
     exam_payload,
+    exam_subject_payload,
     mastery_payload,
     note_payload,
     quiz_attempt_payload,
@@ -35,6 +36,7 @@ from logion_api.sync.push import (
     review_finding_payload,
     review_schedule_payload,
     session_payload,
+    syllabus_node_payload,
     task_payload,
     topic_dependency_payload,
     topic_payload,
@@ -180,6 +182,20 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "exam"},
         )
+        visible_subjects = await self._visible_personal_memory_ids(
+            db,
+            Subject,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "exam_subject"},
+        )
+        visible_syllabus_nodes = await self._visible_personal_memory_ids(
+            db,
+            SyllabusNode,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "syllabus_node"},
+        )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -216,6 +232,8 @@ class SyncReadService:
                 and row.entity_id in personal_visible[row.entity_type]
             )
             or (row.entity_type == "exam" and row.entity_id in visible_exams)
+            or (row.entity_type == "exam_subject" and row.entity_id in visible_subjects)
+            or (row.entity_type == "syllabus_node" and row.entity_id in visible_syllabus_nodes)
         ]
         return PullResponse(
             workspace_id=state.workspace_id,
@@ -261,6 +279,8 @@ class SyncReadService:
             *(await self._personal_memory_records(db, AuditReview, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, ReviewFinding, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, Exam, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, Subject, state.workspace_id, user_id)),
+            *(await self._personal_memory_records(db, SyllabusNode, state.workspace_id, user_id)),
         ]
         chunks = [
             records[index : index + chunk_size] for index in range(0, len(records), chunk_size)
@@ -799,6 +819,8 @@ class SyncReadService:
             | type[AuditReview]
             | type[ReviewFinding]
             | type[Exam]
+            | type[Subject]
+            | type[SyllabusNode]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -877,6 +899,8 @@ class SyncReadService:
             | type[AuditReview]
             | type[ReviewFinding]
             | type[Exam]
+            | type[Subject]
+            | type[SyllabusNode]
         ),
         workspace_id: UUID,
         user_id: UUID,
@@ -900,6 +924,8 @@ class SyncReadService:
                 | AuditReview
                 | ReviewFinding
                 | Exam
+                | Subject
+                | SyllabusNode
             ],
             list((await db.scalars(statement)).all()),
         )
@@ -920,9 +946,15 @@ class SyncReadService:
             elif isinstance(item, ReviewFinding):
                 entity_type = "review_finding"
                 payload = review_finding_payload(item)
-            else:
+            elif isinstance(item, Exam):
                 entity_type = "exam"
                 payload = exam_payload(item)
+            elif isinstance(item, Subject):
+                entity_type = "exam_subject"
+                payload = exam_subject_payload(item)
+            else:
+                entity_type = "syllabus_node"
+                payload = syllabus_node_payload(item)
             records.append(
                 EntityRecord(
                     entity_type=entity_type,
