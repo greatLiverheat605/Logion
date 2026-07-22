@@ -23,6 +23,7 @@ from logion_api.identity.passkey_routes import router as passkey_router
 from logion_api.identity.routes import router as identity_router
 from logion_api.identity.totp_routes import router as totp_router
 from logion_api.identity.verification_routes import router as verification_router
+from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
 from logion_api.planning.routes import router as planning_router
 from logion_api.sync.routes import router as sync_router
@@ -47,7 +48,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Content-Type", "X-CSRF-Token", "X-Request-ID"],
     )
     application.middleware("http")(request_id_middleware)
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
     application.include_router(execution_router)
     application.include_router(content_router)
     application.include_router(evidence_router)
+    application.include_router(memory_router)
     return application
 
 
