@@ -24,6 +24,7 @@ from logion_api.ai_gateway.models import (
 from logion_api.ai_gateway.run_crypto import AIRunInputCipher
 from logion_api.config import Settings
 from logion_api.db import session_factory, utc_now
+from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 
@@ -226,6 +227,17 @@ class AIExecutionService:
                     target_version=run.target_version,
                     structured_output=result.output,
                 )
+            )
+            await EngagementService.emit(
+                db,
+                workspace_id=run.workspace_id,
+                recipient_user_id=run.requested_by,
+                category="ai",
+                title="AI draft ready",
+                summary="A structured AI draft is ready for human review.",
+                dedupe_key=f"ai-draft-ready:{run.id}",
+                target_type="ai_run",
+                target_id=run.id,
             )
             await self._terminal(db, run, "succeeded", None, actual_tokens, actual_cost)
             await db.commit()

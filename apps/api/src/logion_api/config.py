@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     ai_run_write_limit_per_hour: int = Field(default=120, ge=1, le=2000)
     growth_write_limit_per_hour: int = Field(default=120, ge=1, le=2000)
     public_share_read_limit_per_minute: int = Field(default=120, ge=1, le=2000)
+    search_limit_per_minute: int = Field(default=60, ge=1, le=1000)
+    engagement_write_limit_per_hour: int = Field(default=240, ge=1, le=5000)
+    public_calendar_read_limit_per_minute: int = Field(default=120, ge=1, le=2000)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(
