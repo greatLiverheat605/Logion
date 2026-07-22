@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, Request
 
+from logion_api.collaboration.dependencies import CollaborationServiceDependency
 from logion_api.content.dependencies import ContentServiceDependency
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.exam.dependencies import ExamServiceDependency
@@ -83,6 +84,7 @@ async def push(
     exams: ExamServiceDependency,
     self_study: SelfStudyServiceDependency,
     research: ResearchServiceDependency,
+    collaboration: CollaborationServiceDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> PushResponse | RebootstrapControl:
     require_trusted_origin(request, settings)
@@ -145,6 +147,7 @@ async def push(
         exams,
         self_study,
         research,
+        collaboration,
     ).push(
         db,
         context,

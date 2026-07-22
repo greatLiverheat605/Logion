@@ -6,6 +6,14 @@ import rfc8785
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.collaboration.models import GroupFeedback, ReportSnapshot, ReviewRequest, Rubric
+from logion_api.collaboration.schemas import (
+    CollaborationFeedbackCreate,
+    CollaborationReportCreate,
+    CollaborationReviewCreate,
+    CollaborationRubricCreate,
+)
+from logion_api.collaboration.service import CollaborationService
 from logion_api.content.models import Note, Resource
 from logion_api.content.schemas import (
     NoteUpdateRequest,
@@ -129,6 +137,7 @@ class SyncPushService:
         exams: ExamService,
         self_study: SelfStudyService,
         research: ResearchService,
+        collaboration: CollaborationService,
     ) -> None:
         self._ledger = ledger
         self._workspaces = workspaces
@@ -140,6 +149,7 @@ class SyncPushService:
         self._exams = exams
         self._self_study = self_study
         self._research = research
+        self._collaboration = collaboration
 
     async def push(
         self,
@@ -342,6 +352,13 @@ class SyncPushService:
             and operation.operation_type == "create"
         ):
             return await self._create_research(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if (
+            operation.entity_type in {"rubric", "group_review", "group_feedback", "report_snapshot"}
+            and operation.operation_type == "create"
+        ):
+            return await self._create_collaboration(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type != "space" or operation.operation_type != "create":
@@ -2090,6 +2107,57 @@ class SyncPushService:
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
+    async def _create_collaboration(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        definitions: dict[str, tuple[Any, Any]] = {
+            "rubric": (Rubric, CollaborationRubricCreate),
+            "group_review": (ReviewRequest, CollaborationReviewCreate),
+            "group_feedback": (GroupFeedback, CollaborationFeedbackCreate),
+            "report_snapshot": (ReportSnapshot, CollaborationReportCreate),
+        }
+        model, schema = definitions[operation.entity_type]
+        try:
+            payload = schema.model_validate({**raw, "id": operation.entity_id})
+            current = await db.get(model, operation.entity_id)
+            if current is not None and current.workspace_id != request.workspace_id:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            async with db.begin_nested():
+                item = await self._collaboration.create(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    model,
+                    payload.model_dump(mode="python"),
+                    request_id,
+                    operation.entity_type,
+                )
+                projection = collaboration_payload(item)
+                return await self._append_entity(
+                    db, request.workspace_id, identity, item.version, projection
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _causal_base_version(
         self, db: AsyncSession, request: PushRequest, operation: object
     ) -> int | None:
@@ -2243,6 +2311,10 @@ class SyncPushService:
             | ExperimentRun
             | MetricRecord
             | ResearchFeedback
+            | Rubric
+            | ReviewRequest
+            | GroupFeedback
+            | ReportSnapshot
             | None
         ) = None
         if operation.entity_type == "task":
@@ -2305,6 +2377,14 @@ class SyncPushService:
             remote = await db.get(MetricRecord, operation.entity_id)
         elif operation.entity_type == "research_feedback":
             remote = await db.get(ResearchFeedback, operation.entity_id)
+        elif operation.entity_type == "rubric":
+            remote = await db.get(Rubric, operation.entity_id)
+        elif operation.entity_type == "group_review":
+            remote = await db.get(ReviewRequest, operation.entity_id)
+        elif operation.entity_type == "group_feedback":
+            remote = await db.get(GroupFeedback, operation.entity_id)
+        elif operation.entity_type == "report_snapshot":
+            remote = await db.get(ReportSnapshot, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if isinstance(remote, Task):
@@ -2359,6 +2439,8 @@ class SyncPushService:
             ),
         ):
             payload = research_payload(remote)
+        elif isinstance(remote, (Rubric, ReviewRequest, GroupFeedback, ReportSnapshot)):
+            payload = collaboration_payload(remote)
         else:
             payload = resource_payload(remote)
         return ConflictOperationResult(
@@ -2699,4 +2781,32 @@ def research_payload(
         "claim_id": str(item.claim_id),
         "description": item.description,
         "requested_action": item.requested_action,
+    }
+
+
+def collaboration_payload(
+    item: Rubric | ReviewRequest | GroupFeedback | ReportSnapshot,
+) -> dict[str, object]:
+    common: dict[str, object] = {"space_id": str(item.space_id)}
+    if isinstance(item, Rubric):
+        return {**common, "title": item.title, "criteria": item.criteria}
+    if isinstance(item, ReviewRequest):
+        return {
+            **common,
+            "rubric_id": str(item.rubric_id),
+            "subject_title": item.subject_title,
+            "submission_summary": item.submission_summary,
+        }
+    if isinstance(item, GroupFeedback):
+        return {
+            **common,
+            "review_id": str(item.review_id),
+            "feedback": item.feedback,
+            "recommended_action": item.recommended_action,
+        }
+    return {
+        **common,
+        "review_id": str(item.review_id),
+        "summary": item.summary,
+        "published_at": item.published_at.isoformat(),
     }

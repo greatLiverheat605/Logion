@@ -747,6 +747,343 @@
         "title": "ClaimResponse",
         "type": "object"
       },
+      "CollaborationFeedbackCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "feedback": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Feedback",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "recommended_action": {
+            "default": "",
+            "maxLength": 30000,
+            "title": "Recommended Action",
+            "type": "string"
+          },
+          "review_id": {
+            "format": "uuid",
+            "title": "Review Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "review_id",
+          "feedback"
+        ],
+        "title": "CollaborationFeedbackCreate",
+        "type": "object"
+      },
+      "CollaborationFeedbackResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "feedback": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Feedback",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "recommended_action": {
+            "default": "",
+            "maxLength": 30000,
+            "title": "Recommended Action",
+            "type": "string"
+          },
+          "review_id": {
+            "format": "uuid",
+            "title": "Review Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "review_id",
+          "feedback",
+          "version"
+        ],
+        "title": "CollaborationFeedbackResponse",
+        "type": "object"
+      },
+      "CollaborationList": {
+        "additionalProperties": false,
+        "properties": {
+          "feedback": {
+            "items": {
+              "$ref": "#/components/schemas/CollaborationFeedbackResponse"
+            },
+            "title": "Feedback",
+            "type": "array"
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/CollaborationReportResponse"
+            },
+            "title": "Reports",
+            "type": "array"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/CollaborationReviewResponse"
+            },
+            "title": "Reviews",
+            "type": "array"
+          },
+          "rubrics": {
+            "items": {
+              "$ref": "#/components/schemas/CollaborationRubricResponse"
+            },
+            "title": "Rubrics",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rubrics",
+          "reviews",
+          "feedback",
+          "reports"
+        ],
+        "title": "CollaborationList",
+        "type": "object"
+      },
+      "CollaborationReportCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "review_id": {
+            "format": "uuid",
+            "title": "Review Id",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "review_id",
+          "summary",
+          "published_at"
+        ],
+        "title": "CollaborationReportCreate",
+        "type": "object"
+      },
+      "CollaborationReportResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "review_id": {
+            "format": "uuid",
+            "title": "Review Id",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "review_id",
+          "summary",
+          "published_at",
+          "version"
+        ],
+        "title": "CollaborationReportResponse",
+        "type": "object"
+      },
+      "CollaborationReviewCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "rubric_id": {
+            "format": "uuid",
+            "title": "Rubric Id",
+            "type": "string"
+          },
+          "subject_title": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Subject Title",
+            "type": "string"
+          },
+          "submission_summary": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Submission Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rubric_id",
+          "subject_title",
+          "submission_summary"
+        ],
+        "title": "CollaborationReviewCreate",
+        "type": "object"
+      },
+      "CollaborationReviewResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "rubric_id": {
+            "format": "uuid",
+            "title": "Rubric Id",
+            "type": "string"
+          },
+          "subject_title": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Subject Title",
+            "type": "string"
+          },
+          "submission_summary": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Submission Summary",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "rubric_id",
+          "subject_title",
+          "submission_summary",
+          "version"
+        ],
+        "title": "CollaborationReviewResponse",
+        "type": "object"
+      },
+      "CollaborationRubricCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "criteria": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Criteria",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "criteria"
+        ],
+        "title": "CollaborationRubricCreate",
+        "type": "object"
+      },
+      "CollaborationRubricResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "criteria": {
+            "maxLength": 30000,
+            "minLength": 1,
+            "title": "Criteria",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "space_id": {
+            "format": "uuid",
+            "title": "Space Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "criteria",
+          "workspace_id",
+          "space_id",
+          "version"
+        ],
+        "title": "CollaborationRubricResponse",
+        "type": "object"
+      },
       "ConflictOperationResult": {
         "additionalProperties": false,
         "properties": {
@@ -11209,6 +11546,375 @@
         "summary": "Resolve Review Finding",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/collaboration": {
+      "get": {
+        "operationId": "list_collaboration_api_v1_workspaces__workspace_id__spaces__space_id__collaboration_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Collaboration",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/collaboration/feedback": {
+      "post": {
+        "operationId": "create_feedback_api_v1_workspaces__workspace_id__spaces__space_id__collaboration_feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationFeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationFeedbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Feedback",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/collaboration/reports": {
+      "post": {
+        "operationId": "create_report_api_v1_workspaces__workspace_id__spaces__space_id__collaboration_reports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationReportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Report",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/collaboration/reviews": {
+      "post": {
+        "operationId": "create_review_api_v1_workspaces__workspace_id__spaces__space_id__collaboration_reviews_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationReviewCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Review",
+        "tags": [
+          "collaboration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/collaboration/rubrics": {
+      "post": {
+        "operationId": "create_rubric_api_v1_workspaces__workspace_id__spaces__space_id__collaboration_rubrics_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationRubricCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationRubricResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Rubric",
+        "tags": [
+          "collaboration"
         ]
       }
     },

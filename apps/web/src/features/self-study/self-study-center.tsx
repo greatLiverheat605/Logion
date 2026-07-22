@@ -37,7 +37,11 @@ type Kind =
   | "research_question"
   | "experiment_run"
   | "metric_record"
-  | "research_feedback";
+  | "research_feedback"
+  | "rubric"
+  | "group_review"
+  | "group_feedback"
+  | "report_snapshot";
 interface View {
   entity: LocalEntity;
   payload: JsonObject;
@@ -70,8 +74,15 @@ export function SelfStudyCenter() {
 export function ResearchCenter() {
   return <OfflineLearningCenter mode="research" />;
 }
+export function CollaborationCenter() {
+  return <OfflineLearningCenter mode="collaboration" />;
+}
 
-function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
+function OfflineLearningCenter({
+  mode,
+}: {
+  mode: "self-study" | "research" | "collaboration";
+}) {
   const { state: session } = useSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [spaces, setSpaces] = useState<Space[]>([]);
@@ -79,7 +90,13 @@ function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
     [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState(""),
     [unlocked, setUnlocked] = useState(false);
-  const [status, setStatus] = useState("正在准备自主学习空间……");
+  const [status, setStatus] = useState(() =>
+    mode === "collaboration"
+      ? "正在准备共享审阅空间……"
+      : mode === "research"
+        ? "正在准备研究空间……"
+        : "正在准备自主学习空间……",
+  );
   const [records, setRecords] = useState<Record<Kind, View[]>>({
     learning_track: [],
     study_project: [],
@@ -91,6 +108,10 @@ function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
     experiment_run: [],
     metric_record: [],
     research_feedback: [],
+    rubric: [],
+    group_review: [],
+    group_feedback: [],
+    report_snapshot: [],
   });
   const database = useRef<LogionOfflineDatabase | null>(null),
     vault = useRef<OfflineVault | null>(null);
@@ -107,24 +128,39 @@ function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
         w.workspaces.some((i) => i.id === x) ? x : (w.workspaces[0]?.id ?? ""),
       );
       setDeviceId(d.devices.find((i) => i.current)?.id ?? "");
-      setStatus("请解锁本地自主学习资料。");
-    } catch (error) {
-      setStatus(errorMessage(error));
-    }
-  }, []);
-  const loadSpaces = useCallback(async (id: string) => {
-    try {
-      const r = await browserApiClient.request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${id}/spaces`,
-      );
-      setSpaces(r.spaces);
-      setSpaceId((x) =>
-        r.spaces.some((i) => i.id === x) ? x : (r.spaces[0]?.id ?? ""),
+      setStatus(
+        mode === "collaboration"
+          ? "请解锁本地共享审阅资料。"
+          : mode === "research"
+            ? "请解锁本地研究资料。"
+            : "请解锁本地自主学习资料。",
       );
     } catch (error) {
       setStatus(errorMessage(error));
     }
-  }, []);
+  }, [mode]);
+  const loadSpaces = useCallback(
+    async (id: string) => {
+      try {
+        const r = await browserApiClient.request<{ spaces: Space[] }>(
+          `/api/v1/workspaces/${id}/spaces`,
+        );
+        setSpaces(r.spaces);
+        const eligible =
+          mode === "collaboration"
+            ? r.spaces.filter((space) => space.visibility === "shared")
+            : r.spaces;
+        setSpaceId((current) =>
+          eligible.some((space) => space.id === current)
+            ? current
+            : (eligible[0]?.id ?? ""),
+        );
+      } catch (error) {
+        setStatus(errorMessage(error));
+      }
+    },
+    [mode],
+  );
   useEffect(() => {
     queueMicrotask(() => void loadContext());
     return () => database.current?.close();
@@ -197,6 +233,10 @@ function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
       "experiment_run",
       "metric_record",
       "research_feedback",
+      "rubric",
+      "group_review",
+      "group_feedback",
+      "report_snapshot",
     ];
     const entries = await Promise.all(
       kinds.map(async (kind) => {
@@ -433,8 +473,231 @@ function OfflineLearningCenter({ mode }: { mode: "self-study" | "research" }) {
       await refresh();
     }
   }
+  async function submitCollaboration(
+    event: FormEvent<HTMLFormElement>,
+    kind: Kind,
+  ) {
+    event.preventDefault();
+    const form = event.currentTarget,
+      data = new FormData(form);
+    try {
+      if (kind === "rubric")
+        await commit(kind, {
+          title: String(data.get("title")),
+          criteria: String(data.get("criteria")),
+        });
+      if (kind === "group_review") {
+        const parent = String(data.get("rubric_id"));
+        await commit(
+          kind,
+          {
+            rubric_id: parent,
+            subject_title: String(data.get("subject_title")),
+            submission_summary: String(data.get("summary")),
+          },
+          [parent],
+        );
+      }
+      if (kind === "group_feedback") {
+        const parent = String(data.get("review_id"));
+        await commit(
+          kind,
+          {
+            review_id: parent,
+            feedback: String(data.get("feedback")),
+            recommended_action: String(data.get("action")),
+          },
+          [parent],
+        );
+      }
+      if (kind === "report_snapshot") {
+        const parent = String(data.get("review_id"));
+        await commit(
+          kind,
+          {
+            review_id: parent,
+            summary: String(data.get("summary")),
+            published_at: new Date().toISOString(),
+          },
+          [parent],
+        );
+      }
+      form.reset();
+      setStatus("共享记录已加密保存。");
+    } catch (error) {
+      setStatus(errorMessage(error));
+      await refresh();
+    }
+  }
   const visible = (kind: Kind) =>
     records[kind].filter((x) => x.payload.space_id === spaceId);
+  const selectedRole = workspaces.find((x) => x.id === workspaceId)?.role;
+  const canPlanShared =
+    selectedRole === "owner" ||
+    selectedRole === "admin" ||
+    selectedRole === "editor";
+  const canReviewShared = canPlanShared || selectedRole === "reviewer";
+  if (mode === "collaboration")
+    return (
+      <main id="main-content" className="settings-page today-page">
+        <header>
+          <p className="eyebrow">LOGION · GROUP</p>
+          <h1>导师与小组审阅闭环</h1>
+          <p aria-live="polite">{status}</p>
+        </header>
+        <section className="settings-card">
+          <h2>共享空间</h2>
+          <div className="inline-form">
+            <select
+              aria-label="工作区"
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+            >
+              {workspaces.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="共享空间"
+              value={spaceId}
+              onChange={(e) => setSpaceId(e.target.value)}
+            >
+              {spaces.every((x) => x.visibility !== "shared") ? (
+                <option value="">尚无可用共享空间</option>
+              ) : null}
+              {spaces
+                .filter((x) => x.visibility === "shared")
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              disabled={!unlocked}
+              onClick={() => void synchronize()}
+            >
+              同步
+            </button>
+          </div>
+          <form className="inline-form" onSubmit={unlock}>
+            <input
+              name="passphrase"
+              type="password"
+              minLength={10}
+              autoComplete="current-password"
+              aria-label="本地口令"
+              required
+            />
+            <button>解锁</button>
+          </form>
+        </section>
+        <section className="settings-card">
+          <h2>Rubric 与审阅</h2>
+          {!canPlanShared ? (
+            <p role="status">
+              当前角色可查看共享内容，但不能修改 Rubric、审阅或报告。
+            </p>
+          ) : null}
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitCollaboration(e, "rubric")}
+          >
+            <input name="title" placeholder="Rubric 名称" required />
+            <textarea name="criteria" placeholder="验收标准" required />
+            <button disabled={!unlocked || !spaceId || !canPlanShared}>
+              创建 Rubric
+            </button>
+          </form>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitCollaboration(e, "group_review")}
+          >
+            <select name="rubric_id" required>
+              <option value="">选择 Rubric</option>
+              {visible("rubric").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.title)}
+                </option>
+              ))}
+            </select>
+            <input name="subject_title" placeholder="审阅对象" required />
+            <textarea
+              name="summary"
+              placeholder="提交摘要（仅共享内容）"
+              required
+            />
+            <button disabled={!unlocked || !spaceId || !canPlanShared}>
+              发起审阅
+            </button>
+          </form>
+        </section>
+        <section className="settings-card">
+          <h2>反馈与报告快照</h2>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitCollaboration(e, "group_feedback")}
+          >
+            <select name="review_id" required>
+              <option value="">选择审阅</option>
+              {visible("group_review").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.subject_title)}
+                </option>
+              ))}
+            </select>
+            <textarea name="feedback" placeholder="反馈" required />
+            <textarea name="action" placeholder="建议动作" />
+            <button disabled={!unlocked || !spaceId || !canReviewShared}>
+              提交反馈
+            </button>
+          </form>
+          <form
+            className="planning-form"
+            onSubmit={(e) => submitCollaboration(e, "report_snapshot")}
+          >
+            <select name="review_id" required>
+              <option value="">选择审阅</option>
+              {visible("group_review").map((x) => (
+                <option key={x.entity.entity_id} value={x.entity.entity_id}>
+                  {String(x.payload.subject_title)}
+                </option>
+              ))}
+            </select>
+            <textarea name="summary" placeholder="只读报告摘要" required />
+            <button disabled={!unlocked || !spaceId || !canPlanShared}>
+              发布不可变快照
+            </button>
+          </form>
+          <div className="task-grid">
+            {visible("group_review").map((review) => (
+              <article className="task-card" key={review.entity.entity_id}>
+                <h3>{String(review.payload.subject_title)}</h3>
+                {visible("group_feedback")
+                  .filter(
+                    (x) => x.payload.review_id === review.entity.entity_id,
+                  )
+                  .map((x) => (
+                    <p key={x.entity.entity_id}>{String(x.payload.feedback)}</p>
+                  ))}
+                {visible("report_snapshot")
+                  .filter(
+                    (x) => x.payload.review_id === review.entity.entity_id,
+                  )
+                  .map((x) => (
+                    <p key={x.entity.entity_id}>
+                      报告：{String(x.payload.summary)}
+                    </p>
+                  ))}
+              </article>
+            ))}
+          </div>
+        </section>
+      </main>
+    );
   if (mode === "research")
     return (
       <main id="main-content" className="settings-page today-page">

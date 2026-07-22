@@ -2,6 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from logion_api.collaboration import models as collaboration_models  # noqa: F401
 from logion_api.config import get_settings
 from logion_api.content import models as content_models  # noqa: F401
 from logion_api.db import Base
