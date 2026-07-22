@@ -12,6 +12,13 @@ import { createPublicAuthApi, type LoginOutcome } from "./public-auth-api";
 const authApi = createPublicAuthApi(browserApiClient);
 type PasskeyOptions =
   components["schemas"]["PasskeyAuthenticationOptionsResponse"];
+type AuthResponse = components["schemas"]["AuthResponse"];
+
+function nextRoute(response: AuthResponse): string {
+  return response.user.status === "pending_deletion"
+    ? "/account/deletion"
+    : "/app";
+}
 
 function decodeBase64url(value: string): ArrayBuffer {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
@@ -51,7 +58,7 @@ export function LoginForm() {
       if (outcome.kind === "mfa_required") {
         setChallenge(outcome.challenge);
       } else {
-        window.location.assign("/app");
+        window.location.assign(nextRoute(outcome.response));
       }
     } catch (error) {
       setRequestId(
@@ -70,7 +77,7 @@ export function LoginForm() {
     setPending(true);
     setRequestId(null);
     try {
-      await authApi.verifyMfa({
+      const response = await authApi.verifyMfa({
         challenge_token: challenge.challenge_token,
         code: String(data.get("code") ?? ""),
         method:
@@ -78,7 +85,7 @@ export function LoginForm() {
       });
       form.reset();
       setChallenge(null);
-      window.location.assign("/app");
+      window.location.assign(nextRoute(response));
     } catch (error) {
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",
@@ -115,30 +122,33 @@ export function LoginForm() {
       })) as PublicKeyCredential | null;
       if (!credential) throw new Error("Passkey cancelled");
       const response = credential.response as AuthenticatorAssertionResponse;
-      await browserApiClient.request("/api/v1/auth/passkeys/login/verify", {
-        method: "POST",
-        body: JSON.stringify({
-          challenge_id: options.challenge_id,
-          device_name: "此浏览器",
-          platform: "web",
-          credential: {
-            id: credential.id,
-            rawId: encodeBase64url(credential.rawId),
-            type: "public-key",
-            authenticatorAttachment: credential.authenticatorAttachment,
-            clientExtensionResults: credential.getClientExtensionResults(),
-            response: {
-              authenticatorData: encodeBase64url(response.authenticatorData),
-              clientDataJSON: encodeBase64url(response.clientDataJSON),
-              signature: encodeBase64url(response.signature),
-              userHandle: response.userHandle
-                ? encodeBase64url(response.userHandle)
-                : null,
+      const authenticated = await browserApiClient.request<AuthResponse>(
+        "/api/v1/auth/passkeys/login/verify",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            challenge_id: options.challenge_id,
+            device_name: "此浏览器",
+            platform: "web",
+            credential: {
+              id: credential.id,
+              rawId: encodeBase64url(credential.rawId),
+              type: "public-key",
+              authenticatorAttachment: credential.authenticatorAttachment,
+              clientExtensionResults: credential.getClientExtensionResults(),
+              response: {
+                authenticatorData: encodeBase64url(response.authenticatorData),
+                clientDataJSON: encodeBase64url(response.clientDataJSON),
+                signature: encodeBase64url(response.signature),
+                userHandle: response.userHandle
+                  ? encodeBase64url(response.userHandle)
+                  : null,
+              },
             },
-          },
-        }),
-      });
-      window.location.assign("/app");
+          }),
+        },
+      );
+      window.location.assign(nextRoute(authenticated));
     } catch (error) {
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",

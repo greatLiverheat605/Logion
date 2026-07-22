@@ -260,7 +260,7 @@ class TotpService:
             challenge.used_at is not None
             or challenge.expires_at <= current_time
             or challenge.failed_attempts >= self._MAX_CHALLENGE_FAILURES
-            or user.status != "active"
+            or user.status not in {"active", "pending_deletion"}
         ):
             raise self._challenge_error()
 

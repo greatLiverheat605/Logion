@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     engagement_write_limit_per_hour: int = Field(default=240, ge=1, le=5000)
     public_calendar_read_limit_per_minute: int = Field(default=120, ge=1, le=2000)
     data_portability_write_limit_per_hour: int = Field(default=10, ge=1, le=100)
+    account_deletion_grace_days: int = Field(default=14, ge=1, le=30)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(

@@ -99,3 +99,31 @@ class DataImportPreview(Base):
     )
     imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AccountDeletionRequest(Base):
+    __tablename__ = "account_deletion_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','cancelled','completed')",
+            name="ck_account_deletion_status",
+        ),
+        Index("ix_account_deletion_due", "status", "delete_after"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, unique=True
+    )
+    status: Mapped[Literal["pending", "cancelled", "completed"]] = mapped_column(
+        String(16), nullable=False, default="pending"
+    )
+    owned_workspace_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    delete_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

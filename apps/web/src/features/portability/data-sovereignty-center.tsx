@@ -184,6 +184,23 @@ export function DataSovereigntyCenter() {
     }
   }
 
+  async function requestAccountDeletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const confirmation = String(
+      new FormData(event.currentTarget).get("deletion_confirmation") ?? "",
+    );
+    try {
+      await browserApiClient.request("/api/v1/account-deletion", {
+        method: "POST",
+        csrf: true,
+        body: JSON.stringify({ confirmation }),
+      });
+      window.location.assign("/auth/login");
+    } catch (error) {
+      setStatus(errorText(error));
+    }
+  }
+
   const visibleExports = dataWorkspaceId === workspaceId ? exports : [];
   const visibleImports = dataWorkspaceId === workspaceId ? imports : [];
 
@@ -324,6 +341,25 @@ export function DataSovereigntyCenter() {
         <p>
           导入预览、账户删除生命周期与工作区备份恢复将在本阶段后续工作包中启用。
         </p>
+      </section>
+      <section className="settings-card">
+        <h2>删除账户</h2>
+        <p>
+          删除请求会立即撤销会话、分享和日历订阅。若你仍拥有有其他成员的工作区，必须先转移所有权。
+          宽限期内可重新登录并在受限恢复页取消；到期后清理个人数据并去标识化最小审计记录。
+        </p>
+        <form className="planning-form" onSubmit={requestAccountDeletion}>
+          <label>
+            输入 DELETE MY ACCOUNT
+            <input
+              name="deletion_confirmation"
+              pattern="DELETE MY ACCOUNT"
+              autoComplete="off"
+              required
+            />
+          </label>
+          <button className="danger-button">请求删除账户</button>
+        </form>
       </section>
     </main>
   );
