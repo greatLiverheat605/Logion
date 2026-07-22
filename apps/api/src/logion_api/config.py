@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     ai_provider_discovery_limit_per_hour: int = Field(default=10, ge=1, le=100)
     ai_provider_response_max_bytes: int = Field(default=1048576, ge=4096, le=4194304)
     ai_provider_discovery_model_limit: int = Field(default=1000, ge=1, le=5000)
+    ai_run_write_limit_per_hour: int = Field(default=120, ge=1, le=2000)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     totp_active_encryption_key_id: str = Field(

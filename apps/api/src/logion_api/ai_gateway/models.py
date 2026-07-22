@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -6,6 +6,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid6 import uuid7
 
@@ -225,3 +227,171 @@ class AITaskRouteTarget(Base):
         Uuid, ForeignKey("ai_models.id", ondelete="RESTRICT"), nullable=False
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AIUsageMonthly(Base):
+    __tablename__ = "ai_usage_monthly"
+    __table_args__ = (
+        CheckConstraint(
+            "reserved_tokens >= 0 AND consumed_tokens >= 0 AND reserved_cost_minor >= 0 "
+            "AND consumed_cost_minor >= 0",
+            name="ck_ai_usage_nonnegative",
+        ),
+    )
+
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    period_start: Mapped[date] = mapped_column(Date, primary_key=True)
+    reserved_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    consumed_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reserved_cost_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    consumed_cost_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class AIRun(Base):
+    __tablename__ = "ai_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','succeeded','failed','cancelled')",
+            name="ck_ai_run_status",
+        ),
+        CheckConstraint("target_version > 0", name="ck_ai_run_target_version"),
+        CheckConstraint(
+            "estimated_input_tokens > 0 AND requested_output_tokens > 0 "
+            "AND reserved_tokens > 0 AND reserved_cost_minor >= 0",
+            name="ck_ai_run_estimates",
+        ),
+        UniqueConstraint(
+            "workspace_id", "requested_by", "idempotency_key", name="uq_ai_run_idempotency"
+        ),
+        Index("ix_ai_run_workspace_created", "workspace_id", "created_at"),
+        Index(
+            "ix_ai_run_queue",
+            "status",
+            "created_at",
+            postgresql_where=text("status = 'queued'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    route_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("ai_task_routes.id", ondelete="RESTRICT"), nullable=False
+    )
+    task_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    target_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    selected_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    expected_output_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    input_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
+    input_nonce: Mapped[bytes | None] = mapped_column(LargeBinary(12))
+    input_data_key_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
+    input_data_key_nonce: Mapped[bytes | None] = mapped_column(LargeBinary(12))
+    input_encryption_key_id: Mapped[str | None] = mapped_column(String(64))
+    retain_input: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[Literal["queued", "running", "succeeded", "failed", "cancelled"]] = (
+        mapped_column(String(16), nullable=False, default="queued")
+    )
+    estimated_input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    requested_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    reserved_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reserved_cost_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actual_input_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    actual_output_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    actual_cost_minor: Mapped[int | None] = mapped_column(BigInteger)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    selected_model_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("ai_models.id", ondelete="RESTRICT")
+    )
+    selected_provider_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("ai_providers.id", ondelete="RESTRICT")
+    )
+    selected_candidate_position: Mapped[int | None] = mapped_column(Integer)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    requested_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AIRunCandidate(Base):
+    __tablename__ = "ai_run_candidates"
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="ck_ai_run_candidate_position"),
+        UniqueConstraint("run_id", "position", name="uq_ai_run_candidate_position"),
+        UniqueConstraint("run_id", "model_id", name="uq_ai_run_candidate_model"),
+        Index("ix_ai_run_candidate_run", "workspace_id", "run_id", "position"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("ai_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    model_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("ai_models.id", ondelete="RESTRICT"), nullable=False
+    )
+    provider_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("ai_providers.id", ondelete="RESTRICT"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_cost_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class AIOutputDraft(Base):
+    __tablename__ = "ai_output_drafts"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending','accepted','rejected')", name="ck_ai_draft_status"),
+        Index("ix_ai_draft_workspace_created", "workspace_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("ai_runs.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    target_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    structured_output: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False)
+    edited_output: Mapped[dict[str, str] | None] = mapped_column(JSONB)
+    status: Mapped[Literal["pending", "accepted", "rejected"]] = mapped_column(
+        String(16), nullable=False, default="pending"
+    )
+    decided_by: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    decision_note: Mapped[str | None] = mapped_column(String(1000))
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

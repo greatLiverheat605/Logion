@@ -18,6 +18,7 @@ from logion_api.ai_gateway.routing_schemas import (
     AIWorkspaceBudgetResponse,
     AIWorkspaceBudgetUpdate,
 )
+from logion_api.ai_gateway.run_routes import run_write_boundary
 from logion_api.ai_gateway.schemas import AIModelResponse
 from logion_api.errors import APIError
 from logion_api.identity.dependencies import (
@@ -28,6 +29,7 @@ from logion_api.identity.dependencies import (
     SettingsDependency,
     request_id,
 )
+from logion_api.workspaces.permissions import Permission
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/ai", tags=["ai"])
 
@@ -315,9 +317,16 @@ async def resolve_route(
     routing: AIRoutingServiceDependency,
     x_csrf_token: str | None = Header(default=None),
 ) -> AIRouteResolveResponse:
-    await boundary(request, context, identity, limiter, settings, workspace_id, x_csrf_token)
+    await run_write_boundary(
+        request, context, identity, limiter, settings, workspace_id, x_csrf_token
+    )
     route, candidates, budget = await routing.resolve(
-        db, context, workspace_id, payload, request_id(request)
+        db,
+        context,
+        workspace_id,
+        payload,
+        request_id(request),
+        permission=Permission.AI_USE,
     )
     return AIRouteResolveResponse(
         route_id=route.id,

@@ -32,3 +32,14 @@
 - Token、上下文、价格和预算使用有界整数；成本由服务端按保存价格计算并向上取整。
 - 预检只返回模型/Provider ID、候选顺序和估算数字，不返回密钥、Base URL、原始 Provider 数据或用户正文。
 - 当前预检不预占月度额度；在 AIRun 原子预占落地前，它不能作为“已获执行额度”的凭证。
+
+## L5-003 运行与草稿增量
+
+- 新增 `ai.use` 命名权限：Owner/Admin/Editor/Contributor/Reviewer 可创建自己的运行，Viewer 不可用；运行与草稿查询额外限定 `requested_by`。
+- 创建运行要求 recent-auth、可信 Origin、CSRF、独立限流、`send_confirmed=true` 和有界字段；服务端不信任客户端路由、模型、价格或预算估算。
+- 输入以 run/workspace AAD 信封加密；密钥、原文、Provider Base URL 和原始响应不进入运行响应、审计或 worker 日志。默认终态清除全部输入密文。
+- 月度 usage 行加锁后原子预占；幂等键带请求哈希，重复请求不重复预占，不同 payload 重用返回 409。
+- Worker 重新验证模型、Provider、租户、启用与健康状态；出站继续使用固定公网 IP、Host/SNI、无代理、无重定向和有界响应。
+- 只允许网络/超时、429、受控 5xx 重试/降级；认证、schema、预算、状态与取消失败关闭。
+- Provider 内容与输入均按提示注入数据处理；无工具调用，输出只允许预期键的字符串 JSON。
+- AI 成功只创建 `AIOutputDraft`；批准决策记录 `formal_target_modified=false`，不会静默覆盖正式对象。

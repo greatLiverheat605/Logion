@@ -365,10 +365,13 @@ export function ProviderCenter() {
   }
 
   return (
-    <main id="main-content" className="settings-page">
+    <section
+      className="settings-page"
+      aria-labelledby="provider-center-heading"
+    >
       <header>
         <p className="eyebrow">LOGION · AI GATEWAY</p>
-        <h1>AI Provider</h1>
+        <h2 id="provider-center-heading">AI Provider</h2>
         <p aria-live="polite">{visibleStatus}</p>
       </header>
       <section className="settings-card">
@@ -735,6 +738,6 @@ export function ProviderCenter() {
           <p>尚未配置任务路由。</p>
         )}
       </section>
-    </main>
+    </section>
   );
 }

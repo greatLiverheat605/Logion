@@ -46,6 +46,7 @@ class Permission(StrEnum):
     EVIDENCE_SUBMIT = "evidence.submit"
     REVIEW_WRITE = "review.write"
     AI_CONFIGURE = "ai.configure"
+    AI_USE = "ai.use"
     SHARE_CREATE = "share.create"
 
 
@@ -63,6 +64,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.EVIDENCE_SUBMIT,
             Permission.REVIEW_WRITE,
             Permission.AI_CONFIGURE,
+            Permission.AI_USE,
             Permission.SHARE_CREATE,
         }
     ),
@@ -75,6 +77,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.SHARED_PLAN_WRITE,
             Permission.EVIDENCE_SUBMIT,
             Permission.REVIEW_WRITE,
+            Permission.AI_USE,
             Permission.SHARE_CREATE,
         }
     ),
@@ -84,6 +87,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.SPACE_CREATE_PRIVATE,
             Permission.SHARED_CONTENT_READ,
             Permission.EVIDENCE_SUBMIT,
+            Permission.AI_USE,
         }
     ),
     WorkspaceRole.REVIEWER: frozenset(
@@ -92,6 +96,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.SPACE_CREATE_PRIVATE,
             Permission.SHARED_CONTENT_READ,
             Permission.REVIEW_WRITE,
+            Permission.AI_USE,
         }
     ),
     WorkspaceRole.VIEWER: frozenset(

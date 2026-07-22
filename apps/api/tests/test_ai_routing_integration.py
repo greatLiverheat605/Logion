@@ -5,9 +5,16 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.ai_gateway.adapter import DiscoveredModel
 from logion_api.ai_gateway.dependencies import get_ai_discovery_adapter
+from logion_api.ai_gateway.execution_service import AIExecutionService
+from logion_api.ai_gateway.generation_adapter import GeneratedDraft
+from logion_api.ai_gateway.models import AIRun, AIUsageMonthly
+from logion_api.config import get_settings
 from logion_api.db import session_factory
+from logion_api.errors import APIError
+from logion_api.identity.models import AuditEvent
 from logion_api.main import app
 from logion_api.workspaces.models import WorkspaceMembership
+from sqlalchemy import select
 
 
 class RoutingDiscoveryAdapter:
@@ -21,6 +28,22 @@ class RoutingDiscoveryAdapter:
             DiscoveredModel(provider_model_id="route-primary", display_name="Primary"),
             DiscoveredModel(provider_model_id="route-fallback", display_name="Fallback"),
         ]
+
+
+class FallbackGenerationAdapter:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def generate(self, **_kwargs: object) -> GeneratedDraft:
+        self.calls += 1
+        if self.calls == 1:
+            raise APIError(
+                code="AI_PROVIDER_UNAVAILABLE",
+                message="normalized provider failure",
+                status_code=503,
+                retryable=True,
+            )
+        return GeneratedDraft(output={"summary": "draft output"}, input_tokens=20, output_tokens=5)
 
 
 @pytest.mark.integration
@@ -177,6 +200,134 @@ async def test_ai_routes_enforce_budget_order_capability_and_tenant_boundaries()
                 "fallback",
             ]
             assert all(row["estimated_cost_minor"] == 1 for row in preview.json()["candidates"])
+
+            runs_url = f"/api/v1/workspaces/{workspace_id}/ai/runs"
+            run_payload = {
+                "id": str(uuid4()),
+                "idempotency_key": str(uuid4()),
+                "task_type": "user.structured-draft",
+                "target_type": "user.note",
+                "target_id": str(uuid4()),
+                "target_version": 1,
+                "input_fields": {"note": "private source material"},
+                "expected_output_fields": ["summary"],
+                "requested_output_tokens": 100,
+                "retain_input": False,
+                "send_confirmed": True,
+            }
+            not_confirmed = await owner.post(
+                runs_url,
+                headers=csrf,
+                json={**run_payload, "id": str(uuid4()), "send_confirmed": False},
+            )
+            assert not_confirmed.status_code == 422
+            viewer_run = await viewer.post(
+                runs_url,
+                headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+                json={
+                    **run_payload,
+                    "id": str(uuid4()),
+                    "idempotency_key": str(uuid4()),
+                },
+            )
+            assert viewer_run.status_code == 403
+            queued = await owner.post(runs_url, headers=csrf, json=run_payload)
+            assert queued.status_code == 202, queued.text
+            external_cancel = await viewer.post(
+                f"/api/v1/workspaces/{external_workspace_id}/ai/runs/{queued.json()['id']}/cancel",
+                headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+                json={"expected_version": queued.json()["version"]},
+            )
+            assert external_cancel.status_code == 404
+            replay = await owner.post(runs_url, headers=csrf, json=run_payload)
+            assert replay.status_code == 202
+            assert replay.json()["id"] == queued.json()["id"]
+            reused = await owner.post(
+                runs_url,
+                headers=csrf,
+                json={**run_payload, "requested_output_tokens": 101},
+            )
+            assert reused.status_code == 409
+            assert reused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
+            cancelled = await owner.post(
+                f"{runs_url}/{queued.json()['id']}/cancel",
+                headers=csrf,
+                json={"expected_version": queued.json()["version"]},
+            )
+            assert cancelled.status_code == 200, cancelled.text
+            assert cancelled.json()["status"] == "cancelled"
+
+            executable_payload = {
+                **run_payload,
+                "id": str(uuid4()),
+                "idempotency_key": str(uuid4()),
+                "target_id": str(uuid4()),
+            }
+            executable = await owner.post(runs_url, headers=csrf, json=executable_payload)
+            assert executable.status_code == 202, executable.text
+            fake_generation = FallbackGenerationAdapter()
+            execution = AIExecutionService(
+                get_settings(),
+                adapter_factory=lambda: fake_generation,  # type: ignore[arg-type]
+            )
+            assert await execution.execute_next() is True
+            assert fake_generation.calls == 2
+            completed_runs = await owner.get(runs_url)
+            completed = next(
+                row for row in completed_runs.json()["runs"] if row["id"] == executable.json()["id"]
+            )
+            assert completed["status"] == "succeeded"
+            assert completed["selected_candidate_position"] == 1
+            assert "private source material" not in completed_runs.text
+            drafts_url = f"/api/v1/workspaces/{workspace_id}/ai/drafts"
+            drafts = await owner.get(drafts_url)
+            assert drafts.status_code == 200
+            draft = drafts.json()["drafts"][0]
+            assert draft["structured_output"] == {"summary": "draft output"}
+            external_decision = await viewer.post(
+                f"/api/v1/workspaces/{external_workspace_id}/ai/drafts/{draft['id']}/decision",
+                headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+                json={
+                    "expected_version": draft["version"],
+                    "decision": "rejected",
+                    "edited_output": None,
+                    "decision_note": None,
+                },
+            )
+            assert external_decision.status_code == 404
+            accepted = await owner.post(
+                f"{drafts_url}/{draft['id']}/decision",
+                headers=csrf,
+                json={
+                    "expected_version": draft["version"],
+                    "decision": "accepted",
+                    "edited_output": {"summary": "human edited draft"},
+                    "decision_note": "Reviewed; approval does not mutate the target.",
+                },
+            )
+            assert accepted.status_code == 200, accepted.text
+            assert accepted.json()["status"] == "accepted"
+            async with session_factory() as db:
+                cancelled_row = await db.get(AIRun, UUID(queued.json()["id"]))
+                completed_row = await db.get(AIRun, UUID(executable.json()["id"]))
+                assert cancelled_row is not None and cancelled_row.input_ciphertext is None
+                assert completed_row is not None and completed_row.input_ciphertext is None
+                usage = await db.scalar(
+                    select(AIUsageMonthly).where(AIUsageMonthly.workspace_id == workspace_id)
+                )
+                assert usage is not None
+                assert usage.reserved_tokens == 0
+                assert usage.consumed_tokens == 25
+                audits = list(
+                    (
+                        await db.scalars(
+                            select(AuditEvent).where(AuditEvent.workspace_id == workspace_id)
+                        )
+                    ).all()
+                )
+                assert "private source material" not in " ".join(
+                    str(row.event_metadata) for row in audits
+                )
 
             disabled = await owner.put(
                 f"/api/v1/workspaces/{workspace_id}/ai/models/{model_ids[0]}",

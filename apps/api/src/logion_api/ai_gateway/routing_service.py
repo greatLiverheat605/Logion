@@ -36,14 +36,19 @@ class AIRoutingService:
         self._workspaces = workspaces
 
     async def authorize(
-        self, db: AsyncSession, context: AuthContext, workspace_id: UUID, request_id: str
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        request_id: str,
+        permission: Permission = Permission.AI_CONFIGURE,
     ) -> None:
         await self._workspaces.resolve_workspace(
             db,
             context,
             workspace_id,
             request_id=request_id,
-            permission=Permission.AI_CONFIGURE,
+            permission=permission,
         )
 
     async def create_model(
@@ -290,8 +295,10 @@ class AIRoutingService:
         workspace_id: UUID,
         payload: AIRouteResolveRequest,
         request_id: str,
+        *,
+        permission: Permission = Permission.AI_CONFIGURE,
     ) -> tuple[AITaskRoute, list[AIRouteCandidate], AIWorkspaceBudget | None]:
-        await self.authorize(db, context, workspace_id, request_id)
+        await self.authorize(db, context, workspace_id, request_id, permission)
         route = await db.scalar(
             select(AITaskRoute).where(
                 AITaskRoute.workspace_id == workspace_id,

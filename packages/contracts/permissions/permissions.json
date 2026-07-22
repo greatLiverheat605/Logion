@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "roles": ["owner", "admin", "editor", "contributor", "reviewer", "viewer"],
   "legacy_role_aliases": {
     "member": "contributor"
@@ -16,6 +16,7 @@
     "evidence.submit",
     "review.write",
     "ai.configure",
+    "ai.use",
     "share.create"
   ],
   "role_permissions": {
@@ -31,6 +32,7 @@
       "evidence.submit",
       "review.write",
       "ai.configure",
+      "ai.use",
       "share.create"
     ],
     "admin": [
@@ -44,6 +46,7 @@
       "evidence.submit",
       "review.write",
       "ai.configure",
+      "ai.use",
       "share.create"
     ],
     "editor": [
@@ -54,19 +57,22 @@
       "shared_plan.write",
       "evidence.submit",
       "review.write",
+      "ai.use",
       "share.create"
     ],
     "contributor": [
       "workspace.read",
       "space.create_private",
       "shared_content.read",
-      "evidence.submit"
+      "evidence.submit",
+      "ai.use"
     ],
     "reviewer": [
       "workspace.read",
       "space.create_private",
       "shared_content.read",
-      "review.write"
+      "review.write",
+      "ai.use"
     ],
     "viewer": ["workspace.read", "space.create_private", "shared_content.read"]
   }
