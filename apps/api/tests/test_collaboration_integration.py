@@ -146,7 +146,7 @@ async def test_shared_review_role_matrix_and_offline_sync() -> None:
         assert [
             len(visible.json()[key]) for key in ("rubrics", "reviews", "feedback", "reports")
         ] == [1, 1, 1, 1]
-        assert (await viewer.get(private_base)).status_code == 403
+        assert (await viewer.get(private_base)).status_code == 404
         assert (
             await editor.patch(f"{base}/reports/{report_id}", json={"summary": "changed"})
         ).status_code in {404, 405}
