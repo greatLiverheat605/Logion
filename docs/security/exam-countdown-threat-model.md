@@ -1,6 +1,6 @@
 # Personal exam countdown threat model
 
-Status: L4-E1/L4-E2 protected offline/sync baseline
+Status: L4-E1/L4-E2/L4-E3 protected offline/sync baseline
 
 ## Assets and invariants
 
@@ -32,6 +32,9 @@ Status: L4-E1/L4-E2 protected offline/sync baseline
 | Subject weights exceed the whole            | A locked Exam row serializes bounded basis-point totals; the database bounds each weight                           |
 | Cyclic or forged syllabus hierarchy         | A new node selects only an existing same-Subject parent; schema and database reject self-parenting                 |
 | Client forges coverage                      | Create payload coverage is discarded and the server initializes `not_started`; AI has no transition path           |
+| Owner reads a member's mock score           | REST, Pull, and Bootstrap filter MockExam and ScoreRecord by authenticated `user_id`                               |
+| Forged score or completion time             | Numeric bounds, score-at-most-scale, aware datetime validation, and database constraints reject it                 |
+| Score history is silently rewritten         | ScoreRecord is append-only; later correction requires an explicit supersession contract                            |
 
 ## Residual and follow-up work
 

@@ -4,6 +4,8 @@ from uuid import uuid4
 import pytest
 from logion_api.exam.schemas import (
     ExamCreateRequest,
+    MockExamCreateRequest,
+    ScoreRecordCreateRequest,
     SubjectCreateRequest,
     SyllabusNodeCreateRequest,
 )
@@ -60,3 +62,26 @@ def test_subject_and_syllabus_schemas_bound_user_structure() -> None:
         )
     with pytest.raises(ValidationError):
         SyllabusNodeCreateRequest(id=uuid4(), subject_id=uuid4(), title="Node", importance=6)
+
+
+def test_mock_and_score_schemas_reject_invalid_attempts() -> None:
+    with pytest.raises(ValidationError):
+        MockExamCreateRequest(id=uuid4(), exam_id=uuid4(), title="Mock", duration_limit_seconds=59)
+    with pytest.raises(ValidationError):
+        ScoreRecordCreateRequest(
+            id=uuid4(),
+            mock_exam_id=uuid4(),
+            score=101,
+            score_scale_max=100,
+            duration_seconds=3600,
+            completed_at=datetime.now(UTC),
+        )
+    with pytest.raises(ValidationError):
+        ScoreRecordCreateRequest(
+            id=uuid4(),
+            mock_exam_id=uuid4(),
+            score=80,
+            score_scale_max=100,
+            duration_seconds=3600,
+            completed_at=datetime(2026, 9, 5, 9, 0),
+        )
