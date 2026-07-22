@@ -70,44 +70,51 @@ async def test_export_is_encrypted_complete_and_requester_scoped() -> None:
         private_plan_marker = f"other-private-plan-{uuid4().hex}"
         goal_id, plan_id, version_id = uuid4(), uuid4(), uuid4()
         async with session_factory() as db:
-            db.add_all(
-                [
-                    LearningGoal(
-                        id=goal_id,
-                        workspace_id=workspace_id,
-                        space_id=viewer_private_space_id,
-                        title="Other member private goal",
-                        description="",
-                        desired_outcome="",
-                        created_by=viewer_id,
-                        updated_by=viewer_id,
-                    ),
-                    LearningPlan(
-                        id=plan_id,
-                        workspace_id=workspace_id,
-                        space_id=viewer_private_space_id,
-                        goal_id=goal_id,
-                        title="Other member private plan",
-                        status="draft",
-                        created_by=viewer_id,
-                    ),
-                    PlanVersion(
-                        id=version_id,
-                        workspace_id=workspace_id,
-                        plan_id=plan_id,
-                        version_number=1,
-                        status="draft",
-                        change_summary=private_plan_marker,
-                        created_by=viewer_id,
-                    ),
-                    PlanPhase(
-                        workspace_id=workspace_id,
-                        plan_version_id=version_id,
-                        title="Other member private phase",
-                        description=private_plan_marker,
-                        position=0,
-                    ),
-                ]
+            db.add(
+                LearningGoal(
+                    id=goal_id,
+                    workspace_id=workspace_id,
+                    space_id=viewer_private_space_id,
+                    title="Other member private goal",
+                    description="",
+                    desired_outcome="",
+                    created_by=viewer_id,
+                    updated_by=viewer_id,
+                )
+            )
+            await db.flush()
+            db.add(
+                LearningPlan(
+                    id=plan_id,
+                    workspace_id=workspace_id,
+                    space_id=viewer_private_space_id,
+                    goal_id=goal_id,
+                    title="Other member private plan",
+                    status="draft",
+                    created_by=viewer_id,
+                )
+            )
+            await db.flush()
+            db.add(
+                PlanVersion(
+                    id=version_id,
+                    workspace_id=workspace_id,
+                    plan_id=plan_id,
+                    version_number=1,
+                    status="draft",
+                    change_summary=private_plan_marker,
+                    created_by=viewer_id,
+                )
+            )
+            await db.flush()
+            db.add(
+                PlanPhase(
+                    workspace_id=workspace_id,
+                    plan_version_id=version_id,
+                    title="Other member private phase",
+                    description=private_plan_marker,
+                    position=0,
+                )
             )
             await db.commit()
 
