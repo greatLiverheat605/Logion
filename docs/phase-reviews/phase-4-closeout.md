@@ -2,11 +2,12 @@
 
 - Review date: 2026-07-22
 - Baseline: `LOGION_EXECUTION_PLAN.md` and `LOGION_AI_DEVELOPMENT_CONSTRAINTS.md`
-- Final audit candidate: `24a3d26e`
-- Candidate evidence: <https://github.com/greatLiverheat605/Logion/actions/runs/29914365216>
+- Final audit candidate: `4f3441f38f441927b8ae95185f813f42e1a01b22`
+- PR candidate evidence: <https://github.com/greatLiverheat605/Logion/actions/runs/29914593939>
+- Main candidate evidence: <https://github.com/greatLiverheat605/Logion/actions/runs/29914757200>
 - Final pull request: <https://github.com/greatLiverheat605/Logion/pull/108>
 - Phase issue: <https://github.com/greatLiverheat605/Logion/issues/85>
-- Decision: Fast and PostgreSQL Integration candidate checks succeeded; merge and linked Main candidate success are the remaining mechanical conditions before the single Phase 4 human approval
+- Decision: PR Fast/Integration and linked Main candidate completed successfully; ready for the single Phase 4 human approval with no known P0/P1 defect
 
 ## Delivered chains
 
@@ -56,7 +57,8 @@ explicit shared-rubric visibility.
 
 ## Quality evidence
 
-Final audit candidate `24a3d26e` passed both required jobs:
+The final PR candidate passed both required jobs, and merge candidate `4f3441f` then passed
+the Main pipeline:
 
 - Fast: Ruff, Python formatting/type checks, Prettier, ESLint, TypeScript strict, unit tests,
   generated-contract drift, secret/supply-chain checks, affected builds and context guard;
@@ -109,7 +111,7 @@ The detailed matrix and residual risks are recorded in
 
 Approve Phase 4 only after confirming:
 
-1. PR #108 is merged and its linked Main candidate Fast and Integration jobs are successful.
+1. PR #108 is merged and the linked Main candidate evidence remains available and successful.
 2. The four user-created scenario loops and personal-versus-shared boundaries match the
    intended product behavior.
 3. The recorded offline-device retention, Safari/PWA and later release-gate items may remain
