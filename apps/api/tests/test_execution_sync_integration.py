@@ -179,7 +179,15 @@ async def test_task_and_session_sync_replay_conflict_and_bootstrap() -> None:
         conflict = conflicted.json()["results"][0]
         assert conflict["status"] == "conflict"
         assert conflict["conflict"]["remote_version"] == 2
+        assert conflict["conflict"]["conflict_kind"] == "status"
+        assert conflict["conflict"]["resolution_options"] == ["keep_remote", "dismiss"]
         assert conflict["conflict"]["remote_payload"]["description"] == "Sensitive task description"
+
+        async with session_factory() as db:
+            unchanged = await db.get(Task, task_id)
+            assert unchanged is not None
+            assert unchanged.status == "in_progress"
+            assert unchanged.version == 2
 
         session_id = uuid4()
         start_id = uuid4()

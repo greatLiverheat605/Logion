@@ -15,6 +15,7 @@ from sqlalchemy import select
 @pytest.mark.asyncio
 async def test_note_resource_sync_replay_conflict_and_bootstrap() -> None:
     origin = "http://test"
+    owner_email = f"content-sync-{uuid4()}@example.com"
     async with (
         AsyncClient(
             transport=ASGITransport(app=app, client=("192.0.2.85", 48005)),
@@ -26,12 +27,17 @@ async def test_note_resource_sync_replay_conflict_and_bootstrap() -> None:
             base_url=origin,
             headers={"Origin": origin},
         ) as outsider,
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.87", 48007)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as wrong_device,
     ):
         assert (
             await client.post(
                 "/api/v1/auth/register",
                 json={
-                    "email": f"content-sync-{uuid4()}@example.com",
+                    "email": owner_email,
                     "password": "a-strong-password-123",
                     "device_name": "Content sync device",
                 },
@@ -129,6 +135,28 @@ async def test_note_resource_sync_replay_conflict_and_bootstrap() -> None:
                 },
             )
         ).status_code == 201
+        assert (
+            await wrong_device.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": owner_email,
+                    "password": "a-strong-password-123",
+                    "device_name": "Wrong resolution device",
+                },
+            )
+        ).status_code == 200
+        wrong_device_id = UUID(
+            next(
+                item["id"]
+                for item in (await wrong_device.get("/api/v1/auth/devices")).json()["devices"]
+                if item["current"]
+            )
+        )
+        wrong_device_bootstrap = await wrong_device.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",
+            json={**bootstrap_body, "device_id": str(wrong_device_id)},
+        )
+        assert wrong_device_bootstrap.status_code == 200
         outsider_workspace = UUID(
             (await outsider.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
         )
@@ -178,6 +206,33 @@ async def test_note_resource_sync_replay_conflict_and_bootstrap() -> None:
         }
         forged_response = await push([forged])
         assert forged_response.json()["results"][0]["error_code"] == "SYNC_CONFLICT_NOT_FOUND"
+
+        wrong_device_resolution = {
+            **operation("note", note_id, uuid4(), "update", 2, local_payload),
+            "device_id": str(wrong_device_id),
+            "conflict_resolution": {
+                "conflict_id": conflict["conflict_id"],
+                "resolution": "keep_local",
+                "expected_remote_version": 2,
+            },
+        }
+        wrong_device_response = await wrong_device.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/push",
+            headers={"X-CSRF-Token": wrong_device.cookies["logion_csrf"]},
+            json={
+                "message_type": "push_request",
+                "protocol_version": "sync-v1",
+                "workspace_id": str(workspace_id),
+                "device_id": str(wrong_device_id),
+                "sync_epoch": wrong_device_bootstrap.json()["sync_epoch"],
+                "operations": [wrong_device_resolution],
+            },
+        )
+        assert wrong_device_response.status_code == 200
+        assert (
+            wrong_device_response.json()["results"][0]["error_code"]
+            == "SYNC_CONFLICT_RESOLUTION_INVALID"
+        )
 
         resolution_id = uuid4()
         resolution = operation("note", note_id, resolution_id, "update", 2, local_payload)
