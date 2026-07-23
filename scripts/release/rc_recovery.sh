@@ -38,8 +38,8 @@ INSERT INTO workspace_memberships (id,workspace_id,user_id,role,status,version,j
 VALUES ('${fixture_membership}','${fixture_workspace}','${fixture_user}','owner','active',1,now(),now(),now());
 INSERT INTO spaces (id,workspace_id,owner_user_id,name,visibility,status,version,created_by,updated_by,created_at,updated_at)
 VALUES ('${fixture_space}','${fixture_workspace}','${fixture_user}','RC recovery private space','private','active',1,'${fixture_user}','${fixture_user}',now(),now());
-INSERT INTO notes (id,workspace_id,space_id,task_id,title,markdown_body,version,created_by,updated_by,created_at,updated_at)
-VALUES ('${fixture_note}','${fixture_workspace}','${fixture_space}',NULL,'RC recovery note','',1,'${fixture_user}','${fixture_user}',now(),now());
+INSERT INTO notes (id,workspace_id,space_id,task_id,title,markdown_body,yjs_state,version,created_by,updated_by,created_at,updated_at)
+VALUES ('${fixture_note}','${fixture_workspace}','${fixture_space}',NULL,'RC recovery note','',decode('AAA=','base64'),1,'${fixture_user}','${fixture_user}',now(),now());
 INSERT INTO attachments (id,workspace_id,space_id,target_type,target_id,filename,declared_mime,detected_mime,size_bytes,expected_sha256,verified_sha256,status,staging_key,storage_key,failure_code,version,created_by,created_at,updated_at,verified_at)
 VALUES ('${fixture_attachment}','${fixture_workspace}','${fixture_space}','note','${fixture_note}','restore-marker.txt','text/plain','text/plain',${fixture_attachment_size},'${fixture_attachment_sha}','${fixture_attachment_sha}','verified','00000000000000000000000000000108','${fixture_workspace}/${fixture_attachment}',NULL,2,'${fixture_user}',now(),now(),now());
 INSERT INTO workspace_sync_states (workspace_id,sync_epoch,last_sequence,min_retained_sequence,snapshot_schema_version,created_at,updated_at)

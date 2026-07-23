@@ -205,8 +205,9 @@ async def seed(connection: asyncpg.Connection[Any]) -> None:
     await connection.execute(
         """
         INSERT INTO notes
-          (id,workspace_id,space_id,task_id,title,markdown_body,version,created_by,updated_by,created_at,updated_at)
-        SELECT md5('note-'||value)::uuid,$1,$2,NULL,'Note '||value,'capacity',1,$3,$3,now(),now()
+          (id,workspace_id,space_id,task_id,title,markdown_body,yjs_state,version,created_by,updated_by,created_at,updated_at)
+        SELECT md5('note-'||value)::uuid,$1,$2,NULL,'Note '||value,'capacity',
+          decode('AQGcrrftDQAEAQhtYXJrZG93bghjYXBhY2l0eQA=','base64'),1,$3,$3,now(),now()
         FROM generate_series(1,$4::integer) value
         """,
         workspace_id,

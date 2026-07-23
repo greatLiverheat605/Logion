@@ -100,6 +100,8 @@ OMITTED_COLUMNS = {
     "updated_by",
     "staging_key",
     "storage_key",
+    "yjs_generation",
+    "yjs_state",
 }
 
 
@@ -389,6 +391,7 @@ class PortabilityService:
                 "ai_inputs",
                 "share_and_calendar_tokens",
                 "attachments_binary",
+                "internal_crdt_state",
             ],
             "objects": objects,
         }

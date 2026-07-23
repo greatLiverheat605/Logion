@@ -41,6 +41,7 @@ from logion_api.sync.push import (
     exam_subject_payload,
     mastery_payload,
     mock_exam_payload,
+    note_document_state_payload,
     note_payload,
     quiz_attempt_payload,
     quiz_item_payload,
@@ -776,21 +777,39 @@ class SyncReadService:
                     )
                 ).all()
             )
-            return [
-                EntityRecord(
-                    entity_type="note",
-                    entity_id=item.id,
-                    version=item.version,
-                    created_at=item.created_at,
-                    updated_at=item.updated_at,
-                    deleted_at=item.deleted_at,
-                    created_by=item.created_by,
-                    updated_by=item.updated_by,
-                    payload=note_payload(item),
-                    payload_hash=canonical_hash(note_payload(item)),
+            records: list[EntityRecord] = []
+            for item in notes:
+                readable = note_payload(item)
+                state = note_document_state_payload(item)
+                records.extend(
+                    [
+                        EntityRecord(
+                            entity_type="note",
+                            entity_id=item.id,
+                            version=item.version,
+                            created_at=item.created_at,
+                            updated_at=item.updated_at,
+                            deleted_at=item.deleted_at,
+                            created_by=item.created_by,
+                            updated_by=item.updated_by,
+                            payload=readable,
+                            payload_hash=canonical_hash(readable),
+                        ),
+                        EntityRecord(
+                            entity_type="note_document_state",
+                            entity_id=item.id,
+                            version=item.version,
+                            created_at=item.created_at,
+                            updated_at=item.updated_at,
+                            deleted_at=item.deleted_at,
+                            created_by=item.created_by,
+                            updated_by=item.updated_by,
+                            payload=state,
+                            payload_hash=canonical_hash(state),
+                        ),
+                    ]
                 )
-                for item in notes
-            ]
+            return records
         resources = list(
             (
                 await db.scalars(

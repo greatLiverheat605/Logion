@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import pytest
 from logion_api.config import Settings
+from logion_api.content.models import Note
+from logion_api.content.yjs_documents import state_from_markdown
 from logion_api.errors import APIError
 from logion_api.portability.crypto import ExportArtifactCipher
 from logion_api.portability.models import DataExportJob
@@ -65,3 +67,26 @@ def test_export_artifact_cipher_binds_job_workspace_and_key() -> None:
     with pytest.raises(APIError) as raised:
         cipher.decrypt(job)
     assert getattr(raised.value, "code", None) == "EXPORT_ARTIFACT_UNAVAILABLE"
+
+
+def test_export_record_keeps_markdown_and_excludes_internal_crdt_state() -> None:
+    actor_id = uuid4()
+    note = Note(
+        id=uuid4(),
+        workspace_id=uuid4(),
+        space_id=uuid4(),
+        task_id=None,
+        title="Portable note",
+        markdown_body="Readable Markdown",
+        yjs_state=state_from_markdown("Readable Markdown"),
+        yjs_generation=3,
+        version=4,
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+    record = PortabilityService._record(note)
+
+    assert record["markdown_body"] == "Readable Markdown"
+    assert "yjs_state" not in record
+    assert "yjs_generation" not in record
