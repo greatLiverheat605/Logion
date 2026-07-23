@@ -1,0 +1,35 @@
+{
+  "schema_version": "logion-rollout-policy-v1",
+  "stages": [
+    {
+      "traffic_percent": 5,
+      "min_observation_seconds": 900,
+      "min_samples": 3,
+      "min_requests": 500,
+      "max_error_rate": 0.01,
+      "max_p95_ms": 500,
+      "max_queue_lag_seconds": 60,
+      "max_sync_failure_rate": 0.01
+    },
+    {
+      "traffic_percent": 25,
+      "min_observation_seconds": 1800,
+      "min_samples": 3,
+      "min_requests": 2000,
+      "max_error_rate": 0.005,
+      "max_p95_ms": 500,
+      "max_queue_lag_seconds": 45,
+      "max_sync_failure_rate": 0.005
+    },
+    {
+      "traffic_percent": 100,
+      "min_observation_seconds": 3600,
+      "min_samples": 3,
+      "min_requests": 5000,
+      "max_error_rate": 0.005,
+      "max_p95_ms": 500,
+      "max_queue_lag_seconds": 30,
+      "max_sync_failure_rate": 0.005
+    }
+  ]
+}
