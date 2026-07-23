@@ -1,4 +1,4 @@
-FROM node:24.18.0-alpine AS base
+FROM node:24.18.0-alpine3.24 AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
@@ -20,13 +20,16 @@ COPY packages/contracts packages/contracts
 COPY packages/offline packages/offline
 RUN pnpm --filter @logion/web build
 
-FROM node:24.18.0-alpine AS runtime
+FROM node:24.18.0-alpine3.24 AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 WORKDIR /app
-RUN addgroup --system --gid 10001 logion && adduser --system --uid 10001 --ingroup logion logion
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx \
+    && addgroup --system --gid 10001 logion \
+    && adduser --system --uid 10001 --ingroup logion logion
 COPY --from=build --chown=logion:logion /app/apps/web/.next/standalone ./
 COPY --from=build --chown=logion:logion /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=logion:logion /app/apps/web/public ./apps/web/public

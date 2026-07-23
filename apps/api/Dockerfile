@@ -1,5 +1,5 @@
 FROM ghcr.io/astral-sh/uv:0.11.29 AS uv
-FROM python:3.12.13-slim AS runtime
+FROM python:3.12.13-alpine3.24 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -17,7 +17,8 @@ RUN uv sync --frozen --no-dev --package logion-api --no-install-workspace
 COPY apps/api apps/api
 RUN uv sync --frozen --no-dev --package logion-api
 
-RUN useradd --create-home --uid 10001 logion
+RUN addgroup -S -g 10001 logion \
+    && adduser -S -D -H -u 10001 -G logion logion
 USER 10001
 
 ENV PATH="/app/.venv/bin:$PATH"
