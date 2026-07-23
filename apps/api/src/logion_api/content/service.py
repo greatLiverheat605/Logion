@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logion_api.config import Settings
 from logion_api.content.models import Note, Resource
 from logion_api.content.schemas import NoteUpdateRequest, NoteWriteRequest, ResourceFields
+from logion_api.content.yjs_documents import (
+    YjsDocumentError,
+    apply_document_update,
+    state_from_markdown,
+)
 from logion_api.db import utc_now
 from logion_api.errors import APIError
 from logion_api.execution.models import Task
@@ -111,6 +116,7 @@ class ContentService:
             task_id=payload.task_id,
             title=payload.title,
             markdown_body=payload.markdown_body,
+            yjs_state=state_from_markdown(payload.markdown_body),
             created_by=context.user.id,
             updated_by=context.user.id,
         )
@@ -163,6 +169,8 @@ class ContentService:
         note.task_id = payload.task_id
         note.title = payload.title
         note.markdown_body = payload.markdown_body
+        note.yjs_state = state_from_markdown(payload.markdown_body)
+        note.yjs_generation += 1
         note.version += 1
         note.updated_by = context.user.id
         note.updated_at = utc_now()
@@ -176,6 +184,70 @@ class ContentService:
                 target_type="note",
                 target_id=note.id,
                 metadata={"version": note.version, "has_task": note.task_id is not None},
+            )
+        )
+        return note
+
+    async def apply_note_document_update(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        note_id: UUID,
+        base_version: int,
+        yjs_generation: int,
+        update: bytes,
+        request_id: str,
+    ) -> Note:
+        await self._authorize(db, context, workspace_id, space_id, request_id)
+        note = await db.scalar(
+            select(Note)
+            .where(
+                Note.id == note_id,
+                Note.workspace_id == workspace_id,
+                Note.space_id == space_id,
+                Note.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if note is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if base_version < 1 or base_version > note.version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The note document base version is invalid.",
+                status_code=409,
+            )
+        if yjs_generation != note.yjs_generation:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The note document generation changed.",
+                status_code=409,
+            )
+        try:
+            snapshot = apply_document_update(note.yjs_state, update)
+        except YjsDocumentError as exc:
+            raise APIError(
+                code=str(exc), message="The note document update is invalid.", status_code=422
+            ) from exc
+        note.yjs_state = snapshot.state
+        note.markdown_body = snapshot.markdown
+        note.version += 1
+        note.updated_by = context.user.id
+        note.updated_at = utc_now()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="content.note_document_updated",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="note",
+                target_id=note.id,
+                metadata={"version": note.version, "update_bytes": len(update)},
             )
         )
         return note

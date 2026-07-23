@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -40,6 +41,8 @@ class Note(Base):
     task_id: Mapped[UUID | None] = mapped_column(Uuid)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     markdown_body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    yjs_state: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    yjs_generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
     created_by: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False

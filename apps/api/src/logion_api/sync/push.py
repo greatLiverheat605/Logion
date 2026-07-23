@@ -1,3 +1,4 @@
+import base64
 import hashlib
 from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -16,6 +17,7 @@ from logion_api.collaboration.schemas import (
 from logion_api.collaboration.service import CollaborationService
 from logion_api.content.models import Note, Resource
 from logion_api.content.schemas import (
+    NoteDocumentUpdate,
     NoteUpdateRequest,
     NoteWriteRequest,
     ResourceCreateRequest,
@@ -250,6 +252,10 @@ class SyncPushService:
             )
         if operation.entity_type == "note" and operation.operation_type == "update":
             return await self._update_note(
+                db, context, request, operation, identity, request_id=request_id
+            )
+        if operation.entity_type == "note_document_update" and operation.operation_type == "update":
+            return await self._apply_note_document_update(
                 db, context, request, operation, identity, request_id=request_id
             )
         if operation.entity_type == "resource" and operation.operation_type == "create":
@@ -1111,6 +1117,67 @@ class SyncPushService:
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _apply_note_document_update(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        try:
+            payload = NoteDocumentUpdate.model_validate(operation.payload)
+            update = payload.decoded_update()
+            async with db.begin_nested():
+                note = await self._content.apply_note_document_update(
+                    db,
+                    context,
+                    request.workspace_id,
+                    payload.space_id,
+                    operation.entity_id,
+                    operation.base_version,
+                    payload.yjs_generation,
+                    update,
+                    request_id,
+                )
+                projection = {
+                    "space_id": str(note.space_id),
+                    "note_id": str(note.id),
+                    "note_version": note.version,
+                    "yjs_generation": note.yjs_generation,
+                    "update_base64": payload.update_base64,
+                }
+                result = await self._append_entity(
+                    db, request.workspace_id, identity, note.version, projection
+                )
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="readable-note-snapshot",
+                    entity_type="note",
+                    entity_id=note.id,
+                    operation_type="update",
+                    version=note.version,
+                    payload=note_payload(note),
+                )
+                return result
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            if exc.code == "RESOURCE_VERSION_CONFLICT":
+                return self._rejected(
+                    operation.operation_id, "SYNC_NOTE_DOCUMENT_GENERATION_CHANGED"
+                )
             return await self._api_error_result(db, request, operation, exc)
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
@@ -2511,6 +2578,16 @@ def note_payload(note: Note) -> dict[str, object]:
         "task_id": str(note.task_id) if note.task_id is not None else None,
         "title": note.title,
         "markdown_body": note.markdown_body,
+    }
+
+
+def note_document_state_payload(note: Note) -> dict[str, object]:
+    return {
+        "space_id": str(note.space_id),
+        "note_id": str(note.id),
+        "note_version": note.version,
+        "yjs_generation": note.yjs_generation,
+        "state_base64": base64.b64encode(note.yjs_state).decode("ascii"),
     }
 
 

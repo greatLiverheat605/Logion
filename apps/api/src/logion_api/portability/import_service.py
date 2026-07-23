@@ -16,6 +16,7 @@ from uuid6 import uuid7
 
 from logion_api.config import Settings
 from logion_api.content.models import Note, Resource
+from logion_api.content.yjs_documents import state_from_markdown
 from logion_api.db import utc_now
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
@@ -208,7 +209,15 @@ class ImportService:
                 "updated_by": context.user.id,
             }
             if row.kind == "note":
-                db.add(Note(**common, task_id=None, title=row.title[:200], markdown_body=row.body))
+                db.add(
+                    Note(
+                        **common,
+                        task_id=None,
+                        title=row.title[:200],
+                        markdown_body=row.body,
+                        yjs_state=state_from_markdown(row.body),
+                    )
+                )
             elif row.kind == "resource":
                 db.add(
                     Resource(

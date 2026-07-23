@@ -1,3 +1,5 @@
+import base64
+import binascii
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -29,6 +31,21 @@ class NoteResponse(NoteWriteRequest):
     workspace_id: UUID
     space_id: UUID
     version: int
+
+
+class NoteDocumentUpdate(StrictModel):
+    space_id: UUID
+    yjs_generation: int = Field(ge=1)
+    update_base64: Annotated[str, StringConstraints(min_length=4, max_length=240_000)]
+
+    def decoded_update(self) -> bytes:
+        try:
+            decoded = base64.b64decode(self.update_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("update_base64 must be canonical base64") from exc
+        if base64.b64encode(decoded).decode("ascii") != self.update_base64:
+            raise ValueError("update_base64 must be canonical base64")
+        return decoded
 
 
 class PageIndexEntry(StrictModel):
