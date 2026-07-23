@@ -1,14 +1,31 @@
-from datetime import UTC, datetime
+import hashlib
+import json
+from datetime import UTC, date, datetime
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.content.models import Resource
 from logion_api.db import session_factory
+from logion_api.execution.models import Task
 from logion_api.growth.models import ShareSnapshot, TemplateInstallation, TemplatePackage
 from logion_api.identity.models import AuditEvent
 from logion_api.main import app
 from logion_api.workspaces.models import WorkspaceMembership
-from sqlalchemy import select
+from sqlalchemy import func, select
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def _example_package() -> tuple[dict[str, object], str]:
+    package = json.loads(
+        (ROOT / "examples/templates/ai-presemester-47-day.template.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    source = ROOT / "archive/source-documents/learning-materials/01-2026-presemester-47-day-plan.md"
+    return package, hashlib.sha256(source.read_bytes()).hexdigest()
 
 
 @pytest.mark.integration
@@ -224,3 +241,137 @@ async def test_private_template_install_and_revocable_minimal_share() -> None:
         audit_text = " ".join(str(row.event_metadata) for row in audit_rows)
         assert token not in audit_text
         assert "Private detail" not in audit_text
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_original_47_day_template_import_is_bounded_private_and_date_preserving() -> None:
+    package, source_sha256 = _example_package()
+    assert source_sha256 == package["source_sha256"]
+    assert sum(len(phase["tasks"]) for phase in package["goal_plan"]["phases"]) == 47
+    package["package_id"] = str(uuid4())
+    package["template_key"] = str(uuid4())
+
+    origin = "http://test"
+    async with (
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.168", 49008)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as owner,
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.169", 49009)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as outsider,
+    ):
+        responses = []
+        for client, label in ((owner, "owner"), (outsider, "outsider")):
+            responses.append(
+                await client.post(
+                    "/api/v1/auth/register",
+                    json={
+                        "email": f"template-import-{label}-{uuid4()}@example.com",
+                        "password": "a-strong-password-123",
+                        "device_name": label,
+                    },
+                )
+            )
+        assert all(response.status_code == 201 for response in responses)
+        workspace_id = UUID((await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"])
+        outsider_workspace = UUID(
+            (await outsider.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+        )
+        space_id = UUID(
+            (await owner.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()["spaces"][0]["id"]
+        )
+        csrf = {"X-CSRF-Token": owner.cookies["logion_csrf"]}
+        imported = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/templates/import",
+            headers=csrf,
+            json=package,
+        )
+        assert imported.status_code == 201, imported.text
+        imported_template_id = imported.json()["id"]
+        assert imported_template_id != package["package_id"]
+        assert imported.json()["visibility"] == "private"
+        assert imported.json()["risk_metadata"]["external_link_count"] == 8
+        assert "goal_plan" in imported.json()["object_graph"]
+
+        cross_tenant = await owner.post(
+            f"/api/v1/workspaces/{outsider_workspace}/templates/import",
+            headers=csrf,
+            json={**package, "package_id": str(uuid4()), "template_key": str(uuid4())},
+        )
+        assert cross_tenant.status_code == 404
+        outsider_import = await outsider.post(
+            f"/api/v1/workspaces/{outsider_workspace}/templates/import",
+            headers={"X-CSRF-Token": outsider.cookies["logion_csrf"]},
+            json=package,
+        )
+        assert outsider_import.status_code == 201, outsider_import.text
+        assert outsider_import.json()["template_key"] != imported.json()["template_key"]
+        replay = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/templates/import",
+            headers=csrf,
+            json=package,
+        )
+        assert replay.status_code == 409
+
+        installation_payload = {
+            "id": str(uuid4()),
+            "template_id": imported_template_id,
+            "target_space_id": str(space_id),
+        }
+        missing_date = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/template-installations",
+            headers=csrf,
+            json=installation_payload,
+        )
+        assert missing_date.status_code == 422
+
+        start_date = date(2027, 7, 20)
+        installation_id = UUID(installation_payload["id"])
+        installed = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/template-installations",
+            headers=csrf,
+            json={**installation_payload, "start_date": start_date.isoformat()},
+        )
+        assert installed.status_code == 201, installed.text
+        ids = installed.json()["installed_object_ids"]
+        assert len(ids["phase_ids"]) == 7
+        assert len(ids["task_ids"]) == 47
+        assert len(ids["resource_ids"]) == 8
+
+    async with session_factory() as db:
+        installation = await db.get(TemplateInstallation, installation_id)
+        assert installation is not None
+        tasks = list(
+            (
+                await db.scalars(
+                    select(Task)
+                    .where(Task.id.in_([UUID(value) for value in ids["task_ids"]]))
+                    .order_by(Task.planned_at)
+                )
+            ).all()
+        )
+        assert len(tasks) == 47
+        assert tasks[0].planned_at.date() == start_date
+        assert tasks[-1].due_at is not None
+        assert tasks[-1].due_at.date() == date(2027, 9, 4)
+        assert (
+            await db.scalar(
+                select(func.count(Resource.id)).where(
+                    Resource.id.in_([UUID(value) for value in ids["resource_ids"]])
+                )
+            )
+        ) == 8
+        assert (
+            await db.scalar(
+                select(func.count(Task.id)).where(
+                    Task.workspace_id == outsider_workspace,
+                    Task.id.in_([UUID(value) for value in ids["task_ids"]]),
+                )
+            )
+            == 0
+        )

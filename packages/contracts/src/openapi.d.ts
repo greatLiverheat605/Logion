@@ -2050,6 +2050,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/templates/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Template */
+        post: operations["template_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -4099,6 +4116,79 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** ImportedTemplateGoalPlan */
+        ImportedTemplateGoalPlan: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Desired Outcome */
+            desired_outcome: string;
+            /** Phases */
+            phases: components["schemas"]["ImportedTemplatePhase"][];
+            /** Target Day Offset */
+            target_day_offset: number;
+            /** Title */
+            title: string;
+            /**
+             * Weekly Minutes
+             * @default 0
+             */
+            weekly_minutes: number;
+        };
+        /** ImportedTemplatePhase */
+        ImportedTemplatePhase: {
+            /** Acceptance Criteria */
+            acceptance_criteria: string[];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Estimated Minutes
+             * @default 0
+             */
+            estimated_minutes: number;
+            /** Position */
+            position: number;
+            /** Tasks */
+            tasks: components["schemas"]["ImportedTemplateTask"][];
+            /** Title */
+            title: string;
+        };
+        /** ImportedTemplateResource */
+        ImportedTemplateResource: {
+            /** Source Url */
+            source_url: string;
+            /** Title */
+            title: string;
+        };
+        /** ImportedTemplateTask */
+        ImportedTemplateTask: {
+            /** Day Offset */
+            day_offset: number;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Estimated Minutes
+             * @default 0
+             */
+            estimated_minutes: number;
+            /**
+             * Priority
+             * @default 2
+             */
+            priority: number;
+            /** Resources */
+            resources?: components["schemas"]["ImportedTemplateResource"][];
+            /** Title */
+            title: string;
         };
         /** InboxItemCreateRequest */
         InboxItemCreateRequest: {
@@ -6151,6 +6241,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Start Date */
+            start_date?: string | null;
             /**
              * Target Space Id
              * Format: uuid
@@ -6195,6 +6287,52 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** TemplatePackageImport */
+        TemplatePackageImport: {
+            /** Author Name */
+            author_name: string;
+            /**
+             * Changelog
+             * @default
+             */
+            changelog: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            goal_plan: components["schemas"]["ImportedTemplateGoalPlan"];
+            /** License */
+            license: string;
+            /**
+             * Locale
+             * @default zh-CN
+             */
+            locale: string;
+            /** Name */
+            name: string;
+            /**
+             * Package Id
+             * Format: uuid
+             */
+            package_id: string;
+            /**
+             * Product Min Version
+             * @default 0.1.0
+             */
+            product_min_version: string;
+            /** Source Name */
+            source_name: string;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Target Personas */
+            target_personas: string[];
+            /**
+             * Template Key
+             * Format: uuid
+             */
+            template_key: string;
         };
         /** TemplatePackageList */
         TemplatePackageList: {
@@ -17109,6 +17247,88 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TemplateFromGoalCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplatePackageResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    template_import: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePackageImport"];
             };
         };
         responses: {

@@ -15,6 +15,8 @@ function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
     if (error.code === "TEMPLATE_PRIVATE_SOURCE_BLOCKED")
       return "私有 Space 只能创建私有模板；workspace 模板必须来自共享 Space。";
+    if (error.code === "TEMPLATE_START_DATE_REQUIRED")
+      return "此模板包含相对日期；请选择安装起始日期。";
     if (error.status === 403) return "当前角色或 Space 权限不允许此操作。";
     return `操作未完成（${error.code}，请求编号：${error.requestId}）。`;
   }
@@ -32,6 +34,9 @@ export function GrowthCenter() {
   const [dataWorkspaceId, setDataWorkspaceId] = useState("");
   const [goalsSpaceId, setGoalsSpaceId] = useState("");
   const [newShareToken, setNewShareToken] = useState("");
+  const [installStartDates, setInstallStartDates] = useState<
+    Record<string, string>
+  >({});
   const [online, setOnline] = useState(true);
   const [status, setStatus] = useState(
     "模板安装会复制为独立对象；分享默认只读且可撤销。",
@@ -183,6 +188,15 @@ export function GrowthCenter() {
 
   async function installTemplate(template: Template) {
     if (!workspaceId || !spaceId || !online) return;
+    const goalPlan = template.object_graph.goal_plan as
+      | Record<string, unknown>
+      | undefined;
+    const dated = typeof goalPlan?.target_day_offset === "number";
+    const startDate = installStartDates[template.id] ?? "";
+    if (dated && !startDate) {
+      setStatus("此模板包含相对日期；请先选择安装起始日期。");
+      return;
+    }
     if (
       !window.confirm(
         `安装“${template.name}”版本 ${template.version_number}？将创建独立副本，不覆盖已有内容。`,
@@ -199,6 +213,7 @@ export function GrowthCenter() {
             id: crypto.randomUUID(),
             template_id: template.id,
             target_space_id: spaceId,
+            start_date: dated ? startDate : null,
           }),
         },
       );
@@ -206,6 +221,40 @@ export function GrowthCenter() {
       setStatus("模板已安装为独立计划；后续模板版本不会覆盖此副本。");
     } catch (error) {
       setStatus(errorText(error));
+    }
+  }
+
+  async function importTemplate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId || !online) return;
+    const form = event.currentTarget;
+    const file = new FormData(form).get("template_file");
+    if (!(file instanceof File) || file.size === 0) return;
+    if (file.size > 1_000_000) {
+      setStatus("模板文件超过 1 MB 上限，未读取或上传。");
+      return;
+    }
+    try {
+      const payload: unknown = JSON.parse(await file.text());
+      if (!payload || typeof payload !== "object" || Array.isArray(payload))
+        throw new Error("invalid template root");
+      await browserApiClient.request(
+        `/api/v1/workspaces/${workspaceId}/templates/import`,
+        {
+          method: "POST",
+          csrf: true,
+          body: JSON.stringify(payload),
+        },
+      );
+      form.reset();
+      await loadWorkspaceData(workspaceId);
+      setStatus(
+        "模板包已通过结构校验并加入私有模板库；检查风险链接后再选择日期安装。",
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof SyntaxError ? "模板不是有效 JSON。" : errorText(error),
+      );
     }
   }
 
@@ -294,6 +343,22 @@ export function GrowthCenter() {
       </section>
       <section className="settings-card">
         <h2>从计划创建模板</h2>
+        <form className="planning-form" onSubmit={importTemplate}>
+          <label>
+            导入结构化模板包（JSON，最大 1 MB）
+            <input
+              name="template_file"
+              type="file"
+              accept="application/json,.json"
+              required
+            />
+          </label>
+          <button disabled={!online || !workspaceId}>校验并导入私有模板</button>
+        </form>
+        <p>
+          示例包位于 <code>examples/templates</code>
+          ；导入不会创建学习记录，安装前仍可检查来源、许可证和外部链接。
+        </p>
         <form className="planning-form" onSubmit={createTemplate}>
           <label>
             来源目标
@@ -374,6 +439,23 @@ export function GrowthCenter() {
               >
                 安装独立副本
               </button>
+              {typeof (
+                template.object_graph.goal_plan as Record<string, unknown>
+              )?.target_day_offset === "number" ? (
+                <label>
+                  安装起始日期
+                  <input
+                    type="date"
+                    value={installStartDates[template.id] ?? ""}
+                    onChange={(event) =>
+                      setInstallStartDates((current) => ({
+                        ...current,
+                        [template.id]: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ) : null}
             </li>
           ))}
         </ul>
