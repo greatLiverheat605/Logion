@@ -156,6 +156,33 @@ jobs:
         env:
           LOGION_E2E_BASE_URL: http://127.0.0.1:8080
         run: pnpm test:browser
+      - name: Rehearse 5, 25 and 100 percent rollout policy
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          mkdir -p reports/release/rollout
+          for stage in 5 25 100; do
+            jq --arg source_sha "$SOURCE_SHA" '.source_sha = $source_sha' \
+              "tests/fixtures/release/rollout-${stage}.json" \
+              > "reports/release/rollout/samples-${stage}.json"
+          done
+          uv run --group dev python scripts/release/rollout_gate.py \
+            --policy config/release/rollout-policy.json \
+            --samples reports/release/rollout/samples-5.json \
+            --stage 5 --source-sha "$SOURCE_SHA" --mode rehearsal \
+            --output reports/release/rollout/evidence-5.json
+          uv run --group dev python scripts/release/rollout_gate.py \
+            --policy config/release/rollout-policy.json \
+            --samples reports/release/rollout/samples-25.json \
+            --stage 25 --source-sha "$SOURCE_SHA" --mode rehearsal \
+            --previous-evidence reports/release/rollout/evidence-5.json \
+            --output reports/release/rollout/evidence-25.json
+          uv run --group dev python scripts/release/rollout_gate.py \
+            --policy config/release/rollout-policy.json \
+            --samples reports/release/rollout/samples-100.json \
+            --stage 100 --source-sha "$SOURCE_SHA" --mode rehearsal \
+            --previous-evidence reports/release/rollout/evidence-25.json \
+            --output reports/release/rollout/evidence-100.json
       - name: Capture evidence
         if: ${{ always() && hashFiles('compose.yaml') != '' }}
         env:

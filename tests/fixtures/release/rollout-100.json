@@ -1,0 +1,38 @@
+{
+  "schema_version": "logion-rollout-samples-v1",
+  "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "stage_percent": 100,
+  "sample_source": "synthetic_policy_rehearsal",
+  "samples": [
+    {
+      "observed_at": "2026-07-23T02:00:00Z",
+      "requests": 2000,
+      "errors": 2,
+      "p95_ms": 260,
+      "health_ok": true,
+      "queue_lag_seconds": 5,
+      "sync_failures": 1,
+      "sync_attempts": 700
+    },
+    {
+      "observed_at": "2026-07-23T02:30:00Z",
+      "requests": 2000,
+      "errors": 2,
+      "p95_ms": 280,
+      "health_ok": true,
+      "queue_lag_seconds": 6,
+      "sync_failures": 1,
+      "sync_attempts": 700
+    },
+    {
+      "observed_at": "2026-07-23T03:00:00Z",
+      "requests": 2000,
+      "errors": 2,
+      "p95_ms": 270,
+      "health_ok": true,
+      "queue_lag_seconds": 5,
+      "sync_failures": 1,
+      "sync_attempts": 700
+    }
+  ]
+}

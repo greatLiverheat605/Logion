@@ -20,6 +20,7 @@ The bounded gate catches candidate regressions but does not satisfy the full cap
 7. Confirm `recovery-evidence.json` records matching migration heads and object counts, an attachment hash match, a changed `sync_epoch`, RPO/RTO and the digest-pinned backup image.
 8. Confirm offline compatibility tests require `upgrade_required` or `rebootstrap_required` and quarantine the old Outbox instead of replaying it.
 9. Confirm Chromium, Firefox, WebKit, mobile Chrome and mobile Safari emulation pass the public/auth browser gate. Automation is not physical Safari, iOS or screen-reader proof; collect those human sign-offs separately.
+10. Confirm the 5/25/100 rollout policy rehearsal completes with `mode=rehearsal`, `sample_source=synthetic_policy_rehearsal`, the candidate source SHA, and `changes_traffic=false`. This proves the policy engine only; it is never valid Production telemetry or traffic approval.
 
 ## Failure and revocation
 
