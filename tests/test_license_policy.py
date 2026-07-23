@@ -23,9 +23,10 @@ def test_license_policy_accepts_allowed_internal_and_classifier_mapped_packages(
     policy = license_policy.load_policy(ROOT / "config/security/license-policy.json")
     report = license_policy.evaluate(
         policy=policy,
-        node_packages=[package("frontend", "MIT")],
+        node_packages=[package("frontend", "MIT"), package("libvips", "LGPL-3.0-or-later")],
         py_packages=[
             package("logion-api", ""),
+            package("uvloop", "MIT License"),
             package("library", "", "License :: OSI Approved :: Apache Software License"),
         ],
     )
