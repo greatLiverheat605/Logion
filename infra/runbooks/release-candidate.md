@@ -7,13 +7,13 @@
 3. The bounded authenticated workspace-list gate must complete 200 requests at concurrency 10 with p95 strictly below 500 ms.
 4. Record the successful Main run ID, full source SHA, manifest artifact, four digests and performance evidence. A failed or cancelled run is not a candidate.
 
-The bounded gate catches candidate regressions but does not satisfy the full capacity release gate. RC evidence must additionally record the approved profile for 100,000 tasks, 1,000,000 events, 50,000 notes/resources, 10,000 attachments, 5,000 papers and 100,000 AI runs, including dataset generator version, hardware, concurrency, warm-up, sample count, p50/p95/p99, errors, query plans and saturation signals.
+The bounded gate catches candidate regressions but does not satisfy the full capacity release gate. Run **Full capacity profile** on the exact successful Main SHA and retain its numeric run ID. The workflow creates 100,000 tasks, 1,000,000 events, 50,000 notes/resources, 10,000 attachment rows and files, 5,000 papers and 100,000 AI runs in a dedicated database. Evidence records generator version, hardware, warm-up, sample count, p50/p95/p99, errors, query plans and saturation signals. `github-hosted-reference` is reference evidence only and keeps `production_equivalent_approved=false`; repeat on approved production-like hardware before public Production.
 
 ## RC promotion
 
-1. Select **Run workflow** for Release candidate and enter a display version, the full Main source SHA and its numeric run ID.
+1. Select **Run workflow** for Release candidate and enter a display version, the full Main source SHA, its numeric Main run ID and the same-source Full capacity profile run ID.
 2. Approve only the staging environment. Do not approve production as part of this procedure.
-3. Confirm preflight validates the run's workflow, branch, conclusion and source SHA.
+3. Confirm preflight validates both runs' workflow, branch, conclusion and source SHA, then verifies the exact capacity counts and p95 decisions.
 4. Confirm manifest verification passes before registry login or Compose startup.
 5. Confirm logs show `docker compose pull` and `up --no-build`; any build step invalidates the RC.
 6. Preserve the candidate manifest, Compose status and later L6-002/L6-003 evidence under the same candidate identity.

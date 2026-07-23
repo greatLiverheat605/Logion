@@ -12,6 +12,9 @@ on:
       candidate_run_id:
         description: Successful Main candidate workflow run ID
         required: true
+      capacity_run_id:
+        description: Successful full-capacity workflow run ID for the same source
+        required: true
 
 permissions:
   contents: read
@@ -34,11 +37,26 @@ jobs:
           VERSION: ${{ inputs.version }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CAPACITY_RUN_ID: ${{ inputs.capacity_run_id }}
         run: |
           if ! [[ "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$ ]] \
             || ! [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] \
-            || ! [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo '::error title=Invalid candidate input::Use a bounded version, full lowercase Git SHA and numeric Main run ID.'
+            || ! [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]] \
+            || ! [[ "$CAPACITY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo '::error title=Invalid candidate input::Use a bounded version, full lowercase Git SHA and numeric run IDs.'
+            exit 1
+          fi
+          capacity_response="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${CAPACITY_RUN_ID}")"
+          if ! jq -e --arg source_sha "$SOURCE_SHA" '
+            .head_sha == $source_sha
+            and .head_branch == "main"
+            and .conclusion == "success"
+            and .path == ".github/workflows/capacity.yml"
+          ' <<<"$capacity_response" >/dev/null; then
+            echo '::error title=Untrusted capacity evidence::The run must be a successful full-capacity profile for this source SHA.'
             exit 1
           fi
           response="$(curl --fail-with-body --silent --show-error \
@@ -78,6 +96,30 @@ jobs:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.candidate_run_id }}
+      - uses: actions/download-artifact@v6
+        with:
+          name: capacity-profile-${{ inputs.source_sha }}
+          path: reports/capacity
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.capacity_run_id }}
+      - name: Verify full-capacity evidence
+        run: |
+          jq -e --arg source_sha "${{ inputs.source_sha }}" '
+            .schema_version == "logion-capacity-v1"
+            and .source_sha == $source_sha
+            and .passed == true
+            and .errors == []
+            and .actual_counts == .expected_counts
+            and .actual_counts.tasks == 100000
+            and .actual_counts.events == 1000000
+            and (.actual_counts.notes + .actual_counts.resources) == 50000
+            and .actual_counts.attachments == 10000
+            and .actual_counts.papers == 5000
+            and .actual_counts.ai_runs == 100000
+            and ([.queries[].passed] | all)
+            and .production_equivalent_approved == false
+          ' reports/capacity/capacity-profile.json >/dev/null
       - name: Install release browser engines
         run: pnpm exec playwright install --with-deps chromium firefox webkit
       - name: Verify candidate manifest against checked-out source
@@ -214,6 +256,7 @@ jobs:
             release-compose-status.txt
             reports/browser
             reports/release
+            reports/capacity/capacity-profile.json
             candidate-evidence/candidate/candidate-manifest.json
             packages/contracts/openapi/openapi.json
           retention-days: 90

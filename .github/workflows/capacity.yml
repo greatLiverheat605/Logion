@@ -1,0 +1,75 @@
+name: Full capacity profile
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full source SHA to profile
+        required: true
+      profile_label:
+        description: Evidence profile label
+        required: true
+        default: github-hosted-reference
+
+permissions:
+  contents: read
+
+env:
+  LOGION_DATABASE_URL: postgresql+asyncpg://logion:logion@localhost:5432/logion_capacity
+  LOGION_REDIS_URL: redis://localhost:6379/0
+  LOGION_SECRET_KEY: capacity-profile-secret-not-for-production
+  LOGION_CAPACITY_PROFILE: ${{ inputs.profile_label }}
+
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        env:
+          POSTGRES_USER: logion
+          POSTGRES_PASSWORD: logion
+          POSTGRES_DB: logion_capacity
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U logion -d logion_capacity"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:8.6.1-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: 0.11.29
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --all-packages --group dev --frozen
+      - name: Migrate dedicated capacity database
+        run: uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
+      - name: Generate and measure actual release-capacity dataset
+        run: >-
+          uv run --group dev python scripts/performance/capacity_profile.py
+          --database-url "$LOGION_DATABASE_URL"
+          --attachment-root "$RUNNER_TEMP/logion-capacity-attachments"
+          --source-sha "${{ inputs.source_sha }}"
+          --profile-label "${{ inputs.profile_label }}"
+          --output reports/capacity/capacity-profile.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: capacity-profile-${{ inputs.source_sha }}
+          path: reports/capacity/capacity-profile.json
+          if-no-files-found: error
+          retention-days: 30
