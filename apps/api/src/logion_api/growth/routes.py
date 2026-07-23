@@ -15,6 +15,7 @@ from logion_api.growth.schemas import (
     TemplateFromGoalCreate,
     TemplateInstall,
     TemplateInstallationResponse,
+    TemplatePackageImport,
     TemplatePackageList,
     TemplatePackageResponse,
 )
@@ -153,6 +154,35 @@ async def create_template(
 
 
 @router.post(
+    "/templates/import",
+    response_model=TemplatePackageResponse,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="template_import",
+    responses={401: ERROR, 403: ERROR, 404: ERROR, 409: ERROR, 422: ERROR, 429: ERROR},
+)
+async def import_template(
+    workspace_id: UUID,
+    payload: TemplatePackageImport,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    identity: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    growth: GrowthServiceDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> TemplatePackageResponse:
+    await growth_boundary(request, context, identity, limiter, settings, workspace_id, x_csrf_token)
+    try:
+        row = await growth.import_template(db, context, workspace_id, payload, request_id(request))
+        await db.commit()
+    except APIError:
+        await db.rollback()
+        raise
+    return template_response(row)
+
+
+@router.post(
     "/template-installations",
     response_model=TemplateInstallationResponse,
     status_code=status.HTTP_201_CREATED,
@@ -176,7 +206,7 @@ async def install_template(
         row = await growth.install_template(db, context, workspace_id, payload, request_id(request))
         await db.commit()
     except APIError:
-        await db.commit()
+        await db.rollback()
         raise
     return installation_response(row)
 

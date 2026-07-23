@@ -4570,6 +4570,191 @@
         "title": "ImportPreviewResponse",
         "type": "object"
       },
+      "ImportedTemplateGoalPlan": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Description",
+            "type": "string"
+          },
+          "desired_outcome": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Desired Outcome",
+            "type": "string"
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedTemplatePhase"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Phases",
+            "type": "array"
+          },
+          "target_day_offset": {
+            "maximum": 3660.0,
+            "minimum": 0.0,
+            "title": "Target Day Offset",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "weekly_minutes": {
+            "default": 0,
+            "maximum": 10080.0,
+            "minimum": 0.0,
+            "title": "Weekly Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "desired_outcome",
+          "target_day_offset",
+          "phases"
+        ],
+        "title": "ImportedTemplateGoalPlan",
+        "type": "object"
+      },
+      "ImportedTemplatePhase": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptance_criteria": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Acceptance Criteria",
+            "type": "array"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Description",
+            "type": "string"
+          },
+          "estimated_minutes": {
+            "default": 0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Estimated Minutes",
+            "type": "integer"
+          },
+          "position": {
+            "maximum": 99.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedTemplateTask"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Tasks",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "position",
+          "acceptance_criteria",
+          "tasks"
+        ],
+        "title": "ImportedTemplatePhase",
+        "type": "object"
+      },
+      "ImportedTemplateResource": {
+        "additionalProperties": false,
+        "properties": {
+          "source_url": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "source_url"
+        ],
+        "title": "ImportedTemplateResource",
+        "type": "object"
+      },
+      "ImportedTemplateTask": {
+        "additionalProperties": false,
+        "properties": {
+          "day_offset": {
+            "maximum": 3660.0,
+            "minimum": 0.0,
+            "title": "Day Offset",
+            "type": "integer"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 10000,
+            "title": "Description",
+            "type": "string"
+          },
+          "estimated_minutes": {
+            "default": 0,
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Estimated Minutes",
+            "type": "integer"
+          },
+          "priority": {
+            "default": 2,
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ImportedTemplateResource"
+            },
+            "maxItems": 20,
+            "title": "Resources",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "day_offset"
+        ],
+        "title": "ImportedTemplateTask",
+        "type": "object"
+      },
       "InboxItemCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -9274,6 +9459,18 @@
             "title": "Id",
             "type": "string"
           },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
           "target_space_id": {
             "format": "uuid",
             "title": "Target Space Id",
@@ -9341,6 +9538,105 @@
           "created_at"
         ],
         "title": "TemplateInstallationResponse",
+        "type": "object"
+      },
+      "TemplatePackageImport": {
+        "additionalProperties": false,
+        "properties": {
+          "author_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Author Name",
+            "type": "string"
+          },
+          "changelog": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Changelog",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "goal_plan": {
+            "$ref": "#/components/schemas/ImportedTemplateGoalPlan"
+          },
+          "license": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "License",
+            "type": "string"
+          },
+          "locale": {
+            "default": "zh-CN",
+            "maxLength": 35,
+            "minLength": 2,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Locale",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "product_min_version": {
+            "default": "0.1.0",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Product Min Version",
+            "type": "string"
+          },
+          "source_name": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Source Name",
+            "type": "string"
+          },
+          "source_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "target_personas": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_.-]*$",
+              "type": "string"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Target Personas",
+            "type": "array"
+          },
+          "template_key": {
+            "format": "uuid",
+            "title": "Template Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_id",
+          "template_key",
+          "name",
+          "author_name",
+          "license",
+          "target_personas",
+          "source_name",
+          "source_sha256",
+          "goal_plan"
+        ],
+        "title": "TemplatePackageImport",
         "type": "object"
       },
       "TemplatePackageList": {
@@ -25780,6 +26076,125 @@
           }
         },
         "summary": "Create Template",
+        "tags": [
+          "growth"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/templates/import": {
+      "post": {
+        "operationId": "template_import",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplatePackageImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplatePackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Import Template",
         "tags": [
           "growth"
         ]

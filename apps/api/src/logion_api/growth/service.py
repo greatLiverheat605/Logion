@@ -3,8 +3,8 @@ import json
 import re
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
-from uuid import UUID
+from datetime import UTC, datetime, time, timedelta
+from uuid import UUID, uuid5
 
 from pydantic import ValidationError
 from sqlalchemy import or_, select
@@ -13,14 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
 from logion_api.config import Settings
+from logion_api.content.schemas import ResourceFields
+from logion_api.content.service import ContentService
 from logion_api.db import utc_now
 from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
+from logion_api.execution.service import ExecutionService
 from logion_api.growth.models import ShareSnapshot, TemplateInstallation, TemplatePackage
 from logion_api.growth.schemas import (
     ShareSnapshotCreate,
     TemplateFromGoalCreate,
     TemplateInstall,
+    TemplatePackageImport,
 )
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.security import IdentitySecurity
@@ -49,9 +53,13 @@ class GrowthService:
         settings: Settings,
         workspaces: WorkspaceService,
         planning: PlanningService,
+        execution: ExecutionService,
+        content: ContentService,
     ) -> None:
         self._workspaces = workspaces
         self._planning = planning
+        self._execution = execution
+        self._content = content
         self._security = IdentitySecurity(settings.secret_key.get_secret_value())
 
     async def create_template(
@@ -201,6 +209,115 @@ class GrowthService:
         )
         return row
 
+    async def import_template(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        payload: TemplatePackageImport,
+        request_id: str,
+    ) -> TemplatePackage:
+        await self._workspaces.resolve_workspace(
+            db,
+            context,
+            workspace_id,
+            request_id=request_id,
+            permission=Permission.WORKSPACE_READ,
+        )
+        imported_template_key = uuid5(context.user.id, str(payload.template_key))
+        lineage = await db.scalar(
+            select(TemplatePackage.id).where(
+                TemplatePackage.workspace_id == workspace_id,
+                TemplatePackage.template_key == imported_template_key,
+            )
+        )
+        if lineage is not None:
+            raise self._conflict("A template lineage already exists.")
+        object_graph = {"goal_plan": payload.goal_plan.model_dump(mode="json")}
+        external_links = sorted(
+            {
+                resource.source_url
+                for phase in payload.goal_plan.phases
+                for task in phase.tasks
+                for resource in task.resources
+            }
+        )
+        manifest = {
+            "schema_version": 1,
+            "product_min_version": payload.product_min_version,
+            "author": payload.author_name,
+            "license": payload.license,
+            "locale": payload.locale,
+            "target_personas": payload.target_personas,
+            "objects": object_graph,
+            "changelog": payload.changelog,
+            "source_name": payload.source_name,
+            "source_sha256": payload.source_sha256,
+            "package_id": str(payload.package_id),
+            "package_template_key": str(payload.template_key),
+        }
+        content_hash = hashlib.sha256(
+            json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        row = TemplatePackage(
+            id=uuid7(),
+            workspace_id=workspace_id,
+            template_key=imported_template_key,
+            version_number=1,
+            name=payload.name,
+            description=payload.description,
+            schema_version=1,
+            product_min_version=payload.product_min_version,
+            author_name=payload.author_name,
+            license=payload.license,
+            locale=payload.locale,
+            target_personas=payload.target_personas,
+            changelog=payload.changelog,
+            content_hash=content_hash,
+            risk_metadata={
+                "external_links": external_links[:100],
+                "external_link_count": len(external_links),
+                "contains_executable": False,
+                "contains_members_or_tokens": False,
+                "contains_provider_credentials": False,
+                "source_scope": "user_imported_structured_template",
+                "source_name": payload.source_name,
+                "source_sha256": payload.source_sha256,
+                "package_id": str(payload.package_id),
+                "package_template_key": str(payload.template_key),
+            },
+            object_graph=object_graph,
+            visibility="private",
+            created_by=context.user.id,
+        )
+        try:
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError as exc:
+            raise self._conflict("The template package already exists.") from exc
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="template.imported",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="template_package",
+                target_id=row.id,
+                metadata={
+                    "phase_count": len(payload.goal_plan.phases),
+                    "task_count": sum(len(phase.tasks) for phase in payload.goal_plan.phases),
+                    "resource_count": sum(
+                        len(task.resources)
+                        for phase in payload.goal_plan.phases
+                        for task in phase.tasks
+                    ),
+                },
+            )
+        )
+        return row
+
     async def list_templates(
         self, db: AsyncSession, context: AuthContext, workspace_id: UUID, request_id: str
     ) -> list[TemplatePackage]:
@@ -257,6 +374,8 @@ class GrowthService:
         if identifier is not None:
             raise self._conflict("Template installation identifier exists.")
         goal_id, plan_id, version_id = uuid7(), uuid7(), uuid7()
+        task_ids: list[UUID] = []
+        resource_ids: list[UUID] = []
         try:
             source = template.object_graph["goal_plan"]
             if not isinstance(source, dict):
@@ -265,6 +384,22 @@ class GrowthService:
             if not isinstance(raw_phases, list):
                 raise ValueError
             phase_ids = [uuid7() for _ in raw_phases]
+            contains_tasks = any(bool(phase.get("tasks")) for phase in raw_phases)
+            if contains_tasks and payload.start_date is None:
+                raise APIError(
+                    code="TEMPLATE_START_DATE_REQUIRED",
+                    message="A dated template requires a start date.",
+                    status_code=422,
+                )
+            target_date = source.get("target_date")
+            if "target_day_offset" in source:
+                if payload.start_date is None:
+                    raise APIError(
+                        code="TEMPLATE_START_DATE_REQUIRED",
+                        message="A dated template requires a start date.",
+                        status_code=422,
+                    )
+                target_date = payload.start_date + timedelta(days=int(source["target_day_offset"]))
             create = GoalPlanCreateRequest.model_validate(
                 {
                     "goal_id": goal_id,
@@ -274,9 +409,10 @@ class GrowthService:
                     "description": source["description"],
                     "desired_outcome": source["desired_outcome"],
                     "weekly_minutes": source["weekly_minutes"],
-                    "target_date": source["target_date"],
+                    "target_date": target_date,
                     "phases": [
-                        {**phase, "id": phase_ids[position]}
+                        {key: value for key, value in phase.items() if key != "tasks"}
+                        | {"id": phase_ids[position]}
                         for position, phase in enumerate(raw_phases)
                     ],
                 }
@@ -295,6 +431,61 @@ class GrowthService:
             create,
             request_id=request_id,
         )
+        for phase_position, phase in enumerate(raw_phases):
+            raw_tasks = phase.get("tasks", [])
+            if not isinstance(raw_tasks, list):
+                raise APIError(
+                    code="TEMPLATE_PACKAGE_INVALID",
+                    message="The template package is incompatible or invalid.",
+                    status_code=422,
+                )
+            for raw_task in raw_tasks:
+                if not isinstance(raw_task, dict) or payload.start_date is None:
+                    raise APIError(
+                        code="TEMPLATE_PACKAGE_INVALID",
+                        message="The template package is incompatible or invalid.",
+                        status_code=422,
+                    )
+                task_id = uuid7()
+                task_ids.append(task_id)
+                task_day = payload.start_date + timedelta(days=int(raw_task["day_offset"]))
+                planned_at = datetime.combine(task_day, time.min, tzinfo=UTC)
+                due_at = datetime.combine(task_day, time.max, tzinfo=UTC)
+                await self._execution.create_task(
+                    db,
+                    context,
+                    workspace_id,
+                    payload.target_space_id,
+                    task_id=task_id,
+                    goal_id=goal_id,
+                    phase_id=phase_ids[phase_position],
+                    title=str(raw_task["title"]),
+                    description=str(raw_task.get("description", "")),
+                    priority=int(raw_task.get("priority", 2)),
+                    estimated_minutes=int(raw_task.get("estimated_minutes", 0)),
+                    planned_at=planned_at,
+                    due_at=due_at,
+                    request_id=request_id,
+                )
+                for raw_resource in raw_task.get("resources", []):
+                    resource_id = uuid7()
+                    resource_ids.append(resource_id)
+                    await self._content.create_resource(
+                        db,
+                        context,
+                        workspace_id,
+                        payload.target_space_id,
+                        resource_id,
+                        ResourceFields.model_validate(
+                            {
+                                "task_id": task_id,
+                                "resource_type": "link",
+                                "title": raw_resource["title"],
+                                "source_url": raw_resource["source_url"],
+                            }
+                        ),
+                        request_id,
+                    )
         installed = TemplateInstallation(
             id=payload.id,
             workspace_id=workspace_id,
@@ -306,6 +497,8 @@ class GrowthService:
                 "plan_id": str(plan_id),
                 "plan_version_id": str(version_id),
                 "phase_ids": [str(value) for value in phase_ids],
+                "task_ids": [str(value) for value in task_ids],
+                "resource_ids": [str(value) for value in resource_ids],
             },
             installed_by=context.user.id,
         )
