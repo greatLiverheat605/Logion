@@ -27,7 +27,7 @@
     "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.61.1",
     "openapi-typescript": "7.13.0",
-    "prettier": "3.8.2",
+    "prettier": "3.9.6",
     "typescript": "5.9.3"
   }
 }
