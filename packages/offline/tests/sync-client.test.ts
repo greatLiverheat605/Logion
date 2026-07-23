@@ -40,7 +40,7 @@ describe("recoverable push/pull cycle", () => {
       indexedDB,
       IDBKeyRange,
     });
-    const vault = new OfflineVault(database);
+    let vault = new OfflineVault(database);
     await vault.initialize(ids.user, "correct horse battery staple");
     await database.syncState.put({
       workspace_id: ids.workspace,
@@ -133,6 +133,34 @@ describe("recoverable push/pull cycle", () => {
     expect(
       await database.entities.get([ids.workspace, "note", ids.entity]),
     ).toMatchObject({ sync_status: "pending" });
+
+    const databaseName = database.name;
+    vault.lock();
+    database.close();
+    database = await openOfflineDatabase({
+      databaseName,
+      indexedDB,
+      IDBKeyRange,
+    });
+    vault = new OfflineVault(database);
+    await vault.unlock(ids.user, "correct horse battery staple");
+    expect(await database.outbox.get(ids.operation)).toMatchObject({
+      outbox_state: "pending",
+      payload: { encrypted_payload_ref: ids.operation },
+    });
+    expect(await vault.get(ids.operation, ids.workspace)).toMatchObject({
+      space_id: ids.user,
+      yjs_generation: 1,
+    });
+    expect(await vault.get(ids.entity, ids.workspace)).toMatchObject({
+      markdown_body: "after",
+    });
+    expect(
+      JSON.stringify({
+        entities: await database.entities.toArray(),
+        outbox: await database.outbox.toArray(),
+      }),
+    ).not.toContain("after");
 
     let transportedPayload: unknown;
     const result = await new SyncClient(
