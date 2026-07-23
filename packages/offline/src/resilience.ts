@@ -1,23 +1,33 @@
 import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
+import { hashPayload } from "./hashing";
+import { isProtectedEntityType } from "./protected-entities";
 import type {
   AttachmentQueueEntry,
   UploadableAttachmentQueueEntry,
-  ConflictStatus,
   JsonObject,
   LocalConflict,
+  OutboxEntry,
 } from "./types";
 import { validateUuid } from "./validation";
+import { OfflineVault } from "./vault";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "text/plain"]);
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 export class ConflictRepository {
-  constructor(private readonly database: LogionOfflineDatabase) {}
+  constructor(
+    private readonly database: LogionOfflineDatabase,
+    private readonly vault?: OfflineVault,
+  ) {}
 
   async record(conflict: LocalConflict): Promise<void> {
     validateUuid(conflict.conflict_id);
     validateUuid(conflict.workspace_id);
+    if (conflict.source_operation_id !== null)
+      validateUuid(conflict.source_operation_id);
+    if (conflict.source_device_id !== null)
+      validateUuid(conflict.source_device_id);
     if (conflict.status !== "open") {
       throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
     }
@@ -37,64 +47,237 @@ export class ConflictRepository {
 
   async listOpen(workspaceId: string): Promise<LocalConflict[]> {
     validateUuid(workspaceId);
-    return this.database.conflicts
-      .where("[workspace_id+status]")
-      .equals([workspaceId, "open"])
-      .sortBy("created_at");
+    const rows = await this.database.conflicts
+      .where("workspace_id")
+      .equals(workspaceId)
+      .toArray();
+    return rows
+      .filter((row) => row.status === "open" || row.status === "resolving")
+      .sort(
+        (left, right) =>
+          left.created_at.localeCompare(right.created_at) ||
+          left.conflict_id.localeCompare(right.conflict_id),
+      );
   }
 
-  async resolve(
-    workspaceId: string,
-    conflictId: string,
-    resolution: Exclude<ConflictStatus, "open">,
-    mergedPayload?: JsonObject,
-  ): Promise<void> {
-    validateUuid(workspaceId);
-    validateUuid(conflictId);
+  async queueResolution(input: {
+    workspace_id: string;
+    conflict_id: string;
+    operation_id: string;
+    device_id: string;
+    updated_by: string;
+    client_occurred_at: string;
+    resolution: "keep_local" | "keep_remote" | "merge";
+    merged_payload?: JsonObject;
+  }): Promise<OutboxEntry | null> {
+    validateUuid(input.workspace_id);
+    validateUuid(input.conflict_id);
+    validateUuid(input.operation_id);
+    validateUuid(input.device_id);
+    validateUuid(input.updated_by);
+    if (!Number.isFinite(Date.parse(input.client_occurred_at))) {
+      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+    }
     try {
+      const conflict = await this.database.conflicts.get(input.conflict_id);
+      if (
+        conflict === undefined ||
+        conflict.workspace_id !== input.workspace_id ||
+        conflict.status !== "open" ||
+        !conflict.resolution_options.includes(input.resolution) ||
+        conflict.source_operation_id === null ||
+        conflict.resolution_operation_id !== null ||
+        (conflict.server_recorded &&
+          conflict.source_device_id !== input.device_id) ||
+        (input.resolution === "merge") !== (input.merged_payload !== undefined)
+      ) {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      const entityKey: [string, string, string] = [
+        input.workspace_id,
+        conflict.entity_type,
+        conflict.entity_id,
+      ];
+      const sourceOperationId = conflict.source_operation_id;
+      const entity = await this.database.entities.get(entityKey);
+      if (entity === undefined || entity.sync_status !== "conflict") {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      const protectedEntity = isProtectedEntityType(conflict.entity_type);
+      const localPayload = protectedEntity
+        ? await this.getProtectedPayload(
+            conflict.local_payload,
+            input.workspace_id,
+          )
+        : conflict.local_payload;
+      const remotePayload = protectedEntity
+        ? await this.getProtectedPayload(
+            conflict.remote_payload,
+            input.workspace_id,
+          )
+        : conflict.remote_payload;
+      if (localPayload === null || remotePayload === null) {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      const selectedPayload =
+        input.resolution === "keep_local"
+          ? localPayload
+          : input.resolution === "keep_remote"
+            ? remotePayload
+            : input.merged_payload;
+      if (selectedPayload === undefined) {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      const selectedHash = await hashPayload(selectedPayload);
+      if (
+        (input.resolution === "keep_local" &&
+          selectedHash !== conflict.local_payload_hash) ||
+        (input.resolution === "keep_remote" &&
+          selectedHash !== conflict.remote_payload_hash)
+      ) {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      const sealed = protectedEntity
+        ? await this.requireVault().seal(
+            input.operation_id,
+            input.workspace_id,
+            selectedPayload,
+          )
+        : null;
+      const durablePayload: JsonObject = protectedEntity
+        ? { encrypted_payload_ref: input.operation_id }
+        : selectedPayload;
+      if (!conflict.server_recorded && input.resolution === "keep_remote") {
+        await this.database.transaction(
+          "rw",
+          this.database.conflicts,
+          this.database.entities,
+          this.database.outbox,
+          this.database.vaultRecords,
+          async () => {
+            if (sealed !== null) {
+              await this.database.vaultRecords.put(sealed);
+            }
+            await this.database.outbox.delete(sourceOperationId);
+            await this.database.entities.update(entityKey, {
+              payload: durablePayload,
+              payload_hash: selectedHash,
+              server_version: conflict.remote_version,
+              local_revision: entity.local_revision + 1,
+              updated_at: input.client_occurred_at,
+              updated_by: input.updated_by,
+              sync_status: "clean",
+            });
+            await this.database.conflicts.update(input.conflict_id, {
+              status: "resolved_remote",
+              requested_resolution: input.resolution,
+              resolved_at: input.client_occurred_at,
+            });
+          },
+        );
+        return null;
+      }
+      const operation: OutboxEntry = {
+        operation_id: input.operation_id,
+        protocol_version: "sync-v1",
+        workspace_id: input.workspace_id,
+        device_id: input.device_id,
+        entity_type: conflict.entity_type,
+        entity_id: conflict.entity_id,
+        operation_type: "update",
+        base_version: conflict.remote_version,
+        client_occurred_at: input.client_occurred_at,
+        payload: durablePayload,
+        payload_hash: selectedHash,
+        payload_vault_id: protectedEntity ? input.operation_id : undefined,
+        conflict_resolution: conflict.server_recorded
+          ? {
+              conflict_id: input.conflict_id,
+              resolution: input.resolution,
+              expected_remote_version: conflict.remote_version,
+            }
+          : null,
+        dependencies: [],
+        outbox_state: "pending",
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error_code: null,
+        queued_at: input.client_occurred_at,
+      };
       await this.database.transaction(
         "rw",
         this.database.conflicts,
         this.database.entities,
+        this.database.outbox,
+        this.database.vaultRecords,
         async () => {
-          const conflict = await this.database.conflicts.get(conflictId);
           if (
-            conflict === undefined ||
-            conflict.workspace_id !== workspaceId ||
-            conflict.status !== "open"
+            (await this.database.outbox.get(input.operation_id)) !== undefined
           ) {
-            throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+            throw new OfflineStorageError("OFFLINE_OPERATION_HASH_MISMATCH");
           }
-          const payload =
-            resolution === "resolved_remote"
-              ? conflict.remote_payload
-              : resolution === "resolved_merge"
-                ? mergedPayload
-                : conflict.local_payload;
-          if (payload === undefined) {
-            throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+          if (sealed !== null) {
+            await this.database.vaultRecords.put(sealed);
           }
-          await this.database.entities.update(
-            [workspaceId, conflict.entity_type, conflict.entity_id],
-            {
-              payload,
-              payload_hash:
-                resolution === "resolved_remote"
-                  ? conflict.remote_payload_hash
-                  : conflict.local_payload_hash,
-              server_version: conflict.remote_version,
-              sync_status: resolution === "dismissed" ? "conflict" : "pending",
-            },
-          );
-          await this.database.conflicts.update(conflictId, {
-            status: resolution,
-            resolved_at: new Date().toISOString(),
+          await this.database.outbox.delete(sourceOperationId);
+          await this.database.outbox.add(operation);
+          await this.database.entities.update(entityKey, {
+            payload: durablePayload,
+            payload_hash: selectedHash,
+            server_version: conflict.remote_version,
+            local_revision: entity.local_revision + 1,
+            updated_at: input.client_occurred_at,
+            updated_by: input.updated_by,
+            sync_status: "pending",
+          });
+          await this.database.conflicts.update(input.conflict_id, {
+            status: "resolving",
+            resolution_operation_id: input.operation_id,
+            requested_resolution: input.resolution,
           });
         },
       );
+      return operation;
     } catch (error) {
       throw normalizeStorageError(error);
     }
+  }
+
+  async dismiss(workspaceId: string, conflictId: string): Promise<void> {
+    validateUuid(workspaceId);
+    validateUuid(conflictId);
+    const conflict = await this.database.conflicts.get(conflictId);
+    if (
+      conflict === undefined ||
+      conflict.workspace_id !== workspaceId ||
+      conflict.status !== "open" ||
+      !conflict.resolution_options.includes("dismiss")
+    ) {
+      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+    }
+    await this.database.conflicts.update(conflictId, {
+      status: "dismissed",
+      resolved_at: new Date().toISOString(),
+    });
+  }
+
+  private requireVault(): OfflineVault {
+    if (this.vault === undefined) {
+      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+    }
+    return this.vault;
+  }
+
+  private async getProtectedPayload(
+    referencePayload: JsonObject,
+    workspaceId: string,
+  ): Promise<JsonObject | null> {
+    const reference = referencePayload.encrypted_payload_ref;
+    if (typeof reference !== "string") {
+      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+    }
+    validateUuid(reference);
+    return this.requireVault().get(reference, workspaceId);
   }
 }
 

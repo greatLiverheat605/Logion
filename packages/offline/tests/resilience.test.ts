@@ -9,6 +9,7 @@ import {
   openOfflineDatabase,
   OfflineVault,
   ProtectedOfflineRepository,
+  SyncClient,
   type LogionOfflineDatabase,
 } from "../src";
 
@@ -123,18 +124,296 @@ describe("conflict center and attachment queue", () => {
       remote_payload: remote,
       remote_payload_hash: await hashPayload(remote),
       resolution_options: ["keep_local", "keep_remote", "merge"],
+      source_operation_id: ids.attachment,
+      source_device_id: ids.device,
+      resolution_operation_id: null,
+      requested_resolution: null,
+      server_recorded: true,
       created_at: "2026-07-21T00:00:02Z",
       resolved_at: null,
     });
     expect(await repository.listOpen(ids.workspace)).toHaveLength(1);
-    await repository.resolve(ids.workspace, ids.conflict, "resolved_remote");
-    expect(await repository.listOpen(ids.workspace)).toHaveLength(0);
+    const resolutionId = crypto.randomUUID();
+    await repository.queueResolution({
+      workspace_id: ids.workspace,
+      conflict_id: ids.conflict,
+      operation_id: resolutionId,
+      device_id: ids.device,
+      updated_by: ids.user,
+      client_occurred_at: "2026-07-21T00:00:03Z",
+      resolution: "keep_remote",
+    });
+    expect(await repository.listOpen(ids.workspace)).toHaveLength(1);
     expect(
       await db.entities.get([ids.workspace, "space", ids.entity]),
     ).toMatchObject({
       payload: remote,
       server_version: 2,
       sync_status: "pending",
+    });
+    expect(await db.outbox.get(resolutionId)).toMatchObject({
+      base_version: 2,
+      conflict_resolution: {
+        conflict_id: ids.conflict,
+        resolution: "keep_remote",
+        expected_remote_version: 2,
+      },
+    });
+  });
+
+  it("queues protected conflict resolution without exposing either plaintext version", async () => {
+    const db = await open();
+    const vault = new OfflineVault(db);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    const local = {
+      space_id: ids.entity,
+      task_id: null,
+      title: "Local note",
+      markdown_body: "local private body",
+    };
+    const remote = {
+      ...local,
+      title: "Remote note",
+      markdown_body: "remote private body",
+    };
+    await Promise.all([
+      vault.put(ids.attachment, ids.workspace, local),
+      vault.put(ids.conflict, ids.workspace, remote),
+    ]);
+    await db.entities.put({
+      workspace_id: ids.workspace,
+      entity_type: "note",
+      entity_id: ids.entity,
+      server_version: 1,
+      local_revision: 2,
+      created_at: "2026-07-21T00:00:00Z",
+      updated_at: "2026-07-21T00:00:01Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: { encrypted_payload_ref: ids.attachment },
+      payload_hash: await hashPayload(local),
+      sync_status: "conflict",
+    });
+    const conflict = {
+      conflict_id: ids.conflict,
+      workspace_id: ids.workspace,
+      entity_type: "note",
+      entity_id: ids.entity,
+      status: "open" as const,
+      conflict_kind: "content" as const,
+      base_version: 1,
+      local_payload: { encrypted_payload_ref: ids.attachment },
+      local_payload_hash: await hashPayload(local),
+      remote_version: 2,
+      remote_payload: { encrypted_payload_ref: ids.conflict },
+      remote_payload_hash: await hashPayload(remote),
+      resolution_options: [
+        "keep_local",
+        "keep_remote",
+        "merge",
+        "dismiss",
+      ] as const,
+      source_operation_id: ids.attachment,
+      source_device_id: ids.device,
+      resolution_operation_id: null,
+      requested_resolution: null,
+      server_recorded: true,
+      created_at: "2026-07-21T00:00:02Z",
+      resolved_at: null,
+    };
+    await new ConflictRepository(db, vault).record({
+      ...conflict,
+      resolution_options: [...conflict.resolution_options],
+    });
+    await expect(
+      new ConflictRepository(db, vault).queueResolution({
+        workspace_id: ids.workspace,
+        conflict_id: ids.conflict,
+        operation_id: crypto.randomUUID(),
+        device_id: ids.user,
+        updated_by: ids.user,
+        client_occurred_at: "2026-07-21T00:00:03Z",
+        resolution: "keep_local",
+      }),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await expect(
+      new ConflictRepository(db).queueResolution({
+        workspace_id: ids.workspace,
+        conflict_id: ids.conflict,
+        operation_id: crypto.randomUUID(),
+        device_id: ids.device,
+        updated_by: ids.user,
+        client_occurred_at: "2026-07-21T00:00:03Z",
+        resolution: "keep_local",
+      }),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+
+    const operationId = crypto.randomUUID();
+    const repository = new ConflictRepository(db, vault);
+    await repository.queueResolution({
+      workspace_id: ids.workspace,
+      conflict_id: ids.conflict,
+      operation_id: operationId,
+      device_id: ids.device,
+      updated_by: ids.user,
+      client_occurred_at: "2026-07-21T00:00:03Z",
+      resolution: "keep_local",
+    });
+    expect(await vault.get(operationId, ids.workspace)).toEqual(local);
+    expect(JSON.stringify(await db.entities.toArray())).not.toContain(
+      "private body",
+    );
+    expect(JSON.stringify(await db.outbox.toArray())).not.toContain(
+      "private body",
+    );
+    expect(await db.outbox.get(operationId)).toMatchObject({
+      payload: { encrypted_payload_ref: operationId },
+      payload_vault_id: operationId,
+      payload_hash: await hashPayload(local),
+    });
+    expect(await db.conflicts.get(ids.conflict)).toMatchObject({
+      status: "resolving",
+      requested_resolution: "keep_local",
+      resolution_operation_id: operationId,
+    });
+    await expect(
+      repository.queueResolution({
+        workspace_id: ids.workspace,
+        conflict_id: ids.conflict,
+        operation_id: crypto.randomUUID(),
+        device_id: ids.device,
+        updated_by: ids.user,
+        client_occurred_at: "2026-07-21T00:00:04Z",
+        resolution: "keep_remote",
+      }),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+
+    await db.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 4,
+      sync_epoch: ids.user,
+      cursor: 0,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    let transported: unknown;
+    await new SyncClient(
+      db,
+      {
+        async push(request) {
+          await Promise.resolve();
+          transported = request.operations[0].payload;
+          return {
+            message_type: "push_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            results: [
+              {
+                operation_id: operationId,
+                status: "applied",
+                retryable: false,
+                server_version: 3,
+                sequence: 1,
+              },
+            ],
+          };
+        },
+        async pull(request) {
+          await Promise.resolve();
+          return {
+            message_type: "pull_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            from_cursor: 0,
+            next_cursor: 0,
+            has_more: false,
+            changes: [],
+          };
+        },
+      },
+      vault,
+    ).synchronize(ids.workspace, ids.device);
+    expect(transported).toEqual(local);
+    expect(await db.outbox.get(operationId)).toBeUndefined();
+    expect(await db.conflicts.get(ids.conflict)).toMatchObject({
+      status: "resolved_local",
+    });
+    expect(
+      await db.entities.get([ids.workspace, "note", ids.entity]),
+    ).toMatchObject({ server_version: 3, sync_status: "clean" });
+  });
+
+  it("accepts the remote side of a pull-only conflict without forging a server conflict id", async () => {
+    const db = await open();
+    const local = { name: "Unsent local" };
+    const remote = { name: "Pulled remote" };
+    await db.entities.put({
+      workspace_id: ids.workspace,
+      entity_type: "space",
+      entity_id: ids.entity,
+      server_version: 1,
+      local_revision: 2,
+      created_at: "2026-07-21T00:00:00Z",
+      updated_at: "2026-07-21T00:00:01Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: local,
+      payload_hash: await hashPayload(local),
+      sync_status: "conflict",
+    });
+    const repository = new ConflictRepository(db);
+    await repository.record({
+      conflict_id: ids.conflict,
+      workspace_id: ids.workspace,
+      entity_type: "space",
+      entity_id: ids.entity,
+      status: "open",
+      conflict_kind: "status",
+      base_version: 1,
+      local_payload: local,
+      local_payload_hash: await hashPayload(local),
+      remote_version: 2,
+      remote_payload: remote,
+      remote_payload_hash: await hashPayload(remote),
+      resolution_options: ["keep_remote", "dismiss"],
+      source_operation_id: ids.attachment,
+      source_device_id: ids.device,
+      resolution_operation_id: null,
+      requested_resolution: null,
+      server_recorded: false,
+      created_at: "2026-07-21T00:00:02Z",
+      resolved_at: null,
+    });
+    await expect(
+      repository.queueResolution({
+        workspace_id: ids.workspace,
+        conflict_id: ids.conflict,
+        operation_id: crypto.randomUUID(),
+        device_id: ids.device,
+        updated_by: ids.user,
+        client_occurred_at: "2026-07-21T00:00:03Z",
+        resolution: "keep_remote",
+      }),
+    ).resolves.toBeNull();
+    expect(await db.outbox.count()).toBe(0);
+    expect(
+      await db.entities.get([ids.workspace, "space", ids.entity]),
+    ).toMatchObject({
+      payload: remote,
+      server_version: 2,
+      sync_status: "clean",
+    });
+    expect(await db.conflicts.get(ids.conflict)).toMatchObject({
+      status: "resolved_remote",
     });
   });
 
@@ -452,6 +731,17 @@ describe("conflict center and attachment queue", () => {
     const db = await open();
     const repository = new ConflictRepository(db);
     await expect(
+      repository.queueResolution({
+        workspace_id: ids.workspace,
+        conflict_id: ids.conflict,
+        operation_id: crypto.randomUUID(),
+        device_id: ids.device,
+        updated_by: ids.user,
+        client_occurred_at: "not-a-date",
+        resolution: "keep_remote",
+      }),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await expect(
       repository.record({
         conflict_id: ids.conflict,
         workspace_id: ids.workspace,
@@ -466,12 +756,26 @@ describe("conflict center and attachment queue", () => {
         remote_payload: {},
         remote_payload_hash: await hashPayload({}),
         resolution_options: ["merge"],
+        source_operation_id: ids.attachment,
+        source_device_id: ids.device,
+        resolution_operation_id: null,
+        requested_resolution: null,
+        server_recorded: true,
         created_at: "2026-07-21T00:00:00Z",
         resolved_at: null,
       }),
     ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
     await expect(
-      repository.resolve(ids.workspace, ids.conflict, "resolved_merge"),
+      repository.queueResolution({
+        workspace_id: ids.workspace,
+        conflict_id: ids.conflict,
+        operation_id: crypto.randomUUID(),
+        device_id: ids.device,
+        updated_by: ids.user,
+        client_occurred_at: "2026-07-21T00:00:00Z",
+        resolution: "merge",
+        merged_payload: {},
+      }),
     ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
     await db.entities.put({
       workspace_id: ids.workspace,
@@ -502,11 +806,23 @@ describe("conflict center and attachment queue", () => {
       remote_payload: { name: "Remote" },
       remote_payload_hash: await hashPayload({ name: "Remote" }),
       resolution_options: ["merge"],
+      source_operation_id: ids.attachment,
+      source_device_id: ids.device,
+      resolution_operation_id: null,
+      requested_resolution: null,
+      server_recorded: true,
       created_at: "2026-07-21T00:00:01Z",
       resolved_at: null,
     });
-    await repository.resolve(ids.workspace, ids.conflict, "resolved_merge", {
-      name: "Merged",
+    await repository.queueResolution({
+      workspace_id: ids.workspace,
+      conflict_id: ids.conflict,
+      operation_id: crypto.randomUUID(),
+      device_id: ids.device,
+      updated_by: ids.user,
+      client_occurred_at: "2026-07-21T00:00:02Z",
+      resolution: "merge",
+      merged_payload: { name: "Merged" },
     });
     expect(
       await db.entities.get([ids.workspace, "space", ids.entity]),
@@ -527,10 +843,15 @@ describe("conflict center and attachment queue", () => {
       remote_payload: { name: "Remote again" },
       remote_payload_hash: await hashPayload({ name: "Remote again" }),
       resolution_options: ["dismiss"],
+      source_operation_id: ids.attachment,
+      source_device_id: ids.device,
+      resolution_operation_id: null,
+      requested_resolution: null,
+      server_recorded: true,
       created_at: "2026-07-21T00:00:02Z",
       resolved_at: null,
     });
-    await repository.resolve(ids.workspace, ids.attachment, "dismissed");
+    await repository.dismiss(ids.workspace, ids.attachment);
     expect(
       await db.entities.get([ids.workspace, "space", ids.entity]),
     ).toMatchObject({

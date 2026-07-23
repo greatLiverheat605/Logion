@@ -481,8 +481,20 @@ describe("recoverable push/pull cycle", () => {
       sync_status: "conflict",
     });
     expect(await database.outbox.get(ids.operation)).toMatchObject({
-      outbox_state: "blocked",
-      last_error_code: "SYNC_OPERATION_INVALID",
+      outbox_state: "conflict",
+      last_error_code: "SYNC_CONFLICT",
+    });
+    const conflicts = await database.conflicts.toArray();
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      workspace_id: ids.workspace,
+      entity_type: "note",
+      entity_id: ids.entity,
+      local_payload: { encrypted_payload_ref: ids.operation },
+      remote_payload: { encrypted_payload_ref: remoteOperationId },
+      source_operation_id: ids.operation,
+      source_device_id: ids.device,
+      status: "open",
     });
   });
 

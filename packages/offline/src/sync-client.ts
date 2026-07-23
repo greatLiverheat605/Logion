@@ -5,6 +5,7 @@ import {
   type PushRequest,
   type SyncOperationV1,
 } from "@logion/contracts";
+import { v5 as uuidv5 } from "uuid";
 
 import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
@@ -41,6 +42,8 @@ type ReadySyncState = WorkspaceSyncState & {
   bootstrap_state: "ready";
   sync_epoch: string;
 };
+
+const UUID_NAMESPACE_URL = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
 
 export class SyncClient {
   private readonly repository: OfflineRepository;
@@ -186,6 +189,54 @@ export class SyncClient {
                 );
               }
             }
+            const completedResolution = operation.conflict_resolution;
+            if (
+              completedResolution !== null &&
+              completedResolution !== undefined &&
+              completedResolution.resolution !== "dismiss"
+            ) {
+              const status =
+                completedResolution.resolution === "keep_local"
+                  ? "resolved_local"
+                  : completedResolution.resolution === "keep_remote"
+                    ? "resolved_remote"
+                    : "resolved_merge";
+              await this.database.conflicts.update(
+                completedResolution.conflict_id,
+                {
+                  status,
+                  resolved_at: new Date().toISOString(),
+                },
+              );
+            } else {
+              const localResolution = await this.database.conflicts
+                .where("workspace_id")
+                .equals(state.workspace_id)
+                .filter(
+                  (conflict) =>
+                    conflict.status === "resolving" &&
+                    conflict.resolution_operation_id === operation.operation_id,
+                )
+                .first();
+              if (
+                localResolution?.requested_resolution !== null &&
+                localResolution?.requested_resolution !== undefined
+              ) {
+                const status =
+                  localResolution.requested_resolution === "keep_local"
+                    ? "resolved_local"
+                    : localResolution.requested_resolution === "keep_remote"
+                      ? "resolved_remote"
+                      : "resolved_merge";
+                await this.database.conflicts.update(
+                  localResolution.conflict_id,
+                  {
+                    status,
+                    resolved_at: new Date().toISOString(),
+                  },
+                );
+              }
+            }
           } else {
             if (result.status === "conflict") {
               const local = await this.database.entities.get([
@@ -203,8 +254,23 @@ export class SyncClient {
                 remote_payload:
                   protectedConflicts.get(result.conflict.conflict_id) ??
                   (result.conflict.remote_payload as JsonObject),
+                source_operation_id: operation.operation_id,
+                source_device_id: operation.device_id,
+                resolution_operation_id: null,
+                requested_resolution: null,
+                server_recorded: true,
                 resolved_at: null,
               });
+              const failedResolution = operation.conflict_resolution;
+              if (failedResolution !== null && failedResolution !== undefined) {
+                await this.database.conflicts.update(
+                  failedResolution.conflict_id,
+                  {
+                    status: "dismissed",
+                    resolved_at: new Date().toISOString(),
+                  },
+                );
+              }
               await this.database.entities.update(
                 [
                   state.workspace_id,
@@ -285,16 +351,33 @@ export class SyncClient {
   ): Promise<void> {
     const protectedPayloads = new Map<string, JsonObject>();
     const sealedPayloads: VaultRecord[] = [];
+    const pendingSources = new Map<string, OutboxEntry | undefined>();
     for (const change of message.changes) {
+      const existing = await this.database.entities.get([
+        state.workspace_id,
+        change.entity_type,
+        change.entity_id,
+      ]);
+      if (existing?.sync_status === "pending") {
+        const related = await this.database.outbox
+          .where("[workspace_id+entity_type+entity_id]")
+          .equals([state.workspace_id, change.entity_type, change.entity_id])
+          .toArray();
+        pendingSources.set(
+          change.operation_id,
+          related
+            .sort(
+              (left, right) =>
+                left.queued_at.localeCompare(right.queued_at) ||
+                left.operation_id.localeCompare(right.operation_id),
+            )
+            .at(-1),
+        );
+      }
       if (isProtectedEntityType(change.entity_type)) {
         if (this.vault === undefined) {
           throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
         }
-        const existing = await this.database.entities.get([
-          state.workspace_id,
-          change.entity_type,
-          change.entity_id,
-        ]);
         const vaultId =
           change.entity_type === "note_document_update" ||
           existing?.sync_status === "pending"
@@ -317,6 +400,8 @@ export class SyncClient {
       this.database.entities,
       this.database.syncState,
       this.database.vaultRecords,
+      this.database.conflicts,
+      this.database.outbox,
       async () => {
         await this.database.vaultRecords.bulkPut(sealedPayloads);
         let expected = message.from_cursor;
@@ -335,6 +420,52 @@ export class SyncClient {
           ];
           const existing = await this.database.entities.get(key);
           if (existing?.sync_status === "pending") {
+            const source = pendingSources.get(change.operation_id);
+            const conflictId = uuidv5(
+              `logion:pull-conflict:${state.workspace_id}:${change.operation_id}:` +
+                `${change.entity_type}:${change.entity_id}`,
+              UUID_NAMESPACE_URL,
+            );
+            const contentConflict = [
+              "evidence",
+              "note",
+              "resource",
+              "topic",
+            ].includes(change.entity_type);
+            await this.database.conflicts.put({
+              conflict_id: conflictId,
+              workspace_id: state.workspace_id,
+              entity_type: change.entity_type,
+              entity_id: change.entity_id,
+              status: "open",
+              conflict_kind: contentConflict ? "content" : "status",
+              base_version: existing.server_version,
+              local_payload: existing.payload,
+              local_payload_hash: existing.payload_hash,
+              remote_version: change.server_version,
+              remote_payload:
+                protectedPayloads.get(change.operation_id) ??
+                (change.payload as JsonObject),
+              remote_payload_hash: change.payload_hash,
+              resolution_options: ["note", "resource"].includes(
+                change.entity_type,
+              )
+                ? ["keep_local", "keep_remote", "merge", "dismiss"]
+                : ["keep_remote", "dismiss"],
+              source_operation_id: source?.operation_id ?? null,
+              source_device_id: source?.device_id ?? null,
+              resolution_operation_id: null,
+              requested_resolution: null,
+              server_recorded: false,
+              created_at: change.occurred_at,
+              resolved_at: null,
+            });
+            if (source !== undefined) {
+              await this.database.outbox.update(source.operation_id, {
+                outbox_state: "conflict",
+                last_error_code: "SYNC_CONFLICT",
+              });
+            }
             await this.database.entities.update(key, {
               sync_status: "conflict",
             });

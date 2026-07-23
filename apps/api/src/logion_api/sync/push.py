@@ -5,6 +5,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 import rfc8785
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.collaboration.models import GroupFeedback, ReportSnapshot, ReviewRequest, Rubric
@@ -46,6 +47,7 @@ from logion_api.execution.schemas import (
     TaskTransitionRequest,
 )
 from logion_api.execution.service import ExecutionService
+from logion_api.identity.audit import new_audit_event
 from logion_api.identity.service import AuthContext
 from logion_api.memory.models import (
     AuditReview,
@@ -98,7 +100,7 @@ from logion_api.self_study.schemas import (
     TrackCreateRequest,
 )
 from logion_api.self_study.service import SelfStudyService
-from logion_api.sync.models import ProcessedSyncOperation
+from logion_api.sync.models import ProcessedSyncOperation, SyncConflictRecord
 from logion_api.sync.schemas import (
     AppliedOperationResult,
     ConflictOperationResult,
@@ -188,6 +190,14 @@ class SyncPushService:
             results.append(result)
             if isinstance(result, AppliedOperationResult):
                 succeeded.add(operation.operation_id)
+                if operation.conflict_resolution is not None:
+                    await self._complete_conflict_resolution(
+                        db,
+                        context,
+                        request,
+                        operation,
+                        request_id=request_id,
+                    )
         return results
 
     async def _apply_one(
@@ -225,6 +235,23 @@ class SyncPushService:
                 status="duplicate",
                 server_version=replay.server_version,
                 sequence=replay.sequence,
+            )
+        resolution_record, resolution_error = await self._validate_conflict_resolution(
+            db, request, operation
+        )
+        if resolution_error is not None:
+            return self._rejected(operation.operation_id, resolution_error)
+        if (
+            resolution_record is not None
+            and operation.conflict_resolution is not None
+            and operation.conflict_resolution.resolution == "keep_remote"
+        ):
+            return await self._append_entity(
+                db,
+                request.workspace_id,
+                identity,
+                resolution_record.remote_version,
+                operation.payload,
             )
         if operation.entity_type == "learning_goal" and operation.operation_type == "create":
             return await self._create_goal(
@@ -2367,6 +2394,165 @@ class SyncPushService:
         else:
             return None
 
+    async def _validate_conflict_resolution(
+        self,
+        db: AsyncSession,
+        request: PushRequest,
+        operation: object,
+    ) -> tuple[SyncConflictRecord | None, str | None]:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        resolution = operation.conflict_resolution
+        if resolution is None:
+            return None, None
+        record = await db.scalar(
+            select(SyncConflictRecord)
+            .where(
+                SyncConflictRecord.conflict_id == resolution.conflict_id,
+                SyncConflictRecord.workspace_id == request.workspace_id,
+            )
+            .with_for_update()
+        )
+        if record is None:
+            return None, "SYNC_CONFLICT_NOT_FOUND"
+        if (
+            record.status != "open"
+            or record.source_device_id != request.device_id
+            or record.entity_type != operation.entity_type
+            or record.entity_id != operation.entity_id
+            or operation.operation_type != "update"
+            or resolution.expected_remote_version != record.remote_version
+            or operation.base_version != record.remote_version
+            or resolution.resolution not in record.resolution_options
+            or resolution.resolution == "dismiss"
+        ):
+            return None, "SYNC_CONFLICT_RESOLUTION_INVALID"
+        current_version = await self._current_entity_version(
+            db, request.workspace_id, operation.entity_type, operation.entity_id
+        )
+        if current_version != record.remote_version:
+            return None, "SYNC_CONFLICT_STALE"
+        if (
+            resolution.resolution == "keep_remote"
+            and operation.payload_hash != record.remote_payload_hash
+        ):
+            return None, "SYNC_CONFLICT_PAYLOAD_MISMATCH"
+        if (
+            resolution.resolution == "keep_local"
+            and operation.payload_hash != record.local_payload_hash
+        ):
+            return None, "SYNC_CONFLICT_PAYLOAD_MISMATCH"
+        return record, None
+
+    async def _complete_conflict_resolution(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        *,
+        request_id: str,
+    ) -> None:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        resolution = operation.conflict_resolution
+        assert resolution is not None
+        record = await db.scalar(
+            select(SyncConflictRecord)
+            .where(
+                SyncConflictRecord.conflict_id == resolution.conflict_id,
+                SyncConflictRecord.workspace_id == request.workspace_id,
+            )
+            .with_for_update()
+        )
+        if record is None:
+            raise RuntimeError("conflict resolution record disappeared")
+        if record.status != "open":
+            if record.resolution_operation_id == operation.operation_id:
+                return
+            raise RuntimeError("conflict resolution state changed")
+        status_by_resolution = {
+            "keep_local": "resolved_local",
+            "keep_remote": "resolved_remote",
+            "merge": "resolved_merge",
+        }
+        status = status_by_resolution.get(resolution.resolution)
+        if status is None:
+            raise RuntimeError("unsupported conflict resolution completed")
+        record.status = status
+        record.resolution_operation_id = operation.operation_id
+        record.resolved_at = utc_now()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="sync.conflict.resolved",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=request.workspace_id,
+                target_type=record.entity_type,
+                target_id=record.entity_id,
+                metadata={
+                    "conflict_id": str(record.conflict_id),
+                    "resolution": resolution.resolution,
+                    "base_version": record.base_version,
+                    "remote_version": record.remote_version,
+                },
+            )
+        )
+
+    async def _current_entity_version(
+        self,
+        db: AsyncSession,
+        workspace_id: UUID,
+        entity_type: str,
+        entity_id: UUID,
+    ) -> int | None:
+        models: dict[str, Any] = {
+            "task": Task,
+            "study_session": StudySession,
+            "note": Note,
+            "resource": Resource,
+            "evidence": EvidenceItem,
+            "verification": VerificationRecord,
+            "topic": Topic,
+            "topic_dependency": TopicDependency,
+            "mastery": MasteryRecord,
+            "review_schedule": ReviewSchedule,
+            "quiz_item": QuizItem,
+            "quiz_attempt": QuizAttempt,
+            "error_pattern": ErrorPattern,
+            "audit_review": AuditReview,
+            "review_finding": ReviewFinding,
+            "exam": Exam,
+            "exam_subject": Subject,
+            "syllabus_node": SyllabusNode,
+            "mock_exam": MockExam,
+            "score_record": ScoreRecord,
+            "learning_track": LearningTrack,
+            "study_project": StudyProject,
+            "inbox_item": InboxItem,
+            "deliverable": Deliverable,
+            "paper_record": PaperRecord,
+            "research_claim": ResearchClaim,
+            "research_question": ResearchQuestion,
+            "experiment_run": ExperimentRun,
+            "metric_record": MetricRecord,
+            "research_feedback": ResearchFeedback,
+            "rubric": Rubric,
+            "group_review": ReviewRequest,
+            "group_feedback": GroupFeedback,
+            "report_snapshot": ReportSnapshot,
+        }
+        model = models.get(entity_type)
+        if model is None:
+            return None
+        remote = await db.get(model, entity_id)
+        if remote is None or remote.workspace_id != workspace_id:
+            return None
+        return cast(int, remote.version)
+
     async def _api_error_result(
         self,
         db: AsyncSession,
@@ -2545,26 +2731,54 @@ class SyncPushService:
             payload = collaboration_payload(remote)
         else:
             payload = resource_payload(remote)
+        remote_payload_hash = canonical_hash(payload)
+        conflict_kind: Literal["content", "status"] = (
+            "content"
+            if operation.entity_type in {"note", "resource", "evidence", "topic"}
+            else "status"
+        )
+        resolution_options: list[Literal["keep_local", "keep_remote", "merge", "dismiss"]] = (
+            ["keep_local", "keep_remote", "merge", "dismiss"]
+            if operation.entity_type in {"note", "resource"}
+            else ["keep_remote", "dismiss"]
+        )
+        conflict_id = uuid5(
+            NAMESPACE_URL,
+            f"logion:sync-conflict:{request.workspace_id}:{operation.operation_id}:"
+            f"{remote.version}:{remote_payload_hash}",
+        )
+        await db.execute(
+            pg_insert(SyncConflictRecord)
+            .values(
+                conflict_id=conflict_id,
+                workspace_id=request.workspace_id,
+                original_operation_id=operation.operation_id,
+                source_device_id=request.device_id,
+                entity_type=operation.entity_type,
+                entity_id=operation.entity_id,
+                conflict_kind=conflict_kind,
+                base_version=operation.base_version,
+                local_payload_hash=operation.payload_hash,
+                remote_version=remote.version,
+                remote_payload_hash=remote_payload_hash,
+                resolution_options=resolution_options,
+                status="open",
+            )
+            .on_conflict_do_nothing(index_elements=["conflict_id"])
+        )
         return ConflictOperationResult(
             operation_id=operation.operation_id,
             conflict=SyncConflict(
-                conflict_id=uuid5(
-                    NAMESPACE_URL,
-                    f"logion:sync-conflict:{request.workspace_id}:{operation.operation_id}",
-                ),
-                conflict_kind=(
-                    "content"
-                    if operation.entity_type in {"note", "resource", "evidence", "topic"}
-                    else "status"
-                ),
+                conflict_id=conflict_id,
+                conflict_kind=conflict_kind,
                 entity_type=operation.entity_type,
                 entity_id=operation.entity_id,
                 base_version=operation.base_version,
                 local_payload_hash=operation.payload_hash,
                 remote_version=remote.version,
                 remote_payload=payload,
-                remote_payload_hash=canonical_hash(payload),
-                resolution_options=["keep_remote", "dismiss"],
+                remote_payload_hash=remote_payload_hash,
+                resolution_options=resolution_options,
                 created_at=utc_now(),
             ),
         )
