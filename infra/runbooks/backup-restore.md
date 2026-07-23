@@ -46,6 +46,8 @@ docker compose exec -T backup logion-restore-backup \
 
 The helper refuses a non-empty database, validates archive members, restores with `--no-owner --no-privileges`, restores attachments only into an empty safe rehearsal path, and changes every `workspace_sync_states.sync_epoch`. Old devices must therefore re-bootstrap and isolate old Outbox entries.
 
+Successful restore emits exactly one JSON report on stdout. Checksum and progress diagnostics use stderr so automation never has to strip human text before validating the report.
+
 4. Compare manifest/Alembic version, tenant/member/Space counts, attachment hashes, audit sequence and representative authenticated exports.
 5. Run API/Web smoke and cross-tenant negative tests against the rehearsal environment.
 6. Preserve the JSON restore report with RPO/RTO, artifact checksum, key ID, counts and reviewer sign-off.
