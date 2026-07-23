@@ -43,6 +43,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --group dev --frozen
       - run: pnpm ci:fast
+      - name: Production dependency license policy
+        run: |
+          mkdir -p security-reports
+          pnpm licenses list --json --prod > security-reports/pnpm-licenses.json
+          uv run --isolated --no-dev --all-packages python scripts/security/license_policy.py \
+            --policy config/security/license-policy.json \
+            --pnpm-json security-reports/pnpm-licenses.json \
+            --output security-reports/license-policy.json
+          rm security-reports/pnpm-licenses.json
       - name: Validate Compose
         env:
           POSTGRES_PASSWORD: phase0-ci-only
@@ -194,18 +203,37 @@ jobs:
           LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose down --volumes --remove-orphans
-      - uses: aquasecurity/trivy-action@v0.36.0
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
-          severity: HIGH,CRITICAL
-          exit-code: "1"
+          version: v0.70.0
+          cache: true
+      - name: Verify provenance and scan exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WORKER_DIGEST: ${{ steps.worker.outputs.digest }}
+          BACKUP_DIGEST: ${{ steps.backup.outputs.digest }}
+        run: |
+          uv run --group dev python scripts/security/candidate_security.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --reports-dir security-reports \
+            --verify-attestations \
+            --image "web=${IMAGE_PREFIX}-web@${WEB_DIGEST}" \
+            --image "api=${IMAGE_PREFIX}-api@${API_DIGEST}" \
+            --image "worker=${IMAGE_PREFIX}-worker@${WORKER_DIGEST}" \
+            --image "backup=${IMAGE_PREFIX}-backup@${BACKUP_DIGEST}"
       - uses: github/codeql-action/upload-sarif@v4
-        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        if: ${{ always() && hashFiles('security-reports/sarif/*.sarif') != '' }}
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: security-reports/sarif
+          category: candidate-security
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: candidate-security-${{ github.sha }}
+          path: security-reports
+          retention-days: 90
       - uses: anchore/sbom-action@v0.22.1
         with:
           path: .
@@ -218,5 +246,7 @@ jobs:
             logion-sbom.spdx.json
             candidate/candidate-manifest.json
             candidate/performance-smoke.json
+            security-reports/candidate-security-summary.json
+            security-reports/license-policy.json
             packages/contracts/openapi/openapi.json
           retention-days: 30
