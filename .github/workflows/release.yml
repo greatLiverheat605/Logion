@@ -45,10 +45,12 @@ jobs:
             --header "Authorization: Bearer $GH_TOKEN" \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}")"
-          if [ "$(jq -r '.head_sha')" <<<"$response" != "$SOURCE_SHA" ] \
-            || [ "$(jq -r '.head_branch')" <<<"$response" != 'main' ] \
-            || [ "$(jq -r '.conclusion')" <<<"$response" != 'success' ] \
-            || [ "$(jq -r '.path')" <<<"$response" != '.github/workflows/main.yml' ]; then
+          if ! jq -e --arg source_sha "$SOURCE_SHA" '
+            .head_sha == $source_sha
+            and .head_branch == "main"
+            and .conclusion == "success"
+            and .path == ".github/workflows/main.yml"
+          ' <<<"$response" >/dev/null; then
             echo '::error title=Untrusted candidate::The run must be a successful Main candidate for this source SHA.'
             exit 1
           fi
@@ -147,7 +149,7 @@ jobs:
           LOGION_E2E_BASE_URL: http://127.0.0.1:8080
         run: pnpm test:browser
       - name: Capture evidence
-        if: always()
+        if: ${{ always() && hashFiles('compose.yaml') != '' }}
         env:
           POSTGRES_PASSWORD: phase0-release
           LOGION_SECRET_KEY: ${{ inputs.source_sha }}
@@ -158,7 +160,7 @@ jobs:
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose ps > release-compose-status.txt
-      - if: always()
+      - if: ${{ always() && hashFiles('compose.yaml') != '' }}
         env:
           POSTGRES_PASSWORD: phase0-release
           LOGION_SECRET_KEY: ${{ inputs.source_sha }}
