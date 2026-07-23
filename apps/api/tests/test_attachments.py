@@ -1,4 +1,6 @@
 import hashlib
+import os
+import stat
 from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import uuid4
@@ -73,7 +75,13 @@ async def test_storage_stages_inspects_finalizes_and_rejects_oversize(tmp_path: 
 
     storage_key = f"{uuid4()}/{uuid4()}"
     await storage.finalize(staging_key, storage_key)
-    assert storage.verified_path(storage_key).read_bytes() == content
+    verified_path = storage.verified_path(storage_key)
+    assert verified_path.read_bytes() == content
+    if os.name != "nt":
+        assert stat.S_IMODE(verified_path.stat().st_mode) == 0o640
+        assert stat.S_IMODE(verified_path.parent.stat().st_mode) == 0o750
+        assert stat.S_IMODE((tmp_path / "verified").stat().st_mode) == 0o750
+        assert stat.S_IMODE((tmp_path / "staging").stat().st_mode) == 0o700
     await storage.delete(staging_key=staging_key, storage_key=storage_key)
     with pytest.raises(AttachmentStorageError, match="ATTACHMENT_UPLOAD_MISSING"):
         storage.verified_path(storage_key)

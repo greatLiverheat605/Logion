@@ -18,6 +18,10 @@ be replaced by private object storage without changing authorization or verifica
   idempotent only after the exact record is verified; an ID replay with changed metadata is rejected.
 - Responses and audit metadata exclude staging/storage keys, file names, hashes and body content.
   Downloads use `private, no-store`, `nosniff`, binary media type and an encoded attachment filename.
+- The API and Worker run as UID/GID 10001 with read-only root filesystems. A one-shot, networkless
+  initializer owns only the shared attachment volume and retains only `CHOWN`; staging is mode 0700,
+  while verified directories/files are 0750/0640 so the read-only Backup supplementary group can
+  archive them. Backup cannot write the attachment tree.
 
 ## Abuse cases and controls
 
@@ -31,6 +35,7 @@ be replaced by private object storage without changing authorization or verifica
 | DB commit failure after file promotion     | Finalization copies atomically while retaining staging; post-commit cleanup is retryable through complete replay                           | Storage/service implementation                                                                   |
 | Offline retry leaks errors/content         | IndexedDB stores the bounded Blob and hash; transport error details are normalized to stable codes                                         | Offline queue test                                                                               |
 | Backup restores file without metadata      | RC fixture binds an actual verified attachment row to the restored file and compares DB/file SHA-256                                       | `scripts/release/rc_recovery.sh`                                                                 |
+| Container privilege or volume drift        | One-shot initializer has no network and only `CHOWN`; API/Worker remain non-root; Backup receives group-read access and a read-only mount  | Compose boundary test and exact-image Main smoke                                                 |
 | Account deletion leaves personal files     | Deletion enumerates the user's attachment storage keys before deleting attachment rows/user data                                           | Account deletion service                                                                         |
 
 ## Residual risk

@@ -54,9 +54,9 @@ class FilesystemAttachmentStorage:
         self._staging = self._root / "staging"
         self._verified = self._root / "verified"
         self._staging.mkdir(mode=0o700, parents=True, exist_ok=True)
-        self._verified.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._verified.mkdir(mode=0o750, parents=True, exist_ok=True)
         self._staging.chmod(0o700)
-        self._verified.chmod(0o700)
+        self._verified.chmod(0o750)
 
     def _staging_path(self, key: str) -> Path:
         if KEY.fullmatch(key) is None:
@@ -124,10 +124,10 @@ class FilesystemAttachmentStorage:
         source = self._staging_path(staging_key)
         destination = self._verified_path(storage_key)
         temporary = destination.with_name(f".{destination.name}.{os.urandom(16).hex()}.tmp")
-        await anyio.to_thread.run_sync(destination.parent.mkdir, 0o700, True, True)
+        await anyio.to_thread.run_sync(destination.parent.mkdir, 0o750, True, True)
         try:
             await anyio.to_thread.run_sync(shutil.copyfile, source, temporary)
-            await anyio.to_thread.run_sync(temporary.chmod, 0o600)
+            await anyio.to_thread.run_sync(temporary.chmod, 0o640)
             await anyio.to_thread.run_sync(os.replace, temporary, destination)
         except FileNotFoundError as exc:
             raise AttachmentStorageError("ATTACHMENT_UPLOAD_MISSING") from exc
