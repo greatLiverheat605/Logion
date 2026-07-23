@@ -67,7 +67,7 @@ jobs:
           --source-sha "${{ inputs.source_sha }}"
           --profile-label "${{ inputs.profile_label }}"
           --output reports/capacity/capacity-profile.json
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: capacity-profile-${{ inputs.source_sha }}
           path: reports/capacity/capacity-profile.json

@@ -248,7 +248,7 @@ jobs:
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose down --volumes
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: release-candidate-${{ inputs.version }}-${{ inputs.source_sha }}

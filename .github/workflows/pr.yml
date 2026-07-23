@@ -73,7 +73,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: pr-security-${{ github.event.pull_request.number || github.sha }}
@@ -192,7 +192,7 @@ jobs:
         run: |
           mkdir -p reports/browser
           cp "$RUNNER_TEMP/logion-web.log" reports/browser/web.log || true
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: pr-browser-${{ github.event.pull_request.number || github.sha }}
