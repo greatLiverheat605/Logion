@@ -62,9 +62,9 @@ async def test_phase3_two_device_offline_learning_loop_and_tenant_boundary() -> 
             (await device_a.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
         )
         space_id = UUID(
-            (await device_a.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()[
-                "spaces"
-            ][0]["id"]
+            (await device_a.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()["spaces"][0][
+                "id"
+            ]
         )
 
         async def current_device(client: AsyncClient) -> UUID:
@@ -187,9 +187,7 @@ async def test_phase3_two_device_offline_learning_loop_and_tenant_boundary() -> 
             "status": "planned",
             "blocked_reason": None,
         }
-        await push(
-            operation("task", task_id, task_create_op, "create", 0, task_payload, [goal_op])
-        )
+        await push(operation("task", task_id, task_create_op, "create", 0, task_payload, [goal_op]))
         task_start_op = uuid4()
         await push(
             operation(
@@ -365,10 +363,8 @@ async def test_phase3_two_device_offline_learning_loop_and_tenant_boundary() -> 
         )
         assert pulled.status_code == 200, pulled.text
         changes = pulled.json()["changes"]
-        assert [item["sequence"] for item in changes] == list(range(1, 15))
-        latest = {
-            (item["entity_type"], item["entity_id"]): item for item in changes
-        }
+        assert [item["sequence"] for item in changes] == list(range(1, 16))
+        latest = {(item["entity_type"], item["entity_id"]): item for item in changes}
         assert latest[("task", str(task_id))]["payload"]["status"] == "done"
         assert latest[("study_session", str(session_id))]["payload"]["reflection"] == (
             "Private learning reflection"
@@ -385,8 +381,7 @@ async def test_phase3_two_device_offline_learning_loop_and_tenant_boundary() -> 
             json=bootstrap_body(device_b_id),
         )
         records = {
-            (item["entity_type"], item["entity_id"]): item
-            for item in snapshot.json()["records"]
+            (item["entity_type"], item["entity_id"]): item for item in snapshot.json()["records"]
         }
         assert records[("task", str(task_id))]["payload"]["status"] == "done"
         assert records[("verification", str(verification_id))]["payload"]["verdict"] == "passed"

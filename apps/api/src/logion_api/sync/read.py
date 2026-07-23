@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -63,6 +64,16 @@ from logion_api.sync.schemas import BootstrapResponse, Change, EntityRecord, Pul
 from logion_api.workspaces.models import Space
 
 
+def _note_id_from_document_state(payload: Mapping[str, object]) -> UUID | None:
+    value = payload.get("note_id")
+    if not isinstance(value, str):
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
+
+
 class SyncReadService:
     async def pull(
         self,
@@ -114,12 +125,21 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "study_session"},
         )
+        note_stream_ids = {
+            row.entity_id for row in page if row.entity_type in {"note", "note_document_update"}
+        }
+        note_stream_ids.update(
+            note_id
+            for row in page
+            if row.entity_type == "note_document_state"
+            and (note_id := _note_id_from_document_state(row.payload)) is not None
+        )
         visible_notes = await self._visible_content_ids(
             db,
             Note,
             state.workspace_id,
             user_id,
-            {row.entity_id for row in page if row.entity_type == "note"},
+            note_stream_ids,
         )
         visible_resources = await self._visible_content_ids(
             db,
@@ -293,6 +313,11 @@ class SyncReadService:
             or (row.entity_type == "task" and row.entity_id in visible_tasks)
             or (row.entity_type == "study_session" and row.entity_id in visible_sessions)
             or (row.entity_type == "note" and row.entity_id in visible_notes)
+            or (row.entity_type == "note_document_update" and row.entity_id in visible_notes)
+            or (
+                row.entity_type == "note_document_state"
+                and _note_id_from_document_state(row.payload) in visible_notes
+            )
             or (row.entity_type == "resource" and row.entity_id in visible_resources)
             or (row.entity_type == "evidence" and row.entity_id in visible_evidence)
             or (row.entity_type == "verification" and row.entity_id in visible_verifications)

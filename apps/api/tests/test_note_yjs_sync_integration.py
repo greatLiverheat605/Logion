@@ -199,6 +199,34 @@ async def test_two_devices_merge_yjs_note_updates_with_replay_and_tenant_guards(
         assert left_result.json()["results"][0]["server_version"] == 2
         assert right_result.json()["results"][0]["server_version"] == 3
 
+        pulled = await device_a.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/pull",
+            json={
+                "message_type": "pull_request",
+                "protocol_version": "sync-v1",
+                "workspace_id": str(workspace_id),
+                "device_id": str(device_ids["a"]),
+                "sync_epoch": epoch,
+                "cursor": 2,
+                "limit": 100,
+            },
+        )
+        assert pulled.status_code == 200, pulled.text
+        changes = pulled.json()["changes"]
+        assert [row["entity_type"] for row in changes] == [
+            "note_document_update",
+            "note",
+            "note_document_state",
+            "note_document_update",
+            "note",
+            "note_document_state",
+        ]
+        assert all(
+            row["payload"].get("note_id") == str(note_id)
+            for row in changes
+            if row["entity_type"] == "note_document_state"
+        )
+
         duplicate = await push(device_b, device_ids["b"], right_operation)
         assert duplicate.json()["results"][0]["status"] == "duplicate"
         changed = dict(right_operation)
