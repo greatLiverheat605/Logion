@@ -56,6 +56,7 @@ services:
       LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: ${LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS:?set LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS in .env}
       LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ${LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID:-development-v1}
       LOGION_DATA_EXPORT_ENCRYPTION_KEYS: ${LOGION_DATA_EXPORT_ENCRYPTION_KEYS:?set LOGION_DATA_EXPORT_ENCRYPTION_KEYS in .env}
+      LOGION_ATTACHMENT_ROOT: /attachments
       UVICORN_FORWARDED_ALLOW_IPS: ${LOGION_FORWARDED_ALLOW_IPS:-*}
     depends_on:
       postgres:
@@ -74,6 +75,8 @@ services:
       timeout: 5s
       retries: 10
     networks: [backend]
+    volumes:
+      - attachments_data:/attachments
     read_only: true
     tmpfs: [/tmp]
     restart: unless-stopped

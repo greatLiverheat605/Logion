@@ -1,6 +1,6 @@
 import type { EntityRecord, SyncOperationV1 } from "@logion/contracts";
 
-export const OFFLINE_SCHEMA_VERSION = 3 as const;
+export const OFFLINE_SCHEMA_VERSION = 4 as const;
 
 export type JsonPrimitive = boolean | null | number | string;
 export type JsonValue =
@@ -91,7 +91,7 @@ export type BootstrapState =
 export interface WorkspaceSyncState {
   workspace_id: string;
   device_id: string;
-  schema_version: 1 | 2 | typeof OFFLINE_SCHEMA_VERSION;
+  schema_version: 1 | 2 | 3 | typeof OFFLINE_SCHEMA_VERSION;
   sync_epoch: string | null;
   cursor: number;
   bootstrap_state: BootstrapState;
@@ -215,7 +215,10 @@ export type AttachmentQueueState =
 export interface AttachmentQueueEntry {
   attachment_id: string;
   workspace_id: string;
+  space_id: string | null;
   device_id: string;
+  target_type: "note" | "evidence_item" | "experiment_run" | null;
+  target_id: string | null;
   filename: string;
   media_type: "image/jpeg" | "image/png" | "text/plain";
   byte_size: number;
@@ -224,6 +227,16 @@ export interface AttachmentQueueEntry {
   blob: Blob;
   queued_at: string;
   last_error_code: string | null;
+  server_version: number | null;
+}
+
+export interface UploadableAttachmentQueueEntry extends Omit<
+  AttachmentQueueEntry,
+  "space_id" | "target_id" | "target_type"
+> {
+  space_id: string;
+  target_type: "note" | "evidence_item" | "experiment_run";
+  target_id: string;
 }
 
 export interface VaultMetadata {

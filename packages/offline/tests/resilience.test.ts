@@ -1,3 +1,4 @@
+import Dexie from "dexie";
 import { IDBKeyRange, indexedDB } from "fake-indexeddb";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -38,6 +39,56 @@ async function open() {
 }
 
 describe("conflict center and attachment queue", () => {
+  it("quarantines v3 attachment rows that lack target authorization metadata", async () => {
+    const name = `logion-attachment-v3-${crypto.randomUUID()}`;
+    const legacy = new Dexie(name, { indexedDB, IDBKeyRange });
+    legacy.version(3).stores({
+      attachmentQueue:
+        "attachment_id, workspace_id, [workspace_id+state+queued_at], [workspace_id+device_id]",
+    });
+    await legacy.open();
+    await legacy.table("attachmentQueue").put({
+      attachment_id: ids.attachment,
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      filename: "legacy.txt",
+      media_type: "text/plain",
+      byte_size: 6,
+      sha256: `sha256:${"a".repeat(64)}`,
+      state: "pending_upload",
+      blob: new Blob(["legacy"], { type: "text/plain" }),
+      queued_at: "2026-07-23T00:00:00Z",
+      last_error_code: null,
+    });
+    legacy.close();
+
+    database = await openOfflineDatabase({
+      databaseName: name,
+      indexedDB,
+      IDBKeyRange,
+    });
+    expect(await database.attachmentQueue.get(ids.attachment)).toMatchObject({
+      state: "failed",
+      space_id: null,
+      target_type: null,
+      target_id: null,
+      last_error_code: "OFFLINE_ATTACHMENT_METADATA_REQUIRED",
+    });
+    await database.attachmentQueue.update(ids.attachment, {
+      state: "pending_upload",
+    });
+    const repository = new AttachmentQueueRepository(database);
+    await expect(
+      repository.uploadPending(ids.workspace, {} as never),
+    ).resolves.toMatchObject({
+      state: "failed",
+      last_error_code: "OFFLINE_ATTACHMENT_METADATA_REQUIRED",
+    });
+    await expect(repository.retry(ids.attachment)).rejects.toMatchObject({
+      code: "OFFLINE_INPUT_INVALID",
+    });
+  });
+
   it("preserves both conflict versions and resolves explicitly", async () => {
     const db = await open();
     const local = { name: "Local" };
@@ -91,9 +142,15 @@ describe("conflict center and attachment queue", () => {
     const db = await open();
     const repository = new AttachmentQueueRepository(db);
     const blob = new Blob(["evidence"], { type: "text/plain" });
+    const target = {
+      space_id: ids.entity,
+      target_type: "note" as const,
+      target_id: ids.entity,
+    };
     const entry = await repository.enqueue({
       attachment_id: ids.attachment,
       workspace_id: ids.workspace,
+      ...target,
       device_id: ids.device,
       filename: "result.txt",
       media_type: "text/plain",
@@ -105,6 +162,7 @@ describe("conflict center and attachment queue", () => {
       repository.enqueue({
         attachment_id: ids.conflict,
         workspace_id: ids.workspace,
+        ...target,
         device_id: ids.device,
         filename: "../escape.png",
         media_type: "image/png",
@@ -115,6 +173,7 @@ describe("conflict center and attachment queue", () => {
       repository.enqueue({
         attachment_id: ids.conflict,
         workspace_id: ids.workspace,
+        ...target,
         device_id: ids.device,
         filename: "forged.png",
         media_type: "image/png",
@@ -125,6 +184,7 @@ describe("conflict center and attachment queue", () => {
       repository.enqueue({
         attachment_id: ids.conflict,
         workspace_id: ids.workspace,
+        ...target,
         device_id: ids.device,
         filename: "wrong.png",
         media_type: "text/plain",
@@ -135,6 +195,7 @@ describe("conflict center and attachment queue", () => {
       repository.enqueue({
         attachment_id: ids.conflict,
         workspace_id: ids.workspace,
+        ...target,
         device_id: ids.device,
         filename: "result.txt",
         media_type: "text/plain",
@@ -145,6 +206,7 @@ describe("conflict center and attachment queue", () => {
       repository.enqueue({
         attachment_id: ids.conflict,
         workspace_id: ids.workspace,
+        ...target,
         device_id: ids.device,
         filename: "result.exe",
         media_type: "application/octet-stream",
@@ -155,12 +217,106 @@ describe("conflict center and attachment queue", () => {
       repository.enqueue({
         attachment_id: ids.conflict,
         workspace_id: ids.workspace,
+        ...target,
         device_id: ids.device,
         filename: "empty.txt",
         media_type: "text/plain",
         blob: new Blob([], { type: "text/plain" }),
       }),
     ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+  });
+
+  it("drains the attachment queue through init, upload and idempotent complete states", async () => {
+    const db = await open();
+    const repository = new AttachmentQueueRepository(db);
+    await repository.enqueue({
+      attachment_id: ids.attachment,
+      workspace_id: ids.workspace,
+      space_id: ids.entity,
+      device_id: ids.device,
+      target_type: "note",
+      target_id: ids.entity,
+      filename: "result.txt",
+      media_type: "text/plain",
+      blob: new Blob(["evidence"], { type: "text/plain" }),
+    });
+    const calls: string[] = [];
+    const result = await repository.uploadPending(ids.workspace, {
+      initiate() {
+        calls.push("init");
+        return Promise.resolve({ version: 1 });
+      },
+      upload() {
+        calls.push("upload");
+        return Promise.resolve({ version: 2 });
+      },
+      complete(_entry, expectedVersion) {
+        calls.push(`complete:${String(expectedVersion)}`);
+        return Promise.resolve({ status: "verified", version: 3 });
+      },
+    });
+    expect(calls).toEqual(["init", "upload", "complete:2"]);
+    expect(result).toMatchObject({ state: "verified", server_version: 3 });
+    expect(
+      await repository.uploadPending(ids.workspace, {} as never),
+    ).toBeNull();
+
+    await repository.enqueue({
+      attachment_id: ids.conflict,
+      workspace_id: ids.workspace,
+      space_id: ids.entity,
+      device_id: ids.device,
+      target_type: "note",
+      target_id: ids.entity,
+      filename: "failed.txt",
+      media_type: "text/plain",
+      blob: new Blob(["retry"], { type: "text/plain" }),
+    });
+    const failed = await repository.uploadPending(ids.workspace, {
+      initiate() {
+        return Promise.resolve({ version: 1 });
+      },
+      upload() {
+        return Promise.reject(new Error("network details must not persist"));
+      },
+      complete() {
+        return Promise.resolve({ status: "verified", version: 3 });
+      },
+    });
+    expect(failed).toMatchObject({
+      state: "failed",
+      last_error_code: "OFFLINE_ATTACHMENT_UPLOAD_FAILED",
+    });
+    await repository.retry(ids.conflict);
+    expect(await db.attachmentQueue.get(ids.conflict)).toMatchObject({
+      state: "pending_upload",
+      last_error_code: null,
+    });
+    await expect(repository.retry(ids.attachment)).rejects.toMatchObject({
+      code: "OFFLINE_INPUT_INVALID",
+    });
+    await db.attachmentQueue.delete(ids.conflict);
+
+    await repository.enqueue({
+      attachment_id: ids.user,
+      workspace_id: ids.workspace,
+      space_id: ids.entity,
+      device_id: ids.device,
+      target_type: "note",
+      target_id: ids.entity,
+      filename: "unverified.txt",
+      media_type: "text/plain",
+      blob: new Blob(["hold"], { type: "text/plain" }),
+    });
+    const unverified = await repository.uploadPending(ids.workspace, {
+      initiate: () => Promise.resolve({ version: 1 }),
+      upload: () => Promise.resolve({ version: 2 }),
+      complete: () => Promise.resolve({ status: "uploading", version: 2 }),
+    });
+    expect(unverified).toMatchObject({
+      state: "failed",
+      last_error_code: "OFFLINE_ATTACHMENT_VERIFICATION_FAILED",
+    });
   });
 
   it("encrypts protected records at rest and drops the key when locked", async () => {

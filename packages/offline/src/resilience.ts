@@ -2,6 +2,7 @@ import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
 import type {
   AttachmentQueueEntry,
+  UploadableAttachmentQueueEntry,
   ConflictStatus,
   JsonObject,
   LocalConflict,
@@ -103,14 +104,19 @@ export class AttachmentQueueRepository {
   async enqueue(input: {
     attachment_id: string;
     workspace_id: string;
+    space_id: string;
     device_id: string;
+    target_type: "note" | "evidence_item" | "experiment_run";
+    target_id: string;
     filename: string;
     media_type: string;
     blob: Blob;
   }): Promise<AttachmentQueueEntry> {
     validateUuid(input.attachment_id);
     validateUuid(input.workspace_id);
+    validateUuid(input.space_id);
     validateUuid(input.device_id);
+    validateUuid(input.target_id);
     const extension = input.filename.toLowerCase().match(/\.[a-z0-9]+$/)?.[0];
     const expectedExtensions: Record<string, string[]> = {
       "image/jpeg": [".jpg", ".jpeg"],
@@ -158,8 +164,94 @@ export class AttachmentQueueRepository {
       state: "pending_upload",
       queued_at: new Date().toISOString(),
       last_error_code: null,
+      server_version: null,
     };
     await this.database.attachmentQueue.add(entry);
     return entry;
   }
+
+  async uploadPending(
+    workspaceId: string,
+    transport: AttachmentUploadTransport,
+  ): Promise<AttachmentQueueEntry | null> {
+    validateUuid(workspaceId);
+    const entry = await this.database.attachmentQueue
+      .where("[workspace_id+state+queued_at]")
+      .between(
+        [workspaceId, "pending_upload", ""],
+        [workspaceId, "pending_upload", "\uffff"],
+      )
+      .first();
+    if (entry === undefined) return null;
+    if (
+      entry.space_id === null ||
+      entry.target_id === null ||
+      entry.target_type === null
+    ) {
+      await this.database.attachmentQueue.update(entry.attachment_id, {
+        state: "failed",
+        last_error_code: "OFFLINE_ATTACHMENT_METADATA_REQUIRED",
+      });
+      return (
+        (await this.database.attachmentQueue.get(entry.attachment_id)) ?? null
+      );
+    }
+    const uploadable = entry as UploadableAttachmentQueueEntry;
+    await this.database.attachmentQueue.update(entry.attachment_id, {
+      state: "uploading",
+      last_error_code: null,
+    });
+    try {
+      await transport.initiate(uploadable);
+      const uploaded = await transport.upload(uploadable);
+      const completed = await transport.complete(uploadable, uploaded.version);
+      if (completed.status !== "verified") {
+        throw new OfflineStorageError("OFFLINE_ATTACHMENT_VERIFICATION_FAILED");
+      }
+      await this.database.attachmentQueue.update(entry.attachment_id, {
+        state: "verified",
+        server_version: completed.version,
+        last_error_code: null,
+      });
+    } catch (error) {
+      const code =
+        error instanceof OfflineStorageError
+          ? error.code
+          : "OFFLINE_ATTACHMENT_UPLOAD_FAILED";
+      await this.database.attachmentQueue.update(entry.attachment_id, {
+        state: "failed",
+        last_error_code: code,
+      });
+    }
+    return (
+      (await this.database.attachmentQueue.get(entry.attachment_id)) ?? null
+    );
+  }
+
+  async retry(attachmentId: string): Promise<void> {
+    validateUuid(attachmentId);
+    const entry = await this.database.attachmentQueue.get(attachmentId);
+    if (
+      entry === undefined ||
+      entry.state !== "failed" ||
+      entry.space_id === null ||
+      entry.target_id === null ||
+      entry.target_type === null
+    ) {
+      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+    }
+    await this.database.attachmentQueue.update(attachmentId, {
+      state: "pending_upload",
+      last_error_code: null,
+    });
+  }
+}
+
+export interface AttachmentUploadTransport {
+  initiate(entry: UploadableAttachmentQueueEntry): Promise<{ version: number }>;
+  upload(entry: UploadableAttachmentQueueEntry): Promise<{ version: number }>;
+  complete(
+    entry: UploadableAttachmentQueueEntry,
+    expectedVersion: number,
+  ): Promise<{ status: string; version: number }>;
 }

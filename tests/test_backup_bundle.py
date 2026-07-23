@@ -49,7 +49,10 @@ def test_bundle_round_trip_and_path_traversal_rejection(tmp_path: Path) -> None:
     database.write_bytes(b"postgres-custom-dump")
     attachments = tmp_path / "attachments"
     attachments.mkdir()
-    (attachments / "evidence.txt").write_text("verified attachment")
+    (attachments / "verified").mkdir()
+    (attachments / "verified" / "evidence.txt").write_text("verified attachment")
+    (attachments / "staging").mkdir()
+    (attachments / "staging" / "unverified.part").write_text("must not enter backup")
     archive = tmp_path / "bundle.tar.gz"
     bundle.create(
         argparse.Namespace(
@@ -65,7 +68,10 @@ def test_bundle_round_trip_and_path_traversal_rejection(tmp_path: Path) -> None:
     extracted = tmp_path / "extracted"
     bundle.extract(argparse.Namespace(source=archive, output=extracted))
     assert (extracted / "database.dump").read_bytes() == database.read_bytes()
-    assert (extracted / "attachments" / "evidence.txt").read_text() == "verified attachment"
+    assert (
+        extracted / "attachments" / "verified" / "evidence.txt"
+    ).read_text() == "verified attachment"
+    assert not (extracted / "attachments" / "staging").exists()
 
     malicious = tmp_path / "malicious.tar.gz"
     with tarfile.open(malicious, "w:gz") as value:

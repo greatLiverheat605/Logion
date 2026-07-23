@@ -44,23 +44,43 @@ export class LogionOfflineDatabase extends Dexie {
         "operation_id, workspace_id, [workspace_id+outbox_state+queued_at], [workspace_id+entity_type+entity_id], [workspace_id+device_id]",
       syncState: "workspace_id, device_id, bootstrap_state",
     });
-    this.version(OFFLINE_SCHEMA_VERSION).stores({
-      entities:
-        "[workspace_id+entity_type+entity_id], workspace_id, [workspace_id+entity_type], [workspace_id+sync_status]",
-      outbox:
-        "operation_id, workspace_id, [workspace_id+outbox_state+queued_at], [workspace_id+entity_type+entity_id], [workspace_id+device_id]",
-      syncState: "workspace_id, device_id, bootstrap_state",
-      bootstrapManifests:
-        "[workspace_id+snapshot_id], workspace_id, [workspace_id+status]",
-      bootstrapRecords:
-        "[workspace_id+snapshot_id+chunk_index+entity_type+entity_id], [workspace_id+snapshot_id], [workspace_id+snapshot_id+chunk_index], &[workspace_id+snapshot_id+entity_type+entity_id]",
-      conflicts:
-        "conflict_id, workspace_id, [workspace_id+status], [workspace_id+entity_type+entity_id]",
-      attachmentQueue:
-        "attachment_id, workspace_id, [workspace_id+state+queued_at], [workspace_id+device_id]",
-      vaultMetadata: "user_id",
-      vaultRecords: "record_id, workspace_id",
-    });
+    this.version(OFFLINE_SCHEMA_VERSION)
+      .stores({
+        entities:
+          "[workspace_id+entity_type+entity_id], workspace_id, [workspace_id+entity_type], [workspace_id+sync_status]",
+        outbox:
+          "operation_id, workspace_id, [workspace_id+outbox_state+queued_at], [workspace_id+entity_type+entity_id], [workspace_id+device_id]",
+        syncState: "workspace_id, device_id, bootstrap_state",
+        bootstrapManifests:
+          "[workspace_id+snapshot_id], workspace_id, [workspace_id+status]",
+        bootstrapRecords:
+          "[workspace_id+snapshot_id+chunk_index+entity_type+entity_id], [workspace_id+snapshot_id], [workspace_id+snapshot_id+chunk_index], &[workspace_id+snapshot_id+entity_type+entity_id]",
+        conflicts:
+          "conflict_id, workspace_id, [workspace_id+status], [workspace_id+entity_type+entity_id]",
+        attachmentQueue:
+          "attachment_id, workspace_id, [workspace_id+state+queued_at], [workspace_id+device_id]",
+        vaultMetadata: "user_id",
+        vaultRecords: "record_id, workspace_id",
+      })
+      .upgrade((transaction) =>
+        transaction
+          .table<AttachmentQueueEntry, string>("attachmentQueue")
+          .toCollection()
+          .modify((entry) => {
+            if (
+              typeof entry.space_id !== "string" ||
+              typeof entry.target_id !== "string" ||
+              typeof entry.target_type !== "string"
+            ) {
+              entry.space_id = null;
+              entry.target_id = null;
+              entry.target_type = null;
+              entry.state = "failed";
+              entry.last_error_code = "OFFLINE_ATTACHMENT_METADATA_REQUIRED";
+              entry.server_version = null;
+            }
+          }),
+      );
   }
 }
 

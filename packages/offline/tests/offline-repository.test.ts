@@ -5,6 +5,7 @@ import {
   databaseNameForUser,
   hashPayload,
   OfflineRepository,
+  OFFLINE_SCHEMA_VERSION,
   OfflineStorageError,
   openOfflineDatabase,
   type LocalMutationInput,
@@ -319,7 +320,7 @@ describe("IndexedDB v1 and atomic Outbox", () => {
     ).rejects.toMatchObject({ code: "OFFLINE_STORAGE_UNAVAILABLE" });
 
     const name = `logion-future-${crypto.randomUUID()}`;
-    const request = indexedDB.open(name, 30);
+    const request = indexedDB.open(name, (OFFLINE_SCHEMA_VERSION + 1) * 10);
     await new Promise<void>((resolve, reject) => {
       request.onupgradeneeded = () =>
         request.result.createObjectStore("future");

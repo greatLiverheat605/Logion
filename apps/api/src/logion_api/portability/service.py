@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.collaboration.models import GroupFeedback, ReportSnapshot, ReviewRequest, Rubric
 from logion_api.config import Settings
-from logion_api.content.models import Note, Resource
+from logion_api.content.models import Attachment, Note, Resource
 from logion_api.db import session_factory, utc_now
 from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
@@ -59,6 +59,7 @@ SHARED_MODELS = (
     StudySession,
     Note,
     Resource,
+    Attachment,
     EvidenceItem,
     VerificationRecord,
     Topic,
@@ -92,7 +93,14 @@ PERSONAL_MODELS = (
     MetricRecord,
     ResearchFeedback,
 )
-OMITTED_COLUMNS = {"workspace_id", "user_id", "created_by", "updated_by"}
+OMITTED_COLUMNS = {
+    "workspace_id",
+    "user_id",
+    "created_by",
+    "updated_by",
+    "staging_key",
+    "storage_key",
+}
 
 
 class PortabilityService:

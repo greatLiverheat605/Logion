@@ -631,9 +631,9 @@ describe("IndexedDB v2 bootstrap staging and atomic activation", () => {
         resolve(version);
       };
     });
-    expect(nativeVersion).toBe(30);
+    expect(nativeVersion).toBe(40);
     expect(nativeVersion).toBeGreaterThan(1 * 10);
     const reopened = await open(name);
-    expect(reopened.verno).toBe(3);
+    expect(reopened.verno).toBe(4);
   });
 });

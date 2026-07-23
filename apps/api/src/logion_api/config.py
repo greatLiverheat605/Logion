@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     execution_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     content_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
     content_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    attachment_root: str = Field(default=".data/attachments", min_length=1, max_length=4096)
+    attachment_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    attachment_user_quota_bytes: int = Field(
+        default=500 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024 * 1024
+    )
+    attachment_write_limit_per_hour: int = Field(default=120, ge=1, le=5000)
     evidence_per_space_quota: int = Field(default=100000, ge=1, le=1000000)
     verification_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     topic_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
