@@ -3,7 +3,7 @@
 ## Main candidate
 
 1. Merge reviewed code to `main`. Main runs Fast checks and Compose validation.
-2. Main pushes four SHA-tagged GHCR images with SBOM and provenance, generates `candidate-manifest.json`, then starts those exact digest references with `--no-build`.
+2. Main pushes four SHA-tagged GHCR images with SBOM and provenance, generates `candidate-manifest.json`, then starts those exact digest references with `--no-build` and migrates the empty temporary database to the recorded Alembic head.
 3. The bounded authenticated workspace-list gate must complete 200 requests at concurrency 10 with p95 strictly below 500 ms.
 4. Record the successful Main run ID, full source SHA, manifest artifact, four digests and performance evidence. A failed or cancelled run is not a candidate.
 
