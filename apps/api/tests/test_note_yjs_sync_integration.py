@@ -167,7 +167,8 @@ async def test_two_devices_merge_yjs_note_updates_with_replay_and_tenant_guards(
         state_record = next(
             row
             for row in snapshot_b.json()["records"]
-            if row["entity_type"] == "note_document_state" and row["entity_id"] == str(note_id)
+            if row["entity_type"] == "note_document_state"
+            and row["payload"]["note_id"] == str(note_id)
         )
         base_state = base64.b64decode(state_record["payload"]["state_base64"], validate=True)
         base_document = Doc({"markdown": Text()})

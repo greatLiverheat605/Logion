@@ -5,10 +5,12 @@ import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
   databaseNameForUser,
+  noteDocumentStateId,
   OfflineVault,
   openOfflineDatabase,
   ProtectedOfflineRepository,
   SyncClient,
+  YjsNoteRepository,
   type JsonObject,
   type LocalEntity,
   type LogionOfflineDatabase,
@@ -316,17 +318,57 @@ export function ContentCenter() {
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
-      await commit(
-        "note",
-        note?.entity.entity_id ?? crypto.randomUUID(),
-        {
-          space_id: spaceId,
-          task_id: note?.payload.task_id ?? null,
-          title: String(data.get("title") ?? ""),
-          markdown_body: String(data.get("markdown_body") ?? ""),
-        },
-        note?.entity,
-      );
+      const title = String(data.get("title") ?? "");
+      const markdown = String(data.get("markdown_body") ?? "");
+      if (
+        note !== undefined &&
+        title === note.payload.title &&
+        markdown === note.payload.markdown_body
+      ) {
+        await synchronize();
+        return;
+      }
+      const hasYjsState =
+        note !== undefined && database.current !== null
+          ? (await database.current.entities.get([
+              workspaceId,
+              "note_document_state",
+              noteDocumentStateId(workspaceId, note.entity.entity_id),
+            ])) !== undefined
+          : false;
+      if (
+        note !== undefined &&
+        title === note.payload.title &&
+        hasYjsState &&
+        session.status === "authenticated" &&
+        database.current !== null &&
+        vault.current !== null
+      ) {
+        await new YjsNoteRepository(
+          database.current,
+          vault.current,
+        ).commitMarkdown({
+          operation_id: crypto.randomUUID(),
+          workspace_id: workspaceId,
+          device_id: deviceId,
+          note_id: note.entity.entity_id,
+          next_markdown: markdown,
+          updated_by: session.user.id,
+          client_occurred_at: new Date().toISOString(),
+        });
+      } else {
+        await commit(
+          "note",
+          note?.entity.entity_id ?? crypto.randomUUID(),
+          {
+            space_id: spaceId,
+            task_id: note?.payload.task_id ?? null,
+            title,
+            markdown_body: markdown,
+          },
+          note?.entity,
+        );
+      }
       if (!note) form.reset();
       await synchronize();
     } catch (error) {

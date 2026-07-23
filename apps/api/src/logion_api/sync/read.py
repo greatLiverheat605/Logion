@@ -41,6 +41,7 @@ from logion_api.sync.push import (
     exam_subject_payload,
     mastery_payload,
     mock_exam_payload,
+    note_document_state_id,
     note_document_state_payload,
     note_payload,
     quiz_attempt_payload,
@@ -797,7 +798,7 @@ class SyncReadService:
                         ),
                         EntityRecord(
                             entity_type="note_document_state",
-                            entity_id=item.id,
+                            entity_id=note_document_state_id(item),
                             version=item.version,
                             created_at=item.created_at,
                             updated_at=item.updated_at,
