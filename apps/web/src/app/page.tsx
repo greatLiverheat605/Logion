@@ -1,20 +1,23 @@
+import Link from "next/link";
+
 const checks = [
-  "同源认证契约",
-  "HttpOnly Cookie",
-  "会话轮换单飞",
-  "隐私安全错误边界",
+  "目标、计划与证据闭环",
+  "离线编辑与多设备同步",
+  "研究、备考与自主学习空间",
+  "可审查的 AI 草稿与数据主权",
 ];
 
 export default function HomePage() {
   return (
     <main id="main-content" className="shell">
       <section className="hero" aria-labelledby="phase-title">
-        <p className="eyebrow">LOGION · PHASE 1</p>
-        <h1 id="phase-title">可信身份体验正在接入</h1>
+        <p className="eyebrow">LOGION · 可验证的长期学习系统</p>
+        <h1 id="phase-title">让学习过程留下可以复查的证据</h1>
         <p className="lede">
-          当前版本先建立安全的浏览器认证边界。具体登录、注册与工作区界面将在独立工作包中接入，用户内容和学习上下文不会被写死。
+          在一个由你定义内容的工作区中组织目标、资料、笔记、实验与复习。断网时继续编辑，联网后安全同步；AI
+          只生成待你确认的草稿。
         </p>
-        <ul className="check-grid" aria-label="Phase 1 Web 认证基础能力">
+        <ul className="check-grid" aria-label="Logion 核心能力">
           {checks.map((check) => (
             <li key={check}>
               <span aria-hidden="true">✓</span>
@@ -22,9 +25,14 @@ export default function HomePage() {
             </li>
           ))}
         </ul>
-        <p className="status" role="status">
-          Auth shell: ready
-        </p>
+        <nav className="hero-actions" aria-label="开始使用 Logion">
+          <Link className="primary-link" href="/auth/register">
+            创建账户
+          </Link>
+          <Link className="text-link" href="/auth/login">
+            登录
+          </Link>
+        </nav>
       </section>
     </main>
   );

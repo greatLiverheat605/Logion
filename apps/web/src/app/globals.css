@@ -126,6 +126,40 @@ h1 {
   font-size: 0.875rem;
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.primary-link,
+.hero-actions .text-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  border: 1px solid rgb(105 219 255 / 55%);
+  border-radius: 0.65rem;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary-link {
+  background: #167da3;
+}
+
+.hero-actions .text-link {
+  background: transparent;
+}
+
+.primary-link:focus-visible,
+.hero-actions .text-link:focus-visible {
+  outline: 3px solid #67f2c1;
+  outline-offset: 3px;
+}
+
 .session-state {
   display: grid;
   width: min(calc(100% - 2rem), 44rem);

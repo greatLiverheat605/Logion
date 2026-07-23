@@ -17,6 +17,9 @@ The bounded gate catches candidate regressions but does not satisfy the full cap
 4. Confirm manifest verification passes before registry login or Compose startup.
 5. Confirm logs show `docker compose pull` and `up --no-build`; any build step invalidates the RC.
 6. Preserve the candidate manifest, Compose status and later L6-002/L6-003 evidence under the same candidate identity.
+7. Confirm `recovery-evidence.json` records matching migration heads and object counts, an attachment hash match, a changed `sync_epoch`, RPO/RTO and the digest-pinned backup image.
+8. Confirm offline compatibility tests require `upgrade_required` or `rebootstrap_required` and quarantine the old Outbox instead of replaying it.
+9. Confirm Chromium, Firefox, WebKit, mobile Chrome and mobile Safari emulation pass the public/auth browser gate. Automation is not physical Safari, iOS or screen-reader proof; collect those human sign-offs separately.
 
 ## Failure and revocation
 

@@ -15,8 +15,10 @@ Protected assets are source provenance, four application images, compatibility m
 | Source or compatibility metadata is altered | Verifier recalculates lock/OpenAPI hashes, migration head, sync protocol, offline schema and app version at the checked-out SHA | Manifest verification                   |
 | Registry artifact lacks provenance          | BuildKit provenance/SBOM plus GitHub OIDC provenance attestation are pushed for every application image                         | GHCR attestations                       |
 | Secret enters evidence                      | Generator accepts only bounded identifiers/digests and derives hashes locally; no environment dump is captured                  | Manifest schema review                  |
-| Compromised dependency/action changes build | Lockfiles are frozen and hashed; actions are Dependabot-managed. SHA pinning and policy enforcement remain L6-002 work          | Lock hashes and dependency PRs          |
+| Compromised dependency/action changes build | Lockfiles are frozen and hashed; actions are Dependabot-managed; license and HIGH/CRITICAL gates block the candidate            | Lock hashes, dependency PRs, scan JSON  |
+| Browser evidence silently omits Safari/PWA  | RC runs Chromium, Firefox, WebKit and mobile emulation; artifact and runbook explicitly retain physical-device/manual sign-off  | Playwright JSON/HTML and RC checklist   |
+| HTTP assurance is broken by HTTPS-only CSP  | `upgrade-insecure-requests` is emitted only for an actual HTTPS request; all other CSP directives remain fail closed            | WebKit HTTP browser regression gate     |
 
 ## Residual risk and next controls
 
-L6-001 establishes identity and promotion invariants; it does not claim that images are vulnerability-free. L6-002 must scan every digest and IaC, review action pinning, set severity/exception policy and verify attestations before RC. Registry retention and package access policies require operator configuration. A successful Main candidate is not approval to stage or produce a release.
+L6-001 establishes identity and promotion invariants. L6-002 scans every digest, repository filesystem and IaC, verifies attestations and applies the production dependency license policy. L6-003 adds isolated recovery and browser compatibility evidence. Registry retention, package access, physical Safari/iOS, screen-reader and off-host disaster recovery still require operator evidence. A successful Main or RC run is not approval to produce a release.
