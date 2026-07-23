@@ -2,7 +2,7 @@ name: logion
 
 services:
   postgres:
-    image: postgres:17.7-alpine
+    image: postgres:17.10-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-logion}
       POSTGRES_USER: ${POSTGRES_USER:-logion}

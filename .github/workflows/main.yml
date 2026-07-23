@@ -224,10 +224,35 @@ jobs:
             --image "worker=${IMAGE_PREFIX}-worker@${WORKER_DIGEST}" \
             --image "backup=${IMAGE_PREFIX}-backup@${BACKUP_DIGEST}"
       - uses: github/codeql-action/upload-sarif@v4
-        if: ${{ always() && hashFiles('security-reports/sarif/*.sarif') != '' }}
+        if: ${{ always() && hashFiles('security-reports/sarif/filesystem.sarif') != '' }}
         with:
-          sarif_file: security-reports/sarif
-          category: candidate-security
+          sarif_file: security-reports/sarif/filesystem.sarif
+          category: candidate-filesystem
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ always() && hashFiles('security-reports/sarif/iac.sarif') != '' }}
+        with:
+          sarif_file: security-reports/sarif/iac.sarif
+          category: candidate-iac
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ always() && hashFiles('security-reports/sarif/image-api.sarif') != '' }}
+        with:
+          sarif_file: security-reports/sarif/image-api.sarif
+          category: candidate-image-api
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ always() && hashFiles('security-reports/sarif/image-backup.sarif') != '' }}
+        with:
+          sarif_file: security-reports/sarif/image-backup.sarif
+          category: candidate-image-backup
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ always() && hashFiles('security-reports/sarif/image-web.sarif') != '' }}
+        with:
+          sarif_file: security-reports/sarif/image-web.sarif
+          category: candidate-image-web
+      - uses: github/codeql-action/upload-sarif@v4
+        if: ${{ always() && hashFiles('security-reports/sarif/image-worker.sarif') != '' }}
+        with:
+          sarif_file: security-reports/sarif/image-worker.sarif
+          category: candidate-image-worker
       - uses: actions/upload-artifact@v6
         if: always()
         with:

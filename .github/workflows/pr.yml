@@ -83,7 +83,7 @@ jobs:
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:17.7-alpine
+        image: postgres:17.10-alpine
         env:
           POSTGRES_DB: logion_test
           POSTGRES_USER: logion
@@ -137,10 +137,10 @@ jobs:
             --add-host api:127.0.0.1 \
             -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
             nginx:1.29.6-alpine nginx -t
-      - name: Build affected Web image
+      - name: Build candidate images
         env:
           POSTGRES_PASSWORD: logion_test
-        run: docker compose build web
+        run: docker compose build web api worker backup
       - name: Migration round trip
         run: |
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head

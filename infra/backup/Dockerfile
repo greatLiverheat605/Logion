@@ -1,4 +1,4 @@
-FROM postgres:17.7-alpine
+FROM postgres:17.10-alpine
 
 COPY backup.sh /usr/local/bin/logion-backup
 COPY verify-backup.sh /usr/local/bin/logion-verify-backup
