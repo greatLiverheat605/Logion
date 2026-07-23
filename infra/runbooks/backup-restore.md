@@ -56,3 +56,5 @@ The helper refuses a non-empty database, validates archive members, restores wit
 Production restoration requires human approval, a change record and a pre-restore copy of current state. The supplied helper intentionally accepts attachment targets only under `/tmp` or `/restore`; an operator must verify the rehearsal, stop writers, and use a separately reviewed promotion step for the production attachment volume. Binary rollback is forbidden if it cannot read the restored schema; use a compatible application or a database forward fix.
 
 Key rotation does not rewrite old artifacts. Retain each old key through the longest artifact retention period, test it against a sampled backup, then destroy it according to the approved cryptographic erasure procedure.
+
+The release-candidate workflow automates an isolated subset through `scripts/release/rc_recovery.sh`. Its JSON evidence is tied to the candidate source SHA and digest-pinned backup image. It does not promote restored data, approve production, prove off-host disaster recovery, or replace the quarterly operator rehearsal.

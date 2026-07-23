@@ -31,11 +31,14 @@ jobs:
       - name: Validate requested Main candidate run
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
         run: |
-          if ! [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || ! [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo '::error title=Invalid candidate input::Use a full lowercase Git SHA and numeric Main run ID.'
+          if ! [[ "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]{0,63}$ ]] \
+            || ! [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || ! [[ "$CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo '::error title=Invalid candidate input::Use a bounded version, full lowercase Git SHA and numeric Main run ID.'
             exit 1
           fi
           response="$(curl --fail-with-body --silent --show-error \
@@ -73,6 +76,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --group dev --frozen
       - run: pnpm ci:fast
+      - name: Install release browser engines
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
       - name: Verify candidate manifest against checked-out source
         run: |
           uv run --group dev python scripts/release/candidate_manifest.py verify \
@@ -115,6 +120,32 @@ jobs:
           docker compose up --no-build --wait --timeout 180
           curl --fail http://localhost:8080/healthz
           curl --fail http://localhost:8080/health
+      - name: Empty-environment recovery rehearsal
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          POSTGRES_PASSWORD: phase0-release
+          LOGION_VERSION: ${{ inputs.version }}
+          LOGION_SECRET_KEY: ${{ inputs.source_sha }}
+          LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
+          LOGION_AI_CREDENTIAL_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
+          LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+          LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
+        run: scripts/release/rc_recovery.sh reports/release
+      - name: Old-client and restored-epoch compatibility
+        run: |
+          mkdir -p reports/release
+          pnpm --dir packages/offline exec vitest run \
+            tests/bootstrap.test.ts tests/sync-client.test.ts \
+            --reporter=json \
+            --outputFile=../../reports/release/offline-compatibility.json
+      - name: Browser, PWA and automated WCAG gate
+        env:
+          LOGION_E2E_BASE_URL: http://127.0.0.1:8080
+        run: pnpm test:browser
       - name: Capture evidence
         if: always()
         env:
@@ -144,6 +175,8 @@ jobs:
           name: release-candidate-${{ inputs.version }}-${{ inputs.source_sha }}
           path: |
             release-compose-status.txt
+            reports/browser
+            reports/release
             candidate-evidence/candidate/candidate-manifest.json
             packages/contracts/openapi/openapi.json
           retention-days: 90

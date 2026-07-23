@@ -50,6 +50,8 @@ jobs:
             --output reports/security/license-policy.json
           rm reports/security/pnpm-licenses.json
       - run: pnpm ci:fast
+      - name: Validate release shell scripts
+        run: sh -n scripts/release/*.sh
       - name: OpenAPI compatibility
         shell: bash
         run: |
@@ -154,3 +156,45 @@ jobs:
           uv run --package logion-api alembic -c apps/api/alembic.ini downgrade base
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
       - run: uv run --group dev pytest -m integration apps/api/tests apps/worker/tests
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Start isolated Web application
+        run: |
+          pnpm --filter @logion/web dev --hostname 127.0.0.1 --port 3000 > "$RUNNER_TEMP/logion-web.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/logion-web.pid"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/logion-web.log"
+          exit 1
+      - name: Browser, PWA and automated WCAG gate
+        env:
+          LOGION_E2E_BASE_URL: http://127.0.0.1:3000
+        run: pnpm test:browser
+      - name: Capture Web log
+        if: always()
+        run: |
+          mkdir -p reports/browser
+          cp "$RUNNER_TEMP/logion-web.log" reports/browser/web.log || true
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: pr-browser-${{ github.event.pull_request.number || github.sha }}
+          path: reports/browser
+          retention-days: 30
