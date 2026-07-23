@@ -4,7 +4,7 @@
 
 The candidate identity is the full source commit plus four `repository@sha256:digest` references. Main verifies each GitHub attestation against this repository before scanning. Mutable tags, incomplete service sets and digest mismatches are rejected before tools run.
 
-Runtime images use explicit supported patch/distribution tags. Python services use Alpine 3.24 instead of the previous Debian runtime after the first image gate exposed unresolved base OS findings. The Web runtime removes npm/npx because the standalone Next server does not use package-management tooling at runtime. Backup follows the current PostgreSQL 17 minor Alpine image. Frozen application lockfiles remain unchanged by base-image remediation.
+Runtime images use explicit supported patch/distribution tags. Python services use Alpine 3.24 instead of the previous Debian runtime after the first image gate exposed unresolved base OS findings. The Web runtime removes npm/npx because the standalone Next server does not use package-management tooling at runtime. Backup follows the current PostgreSQL 17 minor Alpine image and removes the inherited `gosu` binary because its overridden entrypoint already runs as `postgres` and never performs user switching. Frozen application lockfiles remain unchanged by base-image remediation.
 
 Release-blocking checks are:
 
