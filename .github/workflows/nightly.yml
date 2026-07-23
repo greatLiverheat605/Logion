@@ -18,16 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Create ephemeral backup encryption key
         run: |
           printf '%s' 'Y2ktYmFja3VwLWVuY3J5cHRpb24ta2V5LTMyYnl0ZSE' > "$LOGION_BACKUP_SECRET_SOURCE"
           sudo chown 70:70 "$LOGION_BACKUP_SECRET_SOURCE"
           sudo chmod 400 "$LOGION_BACKUP_SECRET_SOURCE"
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -155,13 +155,13 @@ jobs:
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose down --volumes --remove-orphans
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: nightly-security-${{ github.sha }}
           path: reports/security
           retention-days: 90
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: nightly-browser-${{ github.sha }}
