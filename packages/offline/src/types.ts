@@ -178,6 +178,7 @@ export interface OfflineDatabaseOptions {
 
 export type ConflictStatus =
   | "open"
+  | "resolving"
   | "resolved_local"
   | "resolved_merge"
   | "resolved_remote"
@@ -202,6 +203,11 @@ export interface LocalConflict {
   remote_payload: JsonObject;
   remote_payload_hash: string;
   resolution_options: ("dismiss" | "keep_local" | "keep_remote" | "merge")[];
+  source_operation_id: string | null;
+  source_device_id: string | null;
+  resolution_operation_id: string | null;
+  requested_resolution: "keep_local" | "keep_remote" | "merge" | null;
+  server_recorded: boolean;
   created_at: string;
   resolved_at: string | null;
 }
