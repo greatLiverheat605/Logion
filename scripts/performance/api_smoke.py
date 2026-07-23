@@ -14,6 +14,8 @@ from typing import Any
 
 import httpx
 
+FIXTURE_EMAIL_DOMAIN = "example.com"
+
 
 class PerformanceGateError(RuntimeError):
     """The performance smoke could not produce valid passing evidence."""
@@ -64,7 +66,8 @@ def run_gate(
         raise PerformanceGateError("threshold must be positive")
 
     origin = "http://localhost:3000"
-    email = f"performance-{secrets.token_hex(8)}@example.invalid"
+    # email-validator rejects special-use TLDs before the request reaches the benchmark fixture.
+    email = f"performance-{secrets.token_hex(8)}@{FIXTURE_EMAIL_DOMAIN}"
     password = secrets.token_urlsafe(32)
     with httpx.Client(base_url=base_url, timeout=10, headers={"Origin": origin}) as client:
         registration = client.post(

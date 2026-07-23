@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from email_validator import validate_email
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -32,3 +33,11 @@ def test_summary_fails_when_p95_equals_threshold() -> None:
         [500.0] * 20, request_count=20, concurrency=2, threshold_ms=500
     )
     assert summary["passed"] is False
+
+
+def test_performance_fixture_uses_an_email_validator_compatible_domain() -> None:
+    result = validate_email(
+        f"performance@{api_smoke.FIXTURE_EMAIL_DOMAIN}",
+        check_deliverability=False,
+    )
+    assert result.normalized == "performance@example.com"
