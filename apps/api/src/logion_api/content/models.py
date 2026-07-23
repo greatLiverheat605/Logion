@@ -91,3 +91,54 @@ class Resource(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending_upload','uploading','verified','failed','deleted')",
+            name="ck_attachments_status",
+        ),
+        CheckConstraint(
+            "target_type IN ('note','evidence_item','experiment_run')",
+            name="ck_attachments_target_type",
+        ),
+        CheckConstraint("size_bytes BETWEEN 1 AND 104857600", name="ck_attachments_size"),
+        CheckConstraint("expected_sha256 ~ '^[0-9a-f]{64}$'", name="ck_attachments_expected_sha"),
+        CheckConstraint(
+            "verified_sha256 IS NULL OR verified_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_attachments_verified_sha",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_attachment_workspace"),
+        Index("ix_attachments_workspace_space_status", "workspace_id", "space_id", "status"),
+        Index("ix_attachments_owner_status", "created_by", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    space_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False
+    )
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    declared_mime: Mapped[str] = mapped_column(String(80), nullable=False)
+    detected_mime: Mapped[str | None] = mapped_column(String(80))
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    expected_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    verified_sha256: Mapped[str | None] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending_upload")
+    staging_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str | None] = mapped_column(String(160))
+    failure_code: Mapped[str | None] = mapped_column(String(64))
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

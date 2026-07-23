@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.ai_gateway.models import AIOutputDraft, AIRun, AIRunCandidate
 from logion_api.config import Settings
+from logion_api.content.attachment_storage import FilesystemAttachmentStorage
+from logion_api.content.models import Attachment
 from logion_api.db import session_factory, utc_now
 from logion_api.engagement.models import CalendarFeed, Notification, NotificationPreference
 from logion_api.errors import APIError
@@ -58,6 +60,7 @@ class AccountDeletionService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._security = IdentitySecurity(settings.secret_key.get_secret_value())
+        self._attachment_storage = FilesystemAttachmentStorage(settings.attachment_root)
 
     async def request(
         self, db: AsyncSession, context: AuthContext, request_id: str
@@ -299,6 +302,15 @@ class AccountDeletionService:
         if user is None or user.status != "pending_deletion" or request.status != "pending":
             return
         now = utc_now()
+        attachments = list(
+            (await db.scalars(select(Attachment).where(Attachment.created_by == user.id))).all()
+        )
+        for attachment in attachments:
+            await self._attachment_storage.delete(
+                staging_key=attachment.staging_key,
+                storage_key=attachment.storage_key,
+            )
+        await db.execute(delete(Attachment).where(Attachment.created_by == user.id))
         for workspace_id in request.owned_workspace_ids:
             await db.execute(delete(Workspace).where(Workspace.id == UUID(workspace_id)))
         await db.execute(

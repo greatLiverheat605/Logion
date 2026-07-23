@@ -14,6 +14,7 @@ from logion_api.audit.routes import router as audit_router
 from logion_api.audit.routes import workspace_router as workspace_audit_router
 from logion_api.collaboration.routes import router as collaboration_router
 from logion_api.config import get_settings
+from logion_api.content.attachment_routes import router as attachment_router
 from logion_api.content.routes import router as content_router
 from logion_api.engagement.routes import public_router as public_calendar_router
 from logion_api.engagement.routes import router as engagement_router
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     application.include_router(planning_router)
     application.include_router(execution_router)
     application.include_router(content_router)
+    application.include_router(attachment_router)
     application.include_router(evidence_router)
     application.include_router(memory_router)
     application.include_router(exam_router)

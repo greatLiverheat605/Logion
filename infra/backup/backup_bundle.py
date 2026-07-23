@@ -36,6 +36,8 @@ def create(args: argparse.Namespace) -> None:
                 if path.is_symlink() or (not path.is_file() and not path.is_dir()):
                     raise SystemExit("attachments may contain only regular files and directories")
                 relative = path.relative_to(attachments).as_posix()
+                if PurePosixPath(relative).parts[0] == "staging":
+                    continue
                 archive.add(path, arcname=f"attachments/{relative}", recursive=False)
         else:
             empty = tarfile.TarInfo("attachments")

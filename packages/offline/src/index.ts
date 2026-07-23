@@ -10,7 +10,11 @@ export { OfflineRepository, type MutationCommitResult } from "./repository";
 export { ProtectedOfflineRepository } from "./protected-repository";
 export { OfflineSearchRepository, type OfflineSearchResult } from "./search";
 export { isProtectedEntityType } from "./protected-entities";
-export { AttachmentQueueRepository, ConflictRepository } from "./resilience";
+export {
+  AttachmentQueueRepository,
+  ConflictRepository,
+  type AttachmentUploadTransport,
+} from "./resilience";
 export { OfflineVault } from "./vault";
 export {
   SyncClient,
@@ -25,4 +29,5 @@ export {
   validateSyncErrorCode,
   validateUuid,
 } from "./validation";
+export { OFFLINE_SCHEMA_VERSION } from "./types";
 export type * from "./types";

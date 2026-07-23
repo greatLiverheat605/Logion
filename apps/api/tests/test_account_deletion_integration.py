@@ -1,9 +1,12 @@
+import hashlib
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import get_settings
+from logion_api.content.models import Attachment
 from logion_api.db import session_factory
 from logion_api.identity.models import AuthSession, PasswordCredential, User
 from logion_api.main import app
@@ -11,6 +14,18 @@ from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest
 from logion_api.workspaces.models import WorkspaceMembership
 from sqlalchemy import select
+
+
+def path_exists(path: Path) -> bool:
+    return path.exists()
+
+
+def path_is_file(path: Path) -> bool:
+    return path.is_file()
+
+
+def verified_attachment_path(root: str, workspace_id: UUID, attachment_id: UUID) -> Path:
+    return Path(root).resolve() / "verified" / str(workspace_id) / str(attachment_id)
 
 
 async def register(client: AsyncClient, label: str) -> tuple[UUID, str]:
@@ -167,6 +182,58 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert blocked.json()["code"] == "ACCOUNT_DELETION_OWNERSHIP_BLOCKED"
 
         user_id, original_email = await register(member, "physical")
+        physical_workspace = UUID(
+            (await member.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+        )
+        physical_space = UUID(
+            (await member.get(f"/api/v1/workspaces/{physical_workspace}/spaces")).json()["spaces"][
+                0
+            ]["id"]
+        )
+        physical_csrf = {"X-CSRF-Token": member.cookies["logion_csrf"]}
+        note_id, attachment_id = uuid4(), uuid4()
+        note = await member.post(
+            f"/api/v1/workspaces/{physical_workspace}/spaces/{physical_space}/notes",
+            headers=physical_csrf,
+            json={"id": str(note_id), "title": "Deletion attachment", "markdown_body": ""},
+        )
+        assert note.status_code == 201, note.text
+        attachment_content = b"deletion attachment"
+        attachment_base = (
+            f"/api/v1/workspaces/{physical_workspace}/spaces/{physical_space}/attachments"
+        )
+        initiated = await member.post(
+            f"{attachment_base}/init",
+            headers=physical_csrf,
+            json={
+                "id": str(attachment_id),
+                "target_type": "note",
+                "target_id": str(note_id),
+                "filename": "deletion.txt",
+                "declared_mime": "text/plain",
+                "size_bytes": len(attachment_content),
+                "sha256": hashlib.sha256(attachment_content).hexdigest(),
+            },
+        )
+        assert initiated.status_code == 201, initiated.text
+        uploaded = await member.put(
+            f"{attachment_base}/{attachment_id}/content",
+            headers={**physical_csrf, "Content-Type": "application/octet-stream"},
+            content=attachment_content,
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        completed = await member.post(
+            f"{attachment_base}/{attachment_id}/complete",
+            headers=physical_csrf,
+            json={"expected_version": uploaded.json()["version"]},
+        )
+        assert completed.status_code == 200, completed.text
+        attachment_path = verified_attachment_path(
+            get_settings().attachment_root,
+            physical_workspace,
+            attachment_id,
+        )
+        assert path_is_file(attachment_path)
         requested = await member.post(
             "/api/v1/account-deletion",
             headers={"X-CSRF-Token": member.cookies["logion_csrf"]},
@@ -188,6 +255,8 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert user.email != original_email and user.email.endswith("@invalid.example")
         assert user.email_verified_at is None
         assert request is not None and request.status == "completed"
+        assert await db.get(Attachment, attachment_id) is None
+        assert not path_exists(attachment_path)
         assert await db.get(PasswordCredential, user_id) is None
         assert not list(
             (await db.scalars(select(AuthSession).where(AuthSession.user_id == user_id))).all()
