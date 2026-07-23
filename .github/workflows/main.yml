@@ -259,7 +259,7 @@ jobs:
           name: candidate-security-${{ github.sha }}
           path: security-reports
           retention-days: 90
-      - uses: anchore/sbom-action@v0.22.1
+      - uses: anchore/sbom-action@v0.24.0
         with:
           path: .
           format: spdx-json
