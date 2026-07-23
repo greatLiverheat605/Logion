@@ -45,6 +45,8 @@ and continue reading the refreshed `note` snapshots.
 
 - CRDT state and updates are note content, not metadata. They are Vault-encrypted in offline storage,
   excluded from audit metadata and never rendered as HTML.
+- Portable exports retain the readable Markdown note and explicitly exclude internal CRDT state and
+  generation fields; those implementation bytes are not required to read or migrate the export.
 - Payload hashes and operation IDs retain existing replay protection. Same operation/same hash is
   idempotent; the same operation with changed bytes fails closed.
 - Malformed, empty, oversized or non-canonical base64 and merged Markdown over 500 KB are rejected.
