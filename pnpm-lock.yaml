@@ -114,8 +114,8 @@ importers:
         specifier: 2.0.0
         version: 2.0.0
       uuid:
-        specifier: 13.0.1
-        version: 13.0.1
+        specifier: 14.0.1
+        version: 14.0.1
       yjs:
         specifier: 13.6.31
         version: 13.6.31
@@ -2342,8 +2342,8 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
-  uuid@13.0.1:
-    resolution: {integrity: sha512-9ezox2roIft6ExBVTVqibSd5dc5/47Sw/uY6b4SjQUT2TzQ0tltNquWA46y4xPQmdZYqvnio22SgWd41M86+jw==}
+  uuid@14.0.1:
+    resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
     hasBin: true
 
   vite@8.1.5:
@@ -4987,7 +4987,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  uuid@13.0.1: {}
+  uuid@14.0.1: {}
 
   vite@8.1.5(@types/node@26.1.1):
     dependencies:
