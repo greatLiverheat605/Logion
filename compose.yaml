@@ -31,6 +31,7 @@ services:
     restart: unless-stopped
 
   api:
+    image: ${LOGION_API_IMAGE:-logion-api:${LOGION_VERSION:-dev}}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -78,6 +79,7 @@ services:
     restart: unless-stopped
 
   worker:
+    image: ${LOGION_WORKER_IMAGE:-logion-worker:${LOGION_VERSION:-dev}}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
@@ -116,6 +118,7 @@ services:
     restart: unless-stopped
 
   web:
+    image: ${LOGION_WEB_IMAGE:-logion-web:${LOGION_VERSION:-dev}}
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -166,6 +169,7 @@ services:
     restart: unless-stopped
 
   backup:
+    image: ${LOGION_BACKUP_IMAGE:-logion-backup:${LOGION_VERSION:-dev}}
     build:
       context: infra/backup
     environment:

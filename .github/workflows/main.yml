@@ -7,11 +7,16 @@ on:
 
 permissions:
   contents: read
+  packages: write
+  id-token: write
+  attestations: write
   security-events: write
 
 env:
   NEXT_TELEMETRY_DISABLED: "1"
   LOGION_SECRET_KEY: ${{ github.sha }}
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/greatliverheat605/logion
 
 concurrency:
   group: main-candidate
@@ -51,9 +56,99 @@ jobs:
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose config --quiet
       - uses: docker/setup-buildx-action@v4
-      - name: Build immutable candidate images
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push web candidate
+        id: web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - name: Build and push API candidate
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - name: Build and push worker candidate
+        id: worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-worker:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - name: Build and push backup candidate
+        id: backup
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/backup
+          file: infra/backup/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-backup:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}-web
+          subject-digest: ${{ steps.web.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}-api
+          subject-digest: ${{ steps.api.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}-worker
+          subject-digest: ${{ steps.worker.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}-backup
+          subject-digest: ${{ steps.backup.outputs.digest }}
+          push-to-registry: true
+      - name: Generate immutable candidate manifest
+        env:
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WORKER_DIGEST: ${{ steps.worker.outputs.digest }}
+          BACKUP_DIGEST: ${{ steps.backup.outputs.digest }}
+        run: |
+          generated_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          uv run --group dev python scripts/release/candidate_manifest.py generate \
+            --source-commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --generated-at "$generated_at" \
+            --image "web=${IMAGE_PREFIX}-web@${WEB_DIGEST}" \
+            --image "api=${IMAGE_PREFIX}-api@${API_DIGEST}" \
+            --image "worker=${IMAGE_PREFIX}-worker@${WORKER_DIGEST}" \
+            --image "backup=${IMAGE_PREFIX}-backup@${BACKUP_DIGEST}" \
+            --output candidate/candidate-manifest.json
+          uv run --group dev python scripts/release/candidate_manifest.py verify \
+            --manifest candidate/candidate-manifest.json \
+            --expected-commit "$GITHUB_SHA" \
+            --expected-repository "$GITHUB_REPOSITORY"
+      - name: Smoke exact candidate images
         env:
           POSTGRES_PASSWORD: phase0-ci-only
+          LOGION_WEB_IMAGE: ${{ env.IMAGE_PREFIX }}-web@${{ steps.web.outputs.digest }}
+          LOGION_API_IMAGE: ${{ env.IMAGE_PREFIX }}-api@${{ steps.api.outputs.digest }}
+          LOGION_WORKER_IMAGE: ${{ env.IMAGE_PREFIX }}-worker@${{ steps.worker.outputs.digest }}
+          LOGION_BACKUP_IMAGE: ${{ env.IMAGE_PREFIX }}-backup@${{ steps.backup.outputs.digest }}
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
           LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
@@ -62,7 +157,29 @@ jobs:
           LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
-        run: docker compose build web api worker backup
+        run: |
+          docker compose up --no-build --wait --timeout 180 web api worker reverse-proxy
+          curl --fail --silent http://localhost:8080/healthz
+          curl --fail --silent http://localhost:8080/health
+          uv run --group dev python scripts/performance/api_smoke.py \
+            --base-url http://localhost:8080 \
+            --requests 200 \
+            --concurrency 10 \
+            --threshold-ms 500 \
+            --output candidate/performance-smoke.json
+      - name: Stop candidate environment
+        if: always()
+        env:
+          POSTGRES_PASSWORD: phase0-ci-only
+          LOGION_WEB_IMAGE: ${{ env.IMAGE_PREFIX }}-web@${{ steps.web.outputs.digest }}
+          LOGION_API_IMAGE: ${{ env.IMAGE_PREFIX }}-api@${{ steps.api.outputs.digest }}
+          LOGION_WORKER_IMAGE: ${{ env.IMAGE_PREFIX }}-worker@${{ steps.worker.outputs.digest }}
+          LOGION_BACKUP_IMAGE: ${{ env.IMAGE_PREFIX }}-backup@${{ steps.backup.outputs.digest }}
+          LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+          LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
+          LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
+          LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
+        run: docker compose down --volumes --remove-orphans
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -85,5 +202,7 @@ jobs:
           name: phase0-candidate-evidence-${{ github.sha }}
           path: |
             logion-sbom.spdx.json
+            candidate/candidate-manifest.json
+            candidate/performance-smoke.json
             packages/contracts/openapi/openapi.json
           retention-days: 30
