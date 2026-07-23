@@ -33,11 +33,11 @@ test("skip link and authentication controls are keyboard reachable", async ({
   await expect(page.getByLabel("邮箱")).toBeFocused();
 });
 
-test("critical public flows fit a narrow viewport without page overflow", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 320, height: 640 });
-  for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {
+for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {
+  test(`${route} fits a narrow viewport without page overflow`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
     await page.goto(route);
     const hasOverflow = await page.evaluate(
       () =>
@@ -48,8 +48,8 @@ test("critical public flows fit a narrow viewport without page overflow", async 
       hasOverflow,
       `${route} must not overflow at a 320 CSS px viewport`,
     ).toBe(false);
-  }
-});
+  });
+}
 
 test("reduced-motion preference does not leave forced animation", async ({
   page,
