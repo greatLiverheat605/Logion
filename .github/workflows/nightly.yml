@@ -41,6 +41,15 @@ jobs:
       - run: pnpm ci:fast
       - run: pnpm audit --audit-level high
       - run: uv run --group dev pip-audit
+      - name: Production dependency license policy
+        run: |
+          mkdir -p reports/security
+          pnpm licenses list --json --prod > reports/security/pnpm-licenses.json
+          uv run --isolated --no-dev --all-packages python scripts/security/license_policy.py \
+            --policy config/security/license-policy.json \
+            --pnpm-json reports/security/pnpm-licenses.json \
+            --output reports/security/license-policy.json
+          rm reports/security/pnpm-licenses.json
       - name: Compose smoke
         env:
           LOGION_SECRET_KEY: ${{ github.sha }}
@@ -140,3 +149,9 @@ jobs:
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose down --volumes --remove-orphans
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: nightly-security-${{ github.sha }}
+          path: reports/security
+          retention-days: 90
