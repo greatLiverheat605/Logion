@@ -25,7 +25,7 @@ fi
 
 workdir="$(mktemp -d /tmp/logion-restore.XXXXXX)"
 trap 'rm -rf "${workdir}"' EXIT HUP INT TERM
-(cd "$(dirname "${backup}")" && sha256sum -c "$(basename "${backup}.sha256")")
+(cd "$(dirname "${backup}")" && sha256sum -c "$(basename "${backup}.sha256")") >&2
 python3 /usr/local/lib/logion/backup_crypto.py decrypt \
   "${backup}" "${workdir}/bundle.tar.gz" --key-file "${key_file}"
 manifest="$(python3 /usr/local/lib/logion/backup_bundle.py extract \
