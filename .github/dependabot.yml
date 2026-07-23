@@ -8,6 +8,13 @@ updates:
     groups:
       web-toolchain:
         patterns: ["next", "react", "react-dom", "typescript", "eslint*"]
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: prettier
+        versions: ["3.9.x"]
   - package-ecosystem: pip
     directory: /
     schedule:

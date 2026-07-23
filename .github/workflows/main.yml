@@ -27,11 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -253,7 +253,7 @@ jobs:
         with:
           sarif_file: security-reports/sarif/image-worker.sarif
           category: candidate-image-worker
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: candidate-security-${{ github.sha }}
@@ -264,7 +264,7 @@ jobs:
           path: .
           format: spdx-json
           output-file: logion-sbom.spdx.json
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: phase0-candidate-evidence-${{ github.sha }}
           path: |
