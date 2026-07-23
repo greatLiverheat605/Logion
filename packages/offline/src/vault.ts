@@ -1,6 +1,6 @@
 import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError } from "./errors";
-import type { JsonObject } from "./types";
+import type { JsonObject, VaultRecord } from "./types";
 import { validateUuid } from "./validation";
 
 const ITERATIONS = 310_000;
@@ -110,6 +110,16 @@ export class OfflineVault {
     workspaceId: string,
     value: JsonObject,
   ): Promise<void> {
+    await this.database.vaultRecords.put(
+      await this.seal(recordId, workspaceId, value),
+    );
+  }
+
+  async seal(
+    recordId: string,
+    workspaceId: string,
+    value: JsonObject,
+  ): Promise<VaultRecord> {
     validateUuid(recordId);
     validateUuid(workspaceId);
     const key = this.requireKey();
@@ -125,13 +135,13 @@ export class OfflineVault {
         encoder.encode(JSON.stringify(value)),
       ),
     );
-    await this.database.vaultRecords.put({
+    return {
       record_id: recordId,
       workspace_id: workspaceId,
       iv: encode(iv),
       ciphertext: encode(ciphertext),
       updated_at: new Date().toISOString(),
-    });
+    };
   }
 
   async get(recordId: string, workspaceId: string): Promise<JsonObject | null> {

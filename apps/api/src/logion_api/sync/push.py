@@ -1069,9 +1069,21 @@ class SyncPushService:
                 note = await self._content.create_note(
                     db, context, request.workspace_id, parsed_space, payload, request_id
                 )
-                return await self._append_entity(
+                result = await self._append_entity(
                     db, request.workspace_id, identity, note.version, note_payload(note)
                 )
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="note-document-state",
+                    entity_type="note_document_state",
+                    entity_id=note_document_state_id(note),
+                    operation_type="update",
+                    version=note.version,
+                    payload=note_document_state_payload(note),
+                )
+                return result
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         except APIError as exc:
@@ -1111,9 +1123,21 @@ class SyncPushService:
                     payload,
                     request_id,
                 )
-                return await self._append_entity(
+                result = await self._append_entity(
                     db, request.workspace_id, identity, note.version, note_payload(note)
                 )
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="note-document-state",
+                    entity_type="note_document_state",
+                    entity_id=note_document_state_id(note),
+                    operation_type="update",
+                    version=note.version,
+                    payload=note_document_state_payload(note),
+                )
+                return result
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         except APIError as exc:
@@ -1169,6 +1193,17 @@ class SyncPushService:
                     operation_type="update",
                     version=note.version,
                     payload=note_payload(note),
+                )
+                await self._append_derived(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    suffix="note-document-state",
+                    entity_type="note_document_state",
+                    entity_id=note_document_state_id(note),
+                    operation_type="update",
+                    version=note.version,
+                    payload=note_document_state_payload(note),
                 )
                 return result
         except (TypeError, ValueError):
@@ -2589,6 +2624,13 @@ def note_document_state_payload(note: Note) -> dict[str, object]:
         "yjs_generation": note.yjs_generation,
         "state_base64": base64.b64encode(note.yjs_state).decode("ascii"),
     }
+
+
+def note_document_state_id(note: Note) -> UUID:
+    return uuid5(
+        NAMESPACE_URL,
+        f"logion:note-document-state:{note.workspace_id}:{note.id}",
+    )
 
 
 def resource_payload(resource: Resource) -> dict[str, object]:

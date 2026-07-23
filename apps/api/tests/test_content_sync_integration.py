@@ -121,7 +121,14 @@ async def test_note_resource_sync_replay_conflict_and_bootstrap() -> None:
         snapshot = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/bootstrap", json=bootstrap_body
         )
-        records = {(item["entity_type"], item["entity_id"]) for item in snapshot.json()["records"]}
+        snapshot_records = snapshot.json()["records"]
+        records = {(item["entity_type"], item["entity_id"]) for item in snapshot_records}
         assert ("note", str(note_id)) in records
+        assert any(
+            item["entity_type"] == "note_document_state"
+            and item["payload"]["note_id"] == str(note_id)
+            and item["payload"]["note_version"] == 2
+            for item in snapshot_records
+        )
         assert ("resource", str(resource_id)) in records
-        assert snapshot.json()["cursor"] == 3
+        assert snapshot.json()["cursor"] == 5

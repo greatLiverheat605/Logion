@@ -17,6 +17,11 @@ export {
 } from "./resilience";
 export { OfflineVault } from "./vault";
 export {
+  noteDocumentStateId,
+  YjsNoteRepository,
+  type YjsNoteCommitInput,
+} from "./yjs-notes";
+export {
   SyncClient,
   type SyncCycleResult,
   type SyncTransport,

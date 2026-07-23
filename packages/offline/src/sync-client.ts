@@ -10,10 +10,12 @@ import { LogionOfflineDatabase } from "./database";
 import { OfflineStorageError, normalizeStorageError } from "./errors";
 import { OfflineRepository } from "./repository";
 import { isProtectedEntityType } from "./protected-entities";
+import { noteDocumentStateId } from "./yjs-notes";
 import type {
   JsonObject,
   LocalEntity,
   OutboxEntry,
+  VaultRecord,
   WorkspaceSyncState,
 } from "./types";
 import { validateUuid } from "./validation";
@@ -152,9 +154,13 @@ export class SyncClient {
           }
           if (result.status === "applied" || result.status === "duplicate") {
             await this.database.outbox.delete(operation.operation_id);
+            const entityType =
+              operation.entity_type === "note_document_update"
+                ? "note"
+                : operation.entity_type;
             const key: [string, string, string] = [
               state.workspace_id,
-              operation.entity_type,
+              entityType,
               operation.entity_id,
             ];
             const entity = await this.database.entities.get(key);
@@ -163,6 +169,22 @@ export class SyncClient {
                 server_version: result.server_version,
                 sync_status: "clean",
               });
+              if (operation.entity_type === "note_document_update") {
+                await this.database.entities.update(
+                  [
+                    state.workspace_id,
+                    "note_document_state",
+                    noteDocumentStateId(
+                      state.workspace_id,
+                      operation.entity_id,
+                    ),
+                  ],
+                  {
+                    server_version: result.server_version,
+                    sync_status: "clean",
+                  },
+                );
+              }
             }
           } else {
             if (result.status === "conflict") {
@@ -262,18 +284,31 @@ export class SyncClient {
     message: PullResponse,
   ): Promise<void> {
     const protectedPayloads = new Map<string, JsonObject>();
+    const sealedPayloads: VaultRecord[] = [];
     for (const change of message.changes) {
       if (isProtectedEntityType(change.entity_type)) {
         if (this.vault === undefined) {
           throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
         }
-        await this.vault.put(
-          change.entity_id,
+        const existing = await this.database.entities.get([
           state.workspace_id,
-          change.payload as JsonObject,
+          change.entity_type,
+          change.entity_id,
+        ]);
+        const vaultId =
+          change.entity_type === "note_document_update" ||
+          existing?.sync_status === "pending"
+            ? change.operation_id
+            : change.entity_id;
+        sealedPayloads.push(
+          await this.vault.seal(
+            vaultId,
+            state.workspace_id,
+            change.payload as JsonObject,
+          ),
         );
-        protectedPayloads.set(change.entity_id, {
-          encrypted_payload_ref: change.entity_id,
+        protectedPayloads.set(change.operation_id, {
+          encrypted_payload_ref: vaultId,
         });
       }
     }
@@ -281,7 +316,9 @@ export class SyncClient {
       "rw",
       this.database.entities,
       this.database.syncState,
+      this.database.vaultRecords,
       async () => {
+        await this.database.vaultRecords.bulkPut(sealedPayloads);
         let expected = message.from_cursor;
         for (const change of message.changes) {
           if (
@@ -316,7 +353,7 @@ export class SyncClient {
             created_by: existing?.created_by ?? actor,
             updated_by: actor,
             payload:
-              protectedPayloads.get(change.entity_id) ??
+              protectedPayloads.get(change.operation_id) ??
               (change.payload as JsonObject),
             payload_hash: change.payload_hash,
             sync_status: "clean",

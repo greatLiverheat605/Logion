@@ -3,6 +3,8 @@ const PROTECTED_ENTITY_TYPES = new Set([
   "learning_goal",
   "mastery",
   "note",
+  "note_document_state",
+  "note_document_update",
   "quiz_attempt",
   "quiz_item",
   "resource",

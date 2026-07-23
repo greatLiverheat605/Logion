@@ -1,13 +1,16 @@
 import { IDBKeyRange, indexedDB } from "fake-indexeddb";
 import { afterEach, describe, expect, it } from "vitest";
+import * as Y from "yjs";
 
 import {
   hashPayload,
+  noteDocumentStateId,
   OfflineRepository,
   OfflineVault,
   ProtectedOfflineRepository,
   openOfflineDatabase,
   SyncClient,
+  YjsNoteRepository,
   type LogionOfflineDatabase,
   type JsonObject,
   type SyncTransport,
@@ -31,6 +34,458 @@ afterEach(async () => {
 });
 
 describe("recoverable push/pull cycle", () => {
+  it("retains an encrypted Yjs update on network failure and cleans note state after ACK", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-yjs-sync-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    await database.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 4,
+      sync_epoch: ids.epoch,
+      cursor: 0,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    const stateId = noteDocumentStateId(ids.workspace, ids.entity);
+    const document = new Y.Doc();
+    document.getText("markdown").insert(0, "before");
+    const notePayload = {
+      space_id: ids.user,
+      task_id: null,
+      title: "Encrypted note",
+      markdown_body: "before",
+    };
+    const statePayload = {
+      space_id: ids.user,
+      note_id: ids.entity,
+      note_version: 1,
+      yjs_generation: 1,
+      state_base64: btoa(
+        String.fromCharCode(...Y.encodeStateAsUpdate(document)),
+      ),
+    };
+    await Promise.all([
+      vault.put(ids.entity, ids.workspace, notePayload),
+      vault.put(stateId, ids.workspace, statePayload),
+    ]);
+    const baseEntity = {
+      workspace_id: ids.workspace,
+      server_version: 1,
+      local_revision: 0,
+      created_at: "2026-07-23T00:00:00Z",
+      updated_at: "2026-07-23T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      sync_status: "clean" as const,
+    };
+    await database.entities.bulkAdd([
+      {
+        ...baseEntity,
+        entity_type: "note",
+        entity_id: ids.entity,
+        payload: { encrypted_payload_ref: ids.entity },
+        payload_hash: await hashPayload(notePayload),
+      },
+      {
+        ...baseEntity,
+        entity_type: "note_document_state",
+        entity_id: stateId,
+        payload: { encrypted_payload_ref: stateId },
+        payload_hash: await hashPayload(statePayload),
+      },
+    ]);
+    await new YjsNoteRepository(database, vault).commitMarkdown({
+      operation_id: ids.operation,
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      note_id: ids.entity,
+      next_markdown: "after",
+      updated_by: ids.user,
+      client_occurred_at: "2026-07-23T00:00:01Z",
+    });
+
+    const offlineClient = new SyncClient(
+      database,
+      {
+        async push() {
+          await Promise.resolve();
+          throw new TypeError("network unavailable");
+        },
+        async pull() {
+          await Promise.resolve();
+          throw new Error("pull must not run");
+        },
+      },
+      vault,
+    );
+    await expect(
+      offlineClient.synchronize(ids.workspace, ids.device),
+    ).rejects.toMatchObject({ code: "OFFLINE_TRANSACTION_FAILED" });
+    expect(await database.outbox.get(ids.operation)).toBeDefined();
+    expect(
+      await database.entities.get([ids.workspace, "note", ids.entity]),
+    ).toMatchObject({ sync_status: "pending" });
+
+    let transportedPayload: unknown;
+    const result = await new SyncClient(
+      database,
+      {
+        async push(request) {
+          await Promise.resolve();
+          transportedPayload = request.operations[0].payload;
+          return {
+            message_type: "push_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            results: [
+              {
+                operation_id: ids.operation,
+                status: "applied",
+                retryable: false,
+                server_version: 2,
+                sequence: 1,
+              },
+            ],
+          };
+        },
+        async pull(request) {
+          await Promise.resolve();
+          return {
+            message_type: "pull_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            from_cursor: 0,
+            next_cursor: 0,
+            has_more: false,
+            changes: [],
+          };
+        },
+      },
+      vault,
+    ).synchronize(ids.workspace, ids.device);
+
+    expect(result).toMatchObject({ pushed: 1, pulled: 0 });
+    expect(transportedPayload).toMatchObject({
+      space_id: ids.user,
+      yjs_generation: 1,
+    });
+    expect(await database.outbox.get(ids.operation)).toBeUndefined();
+    expect(
+      await database.entities.get([ids.workspace, "note", ids.entity]),
+    ).toMatchObject({ server_version: 2, sync_status: "clean" });
+    expect(
+      await database.entities.get([
+        ids.workspace,
+        "note_document_state",
+        stateId,
+      ]),
+    ).toMatchObject({ server_version: 2, sync_status: "clean" });
+    expect(await vault.get(ids.entity, ids.workspace)).toMatchObject({
+      markdown_body: "after",
+    });
+    expect(await vault.get(stateId, ids.workspace)).toMatchObject({
+      note_id: ids.entity,
+    });
+    const nextOperationId = crypto.randomUUID();
+    const nextOperation = await new YjsNoteRepository(
+      database,
+      vault,
+    ).commitMarkdown({
+      operation_id: nextOperationId,
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      note_id: ids.entity,
+      next_markdown: "after again",
+      updated_by: ids.user,
+      client_occurred_at: "2026-07-23T00:00:02Z",
+    });
+    expect(nextOperation).toMatchObject({
+      operation_id: nextOperationId,
+      base_version: 2,
+      dependencies: [],
+    });
+    expect(await vault.get(stateId, ids.workspace)).toMatchObject({
+      note_version: 2,
+    });
+  });
+
+  it("pulls update, readable note, and full Yjs state without vault-id collision or false conflict", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-yjs-pull-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    await database.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 4,
+      sync_epoch: ids.epoch,
+      cursor: 0,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    const updateOperationId = crypto.randomUUID();
+    const noteOperationId = crypto.randomUUID();
+    const stateOperationId = crypto.randomUUID();
+    const stateId = noteDocumentStateId(ids.workspace, ids.entity);
+    const updatePayload = {
+      space_id: ids.user,
+      yjs_generation: 1,
+      update_base64: "AQ==",
+    };
+    const notePayload = {
+      space_id: ids.user,
+      task_id: null,
+      title: "Remote note",
+      markdown_body: "merged remote body",
+    };
+    const statePayload = {
+      space_id: ids.user,
+      note_id: ids.entity,
+      note_version: 2,
+      yjs_generation: 1,
+      state_base64: "AQ==",
+    };
+    const changes = [
+      {
+        sequence: 1,
+        operation_id: updateOperationId,
+        entity_type: "note_document_update",
+        entity_id: ids.entity,
+        operation_type: "update" as const,
+        server_version: 2,
+        occurred_at: "2026-07-23T00:00:01Z",
+        tombstone: false,
+        deleted_at: null,
+        payload: updatePayload,
+        payload_hash: await hashPayload(updatePayload),
+      },
+      {
+        sequence: 2,
+        operation_id: noteOperationId,
+        entity_type: "note",
+        entity_id: ids.entity,
+        operation_type: "update" as const,
+        server_version: 2,
+        occurred_at: "2026-07-23T00:00:01Z",
+        tombstone: false,
+        deleted_at: null,
+        payload: notePayload,
+        payload_hash: await hashPayload(notePayload),
+      },
+      {
+        sequence: 3,
+        operation_id: stateOperationId,
+        entity_type: "note_document_state",
+        entity_id: stateId,
+        operation_type: "update" as const,
+        server_version: 2,
+        occurred_at: "2026-07-23T00:00:01Z",
+        tombstone: false,
+        deleted_at: null,
+        payload: statePayload,
+        payload_hash: await hashPayload(statePayload),
+      },
+    ];
+
+    const result = await new SyncClient(
+      database,
+      {
+        async push() {
+          await Promise.resolve();
+          throw new Error("push must not run");
+        },
+        async pull(request) {
+          await Promise.resolve();
+          return {
+            message_type: "pull_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            from_cursor: 0,
+            next_cursor: 3,
+            has_more: false,
+            changes,
+          };
+        },
+      },
+      vault,
+    ).synchronize(ids.workspace, ids.device);
+
+    expect(result).toMatchObject({ pushed: 0, pulled: 3, control: null });
+    expect(await database.conflicts.count()).toBe(0);
+    expect(
+      await database.entities.get([
+        ids.workspace,
+        "note_document_update",
+        ids.entity,
+      ]),
+    ).toMatchObject({
+      payload: { encrypted_payload_ref: updateOperationId },
+      sync_status: "clean",
+    });
+    expect(
+      await database.entities.get([ids.workspace, "note", ids.entity]),
+    ).toMatchObject({
+      payload: { encrypted_payload_ref: ids.entity },
+      sync_status: "clean",
+    });
+    expect(
+      await database.entities.get([
+        ids.workspace,
+        "note_document_state",
+        stateId,
+      ]),
+    ).toMatchObject({
+      payload: { encrypted_payload_ref: stateId },
+      sync_status: "clean",
+    });
+    expect(await vault.get(updateOperationId, ids.workspace)).toEqual(
+      updatePayload,
+    );
+    expect(await vault.get(ids.entity, ids.workspace)).toEqual(notePayload);
+    expect(await vault.get(stateId, ids.workspace)).toEqual(statePayload);
+    expect(JSON.stringify(await database.entities.toArray())).not.toContain(
+      "merged remote body",
+    );
+  });
+
+  it("keeps pending protected content when a rejected push is followed by a remote pull", async () => {
+    database = await openOfflineDatabase({
+      databaseName: `logion-pending-pull-${crypto.randomUUID()}`,
+      indexedDB,
+      IDBKeyRange,
+    });
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    await database.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 4,
+      sync_epoch: ids.epoch,
+      cursor: 0,
+      bootstrap_state: "ready",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    const localPayload = {
+      space_id: ids.user,
+      task_id: null,
+      title: "Local title",
+      markdown_body: "local unsent body",
+    };
+    await new ProtectedOfflineRepository(database, vault).commitMutation({
+      operation_id: ids.operation,
+      protocol_version: "sync-v1",
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      entity_type: "note",
+      entity_id: ids.entity,
+      operation_type: "create",
+      base_version: 0,
+      local_revision: 1,
+      client_occurred_at: "2026-07-23T00:00:00Z",
+      created_at: "2026-07-23T00:00:00Z",
+      updated_at: "2026-07-23T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: localPayload,
+    });
+    const remoteOperationId = crypto.randomUUID();
+    const remotePayload = {
+      ...localPayload,
+      title: "Remote title",
+      markdown_body: "remote body",
+    };
+
+    await new SyncClient(
+      database,
+      {
+        async push(request) {
+          await Promise.resolve();
+          return {
+            message_type: "push_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            results: [
+              {
+                operation_id: ids.operation,
+                status: "rejected",
+                retryable: false,
+                error_code: "SYNC_OPERATION_INVALID",
+              },
+            ],
+          };
+        },
+        async pull(request) {
+          await Promise.resolve();
+          return {
+            message_type: "pull_response",
+            protocol_version: "sync-v1",
+            workspace_id: request.workspace_id,
+            device_id: request.device_id,
+            sync_epoch: request.sync_epoch,
+            from_cursor: 0,
+            next_cursor: 1,
+            has_more: false,
+            changes: [
+              {
+                sequence: 1,
+                operation_id: remoteOperationId,
+                entity_type: "note",
+                entity_id: ids.entity,
+                operation_type: "update",
+                server_version: 2,
+                occurred_at: "2026-07-23T00:00:01Z",
+                tombstone: false,
+                deleted_at: null,
+                payload: remotePayload,
+                payload_hash: await hashPayload(remotePayload),
+              },
+            ],
+          };
+        },
+      },
+      vault,
+    ).synchronize(ids.workspace, ids.device);
+
+    expect(await vault.get(ids.operation, ids.workspace)).toEqual(localPayload);
+    expect(await vault.get(remoteOperationId, ids.workspace)).toEqual(
+      remotePayload,
+    );
+    expect(
+      await database.entities.get([ids.workspace, "note", ids.entity]),
+    ).toMatchObject({
+      payload: { encrypted_payload_ref: ids.operation },
+      sync_status: "conflict",
+    });
+    expect(await database.outbox.get(ids.operation)).toMatchObject({
+      outbox_state: "blocked",
+      last_error_code: "SYNC_OPERATION_INVALID",
+    });
+  });
+
   it("acknowledges Outbox operations and advances the cursor atomically", async () => {
     database = await openOfflineDatabase({
       databaseName: `logion-sync-${crypto.randomUUID()}`,
