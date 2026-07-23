@@ -19,7 +19,7 @@
     "yjs": "13.6.31"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.2",
+    "@eslint/js": "10.0.1",
     "@logion/config": "workspace:*",
     "@vitest/coverage-v8": "4.1.10",
     "eslint": "9.39.2",
