@@ -1,8 +1,8 @@
-# Candidate security gate runbook
+# 候选产物安全门禁操作手册
 
-## Reproduce the license gate
+## 复现许可证门禁
 
-After frozen dependency installation:
+冻结依赖安装后执行：
 
 ```sh
 mkdir -p reports/security
@@ -14,11 +14,11 @@ uv run --isolated --no-dev --all-packages python scripts/security/license_policy
 rm reports/security/pnpm-licenses.json
 ```
 
-Review the normalized report, especially `denied`, rather than preserving package-manager paths.
+审查规范化报告，特别是 `denied`，无需保留包管理器路径。
 
-## Reproduce candidate scans
+## 复现候选扫描
 
-Authenticate `gh`, Trivy and the container registry without printing tokens. Supply the four exact references from a verified candidate manifest:
+认证 `gh`、Trivy 和容器仓库时不得打印 token。从已验证候选 manifest 提供四个精确引用：
 
 ```sh
 python scripts/security/candidate_security.py \
@@ -31,13 +31,13 @@ python scripts/security/candidate_security.py \
   --image backup=REGISTRY/BACKUP@sha256:DIGEST
 ```
 
-The command attempts all provenance, image, filesystem and IaC checks, then exits non-zero if any failed. Do not rerun against tags or edit the generated summary.
+命令会尝试全部来源、镜像、文件系统和 IaC 检查，任一失败即非零退出。不得针对 tag 重跑，也不得编辑生成摘要。
 
-## Triage
+## 分类处置
 
-1. Confirm the source SHA, manifest and digest before reading findings.
-2. For a vulnerability, identify the affected layer/package, exploitability and fixed version. Rebuild from a new commit; never replace the old digest.
-3. For a secret, revoke it first, remove it from the full Git history and rebuild. Treat detector output as sensitive.
-4. For IaC, fix the repository declaration and verify the effective deployment separately.
-5. For a license denial, verify upstream metadata and obligations. Policy changes require human review.
-6. Preserve the failed artifact and link remediation to its Main run. A rerun without a source change may confirm transient infrastructure failure but cannot change vulnerable bytes.
+1. 阅读发现前确认 source SHA、manifest 和 digest。
+2. 漏洞：确认受影响层/包、可利用性和修复版本；从新 commit 重建，绝不替换旧 digest。
+3. 密钥：先撤销，再从完整 Git 历史移除并重建；检测器输出按敏感信息处理。
+4. IaC：修复仓库声明，并另行验证有效部署。
+5. 许可证拒绝：验证上游元数据和义务；策略修改须人工审查。
+6. 保留失败产物，将修复关联到其 Main run。无源码变化的重跑只能确认临时基础设施故障，不能改变有漏洞的字节。

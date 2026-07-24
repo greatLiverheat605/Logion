@@ -1,21 +1,14 @@
-# IndexedDB v4 attachment authorization handoff
+# IndexedDB v4 附件授权交接
 
-Schema v4 retains every v3 store and index and adds the authorization metadata required to drain an
-offline attachment through the server protocol: `space_id`, `target_type`, `target_id`, and the last
-server version. New queue entries validate all UUIDs before the Blob is persisted.
+Schema v4 保留全部 v3 store 和索引，并增加离线附件通过服务端协议出队所需授权元数据：`space_id`、`target_type`、`target_id` 和最后服务端版本。保存 Blob 前必须校验所有 UUID。
 
-Existing v3 attachment rows do not contain a target Space/object. The forward migration preserves the
-Blob but changes the row to `failed` with `OFFLINE_ATTACHMENT_METADATA_REQUIRED`; it is not uploaded,
-guessed, deleted, or silently attached elsewhere. Product UI may offer export/removal, but automatic
-retry is prohibited until a user creates a new fully scoped queue entry.
+旧 v3 附件行没有目标 Space/对象。前向迁移保留 Blob，但将该行改为 `failed` 和 `OFFLINE_ATTACHMENT_METADATA_REQUIRED`；不得上传、猜测、删除或静默附到其他位置。UI 可以提供导出/移除，但用户创建完整限定的新队列项前禁止自动重试。
 
-The upload worker processes one pending entry as:
+上传 worker 按以下顺序处理一个 pending 项：
 
-1. authenticated `init` with metadata, size and client SHA-256;
-2. bounded binary `PUT` of the Blob;
-3. `complete` using the upload response version;
-4. retain `verified` and server version, or a stable redacted failure code.
+1. 携带元数据、大小和客户端 SHA-256 发起已认证 `init`；
+2. 以有界二进制 `PUT` 上传 Blob；
+3. 使用上传响应版本调用 `complete`；
+4. 保留 `verified` 和服务端版本，或稳定、脱敏的失败码。
 
-Network exception details and response bodies are not stored in IndexedDB. A failed current-format
-entry requires an explicit retry action. Schema downgrade remains prohibited; incompatible clients
-must enter upgrade/re-bootstrap handling and must not replay attachment rows blindly.
+IndexedDB 不保存网络异常详情和响应正文。当前格式条目失败后必须由用户明确重试。禁止 schema 降级；不兼容客户端必须进入升级/重新 Bootstrap 流程，不能盲目重放附件行。

@@ -1,14 +1,14 @@
-# Personal self-study threat model
+# 个人自学威胁模型
 
-Status: L4-S1 protected offline/sync baseline
+状态：L4-S1 受保护离线/同步基线
 
-| Threat                                   | Control                                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------------------- |
-| Owner reads a member's plans or evidence | REST, Pull, and Bootstrap filter authenticated `user_id`                        |
-| Cross-owner project or deliverable link  | Composite owner/Workspace/Space foreign keys and scoped parent resolution       |
-| Child sync precedes parent               | Outbox dependencies order Track→Project→Deliverable and make failures explicit  |
-| Sensitive text reaches audit logs        | Audit metadata is empty; objectives, notes, outcomes, and evidence are excluded |
-| IndexedDB exposes private content        | Vault references replace plaintext in durable entity, Outbox, and conflict rows |
-| CSRF or cross-origin creation            | Trusted-origin, double-submit CSRF, user rate limits, and strict schemas        |
-| AI forges completion evidence            | No AI write route exists; Deliverable creation is an authenticated user action  |
-| Hidden personal changes stall a device   | Pull omits the record while advancing the global cursor                         |
+| 威胁                              | 控制                                                       |
+| --------------------------------- | ---------------------------------------------------------- |
+| Owner 读取成员计划或证据          | REST、Pull、Bootstrap 均按认证 `user_id` 过滤              |
+| 跨所有者 Project/Deliverable 关联 | Workspace/Space/user 组合外键及限定父解析                  |
+| 子对象先于父对象同步              | Outbox 依赖按 Track→Project→Deliverable 排序并显式报告失败 |
+| 敏感文本进入审计日志              | 审计元数据为空，排除目标、笔记、结果和证据                 |
+| IndexedDB 暴露私人内容            | 持久实体、Outbox 和冲突行以 Vault 引用替代明文             |
+| CSRF/跨源创建                     | 可信 Origin、双提交 CSRF、用户限速和严格 schema            |
+| AI 伪造完成证据                   | 无 AI 写入路由；Deliverable 创建必须由认证用户操作         |
+| 隐藏个人变更阻塞设备              | Pull 略去记录但继续推进全局 cursor                         |

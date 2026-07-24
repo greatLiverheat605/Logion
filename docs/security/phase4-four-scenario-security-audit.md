@@ -1,65 +1,47 @@
-# Phase 4 four-scenario security audit
+# Phase 4 四场景安全审计
 
-Status: candidate audit for L4-FINAL / issue #107
+状态：L4-FINAL / Issue #107 候选审计
 
-## Scope
+## 范围
 
-This audit covers the Phase 4 learning-science foundation and the Exam, Self-study,
-Research, and Collaboration scenario packages. It reviews REST, sync Push/Pull/Bootstrap,
-offline Vault storage, Workspace/Space authorization, audit metadata, and dynamic user
-context. It does not authorize a production release or replace the Phase 6 backup,
-real-device, performance, or accessibility release gates.
+覆盖 Phase 4 学习科学基础，以及 Exam、Self-study、Research、Collaboration 场景包；审查 REST、Sync Push/Pull/Bootstrap、离线 Vault、Workspace/Space 授权、审计元数据和动态用户上下文。不批准 Production，也不替代 Phase 6 的备份、真机、性能或可访问性门禁。
 
-## Authorization and disclosure matrix
+## 授权与披露矩阵
 
-| Boundary                                     | Exam                         | Self-study                   | Research                     | Collaboration                                 |
-| -------------------------------------------- | ---------------------------- | ---------------------------- | ---------------------------- | --------------------------------------------- |
-| Authenticated owner of a personal record     | Read/write own rows          | Read/write own rows          | Read/write own rows          | Role-based shared read/write                  |
-| Workspace Owner/Admin reading another member | Denied even in Shared Space  | Denied even in Shared Space  | Denied even in Shared Space  | May read explicit Shared Space rows           |
-| Reviewer                                     | No personal visibility grant | No personal visibility grant | No personal visibility grant | Shared read plus feedback append only         |
-| Viewer                                       | No personal visibility grant | No personal visibility grant | No personal visibility grant | Shared read only                              |
-| Other Workspace                              | Hidden                       | Hidden                       | Hidden                       | Hidden                                        |
-| Another member's Private Space               | Hidden                       | Hidden                       | Hidden                       | Collaboration records cannot be created there |
+| 边界                 | Exam                     | Self-study | Research   | Collaboration              |
+| -------------------- | ------------------------ | ---------- | ---------- | -------------------------- |
+| 个人记录所有者       | 读写本人行               | 读写本人行 | 读写本人行 | 按角色读写共享数据         |
+| Owner/Admin 读取他人 | 即使 Shared Space 也拒绝 | 同左       | 同左       | 可读取明确 Shared Space 行 |
+| Reviewer             | 无个人可见权限           | 无         | 无         | 共享只读并只能追加反馈     |
+| Viewer               | 无个人可见权限           | 无         | 无         | 共享只读                   |
+| 其他 Workspace       | 隐藏                     | 隐藏       | 隐藏       | 隐藏                       |
+| 他人的 Private Space | 隐藏                     | 隐藏       | 隐藏       | 禁止创建协作记录           |
 
-The server resolves the authenticated membership and Space for every request. Personal
-scenario queries also bind `user_id`; collaboration queries require `Space.visibility ==
-"shared"`. Client-supplied role, Workspace ownership, and visibility are never accepted as
-authorization conclusions.
+每个请求均由服务端解析认证 membership 和 Space；个人场景另绑定 `user_id`，协作查询要求 `Space.visibility == "shared"`。客户端传入的 role、Workspace ownership 和 visibility 绝不作为授权结论。
 
-## Attack review
+## 攻击审查
 
-| Threat                                                           | Control and evidence                                                                                                                                                                                                           |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Guessed UUID returns another member's content in a sync conflict | Create adapters reject personal rows whose `user_id` differs before conflict projection; `test_phase4_security_integration.py` attacks Exam, LearningTrack, PaperRecord, and Rubric IDs and scans the response for victim text |
-| Workspace owner aggregates private learning state                | Exam, Self-study, and Research REST plus Pull/Bootstrap tests assert owner/member separation; no scenario report service imports personal-domain tables                                                                        |
-| Collaboration report silently scrapes private records            | ReportSnapshot accepts only an explicit bounded summary and same-Space ReviewRequest ID; the service imports no Exam, memory, self-study, research, note, or attachment model                                                  |
-| Viewer or Reviewer mutates shared structure                      | Named permissions are enforced in CollaborationService; Viewer writes and Reviewer rubric/report writes fail; UI disables unsupported local mutations                                                                          |
-| Private collaboration record enters sync                         | REST and sync creation require a Shared Space; Pull and Bootstrap independently join Space and require `shared` visibility                                                                                                     |
-| Plaintext remains in IndexedDB entity/Outbox rows                | Protected repository routes all Phase 4 entity payloads through AES-256-GCM Vault references; the 32-case durable-row test checks every scenario package                                                                       |
-| Sensitive payload enters audit/log metadata                      | Scenario audit events use empty/minimal metadata; integration tests scan for exam, objective, evidence, method, feedback, and report text                                                                                      |
-| AI changes formal mastery, score, run, feedback, or report       | No Phase 4 service is registered as an AI write target; formal records require authenticated human REST/sync operations                                                                                                        |
-| User-specific context ships as a product default                 | Production-path guard rejects named teacher/company context; no migration or seed creates an exam, course, supervisor, group, research direction, or schedule                                                                  |
-| CSRF or untrusted Origin performs a write                        | All scenario REST writes and sync Push require trusted Origin and double-submit CSRF; missing-token integration cases fail                                                                                                     |
-| Dependency or secret exposure                                    | Locked dependencies, secret scan in PR CI, `pnpm audit`, strict validation, and no new runtime dependency in Phase 4                                                                                                           |
+| 威胁                                   | 控制与证据                                                                                                                                               |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 猜测 UUID 在同步冲突中返回他人内容     | create 适配器在构建冲突投影前拒绝不同 `user_id`；`test_phase4_security_integration.py` 攻击 Exam、LearningTrack、PaperRecord、Rubric ID 并扫描受害者文本 |
+| Owner 聚合私人学习状态                 | Exam/Self-study/Research REST 与 Pull/Bootstrap 测试断言隔离；场景报告服务不导入个人领域表                                                               |
+| 协作报告静默抓取私人记录               | ReportSnapshot 只接收有界 summary 和同 Space ReviewRequest ID，不导入个人业务模型                                                                        |
+| Viewer/Reviewer 修改共享结构           | CollaborationService 执行命名权限；Viewer 写和 Reviewer 量规/报告写均失败                                                                                |
+| Private 协作记录进入同步               | REST/Sync 创建要求 Shared Space；Pull/Bootstrap 独立 join Space 并要求 `shared`                                                                          |
+| IndexedDB 实体/Outbox 留明文           | 受保护仓库将 Phase 4 实体全部路由到 AES-256-GCM Vault；32 项持久行测试覆盖全部场景                                                                       |
+| 敏感载荷进入审计/日志                  | 事件使用空/最小元数据；集成测试扫描考试、目标、证据、方法、反馈和报告文本                                                                                |
+| AI 改正式掌握度、分数、Run、反馈或报告 | Phase 4 服务均未注册为 AI 写目标；正式记录需要认证人工 REST/Sync 操作                                                                                    |
+| 用户特定上下文作为默认内容发布         | 生产路径 guard 拒绝命名教师/公司上下文；无 migration/seed 创建考试、课程、导师、小组、研究方向或日程                                                     |
+| CSRF/不可信 Origin 写入                | 场景 REST 写和 Sync Push 均要求可信 Origin 与双提交 CSRF                                                                                                 |
+| 依赖或 secret 泄露                     | 冻结依赖、PR CI 密钥扫描、`pnpm audit`、严格校验，Phase 4 无新增运行依赖                                                                                 |
 
-## Migration and protocol compatibility
+## 迁移与协议兼容
 
-Migrations 0015 through 0022 are additive and retain UUID/Workspace/Space/version/audit
-fields. Required Integration CI performs empty-database upgrade, Alembic schema drift check,
-full downgrade/upgrade, and upgrade from a seeded earlier version. Sync entity types are
-additive under `sync-v1`; protected offline payloads retain the existing encrypted reference
-format and require no IndexedDB schema bump.
+迁移 0015–0022 为增量迁移并保留 UUID/Workspace/Space/version/audit 字段。Integration CI 执行空库升级、Alembic schema drift、完整降级/升级及从已有数据早期版本升级。同步实体类型在 `sync-v1` 下增量增加；受保护离线载荷沿用加密引用格式，不提升 IndexedDB schema。
 
-## Residual risks
+## 残余风险
 
-- An authorized Shared Space member can retain content already synchronized before their
-  membership is revoked. Server revocation stops future access but cannot erase an offline
-  copy on an uncontrolled device.
-- Physical Safari/iOS PWA storage eviction and background execution remain Phase 6
-  real-device verification items; foreground encrypted editing and synchronization are the
-  current authority.
-- Phase 4 uses bounded lists and conservative record-level conflicts. Capacity/performance
-  targets and CRDT/field-level merging remain later release gates; no silent overwrite is
-  introduced.
-- Reports are immutable application records but are not yet public, tokenized ShareSnapshot
-  links; public sharing and revocation belong to Phase 5.
+- 成员撤销前已同步的 Shared Space 内容可能留在设备；服务端只能阻止后续访问，不能擦除失控离线副本。
+- 物理 Safari/iOS PWA 存储驱逐和后台执行仍需 Phase 6 真机验证；前台加密编辑/同步是当前权威路径。
+- Phase 4 使用有界列表和保守记录级冲突。容量/性能及 CRDT/字段合并属于后续门禁，不引入静默覆盖。
+- Report 是不可变应用记录，但还不是公开 token 化 ShareSnapshot；公开分享与撤销属于 Phase 5。

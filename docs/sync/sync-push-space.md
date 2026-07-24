@@ -1,36 +1,21 @@
-# Sync v1 push and Space create adapter
+# Sync v1 Push 与 Space 创建适配器
 
-`POST /api/v1/workspaces/{workspace_id}/sync/push` accepts the authoritative
-`sync-v1` push envelope. The path, envelope, every operation, authenticated
-device, and authorized Workspace must identify the same context.
+`POST /api/v1/workspaces/{workspace_id}/sync/push` 接受权威 `sync-v1` Push 信封。路径、信封、每个操作、认证设备和授权 Workspace 必须指向同一上下文。
 
-## Security and limits
+## 安全与限制
 
-- Cookie authentication, trusted Origin, and double-submit CSRF are mandatory.
-- Requests are rate limited per Workspace and user. Limits are configured with
-  `LOGION_SYNC_PUSH_LIMIT_PER_MINUTE`, `LOGION_SYNC_MAX_OPERATION_BYTES`, and
-  `LOGION_SYNC_MAX_BATCH_BYTES`.
-- Pydantic rejects unknown fields and validates the schema bounds before use.
-- The server recomputes payload hashes and operation fingerprints. It never
-  trusts a client-supplied authorization result or fingerprint.
-- A mismatched epoch returns an explicit `rebootstrap_required` control message.
+- Cookie 认证、可信 Origin 和双提交 CSRF 是强制要求。
+- 按 Workspace 和用户限速，使用 `LOGION_SYNC_PUSH_LIMIT_PER_MINUTE`、`LOGION_SYNC_MAX_OPERATION_BYTES`、`LOGION_SYNC_MAX_BATCH_BYTES` 配置。
+- Pydantic 拒绝未知字段，并在使用前验证 schema 边界。
+- 服务端重新计算载荷哈希和操作指纹，绝不信任客户端传入的授权结论或指纹。
+- epoch 不匹配返回明确 `rebootstrap_required` 控制消息。
 
-## Transaction behavior
+## 事务行为
 
-Operations retain input order. Each operation runs in a database savepoint, so
-an unsupported or unauthorized operation is rejected without rolling back
-successful siblings. Dependencies on a failed operation receive
-`blocked_dependency`. A successful Space mutation, audit event, processed
-operation, and change-log record commit in one outer transaction.
+操作保持输入顺序。每个操作在数据库 savepoint 中运行，因此不支持或未授权操作被拒绝时不会回滚成功兄弟项。依赖失败操作的项返回 `blocked_dependency`。成功 Space 变更、审计事件、已处理操作和变更日志在一个外层事务提交。
 
-The initial adapter supports only `space/create` with `base_version=0`, a
-client-generated entity UUID, and an exact payload of `name` and `visibility`.
-All other valid operation shapes are rejected with stable `SYNC_*` codes and do
-not mutate business data.
+初始适配器只支持 `space/create`、`base_version=0`、客户端生成实体 UUID，以及仅含 `name` 和 `visibility` 的精确载荷。其他即使结构有效也返回稳定 `SYNC_*` 错误码，不改变业务数据。
 
-## Recovery
+## 恢复
 
-The migration and endpoint are forward-fixed. To disable push without losing
-the durable ledger, remove the route from the API deployment while retaining
-the three sync ledger tables. Clients keep their Outbox entries and retry after
-service recovery.
+迁移和端点采用前向修复。若需在不丢持久账本的前提下禁用 Push，应从 API 部署移除路由并保留三张同步账本表；客户端保留 Outbox，服务恢复后重试。

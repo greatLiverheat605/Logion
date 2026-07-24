@@ -1,28 +1,11 @@
-# Protected Phase 3 offline payloads
+# Phase 3 受保护离线载荷
 
-Phase 3 goal descriptions, outcomes, phase criteria, notes, resources, and
-evidence can reveal private study or research context. They must not be stored
-as plaintext in IndexedDB entity, Outbox, bootstrap-staging, or pull records.
+Phase 3 的目标描述、结果、阶段标准、笔记、资料和证据可能泄露私人学习/研究上下文，不能以明文保存在 IndexedDB 实体、Outbox、Bootstrap staging 或 Pull 记录中。
 
-`ProtectedOfflineRepository` seals the full payload in `vaultRecords` before an
-atomic entity/Outbox commit. Those operational records contain only an opaque
-`encrypted_payload_ref`; their payload Hash remains the RFC 8785 Hash of the
-clear payload. A repeated operation is validated before any vault overwrite,
-so a changed-payload replay cannot destroy the original encrypted data.
+`ProtectedOfflineRepository` 先将完整载荷封存到 `vaultRecords`，再原子提交实体/Outbox。这些运行记录只含不透明 `encrypted_payload_ref`；payload Hash 仍是明文载荷的 RFC 8785 Hash。覆盖 Vault 前先验证重复 operation，载荷变化的重放不能破坏原加密数据。
 
-`SyncClient` requires an unlocked vault to hydrate a protected Outbox operation
-immediately before transport. It never writes the clear value back to the
-entity or Outbox. Protected pull changes are sealed before the entity/cursor
-transaction. Replaying a page after a crash is safe and only replaces encrypted
-ciphertext for the same entity reference.
+`SyncClient` 要求 Vault 已解锁，并只在传输前短暂补全受保护 Outbox 操作；绝不将明文写回实体或 Outbox。受保护 Pull 变更在实体/cursor 事务前封存。崩溃后重放页面是安全的，只替换同一实体引用的密文。
 
-`BootstrapRepository` verifies record/chunk/snapshot Hashes against the received
-clear response, then seals protected records before staging them. If the vault
-is absent or locked, bootstrap fails closed. The server remains the encrypted
-transport boundary's trusted endpoint; TLS and authenticated tenant/Space
-authorization are still required.
+`BootstrapRepository` 根据收到的明文响应验证 record/chunk/snapshot Hash，再封存受保护记录后暂存。Vault 缺失或锁定时 Bootstrap 失败关闭。服务端仍是加密传输边界内的可信端点，依然要求 TLS 及认证租户/Space 授权。
 
-Vault ciphertext uses AES-256-GCM with Workspace/record AAD and a non-exportable
-in-memory key derived by PBKDF2-SHA-256. Closing the authenticated planning
-component drops its database and vault references. Offline actions remain
-pending when the network fails and resume only after the user unlocks again.
+Vault 使用 AES-256-GCM、Workspace/record AAD 及 PBKDF2-SHA-256 派生的不可导出内存密钥。关闭已认证规划组件会丢弃数据库和 Vault 引用。网络失败时离线操作保持 pending，用户重新解锁后才恢复。

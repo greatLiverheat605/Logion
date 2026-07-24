@@ -1,23 +1,16 @@
-# ADR 0012: Explicit shared review and report loop
+# ADR 0012：显式共享评审与报告闭环
 
-Status: Accepted for Phase 4 L4-G1
+状态：Phase 4 L4-G1 已接受
 
-## Decision
+## 决策
 
-- Rubric, ReviewRequest, GroupFeedback, and ReportSnapshot exist only in a user-created
-  `shared` Space. No supervisor, group, course, subject, or review context is preinstalled.
-- Owner, Admin, and Editor use `shared_plan.write` to create rubrics, review requests, and
-  report snapshots. Reviewer uses `review.write` to append feedback. Viewer is read-only.
-- Every parent lookup is constrained by Workspace and Space. Shared roles never grant access
-  to a member's private Space or personal exam, self-study, research, note, or mastery rows.
-- ReportSnapshot is an immutable, user-authored projection: it has create and read paths but
-  no update or delete path. It is not an automatic aggregation of personal records.
-- The four payload types are Vault-protected offline entities. Sync preserves the same server
-  authorization as REST and records explicit parent-operation dependencies.
-- AI has no formal write path for rubric, review, feedback, or report records.
+- Rubric、ReviewRequest、GroupFeedback 和 ReportSnapshot 只能存在于用户创建的 `shared` Space；系统不预装导师、小组、课程、学科或评审上下文。
+- Owner、Admin 和 Editor 使用 `shared_plan.write` 创建量规、评审请求及报告快照；Reviewer 使用 `review.write` 追加反馈；Viewer 只读。
+- 所有父对象查询都受 Workspace 和 Space 限制。共享角色永远不能读取成员的 Private Space，或个人考试、自学、研究、笔记和掌握度记录。
+- ReportSnapshot 是不可变、由用户撰写的投影，只允许创建和读取，不允许更新或删除，也不会自动聚合个人记录。
+- 四类载荷均为 Vault 保护的离线实体。同步沿用 REST 的服务端授权，并记录明确的父操作依赖。
+- AI 对量规、评审、反馈和报告记录没有正式写入路径。
 
-## Compatibility and recovery
+## 兼容与恢复
 
-Migration 0022 is additive. Disabling the UI or routes leaves stored shared records intact.
-After production data exists, schema corrections use a forward migration; rollback must not
-drop shared review history without an explicit, verified export and retention decision.
+迁移 0022 为增量迁移。禁用 UI 或路由不影响已有共享记录。产生生产数据后应使用前向迁移修正 schema；除非已有明确、验证过的导出和保留决定，回滚不得删除共享评审历史。

@@ -1,71 +1,39 @@
-# ADR 0026: Durable and encrypted sync conflict resolution
+# ADR 0026：持久、加密的同步冲突解决
 
-- Status: Accepted
-- Date: 2026-07-23
-- Decision owners: Logion sync and offline contract owners
-- Related: Issue #160, ADR 0025
+- 状态：已接受
+- 日期：2026-07-23
+- 决策负责人：Logion 同步与离线契约负责人
+- 关联：Issue #160、ADR 0025
 
-## Context
+## 背景
 
-The original offline conflict repository preserved two values but resolved them by directly
-mutating an IndexedDB entity. It did not create an Outbox operation, the server did not consume
-the existing `conflict_resolution` envelope, protected payloads were not guaranteed to remain in
-the Vault, and a forged or stale conflict ID could not be checked because conflicts were not
-durable on the server. The sync page also displayed fixed demonstration counts.
+原离线冲突仓库虽保留两个值，却通过直接修改 IndexedDB 实体解决冲突；它不创建 Outbox 操作，服务端不消费已有 `conflict_resolution` 信封，受保护载荷也未保证留在 Vault 中。冲突未在服务端持久化，因此无法验证伪造或过期 conflict ID。
 
-Logion must preserve unsent work, require an explicit choice for unsafe conflicts, support offline
-resolution, and make the resulting server write and audit trail replay-safe without storing an
-extra plaintext copy of private notes or research content.
+Logion 必须保留未发送工作，对不安全冲突要求明确选择，支持离线解决，并使服务端写入和审计轨迹可安全重放，同时不得额外保存私人笔记或研究内容的明文副本。
 
-## Decision
+## 决策
 
-1. The server persists a hash-only `sync_conflict_records` row when a version conflict is returned.
-   It stores Workspace, source operation/device, entity identity, versions, payload hashes,
-   allowed resolutions, status, and timestamps. It does not store either conflict payload.
-2. Conflict IDs include the remote version and payload hash and are inserted with PostgreSQL
-   `ON CONFLICT DO NOTHING`. Concurrent replay therefore returns the same conflict without a
-   uniqueness failure.
-3. A server-recorded resolution must match the Workspace, source device, entity, open status,
-   allowed option, expected remote version, current entity version, and selected payload hash.
-   Cross-Workspace, forged, stale, changed-payload, dismissed-as-write, and replay-mismatched
-   requests fail closed.
-4. `keep_local` and `merge` use the normal domain update path and its permission and validation
-   checks. `keep_remote` appends a new sync ledger event for the already-current server snapshot.
-   Successful resolutions close the conflict and create a `sync.conflict.resolved` audit event
-   containing IDs, resolution, and versions only.
-5. The browser stores protected local, remote, merged, and selected payloads only as encrypted
-   Vault records. Entity, Outbox, and conflict rows contain references and hashes. Selecting a
-   resolution atomically seals the payload, replaces the conflicting Outbox entry, updates the
-   entity, and marks the conflict `resolving`; only an ACK marks it resolved.
-6. Pull-only conflicts receive deterministic local IDs. They are not presented to the server as
-   server-recorded conflicts. Accepting the pulled remote snapshot is local convergence; keeping
-   or merging local content creates an ordinary version-checked update.
-7. “Copy as new object” creates a new Note or Resource with a new ID, then resolves the original
-   object by adopting the server version. This preserves both intentions without overwriting the
-   original identity.
-8. The conflict center uses the authenticated Workspace/device and real IndexedDB/Vault,
-   displays bounded field differences as React text, and reads the actual conflict and attachment
-   queues. It identifies provenance as “current device” and “server version”; it does not reveal
-   another member's device name or identifier.
+1. 服务端在返回版本冲突时保存仅含哈希的 `sync_conflict_records` 行，记录 Workspace、源 operation/device、实体身份、版本、载荷哈希、允许的解决方式、状态和时间戳，不保存任一冲突载荷。
+2. Conflict ID 包含远端版本和载荷哈希，并通过 PostgreSQL `ON CONFLICT DO NOTHING` 插入；并发重放返回同一冲突，不产生唯一约束失败。
+3. 服务端解决请求必须同时匹配 Workspace、源设备、实体、开放状态、允许选项、预期远端版本、当前实体版本和已选载荷哈希。跨 Workspace、伪造、过期、载荷变化、把 dismiss 当写入和重放不匹配均失败关闭。
+4. `keep_local` 与 `merge` 使用正常领域更新路径及其权限/校验；`keep_remote` 为当前服务端快照追加新的同步账本事件。成功后关闭冲突并创建只含 ID、解决方式和版本的 `sync.conflict.resolved` 审计事件。
+5. 浏览器只把受保护的本地、远端、合并和已选载荷存为加密 Vault 记录；实体、Outbox 和冲突行仅含引用及哈希。选择方案时以原子事务封存载荷、替换冲突 Outbox 项、更新实体并将冲突标记为 `resolving`；只有 ACK 才标记已解决。
+6. 仅 Pull 产生的冲突使用确定性本地 ID，不作为服务端记录冲突提交。接受拉取的远端快照只是本地收敛；保留或合并本地内容会创建普通版本校验更新。
+7. “复制为新对象”创建新 ID 的 Note 或 Resource，再以服务端版本解决原对象，既保留双方意图，也不覆盖原身份。
+8. 冲突中心使用认证 Workspace/device 和真实 IndexedDB/Vault，以 React 文本显示有界字段差异并读取真实冲突/附件队列。来源标签只能是“当前设备”和“服务器版本”，不得暴露其他成员的设备名或标识。
 
-## Consequences
+## 影响
 
-- Migration `0034_sync_conflicts` is required and becomes the release migration head.
-- Conflict resolution is auditable and replay-safe, while protected content is not duplicated in
-  the server conflict table or plaintext browser rows.
-- A resolution can remain `resolving` while offline or blocked. Both versions remain recoverable
-  until server acknowledgement.
-- Pull-only convergence does not create a server conflict audit event when the user simply accepts
-  an unchanged server snapshot; no server mutation occurred.
-- Real-time collaborative editing remains out of scope. Yjs Markdown merging follows ADR 0025;
-  status, hierarchy, permission, deletion, and verification conflicts remain explicit choices.
+- 必须执行迁移 `0034_sync_conflicts`，它成为发布迁移 head。
+- 冲突解决可审计、可安全重放，受保护内容不会复制到服务端冲突表或浏览器明文行。
+- 离线或受阻时可一直保持 `resolving`，服务端确认前双方版本均可恢复。
+- 用户只接受未变化服务端快照时，仅 Pull 收敛不产生服务端冲突审计事件，因为没有服务端变更。
+- 实时协同编辑不在范围内。Yjs Markdown 合并遵循 ADR 0025；状态、层级、权限、删除和验证冲突仍需显式选择。
 
-## Rejected alternatives
+## 否决方案
 
-- Last-write-wins: silently loses evidence and critical state.
-- Client-only conflict IDs sent as authoritative server records: permits forgery and stale writes.
-- Persisting full conflict payloads on the server: duplicates private content and enlarges the
-  breach surface.
-- Direct IndexedDB mutation without Outbox and ACK: cannot synchronize or audit the decision.
-- Exposing remote device metadata to improve labels: unnecessary for resolution and unsafe across
-  shared Workspaces.
+- 最后写入覆盖：会静默丢失证据和关键状态。
+- 将客户端 conflict ID 当作权威服务端记录：允许伪造和过期写入。
+- 在服务端持久化完整冲突载荷：复制私人内容并扩大泄露面。
+- 不经 Outbox/ACK 直接改 IndexedDB：无法同步或审计决策。
+- 暴露远端设备元数据优化标签：解决冲突不需要，且在共享 Workspace 中不安全。

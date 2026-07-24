@@ -1,31 +1,31 @@
-# Production rollout and abort runbook
+# 生产灰度与中止操作手册
 
-This runbook does not approve or execute Production. The cloud provider, region, traffic adapter, alert recipients and off-host backup target remain operator decisions. Never substitute RC synthetic rehearsal evidence for live Production observability.
+本手册不批准也不执行 Production。云厂商、区域、流量适配器、告警接收人和异地备份目标均由操作员决定。不得用 RC 合成演练证据替代 Production 实时可观测性。
 
-## Preconditions
+## 前置条件
 
-1. Human release owner selects a successful RC artifact and verifies source SHA, candidate manifest, four digests, security, recovery, browser/WCAG and privacy evidence.
-2. Production environment approval is separate from staging and has no automatic approver. Credentials exist only in that protected environment.
-3. Confirm current application/schema compatibility, forward-fix owner, abort authority, incident channel and maintenance window.
-4. Generate and verify a pre-deploy encrypted off-host backup. Record artifact checksum, key generation and restore rehearsal age.
-5. The selected observability adapter emits `logion-rollout-samples-v1` with `sample_source=live_observability` and no content/PII fields.
+1. 人类发布负责人选择成功 RC 产物，核验 source SHA、candidate manifest、四个 digest，以及安全、恢复、浏览器/WCAG 和隐私证据。
+2. Production 环境审批独立于 staging，不得自动批准；凭据只存在于受保护环境。
+3. 确认当前应用/schema 兼容性、前向修复负责人、中止权限、事故通道和维护窗口。
+4. 生成并验证部署前加密异地备份，记录 checksum、密钥代际和最近恢复演练时间。
+5. 可观测性适配器输出 `logion-rollout-samples-v1`，使用 `sample_source=live_observability`，且不包含内容/PII 字段。
 
-## Staged traffic
+## 分阶段流量
 
-At each stage, the operator changes traffic using the reviewed cloud adapter, then observes without another deployment:
+每阶段由操作员使用审查过的云适配器改变流量，然后在不再次部署的情况下观察：
 
-1. 5% for at least 15 minutes, 3 aggregate windows and 500 requests.
-2. 25% for at least 30 minutes, 3 aggregate windows and 2,000 requests. The gate requires the same-candidate 5% promotion evidence.
-3. 100% for at least 60 minutes, 3 aggregate windows and 5,000 requests. The gate requires the same-candidate 25% promotion evidence.
+1. 5%：至少 15 分钟、3 个聚合窗口和 500 次请求。
+2. 25%：至少 30 分钟、3 个聚合窗口和 2,000 次请求；门禁要求同候选 5% 晋级证据。
+3. 100%：至少 60 分钟、3 个聚合窗口和 5,000 次请求；门禁要求同候选 25% 晋级证据。
 
-Run `scripts/release/rollout_gate.py` in `production` mode. `promote` only authorizes the human to consider the next traffic change; the script never deploys, changes traffic or grants approval. `hold` means collect more valid live evidence. `abort` means stop expansion immediately.
+以 `production` 模式运行 `scripts/release/rollout_gate.py`。`promote` 只允许人类考虑下一次流量变化；脚本不部署、不改流量、不批准。`hold` 表示继续收集有效实时证据，`abort` 表示立即停止扩容。
 
-## Abort and recovery
+## 中止与恢复
 
-- Freeze expansion and route traffic away from the candidate through the reviewed provider adapter.
-- Preserve metrics, deployment events, candidate identity and audit timeline without user content.
-- Do not automatically roll back the database. If the prior binary cannot read the migrated schema, keep the compatible candidate disabled and apply a reviewed forward fix.
-- If data integrity, tenant isolation or secret exposure is suspected, declare P0, revoke affected credentials/sessions, stop writers as required and follow the restore/security incident procedure.
-- A retry uses a new candidate identity and new evidence chain. Failed immutable images and evidence remain retained.
+- 冻结扩容，通过已审查 Provider 适配器把流量移离候选。
+- 保留不含用户内容的指标、部署事件、候选身份和审计时间线。
+- 不自动回滚数据库。若旧二进制无法读取已迁移 schema，应保持兼容候选禁用并应用经审查的前向修复。
+- 若怀疑数据完整性、租户隔离或密钥泄露，声明 P0，撤销受影响凭据/会话，按需停止写入并执行恢复/安全事故流程。
+- 重试必须使用新候选身份和新证据链，失败的不可变镜像与证据继续保留。
 
-Production completion requires the human release owner to sign the 100% live evidence, confirm alerts and backup replication, and record any residual risks. Phase approval alone is not Production approval.
+Production 完成必须由人类发布负责人签署 100% 实时证据、确认告警和备份复制并记录残余风险。阶段批准本身不是 Production 批准。

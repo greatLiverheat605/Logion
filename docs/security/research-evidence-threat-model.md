@@ -1,12 +1,12 @@
-# Personal research evidence threat model
+# 个人研究证据威胁模型
 
-Status: L4-R1 protected offline/sync baseline
+状态：L4-R1 受保护离线/同步基线
 
-| Threat                                     | Control                                                                |
-| ------------------------------------------ | ---------------------------------------------------------------------- |
-| Owner reads member research                | REST, Pull, and Bootstrap filter authenticated `user_id`               |
-| Cross-owner evidence link                  | Composite Workspace/Space/user foreign keys plus scoped parent lookup  |
-| AI asserts a conclusion or metric          | No AI write path; runs and metrics require authenticated user actions  |
-| Sensitive paper, method, or feedback leaks | Empty audit metadata and Vault-protected durable offline rows          |
-| Child arrives before source                | Explicit Paper→Claim, Question→Run→Metric, Claim→Feedback dependencies |
-| Hidden changes stall devices               | Pull filters personal rows while advancing the global cursor           |
+| 威胁                     | 控制                                                       |
+| ------------------------ | ---------------------------------------------------------- |
+| Owner 读取成员研究       | REST、Pull、Bootstrap 均按认证 `user_id` 过滤              |
+| 跨所有者证据关联         | Workspace/Space/user 组合外键及限定父查询                  |
+| AI 断言结论或指标        | 无 AI 写路径；Run/Metric 必须由认证用户操作                |
+| 敏感论文、方法或反馈泄露 | 空审计元数据及 Vault 保护的持久离线行                      |
+| 子对象早于来源到达       | 明确 Paper→Claim、Question→Run→Metric、Claim→Feedback 依赖 |
+| 隐藏变更阻塞设备         | Pull 过滤个人行并继续推进全局 cursor                       |

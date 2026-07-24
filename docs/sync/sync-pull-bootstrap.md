@@ -1,23 +1,9 @@
-# Sync v1 pull, bootstrap, and client loop
+# Sync v1 Pull、Bootstrap 与客户端循环
 
-The server exposes authenticated, tenant-bound `pull` and `bootstrap` endpoints
-under each Workspace. Pull pages are ordered by the Workspace sequence and use
-an exclusive cursor. Epoch mismatch and expired retention cursors return
-explicit control envelopes rather than ambiguous empty pages.
+服务端在每个 Workspace 下提供已认证、受租户边界约束的 `pull` 和 `bootstrap` 端点。Pull 页面按 Workspace 序列排序并使用排他 cursor；epoch 不匹配和超出保留期的 cursor 返回明确控制信封，不能伪装成空页成功。
 
-Bootstrap creates a deterministic snapshot identity from the Workspace, epoch,
-head cursor, and RFC 8785 checksum. Chunks contain at most 100 records. Their
-checksums and the framed snapshot checksum use the contract frozen in
-`sync-v1-checksum-vectors.json`. A changed snapshot rejects resume and requires
-the client to restart, preventing mixed-version activation.
+Bootstrap 根据 Workspace、epoch、head cursor 和 RFC 8785 checksum 生成确定性快照身份。每个 chunk 最多 100 条记录；chunk 校验和及框架快照校验和采用 `sync-v1-checksum-vectors.json` 中冻结的契约。快照变化时拒绝续传并要求重启，防止混合版本激活。
 
-The offline `SyncClient` pushes dependency-ordered Outbox operations, validates
-every response with the runtime sync schema, applies acknowledgements and pull
-pages in IndexedDB transactions, and advances the cursor only with a contiguous
-page. Epoch, cursor-retention, and protocol controls update local bootstrap
-state. A remote change never overwrites a pending local entity; it marks the
-entity conflicted for the conflict-center workflow.
+离线 `SyncClient` 按依赖顺序 Push Outbox 操作，以运行时同步 schema 验证每个响应，在 IndexedDB 事务内应用确认和 Pull 页，只在页面连续时推进 cursor。epoch、cursor 保留和协议控制会更新本地 Bootstrap 状态。远端变更绝不覆盖待发送本地实体，而是将实体标记为冲突，交由冲突中心处理。
 
-Current bootstrap records cover the first real synchronized entity adapter,
-`Space`. Later entity adapters must add their snapshot projection and tests in
-the same work package as their Push adapter.
+当前 Bootstrap 已覆盖第一个真实同步实体适配器 `Space`。以后每个实体适配器必须在与其 Push 适配器相同的工作包中加入快照投影和测试。
