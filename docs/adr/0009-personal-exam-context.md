@@ -1,50 +1,27 @@
-# ADR 0009: Personal exam context and derived countdown
+# ADR 0009：个人考试上下文与派生倒计时
 
-Status: Accepted for Phase 4 L4-E1/L4-E2/L4-E3
+状态：Phase 4 L4-E1/L4-E2/L4-E3 已接受
 
-## Context
+## 背景
 
-Logion needs a user-configured exam context for long-running study plans. Exam names,
-dates, time zones, and target scores are sensitive personal planning data. A Space can be
-shared, but that must not turn it into a shared exam dashboard or disclose a learner's
-target to a Workspace owner.
+Logion 需要用户自定义的长期备考上下文。考试名称、日期、时区和目标分数属于敏感个人规划数据。即使 Space 可共享，也不能自动成为共享考试看板或向 Workspace Owner 暴露学习者目标。
 
-## Decision
+## 决策
 
-- An Exam belongs to one Workspace, Space, and authenticated user. The `user_id` boundary
-  applies to REST list, Pull, and Bootstrap even when the Space is shared. Workspace owner
-  or administrator roles do not grant access to another user's Exam.
-- Empty accounts receive no predefined exam, date, target, institution, mentor, or group.
-  Every Exam is created from user input and can later be deleted or archived.
-- `scheduled` requires a timezone-aware instant and a valid IANA time-zone identifier.
-  `undetermined` has no instant. A target and score-scale maximum are either both absent or
-  both present, and the target cannot exceed the scale.
-- The countdown is a client-side projection of the stored instant and the current clock.
-  It never writes a derived number of days or silently changes formal Exam status.
-- Exam payloads are protected offline entities. Durable IndexedDB entity, Outbox, and
-  conflict rows contain Vault references, while Sync Push carries plaintext only in the
-  authenticated request.
-- Subject and SyllabusNode inherit the Exam's personal owner boundary. Subject weights use
-  basis points and cannot total more than 100 percent for one Exam. New syllabus nodes may
-  reference only an existing parent in the same Subject, so create-only hierarchy writes
-  cannot introduce cycles.
-- Syllabus coverage begins at `not_started`. A later explicit user transition may change
-  it; create payloads and AI output cannot forge another coverage state.
-- MockExam is a user-defined timed template under one Exam. ScoreRecord is append-only,
-  belongs to the same personal boundary, and records a bounded score, scale, elapsed time,
-  and timezone-aware completion instant. AI has no submission path.
-- AI may explain or propose planning drafts in later work, but it cannot create, modify,
-  complete, archive, or retarget an Exam without an explicit user action.
+- Exam 属于一个 Workspace、Space 和已认证用户。即使 Space 共享，REST 列表、Pull 和 Bootstrap 也必须执行 `user_id` 边界；Owner/Admin 身份不允许读取他人的 Exam。
+- 空账户不预装考试、日期、目标、院校、导师或小组。所有 Exam 均由用户创建，之后可删除或归档。
+- `scheduled` 必须包含带时区的时间点和有效 IANA 时区；`undetermined` 不含时间点。目标分数与满分要么同时缺省，要么同时存在，且目标不能超过满分。
+- 倒计时是客户端基于存储时间点和当前时钟的投影，不写入派生天数，也不静默改变正式 Exam 状态。
+- Exam 是受保护离线实体；IndexedDB 实体、Outbox 和冲突行保存 Vault 引用，Sync Push 仅在已认证请求中临时携带明文。
+- Subject 和 SyllabusNode 继承 Exam 的个人边界。单个 Exam 的 Subject 权重使用基点且总和不得超过 100%。新节点只能引用同 Subject 的现有父节点，避免仅创建写入形成环。
+- Syllabus 覆盖状态从 `not_started` 开始，之后只能由用户明确转换；创建载荷和 AI 输出不能伪造其他状态。
+- MockExam 是 Exam 下用户定义的计时模板。ScoreRecord 仅追加且遵循同一私人边界，记录有界分数、满分、用时和带时区完成时间；AI 无提交路径。
+- AI 以后可以解释或提出规划草稿，但未经用户明确操作，不得创建、修改、完成、归档或重新设定 Exam。
 
-## Compatibility and recovery
+## 兼容与恢复
 
-The database migration, REST endpoints, and sync entity type are additive. Older clients
-preserve unknown sync records according to the generic protocol but cannot edit Exams.
-Before production data exists, rollback may remove the table and route. After data exists,
-use a forward fix or feature disablement so personal records are not discarded.
+数据库迁移、REST 端点和同步实体类型均为增量变更。旧客户端依照通用协议保留未知同步记录，但不能编辑 Exam。产生数据前可移除表和路由；产生数据后使用前向修复或禁用功能，不能丢弃个人记录。
 
-## Consequences
+## 影响
 
-Shared, mentor, and group dashboards need a future explicit consent and aggregation
-contract. They cannot reuse the personal Exam query. Arbitrary user-selected display time
-zones and Exam update/delete transitions are separate vertical slices.
+共享、导师和小组看板需要未来另行定义明确授权与聚合契约，不能复用个人 Exam 查询。用户自选显示时区及 Exam 更新/删除转换属于其他纵向切片。

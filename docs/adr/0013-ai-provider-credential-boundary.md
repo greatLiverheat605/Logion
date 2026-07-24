@@ -1,27 +1,15 @@
-# ADR 0013: AI Provider credential and network boundary
+# ADR 0013：AI Provider 凭据与网络边界
 
-Status: Accepted for Phase 5 L5-001
+状态：Phase 5 L5-001 已接受
 
-## Decision
+## 决策
 
-- AI Provider configuration is Workspace-scoped and available only to Owner/Admin through
-  the named `ai.configure` permission. Frontend visibility never grants authorization.
-- L5-001 supports metadata for `openai_compatible` Providers only. Creating, updating or
-  deleting a configuration does not make an outbound request and cannot affect core learning
-  workflows.
-- Provider credentials use per-record AES-256-GCM data keys wrapped by a versioned server
-  keyring. AAD binds ciphertext to Workspace, Provider ID and key ID. API responses expose
-  only `credential_configured`; browser storage, logs, audit metadata and export must never
-  receive credential material.
-- Base URLs require public HTTPS, no user information/query/fragment, a bounded port set and
-  no loopback/private/reserved IP literal or local/internal hostname. Runtime DNS resolution,
-  redirect revalidation and connection health belong to L5-002 and must re-check every hop.
-- Provider deletion is a soft metadata tombstone that immediately clears all credential
-  ciphertext and wrapped data-key fields. Reusing a deleted name is allowed.
+- AI Provider 配置属于 Workspace 范围，仅 Owner/Admin 可通过明确的 `ai.configure` 权限操作；前端可见性不构成授权。
+- L5-001 只支持 `openai_compatible` Provider 元数据。创建、更新或删除配置不发起外部请求，也不能影响核心学习流程。
+- Provider 凭据使用每记录 AES-256-GCM 数据密钥，并由版本化服务端 keyring 包裹。AAD 将密文绑定到 Workspace、Provider ID 和 key ID。API 只暴露 `credential_configured`；浏览器存储、日志、审计元数据和导出绝不能收到凭据材料。
+- Base URL 必须是公网 HTTPS，不含用户信息、查询或片段，只允许受限端口，禁止回环/私有/保留 IP 字面量及本地/内部主机名。运行时 DNS 解析、重定向复核和连接健康属于 L5-002，必须逐跳重新验证。
+- 删除 Provider 是软删除元数据墓碑，同时立即清空全部凭据密文和包裹数据密钥字段；允许复用已删除名称。
 
-## Compatibility and recovery
+## 兼容与恢复
 
-Migration 0023 is additive. Key rotation adds a new key ID, switches the active ID and
-rewraps data keys before an old key can be retired. Backups must retain every key needed by
-records or retained backup generations. After production credentials exist, rollback disables
-AI routes/UI and uses a forward fix; it must not drop the Provider table or encryption keys.
+迁移 0023 为增量迁移。密钥轮换先增加新 key ID、切换活动 ID，再重新包裹数据密钥，之后才能停用旧密钥。备份必须保留解密现有记录或保留备份代际所需的全部密钥。产生生产凭据后，回滚应禁用 AI 路由/UI 并前向修复，不得删除 Provider 表或加密密钥。

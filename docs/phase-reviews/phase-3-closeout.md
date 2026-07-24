@@ -1,90 +1,63 @@
-# Phase 3 closeout review
+# Phase 3 阶段验收记录
 
-- Review date: 2026-07-22
-- Baseline: `LOGION_EXECUTION_PLAN.md` and `LOGION_AI_DEVELOPMENT_CONSTRAINTS.md`
-- Implementation candidate: `4ecfa487792fa8693f30ad83940067e74912109f`
-- Candidate evidence: <https://github.com/greatLiverheat605/Logion/actions/runs/29853140304>
-- Tracking issue: <https://github.com/greatLiverheat605/Logion/issues/81>
-- Decision: linked Main candidate completed successfully; ready for the single Phase 3 human approval with no known P0/P1 defect
+- 评审日期：2026-07-22
+- 基线：`LOGION_EXECUTION_PLAN.md`、`LOGION_AI_DEVELOPMENT_CONSTRAINTS.md`
+- 实现候选：`4ecfa487792fa8693f30ad83940067e74912109f`
+- 候选证据：<https://github.com/greatLiverheat605/Logion/actions/runs/29853140304>
+- 跟踪：<https://github.com/greatLiverheat605/Logion/issues/81>
+- 结论：关联 Main 候选成功，可进入一次 Phase 3 人工批准；无已知 P0/P1
 
-## Delivered chain
+## 交付链
 
-| Work package                         | Main commits                    | Delivered outcome                                                                                                 |
-| ------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| L3-001 goals and plans               | `03c4f81`, `6b22372`, `f80ba5d` | user-defined goals, versioned plans and phases; encrypted offline Planning UI and sync                            |
-| L3-002 tasks and sessions            | `cb6c3c`, `7cc07f6`             | constrained task state machine, single active session, causal offline operation chains and Today UI               |
-| L3-003 notes and resources           | `1c9a681`, `336f0a2`            | Markdown notes, HTTP(S) links, PDF metadata/page indexes, encrypted offline Records UI; no PDF body storage       |
-| L3-004 evidence and verification     | `2eafa5b`, `ce3d8f4`            | evidence submission, explicit human verdicts, verified-only close, derived cross-entity sync and Vault protection |
-| L3-005 acceptance and release repair | `72517f2`, `4ecfa48`            | two-device full-loop test, explicit blocked/pending/conflict UX, restored immutable Web image and PR image gate   |
+| 工作包               | Main commit                     | 结果                                                                 |
+| -------------------- | ------------------------------- | -------------------------------------------------------------------- |
+| L3-001 目标/计划     | `03c4f81`, `6b22372`, `f80ba5d` | 用户目标、版本计划/阶段、加密离线 Planning UI/同步                   |
+| L3-002 任务/会话     | `cb6c3c`, `7cc07f6`             | 约束状态机、单活动会话、因果 Outbox、Today UI                        |
+| L3-003 笔记/资料     | `1c9a681`, `336f0a2`            | Markdown、HTTP(S)、PDF 元数据/页索引、加密 Records UI；不存 PDF 正文 |
+| L3-004 证据/验证     | `2eafa5b`, `ce3d8f4`            | 证据、人工 verdict、仅 verified 可关闭、跨实体同步/Vault             |
+| L3-005 验收/发布修复 | `72517f2`, `4ecfa48`            | 双设备完整闭环、blocked/pending/conflict UX、真实 Web 镜像/PR 门禁   |
 
-The Phase 3 exit path is now executable as:
+可执行退出路径：`goal -> plan phase -> task -> study session -> note/resource -> evidence -> explicit human verification -> done`。
 
-`goal -> plan phase -> task -> study session -> note/resource -> evidence -> explicit human verification -> done`
+Review scheduling、Mastery、Quiz、ErrorPattern 和四类用户场景留给 Phase 4；没有引入写死导师、学科、课题组或 Vigils 上下文。
 
-Review scheduling, mastery algorithms, quizzes, error patterns and the four specialized user scenarios remain Phase 4 scope. No fixed teacher, subject, research group or Vigils context was introduced.
+## 验收证据
 
-## Acceptance evidence
+| 不变量/故障       | 结果                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| 在线领域闭环      | REST 集成覆盖 goal/task/evidence、revision、pass、verified-only close                             |
+| 离线同步闭环      | `test_phase3_learning_loop_integration.py` 经 sync-v1 驱动全部实体，第二设备收到 14 条有序 change |
+| 重放/崩溃安全     | identity/hash 重放；Evidence 返回原 version/sequence                                              |
+| 因果离线编辑      | Task/Session/Note/Resource/Verification 依赖推进服务端版本                                        |
+| 弱网              | 中途失败保留 Outbox/cursor，重试不丢本地编辑                                                      |
+| Bootstrap/epoch   | checksum、staging、原子激活、旧 Outbox 隔离、rebootstrap 仍通过                                   |
+| 无静默冲突        | 过期 status/content/verification 显式冲突并保留双版本                                             |
+| 租户/Private 隔离 | 服务授权、Pull/Bootstrap 过滤、组合约束和外部负向测试                                             |
+| 静态保护          | 全部 Phase 3 实体/Outbox/staging/conflict 只保留加密引用                                          |
+| 仅人工验收        | AI 无 verdict 路由；pass/revision/failure/close 均需认证操作                                      |
+| Markdown/链接     | React 文本渲染；只接收 HTTP(S)，服务端不抓取                                                      |
+| 移动/无障碍       | 单列响应、label、live status、focus、reduced-motion 基础                                          |
+| 诚实状态 UX       | Today 区分 pending、blocked、permission、conflict、offline                                        |
+| 可部署候选        | PR Integration 构建包含 `@logion/offline` 的真实 Web 镜像                                         |
 
-| Invariant or failure mode          | Evidence and result                                                                                                                                  |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Complete online domain flow        | REST integration tests cover goal/task/evidence, revision, pass and verified-only close                                                              |
-| Complete offline/sync flow         | `test_phase3_learning_loop_integration.py` drives all Phase 3 entities through sync-v1 and receives 14 ordered changes on a second device            |
-| Duplicate and crash-safe replay    | operation identity and payload hash replay tests; evidence replay returns its original version and sequence                                          |
-| Causal offline edits               | same-device dependencies advance server versions for task, session, note/resource and verification operation chains                                  |
-| Weak or interrupted network        | offline client tests retain Outbox and cursor when transport fails mid-cycle, then retry without discarding local edits                              |
-| Bootstrap and epoch recovery       | chunk checksum, staging, atomic activation, old-Outbox isolation and explicit rebootstrap controls remain green                                      |
-| No silent conflict                 | stale status/content/verification changes create explicit conflicts and retain both versions                                                         |
-| Tenant and Private Space isolation | service authorization, Pull/Bootstrap visibility filters, composite Workspace constraints and outsider negative tests                                |
-| Protected content at rest          | goal/task/session/note/resource/evidence/verification entities, Outbox, bootstrap staging and conflicts retain encrypted references only             |
-| Human-only acceptance              | no AI route invokes a verdict; `passed`, revision/failure and close each require explicit authenticated actions                                      |
-| Safe Markdown and links            | Markdown renders as React text/preformatted content; URL inputs and render paths accept HTTP(S) only; the server does not dereference evidence links |
-| Mobile and accessible states       | responsive single-column cards, associated form labels, live status text, visible focus-compatible controls and reduced-motion foundation            |
-| Honest error and permission UX     | Today distinguishes pending, blocked, permission, conflict and offline states instead of reporting false synchronization success                     |
-| Deployable candidate               | PR Integration now builds the real Web image including `@logion/offline`; the same immutable build is required by Main candidate CI                  |
+本地关门：Ruff/mypy、141 个非集成 Python 测试、Prettier/ESLint/TS strict、12 contract、44 offline（93.29% statements）、20 Web、Next production build、`pnpm audit`/`pip-audit` 无已知漏洞、secret pattern 无发现。每个 PR 均通过 Fast 和 PostgreSQL Integration。
 
-Local closeout gates passed:
+## 安全审查
 
-- Ruff and mypy for all API/worker source;
-- 141 non-integration Python tests;
-- Prettier, ESLint and TypeScript strict checks;
-- 12 contract tests, 44 offline tests with 93.29% statement coverage, and 20 Web tests;
-- Next.js production build;
-- `pnpm audit --prod --audit-level high` and `pip-audit`: no known third-party vulnerabilities;
-- targeted repository secret pattern scan: no finding.
+`security-review` 验证严格 schema/allowlist、Origin/CSRF、服务端 Workspace/Space 权限、同范围 UUID 外键、禁止普通 Task 直达 verified/done、审计排除正文、AES-256-GCM 离线记录、无不安全 HTML 和凭据入库。审计发现 Main Web 镜像自 L3-003 漏掉 offline package，PR #83 已修复并把真实镜像构建加入必需 PR Integration；这是可用性构建缺陷，不是机密性/完整性事故。
 
-Every Phase 3 PR passed Fast and PostgreSQL Integration checks. PostgreSQL Integration includes full migration downgrade/upgrade, backfill verification, Redis, authorization negatives and all integration tests.
+## 兼容与残余风险
 
-## Security review
+- 物理 Safari/iOS PWA、后台调度和存储驱逐仍需 RC 真机；前台同步完整。
+- 已 ACK operation 的 Vault 记录保留到本地 wipe，仍加密但稳定版前应增加有界 GC。
+- 采用保守记录级冲突；字段/CRDT 合并延后，双版本保留且不静默覆盖。
+- Evidence URL 只做语法校验不抓取；以后预览需另做 SSRF/隐私审查。
+- 专门导师流程/报告属于 Phase 4；Production、恢复、真机、性能、WCAG 门禁仍未批准。
 
-The phase-end `security-review` found and verified these controls:
+## 人工批准清单
 
-- inputs are parsed by strict Pydantic schemas or bounded sync adapter allowlists;
-- all state-changing HTTP endpoints require trusted Origin and CSRF validation;
-- Workspace membership and Space visibility are resolved server-side before data access;
-- UUID references are constrained to the same Workspace/Space, with database composite foreign keys as defense in depth;
-- task `verified/done` states cannot be reached through ordinary transitions;
-- audit metadata excludes note bodies, evidence summaries and reviewer notes;
-- protected browser records use AES-256-GCM with per-record IV and Workspace/record AAD;
-- user Markdown is never inserted as unsanitized HTML, and links are not rendered from unchecked schemes;
-- dependency scans are clean and no credential was added to source.
-
-One release defect was found during the audit: Main candidate Web image builds had omitted the offline workspace package since L3-003. PR #83 fixed the Dockerfile and moved the real Web image build into required PR Integration CI. This was a build-availability failure, not a confidentiality or integrity incident.
-
-## Compatibility and residual risk
-
-- Physical Safari/iOS installed-PWA behavior, background scheduling and storage eviction still require the planned real-device release-candidate pass. Foreground synchronization remains authoritative and complete.
-- Browser Vault records from acknowledged operation IDs are retained until explicit local wipe. They remain encrypted, but bounded garbage collection should be added before public stable release to reduce storage growth.
-- Phase 3 uses conservative record-level status/content conflicts. Field-level or CRDT merging is deferred; the product preserves both versions and does not silently overwrite.
-- Evidence links are syntax-validated and never fetched. Reputation checks or previews, if introduced later, require a separate SSRF and privacy review.
-- Shared-Space reviewers act under `review.write`; specialized supervisor workflows and reporting belong to Phase 4.
-- No production release is implied by this phase approval. Backup recovery, real-device, performance, WCAG and production rollout gates remain mandatory in their planned phases.
-
-## Human approval checklist
-
-Approve Phase 3 only after confirming:
-
-1. The linked Main candidate is green and its immutable Web/API/worker/backup artifacts were produced.
-2. The evidence-driven loop and human-only verification rule match the intended product behavior.
-3. Review scheduling, mastery, quizzes and specialized user modes may remain assigned to Phase 4.
-4. The documented Safari/PWA and encrypted Vault garbage-collection items may remain non-blocking P2 risks for later release gates.
-5. No production deployment or public-stable claim is authorized by this approval.
+1. 关联 Main 候选及 Web/API/Worker/Backup 产物成功。
+2. 证据闭环和仅人工验证符合预期。
+3. Review/Mastery/Quiz/场景模式可留到 Phase 4。
+4. Safari/PWA 与 Vault GC 可作为后续 P2 风险。
+5. 不授权 Production 或公开稳定版。

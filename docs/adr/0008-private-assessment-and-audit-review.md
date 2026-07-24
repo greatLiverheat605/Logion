@@ -1,42 +1,25 @@
-# ADR 0008: Private assessment and audit-review state
+# ADR 0008：私有测评与审查状态
 
-Status: Accepted for Phase 4 L4-002
+状态：Phase 4 L4-002 已接受
 
-## Context
+## 背景
 
-Logion needs quiz attempts, error patterns, and daily or weekly reviews without turning a
-shared learning graph into a shared gradebook. These records also participate in offline
-sync and may contain sensitive learning weaknesses.
+Logion 需要记录测验作答、错误模式及每日/每周审查，但不能把共享学习图谱变成共享成绩册。这些记录参与离线同步，也可能暴露敏感的学习薄弱点。
 
-## Decision
+## 决策
 
-- Quiz items belong to a Space and Topic. Shared-Space creation requires
-  `shared_plan.write`; any member who can read the Space may attempt an item.
-- Quiz list responses never include answer keys or explanations. They are disclosed only
-  to the authenticated attempt owner after an attempt has been recorded.
-- Attempts are append-only personal evidence. The server derives exact-match outcomes;
-  self-assessed outcomes require an explicit human choice. AI cannot submit attempts.
-- Incorrect attempts may create or increment one personal ErrorPattern and make that
-  person's ReviewSchedule due. This feedback never changes MasteryRecord confirmation or
-  suggestion fields.
-- Scores, responses, confidence, error patterns, AuditReviews, and ReviewFindings are
-  filtered by authenticated `user_id`, including Pull and Bootstrap. Workspace owners and
-  administrators do not receive raw personal records by default.
-- AuditReview completion and ReviewFinding resolution are explicit human state changes.
-  AI output can only be attached later as a draft.
-- Assessment and review payloads are protected offline entities. Durable IndexedDB entity,
-  Outbox, and conflict rows contain encrypted references only.
+- 试题属于一个 Space 和 Topic。在共享 Space 中创建试题需要 `shared_plan.write`；可读取该 Space 的成员均可作答。
+- 试题列表响应不得包含答案或解析。只有完成作答记录后，才向通过认证的作答者本人披露。
+- 作答是仅追加的个人证据。精确匹配结果由服务端计算；自评结果必须由本人明确选择。AI 不能提交作答。
+- 错误作答可以创建或累加一条个人 ErrorPattern，并使该用户的 ReviewSchedule 到期。这些反馈不得改变 MasteryRecord 的确认或建议字段。
+- 分数、回答、信心、错误模式、AuditReview 和 ReviewFinding 必须按认证 `user_id` 过滤，Pull 和 Bootstrap 也不例外。Workspace Owner/Admin 默认不能获得原始个人记录。
+- AuditReview 完成和 ReviewFinding 解决都是明确的人工状态变更。AI 输出以后也只能作为草稿附加。
+- 测评与审查载荷属于受保护离线实体。持久化 IndexedDB 实体、Outbox 和冲突行只能保存加密引用。
 
-## Compatibility and recovery
+## 兼容与恢复
 
-`review_schedule.source` gains `quiz_error`. Existing clients preserve the protected payload
-as generic sync data and the current Review UI does not branch on this source, so the addition
-is protocol-compatible; compatibility tests must cover it before offline writes ship. The migration is additive. Rollback before
-use can drop the new tables and restore the prior source constraint; after production data
-exists, forward-fix is preferred so attempts and reviews are not discarded.
+`review_schedule.source` 增加 `quiz_error`。旧客户端会将受保护载荷保留为通用同步数据，当前 Review UI 也不按该来源分支，因此该变更与协议兼容；离线写入发布前必须通过兼容测试。迁移是增量式的。尚无数据时可删除新表并恢复旧约束；产生生产数据后应前向修复，不能丢弃作答和审查记录。
 
-## Consequences
+## 影响
 
-Group and mentor views must use a later explicit aggregate/reporting contract. They cannot
-reuse personal attempt or review queries. High-stakes exam proctoring and ranking are outside
-this decision.
+小组和导师视图以后必须采用明确的聚合/报告契约，不能复用个人作答或审查查询。高风险考试监考与排名不在本决策范围内。

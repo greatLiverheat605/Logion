@@ -1,46 +1,32 @@
-# Attachment upload threat model
+# 附件上传威胁模型
 
-Scope: first-release direct upload for small screenshots, PDF/text/CSV/JSON experiment results and
-their offline queue. The filesystem adapter is behind the attachment service boundary and may later
-be replaced by private object storage without changing authorization or verification semantics.
+范围：首版小型截图、PDF/文本/CSV/JSON 实验结果的直传与离线队列。文件系统适配器位于附件服务边界后，未来可换成私有对象存储，不改变授权或验证语义。
 
-## Invariants
+## 不变量
 
-- `init -> content -> complete` is required. Only `verified` content can be downloaded.
-- Every request is scoped by authenticated user, Workspace and Space. Upload/complete are restricted
-  to the user who initiated the record; readers still require live access to the target Space and
-  target object.
-- Client filename is metadata only. Storage paths contain generated keys/UUIDs and never use the
-  filename.
-- The configured default is 20 MB per file and 500 MB reserved bytes per user. Streaming stops at
-  the declared size; unknown fields, unsupported MIME/extension pairs and invalid hashes fail closed.
-- `complete` independently recomputes byte count, SHA-256 and an allowlisted content signature. It is
-  idempotent only after the exact record is verified; an ID replay with changed metadata is rejected.
-- Responses and audit metadata exclude staging/storage keys, file names, hashes and body content.
-  Downloads use `private, no-store`, `nosniff`, binary media type and an encoded attachment filename.
-- The API and Worker run as UID/GID 10001 with read-only root filesystems. A one-shot, networkless
-  initializer owns only the shared attachment volume and retains only `CHOWN`; staging is mode 0700,
-  while verified directories/files are 0750/0640 so the read-only Backup supplementary group can
-  archive them. Backup cannot write the attachment tree.
+- 必须执行 `init -> content -> complete`；只有 `verified` 内容可下载。
+- 每个请求限定认证 user/Workspace/Space。upload/complete 只允许记录发起者；读取者仍需实时访问目标 Space/对象。
+- 客户端 filename 仅为元数据；存储路径只用生成 key/UUID，绝不用 filename。
+- 默认每文件 20 MB、每用户 500 MB reserved bytes。流式读取在声明大小停止；未知字段、不支持 MIME/扩展名和无效 hash 失败关闭。
+- `complete` 独立重算字节数、SHA-256 和白名单内容签名。只有同一记录完全 verified 后才幂等；ID 重放但元数据变化会拒绝。
+- 响应/审计不含 staging/storage key、文件名、hash 或正文。下载使用 `private, no-store`、`nosniff`、binary media type 和编码 attachment filename。
+- API/Worker 使用 UID/GID 10001 和只读根文件系统。一次性无网络 initializer 只拥有共享附件卷并仅保留 `CHOWN`；staging 为 0700，verified 目录/文件为 0750/0640，使只读 Backup 附加组可归档但不能写入。
 
-## Abuse cases and controls
+## 滥用与控制
 
-| Threat                                     | Control                                                                                                                                    | Evidence                                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Cross-tenant ID/key guessing               | Workspace/Space/creator predicates and opaque 404; storage keys never enter API responses                                                  | Integration test uses the same attachment UUID across two Workspaces and attempts foreign upload |
-| Path traversal or header injection         | Filename rejects separators/control bytes; generated storage path is allowlist-validated; download uses RFC 5987 percent encoding          | Schema and storage unit tests                                                                    |
-| MIME spoofing/polyglot delivery            | Extension and declared MIME must agree; complete sniffs PNG/JPEG/WebP/PDF or validates UTF-8/JSON; download is never inline                | Unit and integration tests include a PDF declared as PNG                                         |
-| Oversized/chunked body or quota exhaustion | Stream is bounded by declared size and configured maximum; reserved-byte quota includes pending/failed records; dedicated write rate limit | Storage unit test and API policy                                                                 |
-| Partial/replayed upload                    | Temporary file is atomically replaced; complete locks the row and checks version; verified complete replay returns the same version        | Integration and offline queue tests                                                              |
-| DB commit failure after file promotion     | Finalization copies atomically while retaining staging; post-commit cleanup is retryable through complete replay                           | Storage/service implementation                                                                   |
-| Offline retry leaks errors/content         | IndexedDB stores the bounded Blob and hash; transport error details are normalized to stable codes                                         | Offline queue test                                                                               |
-| Backup restores file without metadata      | RC fixture binds an actual verified attachment row to the restored file and compares DB/file SHA-256                                       | `scripts/release/rc_recovery.sh`                                                                 |
-| Container privilege or volume drift        | One-shot initializer has no network and only `CHOWN`; API/Worker remain non-root; Backup receives group-read access and a read-only mount  | Compose boundary test and exact-image Main smoke                                                 |
-| Account deletion leaves personal files     | Deletion enumerates the user's attachment storage keys before deleting attachment rows/user data                                           | Account deletion service                                                                         |
+| 威胁                         | 控制                                                                                        | 证据                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------- |
+| 跨租户 ID/key 猜测           | Workspace/Space/creator 条件与不透明 404；API 不返回 storage key                            | 两 Workspace 同 UUID 外部上传测试 |
+| 路径穿越/Header 注入         | filename 拒绝分隔符/控制字节；生成路径白名单；RFC 5987 编码下载名                           | schema/存储单测                   |
+| MIME 欺骗/polyglot           | 扩展名与声明 MIME 一致；complete 嗅探 PNG/JPEG/WebP/PDF 或校验 UTF-8/JSON；绝不 inline 下载 | PDF 冒充 PNG 的单测/集成          |
+| 超大/chunked body 或配额耗尽 | 按声明大小和配置上限流式限制；配额计 pending/failed；专用写限速                             | 存储单测/API 策略                 |
+| 部分/重放上传                | 临时文件原子替换；complete 锁行校验版本；verified 重放返回同版本                            | 集成/离线队列测试                 |
+| 文件提升后 DB 提交失败       | 原子复制且保留 staging；提交后清理由 complete 重放重试                                      | 实现审查                          |
+| 离线重试泄露错误/内容        | IndexedDB 只存有界 Blob/hash；传输异常归一为稳定 code                                       | 队列测试                          |
+| 备份恢复文件无元数据         | RC fixture 将 verified 行绑定恢复文件并比对 DB/file SHA-256                                 | `scripts/release/rc_recovery.sh`  |
+| 容器权限/卷漂移              | initializer 无网络且仅 `CHOWN`；API/Worker 非 root；Backup 只读挂载                         | Compose 边界测试/Main smoke       |
+| 账户删除遗留文件             | 删除用户前枚举其 attachment storage key，再删除行/用户数据                                  | deletion service                  |
 
-## Residual risk
+## 残余风险
 
-The filesystem adapter is a single-server implementation, not off-host disaster recovery or a cloud
-object-store durability claim. Antivirus/CDR is not provided; allowlisted files are downloaded as
-attachments and are never rendered or executed by the API. Production object storage, malware policy,
-retention and off-host restore remain operator/human release decisions.
+文件系统适配器只适用于单服务器，不代表异地灾备或云对象存储耐久性。未提供防病毒/CDR；白名单文件只作为附件下载，API 不渲染、不执行。Production 对象存储、恶意软件策略、保留和异地恢复仍由操作员/人类发布决策。

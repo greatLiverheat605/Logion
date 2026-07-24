@@ -1,20 +1,20 @@
-# Aggregate observability contract
+# 聚合可观测性契约
 
-Logion rollout decisions consume aggregate operational windows, never learning content. A monitoring adapter may emit only the fields in `logion-rollout-samples-v1`: UTC observation time, request/error counts, p95 latency, boolean health, queue lag, and sync attempt/failure counts. Unknown fields fail closed.
+Logion 发布决策只使用聚合运行窗口，不使用学习内容。监控适配器只能输出 `logion-rollout-samples-v1` 定义的字段：UTC 观测时间、请求/错误数、p95 延迟、布尔健康状态、队列滞后及同步尝试/失败数；未知字段必须失败关闭。
 
-The adapter must not include user IDs, email, IP address, workspace/object IDs, URLs with query strings, note/task/research text, attachment names, AI prompts or responses, tokens, cookies, credentials, recovery material, or raw exception payloads. Logs follow the same boundary and use request IDs only for bounded operational correlation.
+适配器不得包含用户 ID、邮箱、IP 地址、Workspace/对象 ID、带查询串 URL、笔记/任务/研究正文、附件名、AI 提示词或响应、token、Cookie、凭据、恢复材料或原始异常载荷。日志遵循同一边界，请求 ID 只用于有界运行关联。
 
-## Required signals
+## 必需信号
 
-- Web/API health and dependency readiness;
-- request volume, server error rate and non-AI p95 latency;
-- Worker queue depth/oldest-job lag and failed job class counts;
-- sync attempts/failures, conflict volume and bootstrap-required counts;
-- PostgreSQL connection/saturation, storage capacity and backup age;
-- authentication abuse counters without credential or account values.
+- Web/API 健康与依赖就绪；
+- 请求量、服务端错误率及非 AI p95 延迟；
+- Worker 队列深度/最老任务延迟及失败任务类别数；
+- 同步尝试/失败、冲突量和需要 Bootstrap 的数量；
+- PostgreSQL 连接/饱和度、存储容量和备份年龄；
+- 不含凭据或账户值的认证滥用计数。
 
-The versioned rollout policy in `config/release/rollout-policy.json` is the release gate. Provider dashboards may be stricter but cannot silently weaken it. Missing telemetry, insufficient duration/volume, unordered windows, an unknown schema, or candidate mismatch produces `hold` or rejection—not promotion.
+`config/release/rollout-policy.json` 中版本化发布策略是发布门禁。Provider 看板可以更严格，但不能静默放宽。遥测缺失、持续时间/样本量不足、窗口乱序、未知 schema 或候选不匹配都必须返回 `hold` 或拒绝，不能晋级。
 
-## Alerts and retention
+## 告警与保留
 
-P0 alerts cover tenant isolation, data loss, secret exposure and unrecoverable backup. P1 alerts cover sustained health failure, error/latency threshold breach, queue saturation, sync regression and expired backup. Recipients, escalation timing, retention and data region must be configured in the selected cloud platform before Production. Alert payloads contain aggregate values and the immutable candidate identity only.
+P0 覆盖租户隔离、数据丢失、密钥泄露和不可恢复备份；P1 覆盖持续健康失败、错误/延迟越界、队列饱和、同步回归和备份过期。进入 Production 前必须在选定云平台配置接收人、升级时限、保留期和数据区域。告警载荷只能包含聚合值和不可变候选身份。

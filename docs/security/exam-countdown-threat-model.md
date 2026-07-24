@@ -1,46 +1,39 @@
-# Personal exam countdown threat model
+# 个人考试倒计时威胁模型
 
-Status: L4-E1/L4-E2/L4-E3 protected offline/sync baseline
+状态：L4-E1/L4-E2/L4-E3 受保护离线/同步基线
 
-## Assets and invariants
+## 资产与不变量
 
-- Exam title, date, time zone, and target score are personal data.
-- A shared Space does not make an Exam shared. Reads always filter authenticated `user_id`.
-- Scheduled dates are timezone-aware and paired with a valid IANA identifier; undetermined
-  dates have no instant.
-- Target score and scale are validated as one bounded pair.
-- The countdown is derived for display and does not mutate business state.
+- Exam 标题、日期、时区和目标分数是个人数据；Shared Space 不使 Exam 共享，读取始终过滤认证 `user_id`。
+- scheduled 日期带时区并配有效 IANA ID；undetermined 不含 instant；目标与满分是一个有界组合。
+- 倒计时仅为显示投影，不修改业务状态。
 
-## Threat controls
+## 威胁控制
 
-| Threat                                      | Control                                                                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Workspace owner reads a member's target     | REST, Pull, and Bootstrap filter Exam by authenticated `user_id`                                                   |
-| Hidden changes stall another device         | Pull filters the record but advances the global cursor                                                             |
-| Cross-tenant or cross-Space identifier use  | Workspace and Space resolution precedes writes; scoped foreign keys enforce persistence boundaries                 |
-| Identifier collision exposes a foreign Exam | Collision returns a bounded error or sync rejection without a foreign projection                                   |
-| Forged or ambiguous date                    | Strict schema, aware-datetime check, IANA allow-list validation, and database shape constraint                     |
-| Invalid score pair                          | Strict numeric bounds and database constraint require a complete pair with target at or below scale                |
-| CSRF write from another site                | Trusted-origin and double-submit CSRF checks protect REST and Sync Push                                            |
-| Request or storage exhaustion               | Per-user quotas, write/sync rate limits, payload limits, and bounded lists                                         |
-| Audit-log disclosure                        | Audit metadata records only the non-sensitive date-status enum; title, instant, time zone, and scores are excluded |
-| IndexedDB disclosure                        | Exam payloads use the Vault; durable entity, Outbox, and conflict rows store encrypted references only             |
-| Duplicate offline creation                  | Operation replay is idempotent and returns the original sequence/version                                           |
-| AI changes a formal target                  | No AI write path exists; formal mutations require an authenticated user action                                     |
-| Clock drift changes stored truth            | Countdown is a pure projection and never writes back to Exam state                                                 |
-| Cross-owner Subject or parent link          | Composite foreign keys and owner-scoped resolution bind the hierarchy to one user and Space                        |
-| Subject weights exceed the whole            | A locked Exam row serializes bounded basis-point totals; the database bounds each weight                           |
-| Cyclic or forged syllabus hierarchy         | A new node selects only an existing same-Subject parent; schema and database reject self-parenting                 |
-| Client forges coverage                      | Create payload coverage is discarded and the server initializes `not_started`; AI has no transition path           |
-| Owner reads a member's mock score           | REST, Pull, and Bootstrap filter MockExam and ScoreRecord by authenticated `user_id`                               |
-| Forged score or completion time             | Numeric bounds, score-at-most-scale, aware datetime validation, and database constraints reject it                 |
-| Score history is silently rewritten         | ScoreRecord is append-only; later correction requires an explicit supersession contract                            |
+| 威胁                        | 控制                                                                    |
+| --------------------------- | ----------------------------------------------------------------------- |
+| Owner 读取成员目标/模考分数 | REST、Pull、Bootstrap 按认证 `user_id` 过滤 Exam、MockExam、ScoreRecord |
+| 隐藏变更阻塞设备            | Pull 过滤记录但推进全局 cursor                                          |
+| 跨租户/Space ID             | 写前解析 Workspace/Space，组合外键强化                                  |
+| ID 冲突暴露他人 Exam        | 有界错误/同步拒绝，不返回外部投影                                       |
+| 伪造/歧义日期               | 严格 schema、aware datetime、IANA 白名单及数据库 shape 约束             |
+| 无效分数组合                | 严格数值和数据库约束要求完整组合且 target≤scale                         |
+| CSRF 写入                   | REST/Sync Push 执行可信 Origin 和双提交 CSRF                            |
+| 资源耗尽                    | user 配额、写/同步限速、payload 限额和有界列表                          |
+| 审计泄露                    | 只记录非敏感 date-status enum，排除标题、instant、时区和分数            |
+| IndexedDB 泄露              | Exam 使用 Vault；实体/Outbox/冲突只存加密引用                           |
+| 重复离线创建                | operation 重放幂等并返回原 sequence/version                             |
+| AI 改正式目标               | 无 AI 写路径，正式 mutation 需要认证用户操作                            |
+| 时钟漂移改变真值            | 倒计时是纯投影，绝不写回 Exam                                           |
+| 跨 Owner Subject/父关联     | 组合外键和 owner-scoped 解析绑定同一 user/Space                         |
+| Subject 权重超 100%         | 锁 Exam 行串行计算 basis-point 总和，DB 限制单值                        |
+| 环状/伪造 syllabus          | 新节点只选同 Subject 现有父；schema/DB 拒绝 self-parent                 |
+| 客户端伪造 coverage         | create 忽略输入并初始化 `not_started`；AI 无转换路径                    |
+| 伪造分数/完成时间           | 数值、score≤scale、aware datetime 和数据库约束                          |
+| Score 历史静默改写          | ScoreRecord 仅追加，修正需要显式 supersession 契约                      |
 
-## Residual and follow-up work
+## 残余与后续
 
-- A compromised unlocked browser session can read decrypted personal data. Session expiry,
-  device revocation, Vault locking, and browser hardening reduce but cannot eliminate this.
-- Browser clocks may be inaccurate; the UI should eventually expose clock provenance or
-  server-time drift without making the server clock an offline dependency.
-- Mentor or group visibility requires explicit consent, revocation, minimum disclosure, and
-  separate aggregate authorization before implementation.
+- 被攻陷且已解锁的浏览器会话可读解密个人数据；过期、撤销、Vault 锁和浏览器加固只能降低风险。
+- 浏览器时钟可能不准；以后可显示时钟来源/服务端偏移，但不能让离线依赖服务端时钟。
+- 导师/小组可见性实现前需明确同意、撤销、最小披露和独立聚合授权。

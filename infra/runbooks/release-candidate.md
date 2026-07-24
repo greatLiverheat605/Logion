@@ -1,27 +1,27 @@
-# Immutable candidate and RC runbook
+# 不可变候选与 RC 操作手册
 
-## Main candidate
+## Main 候选
 
-1. Merge reviewed code to `main`. Main runs Fast checks and Compose validation.
-2. Main pushes four SHA-tagged GHCR images with SBOM and provenance, generates `candidate-manifest.json`, then starts those exact digest references with `--no-build` and migrates the empty temporary database to the recorded Alembic head.
-3. The bounded authenticated workspace-list gate must complete 200 requests at concurrency 10 with p95 strictly below 500 ms.
-4. Record the successful Main run ID, full source SHA, manifest artifact, four digests and performance evidence. A failed or cancelled run is not a candidate.
+1. 将已审查代码合并到 `main`，Main 运行 Fast 检查和 Compose 校验。
+2. Main 推送四个以完整 Git SHA 标记的 GHCR 镜像，附带 SBOM 和 provenance；生成 `candidate-manifest.json`，再以精确 digest 和 `--no-build` 启动，将空临时数据库迁移到记录的 Alembic head。
+3. 有界、已认证的 Workspace 列表门禁必须以并发 10 完成 200 个请求，p95 严格低于 500 ms。
+4. 记录成功 Main run ID、完整 source SHA、manifest 产物、四个 digest 和性能证据。失败或取消的 run 不是候选。
 
-The bounded gate catches candidate regressions but does not satisfy the full capacity release gate. Run **Full capacity profile** on the exact successful Main SHA and retain its numeric run ID. The workflow creates 100,000 tasks, 1,000,000 events, 50,000 notes/resources, 10,000 attachment rows and files, 5,000 papers and 100,000 AI runs in a dedicated database. Evidence records generator version, hardware, warm-up, sample count, p50/p95/p99, errors, query plans and saturation signals. `github-hosted-reference` is reference evidence only and keeps `production_equivalent_approved=false`; repeat on approved production-like hardware before public Production.
+该门禁可发现候选回归，但不满足完整容量发布门禁。应在成功 Main SHA 上运行 **Full capacity profile** 并保留数值 run ID。工作流在专用数据库生成 100,000 个任务、1,000,000 个事件、50,000 条笔记/资料、10,000 条附件记录及文件、5,000 篇论文和 100,000 次 AI run。证据记录生成器版本、硬件、预热、样本量、p50/p95/p99、错误、查询计划和饱和信号。`github-hosted-reference` 仅供参考，保持 `production_equivalent_approved=false`；公开 Production 前必须在批准的生产等价硬件重跑。
 
-## RC promotion
+## RC 晋级
 
-1. Select **Run workflow** for Release candidate and enter a display version, the full Main source SHA, its numeric Main run ID and the same-source Full capacity profile run ID.
-2. Approve only the staging environment. Do not approve production as part of this procedure.
-3. Confirm preflight validates both runs' workflow, branch, conclusion and source SHA, then verifies the exact capacity counts and p95 decisions.
-4. Confirm manifest verification passes before registry login or Compose startup.
-5. Confirm logs show `docker compose pull` and `up --no-build`; any build step invalidates the RC.
-6. Preserve the candidate manifest, Compose status and later L6-002/L6-003 evidence under the same candidate identity.
-7. Confirm `recovery-evidence.json` records matching migration heads and object counts, an attachment hash match, a changed `sync_epoch`, RPO/RTO and the digest-pinned backup image.
-8. Confirm offline compatibility tests require `upgrade_required` or `rebootstrap_required` and quarantine the old Outbox instead of replaying it.
-9. Confirm Chromium, Firefox, WebKit, mobile Chrome and mobile Safari emulation pass the public/auth browser gate. Automation is not physical Safari, iOS or screen-reader proof; collect those human sign-offs separately.
-10. Confirm the 5/25/100 rollout policy rehearsal completes with `mode=rehearsal`, `sample_source=synthetic_policy_rehearsal`, the candidate source SHA, and `changes_traffic=false`. This proves the policy engine only; it is never valid Production telemetry or traffic approval.
+1. 在 Release candidate 选择 **Run workflow**，填写显示版本、完整 Main source SHA、数值 Main run ID 和同源 Full capacity profile run ID。
+2. 只批准 staging 环境，不得在此流程批准 Production。
+3. 确认 preflight 校验两个 run 的 workflow、branch、conclusion 和 source SHA，再验证精确容量数量及 p95 决策。
+4. 在登录容器仓库或启动 Compose 前确认 manifest 校验通过。
+5. 日志必须显示 `docker compose pull` 和 `up --no-build`；出现任何构建步骤都会使 RC 无效。
+6. 在同一候选身份下保留 manifest、Compose 状态及后续 L6-002/L6-003 证据。
+7. 确认 `recovery-evidence.json` 记录匹配的迁移 head/对象数量、附件哈希匹配、已变化 `sync_epoch`、RPO/RTO 和 digest 固定的 Backup 镜像。
+8. 确认离线兼容测试要求 `upgrade_required` 或 `rebootstrap_required`，并隔离旧 Outbox 而非重放。
+9. 确认 Chromium、Firefox、WebKit、移动 Chrome 和移动 Safari 模拟通过公开/认证浏览器门禁。自动化不等于物理 Safari/iOS 或屏幕阅读器证据，须单独收集人工签字。
+10. 确认 5/25/100 发布策略演练使用 `mode=rehearsal`、`sample_source=synthetic_policy_rehearsal`、候选 source SHA 和 `changes_traffic=false`。它只证明策略引擎，绝不是有效 Production 遥测或流量批准。
 
-## Failure and revocation
+## 失败与撤销
 
-Do not delete immutable images when a candidate fails. Mark the candidate rejected, retain the evidence and fix through a new source commit and Main candidate. If a digest or provenance cannot be verified, stop promotion. Database rollback is never inferred from an image rollback: apply the documented compatibility matrix and prefer a forward fix when an older binary cannot read the migrated schema.
+候选失败时不得删除不可变镜像。将其标记为拒绝、保留证据，并通过新源码 commit/Main 候选修复。digest 或 provenance 无法验证时停止晋级。镜像回滚不隐含数据库回滚：必须执行兼容矩阵；旧二进制无法读取迁移 schema 时优先前向修复。
