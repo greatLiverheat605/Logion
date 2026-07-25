@@ -5,3 +5,4 @@
 *.gif binary
 *.webp binary
 *.pdf binary
+patches/*.patch -whitespace
