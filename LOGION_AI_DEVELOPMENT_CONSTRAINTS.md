@@ -22,7 +22,7 @@ AI 每次任务输出至少包含：需求 ID/目标、修改文件、设计选�
 4. 客户端传入的 `workspace_id`、角色、价格、配额、所有权、版本和资源归属均不可信。
 5. AI 只能创建草稿；未经用户明确确认，不得改变正式数据、任务状态、验收、掌握度、权限或发布状态。
 6. AI API Key、TOTP secret、恢复码、令牌和加密主密钥不得出现在浏览器、普通日志、分析事件、导出或错误响应。
-7. 核心流程在 AI、邮件、分析、支付或单一 Provider 不可用时仍可使用或明确降级。
+7. 核心流程在 AI、邮件、分析或单一 Provider 不可用时仍可使用或明确降级。
 8. 所有长期数据必须可导出、备份、恢复和迁移；数据迁移不得破坏历史语义。
 9. PWA、离线、无障碍、移动端、空态/错态/权限态是功能的一部分，不得留到“以后统一补”。
 10. 禁止伪造成功、吞掉异常、用示例数据掩盖缺失后端、跳过安全校验或删除失败测试以获得绿色构建。
@@ -48,7 +48,7 @@ AI 每次任务输出至少包含：需求 ID/目标、修改文件、设计选�
 
 ### 3.1 账户与工作区
 
-- 允许公众邮箱注册、受邀注册和后续 Passkey 登录；生产环境必须有邮箱验证、速率限制和反滥用策略。
+- 采用受邀/封闭注册：默认不开放公众邮箱自助注册，仅允许受邀注册和后续 Passkey 登录；生产环境必须有邮箱验证、速率限制和反滥用策略。
 - 用户可拥有或加入多个 workspace；注册后创建个人 workspace，但不得假设永远只有一个。
 - 规范角色固定为 `owner/admin/editor/contributor/reviewer/viewer`；旧资料中的 `member` 仅为迁移兼容别名，不得进入新契约。Owner 可转移所有权；最后一个 Owner 不得离开或被移除；Viewer 默认只读。
 - 邀请必须使用一次性高熵 token 的哈希、明确 workspace/角色/邀请人/到期时间；接受时绑定实际账户；撤销或过期后不可重放。
@@ -58,7 +58,7 @@ AI 每次任务输出至少包含：需求 ID/目标、修改文件、设计选�
 
 每个 repository 查询必须显式带 `workspace_id`，每个 application use case 先解析当前 membership。不得先按对象 ID 查询再在响应层过滤。批量接口逐项验证归属；多态链接验证源和目标均属于同一 workspace。
 
-角色权限至少覆盖：成员管理、计划写入、学习记录写入、研究数据写入、AI 配置、导出、备份、账单、分享和删除。前端隐藏按钮不是授权。所有拒绝路径写安全审计但不得记录敏感 payload。
+角色权限至少覆盖：成员管理、计划写入、学习记录写入、研究数据写入、AI 配置、导出、备份、分享和删除。前端隐藏按钮不是授权。所有拒绝路径写安全审计但不得记录敏感 payload。
 
 必须有 IDOR 负向测试：用户 A 猜测用户 B 的 UUID、附件 key、冲突 ID、导出任务、分享记录、AI run 和同步 operation 时全部失败。响应不应暴露对象是否存在。
 
@@ -101,7 +101,7 @@ updated_by uuid null
 - 研究：`papers, paper_relations, research_questions, research_question_versions, experiments, experiment_runs, experiment_metrics`；
 - AI：`ai_providers, ai_models, ai_task_routes, ai_runs, ai_output_drafts`；
 - 同步/审计：`processed_operations, change_log, sync_conflicts, audit_events, sync_snapshots`；
-- 商业化预留：`subscriptions, entitlements, usage_counters`，不得让业务代码直接依赖支付供应商状态字符串。
+- 使用计数（可选）：`usage_counters` 仅用于本地使用上限展示；个人/≤10 人自用不实现 `subscriptions/entitlements` 与支付集成。
 
 ### 4.3 状态枚举
 
@@ -150,7 +150,7 @@ Alembic 迁移必须可在生产数据副本验证；新增必填列采用 expan
 
 ### 5.2 必备资源组
 
-认证/设备、users/me、workspaces/members/invitations、plans/versions/phases/milestones、topics/dependencies/mastery、tasks/status-events、sessions/events、notes/updates/versions、resources/pdf-indexes、attachments、evidence/verifications、reviews/quizzes/errors/audits、papers/research-questions/experiments/runs/metrics、ai/providers/models/routes/runs/drafts、sync/bootstrap/push/pull/conflicts、imports/exports/backups、shares、subscriptions/entitlements。
+认证/设备、users/me、workspaces/members/invitations、plans/versions/phases/milestones、topics/dependencies/mastery、tasks/status-events、sessions/events、notes/updates/versions、resources/pdf-indexes、attachments、evidence/verifications、reviews/quizzes/errors/audits、papers/research-questions/experiments/runs/metrics、ai/providers/models/routes/runs/drafts、sync/bootstrap/push/pull/conflicts、imports/exports/backups、shares。
 
 OpenAPI 必须为请求和响应给出 schema、required、enum、最大长度、格式、错误响应和权限说明。不得返回数据库 ORM 对象或内部存储 key。
 
@@ -187,7 +187,7 @@ Pull 使用 `(sync_epoch, cursor)`；变更按 workspace sequence 升序，分�
 
 ### 6.5 附件
 
-离线选择后生成本地临时 ID、SHA-256、大小、声明 MIME 与状态。联网上传流程为 init → 限额校验 → 分块/直传 → complete → 服务端重新计算哈希/嗅探类型 → 原子移动到正式 key → `verified`。文件名不得用于拼接存储路径；下载使用授权后的短期 URL 或受控流。首发默认 20 MB/文件，具体配额由 entitlement 决定。
+离线选择后生成本地临时 ID、SHA-256、大小、声明 MIME 与状态。联网上传流程为 init → 限额校验 → 分块/直传 → complete → 服务端重新计算哈希/嗅探类型 → 原子移动到正式 key → `verified`。文件名不得用于拼接存储路径；下载使用授权后的短期 URL 或受控流。首发默认 20 MB/文件，存储上限为固定配置（不接 entitlement）。
 
 ## 7. AI Provider 与草稿安全
 
@@ -236,11 +236,11 @@ Provider 配置包含名称、类型、base_url、加密 credential 引用、组
 
 界面字符串不得硬编码拼接；日期、数字、时区、复数和排序使用 locale API；数据模型保存 UTC 与用户 timezone。首发中文内容也必须保留英文扩展结构。不得使用性别、年龄、教育程度或身体能力假设。
 
-### 8.4 公共站与推广
+### 8.4 分析与隐私最小化
 
-公共页必须服务端可渲染/静态生成，具有独立 title/description/canonical/Open Graph、sitemap、robots、结构化数据和语义 heading。性能目标以真实移动网络为准：优化 LCP、CLS、INP，图片有尺寸与替代文本。
+本项目不做公开营销站与增长设计。若存在极简入口/说明页，使用语义化 HTML、正确 heading、图片替代文本和合理性能（LCP/CLS/INP）即可，无需 SEO/Open Graph/sitemap/结构化数据等增长能力。
 
-任何增长事件不得携带笔记、研究内容、附件名、AI 输入、密钥或完整 URL 查询参数。Cookie/分析须符合适用的同意与退出要求。公开指标、安全认证和客户陈述必须可核验；路线图明确标“计划”。
+任何分析事件不得携带笔记、研究内容、附件名、AI 输入、密钥或完整 URL 查询参数。Cookie/分析须符合适用的同意与退出要求，且分析可关闭。对外陈述必须可核验，不使用无法证明的用户量或“零风险”声明。
 
 ## 9. 安全威胁控制
 
@@ -368,7 +368,7 @@ AI 必须报告实际执行的测试及结果，不能声称未运行的检查�
 ```text
 User
 └── WorkspaceMembership
-    └── Workspace（租户/计费边界）
+    └── Workspace（租户边界）
         └── Space（可见性边界：private/shared）
             └── Domain Object
 ```
@@ -385,7 +385,7 @@ User
 
 | 能力 | Owner | Admin | Editor | Contributor | Reviewer | Viewer |
 |---|---:|---:|---:|---:|---:|---:|
-| 管理 workspace 安全/账单 | 是 | 否/按 entitlement | 否 | 否 | 否 | 否 |
+| 管理 workspace 安全 | 是 | 否 | 否 | 否 | 否 | 否 |
 | 管理成员和角色 | 是 | 是 | 否 | 否 | 否 | 否 |
 | 创建/删除 shared Space | 是 | 是 | 可创建 | 否 | 否 | 否 |
 | 编辑共享计划和结构 | 是 | 是 | 是 | 受限 | 否 | 否 |
@@ -413,7 +413,7 @@ User
 - 自学：`learning_goals, learning_tracks, course_indexes, learning_projects, deliverables, inbox_items, portfolio_items`；
 - 研究深化：`claims, claim_evidence_links, literature_matrices, literature_matrix_entries, dataset_records, experiment_protocols, experiment_baselines, experiment_run_groups, supervisor_feedback, manuscript_sections`；
 - 协作：`spaces, space_memberships_or_policies, review_assignments, rubrics, rubric_items, feedback_threads, share_snapshots`；
-- 平台：`notifications, notification_preferences, search_documents, calendar_events, template_packages, template_versions, template_installations, entitlements, subscriptions, quota_usage, operator_audit_events, support_cases`。
+- 平台：`notifications, notification_preferences, search_documents, calendar_events, template_packages, template_versions, template_installations`（个人/≤10 人自用不实现 `entitlements, subscriptions, support_cases`；`quota_usage、operator_audit_events` 可选，仅用于本地使用上限与自管维护审计）。
 
 所有新增同步实体遵守 UUIDv7、workspace_id、space_id、version、软删除和审计约定。事件、尝试、分数和反馈历史优先追加，不覆盖旧值。
 
@@ -460,7 +460,7 @@ User
 
 ### 18.2 通知
 
-- 类型分 learning、collaboration、sync、security、ai、billing、system；
+- 类型分 learning、collaboration、sync、security、ai、system；
 - 安全通知不可完全关闭；
 - 通知 payload 只保存最小摘要，不复制敏感正文；
 - 邮件/Web Push 点击后仍需服务端授权，通知本身不是访问凭证；
@@ -487,42 +487,39 @@ TemplatePackage 至少包含：schema_version、product_min_version、author、l
 - 公共模板发布需要审核、链接检查、版权声明、举报和撤回机制；
 - 模板被撤回不删除已安装用户内容，只阻止新安装并通知风险。
 
-## 19. SaaS 运营、计费和系统管理约束
+## 19. 隐私、删除与防滥用约束
 
-### 19.1 Entitlement
+本项目为个人/小规模自用，不实现套餐 entitlement、计费与独立 SaaS 运营域。仅保留以下约束：
 
-- 功能与配额由服务端 `entitlements` 决策，前端显示不构成授权；
-- entitlement 输入包括 plan、subscription 状态、workspace、试用、运营赠送和功能开关；
-- 任何付费回调必须验签、幂等、可重放测试并保存原始事件摘要；
-- 客户端传入价格、套餐和配额不可信；
-- 降级采用宽限/只读策略，禁止立即删除超额内容；
-- 用户在欠费或降级状态仍可导出数据和管理安全设置。
+### 19.1 使用上限（固定）
 
-### 19.2 Operator 控制面
+- 功能上限（如存储、附件大小、AI 预算）由服务端固定配置，不依赖 plan/subscription/支付；
+- 客户端传入的上限、角色和归属不可信，一律服务端重新判定；
+- 超限采用宽限/只读策略，禁止立即删除超额内容；用户在受限状态仍可导出数据和管理安全设置。
 
-- Operator 身份与普通 User/WorkspaceMembership 完全分域，使用独立角色和强认证；
-- 默认只能查看账户/服务元数据、配额、队列、备份和脱敏错误；
-- 读取用户正文属于 break-glass 操作，需要工单、原因、最近认证、双人批准（生产成熟阶段）和完整审计；
-- Operator 不能获得 AI Key 明文、恢复码、TOTP secret 或密码；
-- 停用用户/workspace、恢复数据、调整配额和处理删除均为审计操作；
-- 后台不得提供任意 SQL、任意 URL 请求或任意文件读取界面。
+### 19.2 自管维护
+
+- 维护由部署者（同一可信管理员）在受保护入口进行，与普通用户会话使用强认证区分；
+- 默认只查看账户/服务元数据、队列、备份和脱敏错误，不默认读取用户私人正文；
+- 维护入口不提供任意 SQL、任意 URL 请求或任意文件读取；
+- 停用账户/workspace、恢复数据、调整上限和处理删除均为审计操作，不能获得 AI Key 明文、恢复码、TOTP secret 或密码。
 
 ### 19.3 隐私、年龄与分析
 
 - 上线前确定适用地区和最低年龄；未建立法定监护同意前不得主动面向低龄儿童；
 - 产品分析事件使用明确 schema 和允许列表，不采集笔记正文、题目答案、论文未公开内容、AI 输入和附件；
-- 分析可关闭，安全/计费审计与产品分析分开；
+- 分析可关闭，安全审计与产品分析分开；
 - 账户删除、workspace 删除、备份保留和法律保留分别定义期限；
-- 第三方邮件、支付、监控和 AI Provider 进入数据处理清单并在隐私说明披露；
+- 第三方邮件、监控和 AI Provider 进入数据处理清单并在隐私说明披露；
 - 不将用户内容用于模型训练，除非另有独立、可撤销的明确同意。
 
 ### 19.4 反滥用
 
 - 注册、登录、邀请、分享、模板发布、附件、URL 检查和 AI 调用分别限流；
 - 邮件邀请防枚举和批量垃圾；
-- 公共分享支持举报、撤销、过期、搜索引擎索引开关；
-- 恶意 workspace 隔离不能影响其他租户；
-- 封禁不得破坏用户依法获得数据副本的流程，具体依条款和法律处理。
+- 只读分享支持举报、撤销、过期、搜索引擎索引开关；
+- 恶意/异常 workspace 隔离不影响其他租户；
+- 封禁不得破坏用户依法获得数据副本的流程。
 
 ## 20. 原型到实现的契约
 
@@ -539,14 +536,14 @@ TemplatePackage 至少包含：schema_version、product_min_version、author、l
 - 硬编码用户、价格、角色、Provider 健康和指标；
 - 没有服务端验证的 workspace/space 切换；
 - 本地计时器直接成为最终有效时长；
-- 静态按钮暗示已完成邀请、备份、分享、删除或支付。
+- 静态按钮暗示已完成邀请、备份、分享或删除。
 
 原型实现阶段必须补齐：
 
-- 正常、空、加载、离线、待同步、冲突、权限不足、配额、错误和恢复状态；
+- 正常、空、加载、离线、待同步、冲突、权限不足、使用上限、错误和恢复状态；
 - 备考、自学、研究和导师四种 profile track 的内容差异；
 - private/shared Space 明确标识；
-- 搜索、通知、日历、模板和运营边界；
+- 搜索、通知、日历、模板和分享/权限边界；
 - 对话框焦点管理、Escape、焦点返回、ARIA 状态和键盘可用；
 - iOS PWA、窄屏、横屏、200% 缩放和减少动效检查。
 
@@ -594,7 +591,7 @@ AI 代理完成任务时必须提供：
 非目标：<明确排除>
 
 开始前：审查现有改动、相关 schema/API/本地模型/权限/测试；如涉及租户、数据寿命、同步、安全、付费或隐私，先提出 ADR。
-实现要求：契约和失败测试先行；服务端授权；本地事务与同步；正常/空/加载/离线/冲突/权限/配额/错误状态；无障碍；审计；迁移和回滚。
+实现要求：契约和失败测试先行；服务端授权；本地事务与同步；正常/空/加载/离线/冲突/权限/使用上限/错误状态；无障碍；审计；迁移和回滚。
 验收：列出自动测试、E2E、性能/安全/无障碍门槛及人工场景。
 交付：变更摘要、文件、测试证据、OpenAPI diff、迁移/回滚、风险、未验证项。不得声称未运行的测试已通过。
 ```
