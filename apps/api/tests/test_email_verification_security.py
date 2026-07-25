@@ -87,6 +87,14 @@ def test_production_rejects_development_email_key_and_legacy_registration() -> N
         Settings(**_production_settings(registration_mode="open"))
 
 
+def test_blank_bootstrap_owner_email_disables_bootstrap_without_weakening_validation() -> None:
+    settings = Settings(registration_mode="invite", bootstrap_owner_email="")
+
+    assert settings.bootstrap_owner_email is None
+    with pytest.raises(ValidationError, match="valid email address"):
+        Settings(registration_mode="invite", bootstrap_owner_email="not-an-email")
+
+
 @pytest.mark.asyncio
 async def test_registration_decision_covers_open_invite_closed_and_bootstrap() -> None:
     security = IdentitySecurity("registration-decision-test-secret-at-least-32")
