@@ -3,7 +3,7 @@ import { AIRunCenter } from "@/features/ai/run-center";
 
 export default function AIProviderPage() {
   return (
-    <main id="main-content">
+    <main id="main-content" className="app-route-stack">
       <AIRunCenter />
       <ProviderCenter />
     </main>
