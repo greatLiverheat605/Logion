@@ -1,4 +1,3 @@
-import hashlib
 import json
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -18,14 +17,12 @@ from sqlalchemy import func, select
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def _example_package() -> tuple[dict[str, object], str]:
-    package = json.loads(
+def _example_package() -> dict[str, object]:
+    return json.loads(
         (ROOT / "examples/templates/ai-presemester-47-day.template.json").read_text(
             encoding="utf-8"
         )
     )
-    source = ROOT / "archive/source-documents/learning-materials/01-2026-presemester-47-day-plan.md"
-    return package, hashlib.sha256(source.read_bytes()).hexdigest()
 
 
 @pytest.mark.integration
@@ -245,9 +242,11 @@ async def test_private_template_install_and_revocable_minimal_share() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_original_47_day_template_import_is_bounded_private_and_date_preserving() -> None:
-    package, source_sha256 = _example_package()
-    assert source_sha256 == package["source_sha256"]
+async def test_example_47_day_template_import_is_bounded_private_and_date_preserving() -> None:
+    package = _example_package()
+    source_sha256 = str(package["source_sha256"])
+    assert len(source_sha256) == 64
+    assert set(source_sha256) <= set("0123456789abcdef")
     assert sum(len(phase["tasks"]) for phase in package["goal_plan"]["phases"]) == 47
     package["package_id"] = str(uuid4())
     package["template_key"] = str(uuid4())

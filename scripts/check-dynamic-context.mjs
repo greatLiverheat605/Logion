@@ -12,7 +12,22 @@ const searchableExtensions = new Set([
   ".ts",
   ".tsx",
 ]);
-const forbidden = ["郝老师", "郝永静", "yjhao@mail.usts.edu.cn", "vigils.ai"];
+const configuredTerms = (process.env.LOGION_CONTEXT_GUARD_TERMS ?? "")
+  .split(",")
+  .map((term) => term.trim())
+  .filter(Boolean);
+const emailPattern = /[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/giu;
+const allowedExampleDomains = new Set([
+  "example.com",
+  "example.net",
+  "example.org",
+]);
+const isExampleDomain = (domain) =>
+  [...allowedExampleDomains].some(
+    (allowed) => domain === allowed || domain.endsWith(`.${allowed}`),
+  );
+const userPathPattern =
+  /(?:[A-Z]:\\Users\\[^\\]+\\|\/Users\/[^/]+\/|\/home\/[^/]+\/)/iu;
 const violations = [];
 
 async function walk(directory) {
@@ -25,9 +40,18 @@ async function walk(directory) {
     }
     if (!searchableExtensions.has(extname(entry.name))) continue;
     const content = await readFile(path, "utf8");
-    for (const term of forbidden) {
-      if (content.includes(term))
-        violations.push(`${relative(".", path)}: ${term}`);
+    for (const term of configuredTerms) {
+      if (content.includes(term)) {
+        violations.push(`${relative(".", path)}: configured private context`);
+      }
+    }
+    for (const match of content.matchAll(emailPattern)) {
+      if (!isExampleDomain(match[1].toLowerCase())) {
+        violations.push(`${relative(".", path)}: hard-coded email address`);
+      }
+    }
+    if (userPathPattern.test(content)) {
+      violations.push(`${relative(".", path)}: hard-coded user home path`);
     }
   }
 }

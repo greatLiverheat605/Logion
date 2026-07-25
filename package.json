@@ -2,6 +2,15 @@
   "name": "logion",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/greatLiverheat605/Logion.git"
+  },
+  "bugs": {
+    "url": "https://github.com/greatLiverheat605/Logion/issues"
+  },
+  "homepage": "https://github.com/greatLiverheat605/Logion#readme",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=24.14.0",

@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest a focused improvement for small-scale self-hosting
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Logion is designed for personal and small-group (up to 10 people) self-hosting. Requests for billing, pricing, public marketing, or SaaS operations are outside the project scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the user problem without prescribing an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Explain the smallest useful behavior and how a user would verify it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Data, security, offline, or compatibility impact
+      description: Note any expected impact on permissions, synchronization, migrations, export, or deployment.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: This request is suitable for personal or small-group self-hosting.
+          required: true
+        - label: This request does not add billing, pricing, public marketing, or SaaS operations.
+          required: true
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
