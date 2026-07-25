@@ -36,6 +36,14 @@ playwright-report/
 test-results/
 reports/
 
+# Local-only planning and review material
+/LOGION_AI_DEVELOPMENT_CONSTRAINTS.md
+/LOGION_EXECUTION_PLAN.md
+/archive/
+/prototype/
+/docs/OWNERSHIP.md
+/docs/phase-reviews/
+
 # IDE and OS
 .idea/
 .vscode/
