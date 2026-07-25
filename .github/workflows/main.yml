@@ -171,6 +171,54 @@ jobs:
           curl --fail --silent http://localhost:8080/healthz
           curl --fail --silent http://localhost:8080/health
           docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
+          fixture_email="performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com"
+          fixture_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${fixture_password}"
+          export LOGION_PERFORMANCE_FIXTURE_EMAIL="${fixture_email}"
+          export LOGION_PERFORMANCE_FIXTURE_PASSWORD="${fixture_password}"
+          docker compose exec -T \
+            -e LOGION_PERFORMANCE_FIXTURE_EMAIL \
+            -e LOGION_PERFORMANCE_FIXTURE_PASSWORD \
+            api python - <<'PY'
+          import asyncio
+          import os
+
+          from logion_api.config import get_settings
+          from logion_api.db import session_factory
+          from logion_api.identity.dependencies import get_identity_service
+          from logion_api.identity.schemas import RegisterRequest
+          from logion_api.workspaces.service import WorkspaceService
+
+
+          async def seed() -> None:
+              settings = get_settings()
+              identity = get_identity_service()
+              workspaces = WorkspaceService(settings)
+              async with session_factory() as db:
+                  issued = await identity.register(
+                      db,
+                      RegisterRequest(
+                          email=os.environ["LOGION_PERFORMANCE_FIXTURE_EMAIL"],
+                          password=os.environ["LOGION_PERFORMANCE_FIXTURE_PASSWORD"],
+                          device_name="Candidate performance fixture",
+                          platform="web",
+                      ),
+                      request_id="candidate-performance-fixture",
+                      ip_address=None,
+                      user_agent="candidate-workflow",
+                  )
+                  if issued is None:
+                      raise RuntimeError("candidate performance fixture already exists")
+                  await workspaces.provision_personal_workspace(
+                      db,
+                      issued.user.id,
+                      request_id="candidate-performance-fixture",
+                  )
+                  await db.commit()
+
+
+          asyncio.run(seed())
+          PY
           uv run --group dev python scripts/performance/api_smoke.py \
             --base-url http://localhost:8080 \
             --requests 200 \
