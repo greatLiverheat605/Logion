@@ -20,10 +20,13 @@ export function AuthFormShell({
   );
 }
 
-export function FormError({ requestId }: Readonly<{ requestId: string }>) {
+export function FormError({
+  message = "操作未完成，请检查输入或稍后重试。",
+  requestId,
+}: Readonly<{ message?: string; requestId: string }>) {
   return (
     <div className="form-message form-error" role="alert">
-      <p>操作未完成，请检查输入或稍后重试。</p>
+      <p>{message}</p>
       <p>
         请求编号：<code>{requestId}</code>
       </p>

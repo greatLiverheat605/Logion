@@ -15,6 +15,7 @@ export function RegisterForm() {
     "idle",
   );
   const [requestId, setRequestId] = useState("unavailable");
+  const [errorMessage, setErrorMessage] = useState<string | undefined>();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -22,11 +23,18 @@ export function RegisterForm() {
     const data = new FormData(form);
     const email = String(data.get("email") ?? "");
     setState("pending");
+    setErrorMessage(undefined);
     try {
       await authApi.startRegistration({ email });
       form.reset();
       setState("success");
     } catch (error) {
+      if (
+        error instanceof LogionApiError &&
+        error.code === "AUTH_REGISTRATION_CLOSED"
+      ) {
+        setErrorMessage("注册已关闭");
+      }
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",
       );
@@ -46,6 +54,9 @@ export function RegisterForm() {
         </FormSuccess>
       ) : (
         <form className="auth-form" onSubmit={submit}>
+          <p className="auth-description">
+            注册仅对已受邀的邮箱开放；未收到邀请请联系管理员。
+          </p>
           <label htmlFor="registration-email">邮箱</label>
           <input
             id="registration-email"
@@ -55,7 +66,9 @@ export function RegisterForm() {
             maxLength={320}
             required
           />
-          {state === "error" ? <FormError requestId={requestId} /> : null}
+          {state === "error" ? (
+            <FormError message={errorMessage} requestId={requestId} />
+          ) : null}
           <button type="submit" disabled={state === "pending"}>
             {state === "pending" ? "正在提交…" : "发送确认邮件"}
           </button>

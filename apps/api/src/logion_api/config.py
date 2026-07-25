@@ -1,9 +1,10 @@
 import base64
 import binascii
 from functools import lru_cache
+from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import EmailStr, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +35,8 @@ class Settings(BaseSettings):
     refresh_ttl_days: int = Field(default=30, ge=1, le=90)
     require_origin_header: bool = True
     legacy_registration_enabled: bool = True
+    registration_mode: Literal["open", "invite", "closed"] = "open"
+    bootstrap_owner_email: EmailStr | None = None
     registration_limit_per_hour: int = Field(default=5, ge=1, le=100)
     email_registration_ip_limit_per_hour: int = Field(default=10, ge=1, le=100)
     email_registration_account_limit_per_hour: int = Field(default=3, ge=1, le=20)
@@ -299,6 +302,10 @@ class Settings(BaseSettings):
             if self.legacy_registration_enabled:
                 raise ValueError(
                     "LOGION_LEGACY_REGISTRATION_ENABLED must be disabled in production"
+                )
+            if self.registration_mode == "open":
+                raise ValueError(
+                    "LOGION_REGISTRATION_MODE must be 'invite' or 'closed' in production"
                 )
         return self
 
