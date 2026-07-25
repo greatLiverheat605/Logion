@@ -3,6 +3,7 @@ import json
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from logion_api.identity.models import (
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import normalize_email
 from logion_api.identity.totp import TotpService
+from logion_api.workspaces.models import WorkspaceInvitation
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,12 @@ class EncryptedEmailPayload:
     ciphertext: bytes
     nonce: bytes
     key_id: str
+
+
+class RegistrationDecision(StrEnum):
+    ALLOW = "allow"
+    DENY_CLOSED = "deny_closed"
+    SILENT_NOOP = "silent_noop"
 
 
 class EmailDeliveryCipher:
@@ -104,6 +112,36 @@ class EmailVerificationService:
         self._settings = settings
         self._security = security
         self._cipher = EmailDeliveryCipher(settings)
+
+    async def registration_decision(
+        self,
+        db: AsyncSession,
+        email_normalized: str,
+    ) -> RegistrationDecision:
+        bootstrap_email = self._settings.bootstrap_owner_email
+        if bootstrap_email is not None and email_normalized == normalize_email(
+            str(bootstrap_email)
+        ):
+            return RegistrationDecision.ALLOW
+        if self._settings.registration_mode == "open":
+            return RegistrationDecision.ALLOW
+        if self._settings.registration_mode == "closed":
+            return RegistrationDecision.DENY_CLOSED
+
+        invitation = await db.scalar(
+            select(WorkspaceInvitation)
+            .where(
+                WorkspaceInvitation.email_normalized == email_normalized,
+                WorkspaceInvitation.status == "pending",
+                WorkspaceInvitation.expires_at > datetime.now(UTC),
+            )
+            .limit(1)
+        )
+        return (
+            RegistrationDecision.ALLOW
+            if invitation is not None
+            else RegistrationDecision.SILENT_NOOP
+        )
 
     async def start_registration(
         self,

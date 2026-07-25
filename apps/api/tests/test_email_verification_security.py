@@ -1,10 +1,15 @@
 import base64
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from logion_api.config import Settings
 from logion_api.errors import APIError
-from logion_api.identity.email_verification import EmailDeliveryCipher
+from logion_api.identity.email_verification import (
+    EmailDeliveryCipher,
+    EmailVerificationService,
+    RegistrationDecision,
+)
 from logion_api.identity.models import EmailOutbox, IdentityActionToken, User
 from logion_api.identity.passkeys import _authentication_credential_statement
 from logion_api.identity.schemas import PasswordRecoveryCompletionRequest
@@ -17,6 +22,7 @@ from logion_api.identity.verification_routes import (
 from logion_api.main import app
 from pydantic import SecretStr, ValidationError
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class RecordingRateLimiter:
@@ -59,6 +65,7 @@ def _production_settings(**overrides: object) -> dict[str, object]:
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"x" * 32).decode())
         },
         "legacy_registration_enabled": False,
+        "registration_mode": "invite",
     }
     values.update(overrides)
     return values
@@ -76,6 +83,51 @@ def test_production_rejects_development_email_key_and_legacy_registration() -> N
         )
     with pytest.raises(ValidationError, match="LEGACY_REGISTRATION_ENABLED"):
         Settings(**_production_settings(legacy_registration_enabled=True))
+    with pytest.raises(ValidationError, match="LOGION_REGISTRATION_MODE"):
+        Settings(**_production_settings(registration_mode="open"))
+
+
+@pytest.mark.asyncio
+async def test_registration_decision_covers_open_invite_closed_and_bootstrap() -> None:
+    security = IdentitySecurity("registration-decision-test-secret-at-least-32")
+    db = AsyncMock(spec=AsyncSession)
+
+    open_service = EmailVerificationService(Settings(registration_mode="open"), security)
+    assert (
+        await open_service.registration_decision(db, "person@example.com")
+        is RegistrationDecision.ALLOW
+    )
+
+    closed_service = EmailVerificationService(Settings(registration_mode="closed"), security)
+    assert (
+        await closed_service.registration_decision(db, "person@example.com")
+        is RegistrationDecision.DENY_CLOSED
+    )
+
+    for mode in ("invite", "closed"):
+        bootstrap_service = EmailVerificationService(
+            Settings(
+                registration_mode=mode,
+                bootstrap_owner_email="Owner@Example.com",
+            ),
+            security,
+        )
+        assert (
+            await bootstrap_service.registration_decision(db, "owner@example.com")
+            is RegistrationDecision.ALLOW
+        )
+
+    invite_service = EmailVerificationService(Settings(registration_mode="invite"), security)
+    db.scalar.return_value = object()
+    assert (
+        await invite_service.registration_decision(db, "invited@example.com")
+        is RegistrationDecision.ALLOW
+    )
+    db.scalar.return_value = None
+    assert (
+        await invite_service.registration_decision(db, "uninvited@example.com")
+        is RegistrationDecision.SILENT_NOOP
+    )
 
 
 def test_identity_action_token_is_high_entropy_and_purpose_bound() -> None:

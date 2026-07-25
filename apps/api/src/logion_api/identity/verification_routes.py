@@ -15,6 +15,7 @@ from logion_api.identity.dependencies import (
     request_id,
     require_trusted_origin,
 )
+from logion_api.identity.email_verification import RegistrationDecision
 from logion_api.identity.schemas import (
     EmailVerificationConfirmationRequest,
     MessageResponse,
@@ -114,12 +115,23 @@ async def start_registration(
 ) -> MessageResponse:
     require_trusted_origin(request, settings)
     email = str(payload.email)
+    normalized_email = normalize_email(email)
     await _enforce_registration_rate_limits(
         limiter,
         settings,
         client_ip_value=client_ip(request),
-        normalized_email=normalize_email(email),
+        normalized_email=normalized_email,
     )
+    decision = await service.registration_decision(db, normalized_email)
+    if decision is RegistrationDecision.DENY_CLOSED:
+        raise APIError(
+            code="AUTH_REGISTRATION_CLOSED",
+            message="Registration is closed.",
+            status_code=403,
+        )
+    if decision is RegistrationDecision.SILENT_NOOP:
+        response.headers["Cache-Control"] = "no-store"
+        return MessageResponse()
     await service.start_registration(db, email, request_id=request_id(request))
     await db.commit()
     response.headers["Cache-Control"] = "no-store"

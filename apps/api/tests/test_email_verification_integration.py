@@ -5,10 +5,10 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from logion_api.config import get_settings
+from logion_api.config import Settings, get_settings
 from logion_api.db import session_factory
-from logion_api.identity.dependencies import get_security
-from logion_api.identity.email_verification import EmailDeliveryCipher
+from logion_api.identity.dependencies import get_email_verification_service, get_security
+from logion_api.identity.email_verification import EmailDeliveryCipher, EmailVerificationService
 from logion_api.identity.models import (
     AuditEvent,
     EmailOutbox,
@@ -17,7 +17,7 @@ from logion_api.identity.models import (
     User,
 )
 from logion_api.main import app
-from logion_api.workspaces.models import Space, WorkspaceMembership
+from logion_api.workspaces.models import Space, WorkspaceInvitation, WorkspaceMembership
 from sqlalchemy import func, select
 
 
@@ -166,11 +166,7 @@ async def test_email_registration_is_uniform_encrypted_single_use_and_no_auto_lo
             assert stored_outbox is not None and stored_outbox.status == "dead"
             assert stored_outbox.payload_ciphertext == b""
             audits = list(
-                (
-                    await db.scalars(
-                        select(AuditEvent).where(AuditEvent.target_id == user_id)
-                    )
-                ).all()
+                (await db.scalars(select(AuditEvent).where(AuditEvent.target_id == user_id))).all()
             )
             audit_text = json.dumps(
                 [event.event_metadata for event in audits],
@@ -274,3 +270,179 @@ async def test_registration_hides_verified_accounts_and_expired_tokens() -> None
             },
         )
         assert unverified_login.status_code == 401
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_invite_and_closed_registration_modes_gate_start_without_leaking_invites() -> None:
+    origin = "http://test"
+    owner_email = f"registration-owner-{uuid4()}@example.com"
+    invited_email = f"registration-invited-{uuid4()}@example.com"
+    uninvited_email = f"registration-uninvited-{uuid4()}@example.com"
+    invite_bootstrap_email = f"registration-bootstrap-invite-{uuid4()}@example.com"
+    closed_email = f"registration-closed-{uuid4()}@example.com"
+    closed_bootstrap_email = f"registration-bootstrap-closed-{uuid4()}@example.com"
+    original_overrides = dict(app.dependency_overrides)
+
+    def apply_registration_settings(settings: Settings) -> None:
+        service = EmailVerificationService(
+            settings,
+            get_security(),
+        )
+        app.dependency_overrides[get_settings] = lambda: settings
+        app.dependency_overrides[get_email_verification_service] = lambda: service
+
+    try:
+        apply_registration_settings(
+            Settings(
+                allowed_origins=[origin],
+                webauthn_rp_id="test",
+                webauthn_origins=[origin],
+                registration_mode="open",
+            )
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.212", 53002)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as client:
+            owner = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": owner_email,
+                    "password": "owner-password-123",
+                    "device_name": "Owner browser",
+                },
+            )
+            assert owner.status_code == 201, owner.text
+            owner_id = UUID(owner.json()["user"]["id"])
+
+            async with session_factory() as db:
+                owner_membership = await db.scalar(
+                    select(WorkspaceMembership).where(
+                        WorkspaceMembership.user_id == owner_id,
+                        WorkspaceMembership.role == "owner",
+                    )
+                )
+                assert owner_membership is not None
+                db.add(
+                    WorkspaceInvitation(
+                        workspace_id=owner_membership.workspace_id,
+                        email_normalized=invited_email.casefold(),
+                        role="viewer",
+                        status="pending",
+                        token_hash=uuid4().hex * 2,
+                        invited_by=owner_id,
+                        expires_at=datetime.now(UTC) + timedelta(days=1),
+                    )
+                )
+                await db.commit()
+
+            invite_settings = Settings(
+                allowed_origins=[origin],
+                webauthn_rp_id="test",
+                webauthn_origins=[origin],
+                registration_mode="invite",
+                bootstrap_owner_email=invite_bootstrap_email,
+            )
+            apply_registration_settings(invite_settings)
+
+            legacy = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"legacy-bypass-{uuid4()}@example.com",
+                    "password": "legacy-password-123",
+                    "device_name": "Legacy browser",
+                },
+            )
+            invited = await client.post(
+                "/api/v1/auth/registrations",
+                json={"email": invited_email},
+            )
+            uninvited = await client.post(
+                "/api/v1/auth/registrations",
+                json={"email": uninvited_email},
+            )
+            invite_bootstrap = await client.post(
+                "/api/v1/auth/registrations",
+                json={"email": invite_bootstrap_email.upper()},
+            )
+
+            assert legacy.status_code == 410
+            assert legacy.json()["code"] == "AUTH_REGISTRATION_UPGRADE_REQUIRED"
+            assert invited.status_code == uninvited.status_code == 202
+            assert invited.json() == uninvited.json() == {"status": "ok"}
+            assert invite_bootstrap.status_code == 202
+
+            async with session_factory() as db:
+                invited_user = await db.scalar(
+                    select(User).where(User.email_normalized == invited_email.casefold())
+                )
+                uninvited_user = await db.scalar(
+                    select(User).where(User.email_normalized == uninvited_email.casefold())
+                )
+                invite_bootstrap_user = await db.scalar(
+                    select(User).where(User.email_normalized == invite_bootstrap_email.casefold())
+                )
+                assert invited_user is not None
+                assert uninvited_user is None
+                assert invite_bootstrap_user is not None
+                invited_outbox = await db.scalar(
+                    select(EmailOutbox).where(EmailOutbox.user_id == invited_user.id)
+                )
+                invite_bootstrap_outbox = await db.scalar(
+                    select(EmailOutbox).where(EmailOutbox.user_id == invite_bootstrap_user.id)
+                )
+                assert invited_outbox is not None
+                assert invite_bootstrap_outbox is not None
+                invited_token = EmailDeliveryCipher(invite_settings).decrypt(invited_outbox)[
+                    "token"
+                ]
+
+            confirmed = await client.post(
+                "/api/v1/auth/email-verification/confirmations",
+                json={"token": invited_token, "password": "invited-password-123"},
+            )
+            assert confirmed.status_code == 200, confirmed.text
+
+            closed_settings = Settings(
+                allowed_origins=[origin],
+                webauthn_rp_id="test",
+                webauthn_origins=[origin],
+                registration_mode="closed",
+                bootstrap_owner_email=closed_bootstrap_email,
+            )
+            apply_registration_settings(closed_settings)
+            closed = await client.post(
+                "/api/v1/auth/registrations",
+                json={"email": closed_email},
+            )
+            closed_bootstrap = await client.post(
+                "/api/v1/auth/registrations",
+                json={"email": closed_bootstrap_email.upper()},
+            )
+
+            assert closed.status_code == 403
+            assert closed.json()["code"] == "AUTH_REGISTRATION_CLOSED"
+            assert closed_bootstrap.status_code == 202
+
+            async with session_factory() as db:
+                assert (
+                    await db.scalar(
+                        select(User).where(User.email_normalized == closed_email.casefold())
+                    )
+                    is None
+                )
+                closed_bootstrap_user = await db.scalar(
+                    select(User).where(User.email_normalized == closed_bootstrap_email.casefold())
+                )
+                assert closed_bootstrap_user is not None
+                assert (
+                    await db.scalar(
+                        select(EmailOutbox).where(EmailOutbox.user_id == closed_bootstrap_user.id)
+                    )
+                    is not None
+                )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)

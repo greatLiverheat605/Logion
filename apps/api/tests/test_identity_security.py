@@ -132,6 +132,7 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"x" * 32).decode().rstrip("="))
         },
         legacy_registration_enabled=False,
+        registration_mode="invite",
     )
 
     assert settings.cookie_secure is True

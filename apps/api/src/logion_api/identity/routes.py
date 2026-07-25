@@ -96,7 +96,7 @@ async def register(
     settings: SettingsDependency,
 ) -> AuthResponse:
     require_trusted_origin(request, settings)
-    if not settings.legacy_registration_enabled:
+    if not settings.legacy_registration_enabled or settings.registration_mode != "open":
         raise APIError(
             code="AUTH_REGISTRATION_UPGRADE_REQUIRED",
             message="Use the email verification registration flow.",

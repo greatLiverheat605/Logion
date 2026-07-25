@@ -371,6 +371,8 @@ AI_KEY="$(random_urlsafe)"
 EXPORT_KEY="$(random_urlsafe)"
 BACKUP_KEY="$(random_urlsafe)"
 
+read -r -p '首个 Owner 邮箱: ' LOGION_BOOTSTRAP_OWNER_EMAIL
+
 printf '%s' "${BACKUP_KEY}" >secrets/backup.key
 chmod 600 secrets/backup.key
 
@@ -385,7 +387,9 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
 LOGION_SECRET_KEY=${LOGION_SECRET_KEY}
 LOGION_COOKIE_SECURE=false
-LOGION_LEGACY_REGISTRATION_ENABLED=true
+LOGION_LEGACY_REGISTRATION_ENABLED=false
+LOGION_REGISTRATION_MODE=invite
+LOGION_BOOTSTRAP_OWNER_EMAIL=${LOGION_BOOTSTRAP_OWNER_EMAIL}
 
 LOGION_ALLOWED_ORIGINS=["http://localhost:8080"]
 LOGION_WEBAUTHN_RP_ID=localhost
@@ -730,68 +734,32 @@ ss -lntp | grep ':8080'
 127.0.0.1:8080
 ```
 
-## 15. 创建第一个测试账户
+## 15. 引导首个 Owner 账户
 
-邮件投递适配器未完成，因此先使用受限旧注册接口创建一个测试账户。密码至少 12 位；输入过程不会回显。
+首次启动前，`.env` 必须保持 `LOGION_REGISTRATION_MODE=invite`、`LOGION_LEGACY_REGISTRATION_ENABLED=false`，并将 `LOGION_BOOTSTRAP_OWNER_EMAIL` 设为首个 Owner 的邮箱。
 
-```bash
-read -r -p '测试邮箱: ' LOGION_TEST_EMAIL
-read -r -s -p '测试密码（至少 12 位）: ' LOGION_TEST_PASSWORD
-echo
+在浏览器打开 `http://localhost:8080/auth/register`，使用该邮箱提交注册，完成邮件验证并设置密码。随后打开 `http://localhost:8080/auth/login`，确认可以登录且个人工作区已经创建。
 
-PAYLOAD="$(
-  jq -nc \
-    --arg email "${LOGION_TEST_EMAIL}" \
-    --arg password "${LOGION_TEST_PASSWORD}" \
-    '{
-      email: $email,
-      password: $password,
-      device_name: "Initial server bootstrap",
-      platform: "web"
-    }'
-)"
-
-printf '%s' "${PAYLOAD}" \
-  | curl --fail-with-body \
-      --silent \
-      --output /dev/null \
-      --write-out 'HTTP %{http_code}\n' \
-      --request POST \
-      --header 'Origin: http://localhost:8080' \
-      --header 'Content-Type: application/json' \
-      --data-binary @- \
-      http://127.0.0.1:8080/api/v1/auth/register
-
-unset LOGION_TEST_EMAIL LOGION_TEST_PASSWORD PAYLOAD
-```
-
-预期：
-
-```text
-HTTP 201
-```
-
-随后在浏览器打开 `http://localhost:8080/auth/login` 登录。
-
-确认账户可登录后，关闭旧注册接口：
+Owner 创建成功后，立即清空引导邮箱并重启 API 与 worker，关闭引导口子：
 
 ```bash
 cd /opt/logion
 sed -i \
-  's/^LOGION_LEGACY_REGISTRATION_ENABLED=.*/LOGION_LEGACY_REGISTRATION_ENABLED=false/' \
+  's/^LOGION_BOOTSTRAP_OWNER_EMAIL=.*/LOGION_BOOTSTRAP_OWNER_EMAIL=/' \
   .env
 
 logion-compose up -d --no-build --force-recreate api worker
 ```
 
-阿里云邮件适配器完成前，不开放 30 人自由注册。需要额外测试账户时，由操作者临时启用旧注册、创建账户后立即再次关闭，并保留操作记录。
+需要额外账户时，由 Owner 在工作区内创建邀请并发送邀请链接。受邀者必须使用被邀请的邮箱完成注册，再通过现有邀请接受页加入工作区；不要重新开启 legacy 注册或将注册模式改为 `open`。
 
 ### 检查点 D
 
 - [ ] 首页、登录页真实渲染；
 - [ ] 第一个账户可以登录；
 - [ ] 个人工作区已自动创建；
-- [ ] 旧注册接口已经关闭；
+- [ ] 注册模式保持 `invite`，旧注册接口保持关闭；
+- [ ] `LOGION_BOOTSTRAP_OWNER_EMAIL` 已清空；
 - [ ] 容器没有 OOM 或反复重启。
 
 ## 16. 功能验收顺序
