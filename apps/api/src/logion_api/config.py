@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import EmailStr, Field, SecretStr, model_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -156,6 +156,13 @@ class Settings(BaseSettings):
             "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtZXhwb3J0LWtleS0zMmJ5dGVzISE")
         }
     )
+
+    @field_validator("bootstrap_owner_email", mode="before")
+    @classmethod
+    def normalize_empty_bootstrap_owner_email(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def validate_security_configuration(self) -> "Settings":
