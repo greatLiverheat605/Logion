@@ -110,26 +110,30 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}-backup:${{ github.sha }}
           provenance: mode=max
           sbom: true
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-web
           subject-digest: ${{ steps.web.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v3
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-api
           subject-digest: ${{ steps.api.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v3
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-worker
           subject-digest: ${{ steps.worker.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v3
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-backup
           subject-digest: ${{ steps.backup.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
       - name: Generate immutable candidate manifest
         env:
           WEB_DIGEST: ${{ steps.web.outputs.digest }}
@@ -171,6 +175,54 @@ jobs:
           curl --fail --silent http://localhost:8080/healthz
           curl --fail --silent http://localhost:8080/health
           docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
+          fixture_email="performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com"
+          fixture_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${fixture_password}"
+          export LOGION_PERFORMANCE_FIXTURE_EMAIL="${fixture_email}"
+          export LOGION_PERFORMANCE_FIXTURE_PASSWORD="${fixture_password}"
+          docker compose exec -T \
+            -e LOGION_PERFORMANCE_FIXTURE_EMAIL \
+            -e LOGION_PERFORMANCE_FIXTURE_PASSWORD \
+            api python - <<'PY'
+          import asyncio
+          import os
+
+          from logion_api.config import get_settings
+          from logion_api.db import session_factory
+          from logion_api.identity.dependencies import get_identity_service
+          from logion_api.identity.schemas import RegisterRequest
+          from logion_api.workspaces.service import WorkspaceService
+
+
+          async def seed() -> None:
+              settings = get_settings()
+              identity = get_identity_service()
+              workspaces = WorkspaceService(settings)
+              async with session_factory() as db:
+                  issued = await identity.register(
+                      db,
+                      RegisterRequest(
+                          email=os.environ["LOGION_PERFORMANCE_FIXTURE_EMAIL"],
+                          password=os.environ["LOGION_PERFORMANCE_FIXTURE_PASSWORD"],
+                          device_name="Candidate performance fixture",
+                          platform="web",
+                      ),
+                      request_id="candidate-performance-fixture",
+                      ip_address=None,
+                      user_agent="candidate-workflow",
+                  )
+                  if issued is None:
+                      raise RuntimeError("candidate performance fixture already exists")
+                  await workspaces.provision_personal_workspace(
+                      db,
+                      issued.user.id,
+                      request_id="candidate-performance-fixture",
+                  )
+                  await db.commit()
+
+
+          asyncio.run(seed())
+          PY
           uv run --group dev python scripts/performance/api_smoke.py \
             --base-url http://localhost:8080 \
             --requests 200 \
@@ -203,7 +255,7 @@ jobs:
           LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: docker compose down --volumes --remove-orphans
-      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.70.0
           cache: true
@@ -259,7 +311,7 @@ jobs:
           name: candidate-security-${{ github.sha }}
           path: security-reports
           retention-days: 90
-      - uses: anchore/sbom-action@v0.22.1
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json
