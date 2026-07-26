@@ -80,9 +80,7 @@ async def test_membership_hierarchy_versions_and_live_revocation() -> None:
 
         viewer_list = await clients["target"].get(f"/api/v1/workspaces/{workspace_id}/members")
         assert viewer_list.status_code == 403
-        cross_tenant = await clients["outsider"].get(
-            f"/api/v1/workspaces/{workspace_id}/members"
-        )
+        cross_tenant = await clients["outsider"].get(f"/api/v1/workspaces/{workspace_id}/members")
         assert cross_tenant.status_code == 404
 
         self_change = await clients["admin"].post(

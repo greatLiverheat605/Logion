@@ -222,12 +222,10 @@ async def test_offline_topic_mastery_review_sync_and_personal_visibility() -> No
         assert owner_records[("topic", str(topic_a))]["payload"]["description"] == (
             "private topic details"
         )
-        assert owner_records[("mastery", str(mastery_id))]["payload"][
-            "confirmed_level"
-        ] == "familiar"
-        assert owner_records[("review_schedule", str(schedule_id))]["payload"][
-            "interval_days"
-        ] == 4
+        assert (
+            owner_records[("mastery", str(mastery_id))]["payload"]["confirmed_level"] == "familiar"
+        )
+        assert owner_records[("review_schedule", str(schedule_id))]["payload"]["interval_days"] == 4
 
         viewer_snapshot = await viewer.post(
             f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",

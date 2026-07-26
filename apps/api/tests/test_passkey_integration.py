@@ -247,9 +247,7 @@ async def test_passkey_registration_login_replay_and_revocation() -> None:
         base_url=origin,
         headers=headers,
     ) as passkey_client:
-        login_options_response = await passkey_client.post(
-            "/api/v1/auth/passkeys/login/options"
-        )
+        login_options_response = await passkey_client.post("/api/v1/auth/passkeys/login/options")
         assert login_options_response.status_code == 200, login_options_response.text
         login_options = login_options_response.json()
         login_public_key = login_options["public_key"]
@@ -334,9 +332,7 @@ async def test_passkey_registration_login_replay_and_revocation() -> None:
         base_url=origin,
         headers=headers,
     ) as revoked_client:
-        next_options_response = await revoked_client.post(
-            "/api/v1/auth/passkeys/login/options"
-        )
+        next_options_response = await revoked_client.post("/api/v1/auth/passkeys/login/options")
         assert next_options_response.status_code == 200
         next_options = next_options_response.json()
         next_public_key = next_options["public_key"]

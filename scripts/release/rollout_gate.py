@@ -105,9 +105,7 @@ def stage_policy(policy: dict[str, Any], stage: int) -> dict[str, Any]:
     return found[stage]
 
 
-def validate_previous(
-    path: Path | None, *, stage: int, source_sha: str, mode: str
-) -> str | None:
+def validate_previous(path: Path | None, *, stage: int, source_sha: str, mode: str) -> str | None:
     previous_stage = {5: None, 25: 5, 100: 25}[stage]
     if previous_stage is None:
         if path is not None:
@@ -201,9 +199,7 @@ def evaluate(
 
     observation_seconds = int((timestamps[-1] - timestamps[0]).total_seconds())
     error_rate = total_errors / total_requests if total_requests else 1.0
-    sync_failure_rate = (
-        total_sync_failures / total_sync_attempts if total_sync_attempts else 1.0
-    )
+    sync_failure_rate = total_sync_failures / total_sync_attempts if total_sync_attempts else 1.0
     measured = {
         "samples": len(raw_samples),
         "observation_seconds": observation_seconds,

@@ -27,9 +27,7 @@ def fixture_credentials(environ: Mapping[str, str]) -> tuple[str, str]:
     email = environ.get(FIXTURE_EMAIL_ENV, "").strip()
     password = environ.get(FIXTURE_CREDENTIAL_ENV, "")
     if not email or not password:
-        raise PerformanceGateError(
-            f"{FIXTURE_EMAIL_ENV} and {FIXTURE_CREDENTIAL_ENV} are required"
-        )
+        raise PerformanceGateError(f"{FIXTURE_EMAIL_ENV} and {FIXTURE_CREDENTIAL_ENV} are required")
     return email, password
 
 

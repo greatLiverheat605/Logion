@@ -126,9 +126,7 @@ def main() -> None:
     try:
         report = evaluate(
             policy=load_policy(args.policy),
-            node_packages=pnpm_packages(
-                json.loads(args.pnpm_json.read_text(encoding="utf-8-sig"))
-            ),
+            node_packages=pnpm_packages(json.loads(args.pnpm_json.read_text(encoding="utf-8-sig"))),
             py_packages=python_packages(),
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
