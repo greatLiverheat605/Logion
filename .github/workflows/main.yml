@@ -110,22 +110,22 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}-backup:${{ github.sha }}
           provenance: mode=max
           sbom: true
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-web
           subject-digest: ${{ steps.web.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-api
           subject-digest: ${{ steps.api.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-worker
           subject-digest: ${{ steps.worker.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-backup
           subject-digest: ${{ steps.backup.outputs.digest }}
