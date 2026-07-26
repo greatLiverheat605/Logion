@@ -89,14 +89,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --group dev --frozen
       - run: pnpm ci:fast
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: phase0-candidate-evidence-${{ inputs.source_sha }}
           path: candidate-evidence
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.candidate_run_id }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: capacity-profile-${{ inputs.source_sha }}
           path: reports/capacity
