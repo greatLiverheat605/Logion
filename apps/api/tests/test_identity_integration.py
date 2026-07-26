@@ -101,9 +101,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
 
         devices = await login_client.get("/api/v1/auth/devices")
         assert devices.status_code == 200
-        current_device = next(
-            device for device in devices.json()["devices"] if device["current"]
-        )
+        current_device = next(device for device in devices.json()["devices"] if device["current"])
         revoked_current = await login_client.delete(
             f"/api/v1/auth/devices/{current_device['id']}",
             headers={"X-CSRF-Token": csrf},

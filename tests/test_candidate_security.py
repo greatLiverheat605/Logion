@@ -66,6 +66,4 @@ def test_security_gates_collect_failures_and_reject_candidate(tmp_path: Path) ->
 
 def test_security_gates_reject_mutable_or_incomplete_images() -> None:
     with pytest.raises(candidate_security.CandidateSecurityError):
-        candidate_security.parse_images(
-            ["api=ghcr.io/greatliverheat605/logion-api:latest"]
-        )
+        candidate_security.parse_images(["api=ghcr.io/greatliverheat605/logion-api:latest"])

@@ -53,9 +53,7 @@ async def test_atomic_ownership_transfer_and_last_owner_protection() -> None:
         assert owner_second_login.status_code == 200, owner_second_login.text
         csrf["owner_second"] = clients["owner_second"].cookies["logion_csrf"]
 
-        owner_workspace = (await clients["owner"].get("/api/v1/workspaces")).json()[
-            "workspaces"
-        ][0]
+        owner_workspace = (await clients["owner"].get("/api/v1/workspaces")).json()["workspaces"][0]
         workspace_id = UUID(owner_workspace["id"])
         now = datetime.now(UTC)
         async with session_factory() as db:

@@ -43,9 +43,7 @@ async def test_topic_graph_mastery_separation_review_schedule_and_permissions() 
         owner_csrf = owner.cookies["logion_csrf"]
         workspace_id = UUID((await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"])
         private_space_id = UUID(
-            (await owner.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()["spaces"][0][
-                "id"
-            ]
+            (await owner.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()["spaces"][0]["id"]
         )
         shared = await owner.post(
             f"/api/v1/workspaces/{workspace_id}/spaces",
@@ -239,9 +237,7 @@ async def test_topic_graph_mastery_separation_review_schedule_and_permissions() 
         edges = list(
             (
                 await db.scalars(
-                    select(TopicDependency).where(
-                        TopicDependency.workspace_id == workspace_id
-                    )
+                    select(TopicDependency).where(TopicDependency.workspace_id == workspace_id)
                 )
             ).all()
         )
@@ -251,9 +247,7 @@ async def test_topic_graph_mastery_separation_review_schedule_and_permissions() 
         assert len(edges) == 2
         audits = list(
             (
-                await db.scalars(
-                    select(AuditEvent).where(AuditEvent.workspace_id == workspace_id)
-                )
+                await db.scalars(select(AuditEvent).where(AuditEvent.workspace_id == workspace_id))
             ).all()
         )
         serialized = " ".join(str(item.event_metadata) for item in audits)

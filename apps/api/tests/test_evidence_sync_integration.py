@@ -225,8 +225,7 @@ async def test_offline_evidence_decision_close_replay_and_bootstrap() -> None:
             f"/api/v1/workspaces/{workspace_id}/sync/bootstrap", json=bootstrap_request
         )
         records = {
-            (item["entity_type"], item["entity_id"]): item
-            for item in snapshot.json()["records"]
+            (item["entity_type"], item["entity_id"]): item for item in snapshot.json()["records"]
         }
         assert records[("task", str(task_id))]["payload"]["status"] == "done"
         assert records[("evidence", str(evidence_id))]["payload"]["summary"] == (
