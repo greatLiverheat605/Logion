@@ -94,9 +94,7 @@ async def test_password_recovery_is_uniform_revokes_sessions_and_notifies() -> N
         async with session_factory() as db:
             original_session_ids = tuple(
                 (
-                    await db.scalars(
-                        select(AuthSession.id).where(AuthSession.user_id == user_id)
-                    )
+                    await db.scalars(select(AuthSession.id).where(AuthSession.user_id == user_id))
                 ).all()
             )
         assert len(original_session_ids) == 2
@@ -192,9 +190,7 @@ async def test_password_recovery_is_uniform_revokes_sessions_and_notifies() -> N
             audit_events = list(
                 (
                     await db.scalars(
-                        select(AuditEvent).where(
-                            AuditEvent.target_id.in_((user_id, action.id))
-                        )
+                        select(AuditEvent).where(AuditEvent.target_id.in_((user_id, action.id)))
                     )
                 ).all()
             )

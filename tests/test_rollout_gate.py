@@ -62,9 +62,7 @@ def test_insufficient_observation_holds(tmp_path: Path) -> None:
     assert isinstance(samples, list)
     samples[-1]["observed_at"] = "2026-07-23T00:10:00Z"
     path = write_json(tmp_path / "hold.json", value)
-    result = rollout_gate.evaluate(
-        POLICY, path, stage=5, source_sha=SOURCE_SHA, mode="rehearsal"
-    )
+    result = rollout_gate.evaluate(POLICY, path, stage=5, source_sha=SOURCE_SHA, mode="rehearsal")
     assert result["decision"] == "hold"
 
 
@@ -74,9 +72,7 @@ def test_unhealthy_sample_aborts(tmp_path: Path) -> None:
     assert isinstance(samples, list)
     samples[1]["health_ok"] = False
     path = write_json(tmp_path / "abort.json", value)
-    result = rollout_gate.evaluate(
-        POLICY, path, stage=5, source_sha=SOURCE_SHA, mode="rehearsal"
-    )
+    result = rollout_gate.evaluate(POLICY, path, stage=5, source_sha=SOURCE_SHA, mode="rehearsal")
     assert result["decision"] == "abort"
 
 
@@ -87,15 +83,11 @@ def test_rejects_content_fields_and_synthetic_production_samples(tmp_path: Path)
     samples[0]["note_title"] = "must not enter observability"
     path = write_json(tmp_path / "content.json", value)
     with pytest.raises(rollout_gate.RolloutError, match="aggregate contract fields"):
-        rollout_gate.evaluate(
-            POLICY, path, stage=5, source_sha=SOURCE_SHA, mode="rehearsal"
-        )
+        rollout_gate.evaluate(POLICY, path, stage=5, source_sha=SOURCE_SHA, mode="rehearsal")
 
     production = write_json(tmp_path / "production.json", fixture(5))
     with pytest.raises(rollout_gate.RolloutError, match="live observability"):
-        rollout_gate.evaluate(
-            POLICY, production, stage=5, source_sha=SOURCE_SHA, mode="production"
-        )
+        rollout_gate.evaluate(POLICY, production, stage=5, source_sha=SOURCE_SHA, mode="production")
 
 
 def test_rejects_cross_candidate_previous_evidence(tmp_path: Path) -> None:

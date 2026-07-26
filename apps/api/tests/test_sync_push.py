@@ -31,11 +31,7 @@ def operation_payload() -> dict[str, object]:
 
 def test_push_dto_matches_authoritative_required_fields() -> None:
     schema_path = (
-        Path(__file__).parents[3]
-        / "packages"
-        / "contracts"
-        / "schemas"
-        / "sync-v1.schema.json"
+        Path(__file__).parents[3] / "packages" / "contracts" / "schemas" / "sync-v1.schema.json"
     )
     contract = json.loads(schema_path.read_text(encoding="utf-8"))["$defs"]
     assert set(SyncOperation.model_fields) == set(contract["syncOperation"]["properties"])
@@ -52,9 +48,9 @@ def test_push_dto_matches_authoritative_required_fields() -> None:
         "operations",
     }
     assert set(PushRequest.model_fields) == request_fields
-    assert {
-        name for name, field in PushRequest.model_fields.items() if field.is_required()
-    } == set(contract["pushRequest"]["allOf"][2]["required"])
+    assert {name for name, field in PushRequest.model_fields.items() if field.is_required()} == set(
+        contract["pushRequest"]["allOf"][2]["required"]
+    )
 
 
 def test_push_dto_forbids_unknown_fields_and_duplicate_dependencies() -> None:

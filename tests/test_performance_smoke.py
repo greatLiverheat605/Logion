@@ -28,9 +28,7 @@ def test_summary_enforces_complete_sample_and_strict_threshold() -> None:
 
 
 def test_summary_fails_when_p95_equals_threshold() -> None:
-    summary = api_smoke.summarize(
-        [500.0] * 20, request_count=20, concurrency=2, threshold_ms=500
-    )
+    summary = api_smoke.summarize([500.0] * 20, request_count=20, concurrency=2, threshold_ms=500)
     assert summary["passed"] is False
 
 

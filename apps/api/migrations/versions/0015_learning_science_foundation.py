@@ -103,9 +103,7 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("id", "workspace_id", name="uq_topic_dependency_workspace"),
     )
-    op.create_index(
-        "ix_topic_dependencies_dependent", "topic_dependencies", ["dependent_topic_id"]
-    )
+    op.create_index("ix_topic_dependencies_dependent", "topic_dependencies", ["dependent_topic_id"])
 
     op.create_table(
         "mastery_records",
@@ -116,9 +114,7 @@ def upgrade() -> None:
         sa.Column(
             "user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
         ),
-        sa.Column(
-            "suggested_level", sa.String(20), nullable=False, server_default="unknown"
-        ),
+        sa.Column("suggested_level", sa.String(20), nullable=False, server_default="unknown"),
         sa.Column("suggested_reason", sa.String(500), nullable=False, server_default=""),
         sa.Column("suggested_at", sa.DateTime(timezone=True)),
         sa.Column("confirmed_level", sa.String(20)),
@@ -201,9 +197,7 @@ def upgrade() -> None:
             "source IN ('mastery_confirmation','manual')",
             name="ck_review_schedule_source",
         ),
-        sa.CheckConstraint(
-            "interval_days BETWEEN 1 AND 3650", name="ck_review_interval_days"
-        ),
+        sa.CheckConstraint("interval_days BETWEEN 1 AND 3650", name="ck_review_interval_days"),
         sa.UniqueConstraint(
             "workspace_id", "topic_id", "user_id", name="uq_review_schedule_topic_user"
         ),
