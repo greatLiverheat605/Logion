@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import secrets
+import os
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,11 +15,22 @@ from typing import Any
 
 import httpx
 
-FIXTURE_EMAIL_DOMAIN = "example.com"
+FIXTURE_EMAIL_ENV = "LOGION_PERFORMANCE_FIXTURE_EMAIL"
+FIXTURE_CREDENTIAL_ENV = "LOGION_PERFORMANCE_FIXTURE_PASSWORD"
 
 
 class PerformanceGateError(RuntimeError):
     """The performance smoke could not produce valid passing evidence."""
+
+
+def fixture_credentials(environ: Mapping[str, str]) -> tuple[str, str]:
+    email = environ.get(FIXTURE_EMAIL_ENV, "").strip()
+    password = environ.get(FIXTURE_CREDENTIAL_ENV, "")
+    if not email or not password:
+        raise PerformanceGateError(
+            f"{FIXTURE_EMAIL_ENV} and {FIXTURE_CREDENTIAL_ENV} are required"
+        )
+    return email, password
 
 
 def percentile(values: list[float], percentage: int) -> float:
@@ -54,6 +66,8 @@ def summarize(
 def run_gate(
     base_url: str,
     *,
+    fixture_email: str,
+    fixture_password: str,
     request_count: int,
     concurrency: int,
     threshold_ms: float,
@@ -66,23 +80,18 @@ def run_gate(
         raise PerformanceGateError("threshold must be positive")
 
     origin = "http://localhost:3000"
-    # email-validator rejects special-use TLDs before the request reaches the benchmark fixture.
-    email = f"performance-{secrets.token_hex(8)}@{FIXTURE_EMAIL_DOMAIN}"
-    password = secrets.token_urlsafe(32)
     with httpx.Client(base_url=base_url, timeout=10, headers={"Origin": origin}) as client:
-        registration = client.post(
-            "/api/v1/auth/register",
+        login = client.post(
+            "/api/v1/auth/login",
             json={
-                "email": email,
-                "password": password,
+                "email": fixture_email,
+                "password": fixture_password,
                 "device_name": "Phase 6 performance gate",
                 "platform": "web",
             },
         )
-        if registration.status_code != 201:
-            raise PerformanceGateError(
-                f"fixture registration failed with HTTP {registration.status_code}"
-            )
+        if login.status_code != 200:
+            raise PerformanceGateError(f"fixture login failed with HTTP {login.status_code}")
 
         endpoint = "/api/v1/workspaces"
         warmup = client.get(endpoint)
@@ -137,8 +146,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
+        fixture_email, fixture_password = fixture_credentials(os.environ)
         evidence = run_gate(
             args.base_url.rstrip("/"),
+            fixture_email=fixture_email,
+            fixture_password=fixture_password,
             request_count=args.requests,
             concurrency=args.concurrency,
             threshold_ms=args.threshold_ms,

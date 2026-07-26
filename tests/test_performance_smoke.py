@@ -2,7 +2,6 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from email_validator import validate_email
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -35,9 +34,17 @@ def test_summary_fails_when_p95_equals_threshold() -> None:
     assert summary["passed"] is False
 
 
-def test_performance_fixture_uses_an_email_validator_compatible_domain() -> None:
-    result = validate_email(
-        f"performance@{api_smoke.FIXTURE_EMAIL_DOMAIN}",
-        check_deliverability=False,
-    )
-    assert result.normalized == "performance@example.com"
+def test_performance_fixture_credentials_are_required() -> None:
+    with pytest.raises(api_smoke.PerformanceGateError, match="are required"):
+        api_smoke.fixture_credentials({})
+    with pytest.raises(api_smoke.PerformanceGateError, match="are required"):
+        api_smoke.fixture_credentials({api_smoke.FIXTURE_EMAIL_ENV: "performance@example.com"})
+
+
+def test_performance_fixture_credentials_are_loaded_from_the_environment() -> None:
+    assert api_smoke.fixture_credentials(
+        {
+            api_smoke.FIXTURE_EMAIL_ENV: " performance@example.com ",
+            api_smoke.FIXTURE_CREDENTIAL_ENV: "random-password-value",
+        }
+    ) == ("performance@example.com", "random-password-value")
