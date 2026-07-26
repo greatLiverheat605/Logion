@@ -110,26 +110,30 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}-backup:${{ github.sha }}
           provenance: mode=max
           sbom: true
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-web
           subject-digest: ${{ steps.web.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v4
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-api
           subject-digest: ${{ steps.api.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v4
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-worker
           subject-digest: ${{ steps.worker.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v4
+          create-storage-record: false
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-backup
           subject-digest: ${{ steps.backup.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
       - name: Generate immutable candidate manifest
         env:
           WEB_DIGEST: ${{ steps.web.outputs.digest }}
