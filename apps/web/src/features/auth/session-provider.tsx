@@ -16,6 +16,7 @@ import {
   createAuthApi,
   createSessionCoordinator,
   createWebLockRefreshCoordinator,
+  sessionRefreshDelay,
   type SessionCoordinator,
   type SessionState,
 } from "./session";
@@ -39,13 +40,41 @@ export function SessionProvider({
   const generation = useRef(0);
   const [state, setState] = useState<SessionState>({ status: "loading" });
 
+  const runRefresh = useCallback(
+    (showLoading: boolean) => {
+      const currentGeneration = ++generation.current;
+      if (showLoading) setState({ status: "loading" });
+      void coordinator.refresh().then((nextState) => {
+        if (generation.current === currentGeneration) setState(nextState);
+      });
+    },
+    [coordinator],
+  );
+
   const refresh = useCallback(() => {
-    const currentGeneration = ++generation.current;
-    setState({ status: "loading" });
-    void coordinator.refresh().then((nextState) => {
-      if (generation.current === currentGeneration) setState(nextState);
-    });
-  }, [coordinator]);
+    runRefresh(true);
+  }, [runRefresh]);
+
+  const sessionExpiresAt =
+    state.status === "authenticated" ? state.sessionExpiresAt : null;
+
+  useEffect(() => {
+    if (sessionExpiresAt === null) return;
+    const scheduleDelay = sessionRefreshDelay(sessionExpiresAt);
+    if (scheduleDelay === null) return;
+
+    const refreshIfDue = () => {
+      if (sessionRefreshDelay(sessionExpiresAt) === 0) runRefresh(false);
+    };
+    const timer = window.setTimeout(() => runRefresh(false), scheduleDelay);
+    document.addEventListener("visibilitychange", refreshIfDue);
+    window.addEventListener("focus", refreshIfDue);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", refreshIfDue);
+      window.removeEventListener("focus", refreshIfDue);
+    };
+  }, [runRefresh, sessionExpiresAt]);
 
   useEffect(() => {
     const currentGeneration = ++generation.current;

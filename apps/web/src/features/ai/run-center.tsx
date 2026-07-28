@@ -3,6 +3,16 @@
 import type { components } from "@logion/contracts";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductHero,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductProgress,
+  ProductTag,
+} from "@/components/product/product-ui";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -13,7 +23,7 @@ type Preview = components["schemas"]["AIRouteResolveResponse"];
 function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
     if (error.code === "AI_BUDGET_EXCEEDED")
-      return "本月 AI 预算不足，未发送内容。";
+      return "本月 AI Token 使用量已达上限，内容未发送。";
     if (error.status === 403)
       return "当前角色无权使用 AI，或需要重新验证身份。";
     return `AI 操作未完成（${error.code}，请求编号：${error.requestId}）。`;
@@ -90,6 +100,16 @@ export function AIRunCenter() {
 
   const visibleRuns = dataWorkspaceId === workspaceId ? runs : [];
   const visibleDrafts = dataWorkspaceId === workspaceId ? drafts : [];
+  const pendingDrafts = visibleDrafts.filter(
+    (draft) => draft.status === "pending",
+  ).length;
+  const activeRuns = visibleRuns.filter((run) =>
+    ["queued", "running"].includes(run.status),
+  ).length;
+  const completedRuns = visibleRuns.filter(
+    (run) => run.status === "succeeded",
+  ).length;
+  const reviewedDrafts = visibleDrafts.length - pendingDrafts;
 
   async function createRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,7 +147,7 @@ export function AIRunCenter() {
       if (!first) throw new Error("No route candidate");
       const confirmed = window.confirm(
         `将发送字段“${inputName}”至 Provider ${first.provider_id} / 模型 ${first.model_id}。` +
-          `估算 ${first.estimated_tokens} Token、${first.estimated_cost_minor} ${first.currency} 最小单位。` +
+          `预计使用 ${first.estimated_tokens} Token。` +
           "内容可能离开当前部署区域；AI 只生成待审草稿。确认发送？",
       );
       if (!confirmed) {
@@ -213,14 +233,73 @@ export function AIRunCenter() {
 
   return (
     <section className="settings-page" aria-labelledby="ai-runs-heading">
-      <header>
-        <p className="eyebrow">LOGION · AUDITABLE AI</p>
-        <h1 id="ai-runs-heading">AI 运行与草稿</h1>
-        <p aria-live="polite">
-          {!online ? "当前离线：云 AI 不可用。" : status}
-        </p>
-      </header>
-      <section className="settings-card">
+      <ProductPageHeader
+        eyebrow="AI PROVIDER · GROUNDED DRAFTS"
+        title={
+          <span id="ai-runs-heading">让 AI 围绕你的资料生成可审查草稿</span>
+        }
+        description={
+          <>
+            <p>
+              来源、隐私边界、路由和草稿审查在同一页面；AI
+              不直接改变任务、掌握或研究结论。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {!online ? "当前离线：云 AI 不可用。" : status}
+            </p>
+          </>
+        }
+      />
+      <ProductHero
+        badge={
+          <ProductTag tone={online ? "good" : "warn"}>
+            {online ? "在线可用" : "当前离线"}
+          </ProductTag>
+        }
+        title={
+          pendingDrafts > 0
+            ? `${pendingDrafts} 份草稿等待你的决定`
+            : "创建一份可追溯、可拒绝的 AI 草稿"
+        }
+        progressLabel="草稿审查率"
+        progressValue={
+          visibleDrafts.length
+            ? (reviewedDrafts / visibleDrafts.length) * 100
+            : 0
+        }
+      >
+        每次运行都先预检发送内容；生成结果只进入草稿区，不会自动覆盖正式学习记录。
+      </ProductHero>
+      <div className="product-metric-grid">
+        <ProductMetric
+          label="全部运行"
+          value={visibleRuns.length}
+          detail={`${activeRuns} 项处理中`}
+          tone="info"
+        />
+        <ProductMetric
+          label="已完成运行"
+          value={completedRuns}
+          detail="保留审计状态"
+          tone="good"
+        />
+        <ProductMetric
+          label="待审草稿"
+          value={pendingDrafts}
+          detail="必须人工决定"
+          tone={pendingDrafts ? "warn" : "default"}
+        />
+        <ProductMetric
+          label="已审草稿"
+          value={reviewedDrafts}
+          detail="已批准或拒绝"
+        />
+      </div>
+
+      <ProductDisclosure
+        summary="AI 工作区"
+        description="选择运行与草稿所属的现有工作区"
+      >
         <label htmlFor="ai-run-workspace">工作区</label>
         <select
           id="ai-run-workspace"
@@ -233,9 +312,12 @@ export function AIRunCenter() {
             </option>
           ))}
         </select>
-      </section>
-      <section className="settings-card">
-        <h3>创建结构化草稿</h3>
+      </ProductDisclosure>
+
+      <ProductDisclosure
+        summary="创建结构化草稿"
+        description="明确目标、发送字段和预期输出，再执行预检"
+      >
         <form className="planning-form" onSubmit={createRun}>
           <label>
             任务类型
@@ -298,9 +380,17 @@ export function AIRunCenter() {
             预检并确认发送
           </button>
         </form>
-      </section>
-      <section className="settings-card">
-        <h3>运行</h3>
+      </ProductDisclosure>
+
+      <ProductPanel
+        title="运行队列"
+        description="查看任务状态、尝试次数并取消尚未完成的运行。"
+        aside={
+          <ProductTag tone={activeRuns ? "warn" : "good"}>
+            {activeRuns ? `${activeRuns} 项处理中` : "队列空闲"}
+          </ProductTag>
+        }
+      >
         <button
           type="button"
           disabled={!online || !workspaceId}
@@ -330,9 +420,33 @@ export function AIRunCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h3>待审草稿</h3>
+        {visibleRuns.length === 0 ? (
+          <ProductEmptyState
+            icon="◇"
+            title="还没有 AI 运行"
+            description="打开上方创建面板，定义一个结构化草稿任务。"
+          />
+        ) : null}
+      </ProductPanel>
+
+      <ProductPanel
+        title="草稿审查台"
+        description="检查结构化输出，必要时编辑，再明确批准或拒绝。"
+        aside={
+          <ProductTag tone={pendingDrafts ? "warn" : "good"}>
+            {pendingDrafts} 份待审
+          </ProductTag>
+        }
+      >
+        <ProductProgress
+          label="审查完成率"
+          value={
+            visibleDrafts.length
+              ? (reviewedDrafts / visibleDrafts.length) * 100
+              : 0
+          }
+          tone="good"
+        />
         {visibleDrafts.map((draft) => (
           <form
             key={`${draft.id}:${draft.version}`}
@@ -381,7 +495,14 @@ export function AIRunCenter() {
             </span>
           </form>
         ))}
-      </section>
+        {visibleDrafts.length === 0 ? (
+          <ProductEmptyState
+            icon="✓"
+            title="暂无待审草稿"
+            description="AI 输出生成后会进入此处，正式记录不会自动改变。"
+          />
+        ) : null}
+      </ProductPanel>
     </section>
   );
 }

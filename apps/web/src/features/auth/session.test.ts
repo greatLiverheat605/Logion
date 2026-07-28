@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LogionApiError } from "@/lib/api/client";
 
-import { createAuthApi, createSessionCoordinator } from "./session";
+import {
+  createAuthApi,
+  createSessionCoordinator,
+  sessionRefreshDelay,
+} from "./session";
 
 type AuthResponse = components["schemas"]["AuthResponse"];
 type UserResponse = components["schemas"]["UserResponse"];
@@ -45,19 +49,20 @@ describe("session coordinator", () => {
     });
   });
 
-  it("uses the current access session without refreshing", async () => {
+  it("rotates a verified session so its exact expiry can be scheduled", async () => {
     const authApi = {
       me: vi.fn().mockResolvedValue(user),
-      refresh: vi.fn(),
+      refresh: vi.fn().mockResolvedValue(authResponse),
     };
     const coordinator = createSessionCoordinator(authApi);
 
     await expect(coordinator.bootstrap()).resolves.toEqual({
       status: "authenticated",
-      sessionExpiresAt: null,
+      sessionExpiresAt: authResponse.session_expires_at,
       user,
     });
-    expect(authApi.refresh).not.toHaveBeenCalled();
+    expect(authApi.me).toHaveBeenCalledTimes(1);
+    expect(authApi.refresh).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes once after access expiry and returns the rotated session", async () => {
@@ -144,5 +149,21 @@ describe("session coordinator", () => {
       },
     });
     expect(JSON.stringify(state)).not.toContain("database credentials leaked");
+  });
+
+  it("schedules refresh one minute before access expiry", () => {
+    expect(
+      sessionRefreshDelay(
+        "2026-07-20T00:15:00Z",
+        Date.parse("2026-07-20T00:10:00Z"),
+      ),
+    ).toBe(240_000);
+    expect(
+      sessionRefreshDelay(
+        "2026-07-20T00:15:00Z",
+        Date.parse("2026-07-20T00:14:30Z"),
+      ),
+    ).toBe(0);
+    expect(sessionRefreshDelay("not-a-date", 0)).toBeNull();
   });
 });

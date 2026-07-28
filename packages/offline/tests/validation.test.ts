@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   LogionOfflineDatabase,
   hashPayload,
   normalizeStorageError,
   OfflineStorageError,
+  secureRandomUuid,
   validateMutation,
   validatePayload,
   validateSyncErrorCode,
@@ -168,6 +169,28 @@ describe("offline validation and public errors", () => {
   });
 
   it("fails closed when Web Crypto is unavailable", async () => {
+    expect(() => secureRandomUuid(null)).toThrow(
+      expect.objectContaining({ code: "OFFLINE_CRYPTO_UNAVAILABLE" }),
+    );
+    expect(() => secureRandomUuid({ randomUUID: undefined } as never)).toThrow(
+      expect.objectContaining({ code: "OFFLINE_CRYPTO_UNAVAILABLE" }),
+    );
+    expect(
+      secureRandomUuid({
+        randomUUID: () => "01900000-0000-7000-8000-000000000008",
+      }),
+    ).toBe("01900000-0000-7000-8000-000000000008");
+    expect(() =>
+      secureRandomUuid({ randomUUID: () => "not-a-uuid" as never }),
+    ).toThrow(expect.objectContaining({ code: "OFFLINE_CRYPTO_UNAVAILABLE" }));
+    expect(() => {
+      validateUuid(secureRandomUuid());
+    }).not.toThrow();
+    vi.stubGlobal("crypto", undefined);
+    expect(() => secureRandomUuid()).toThrow(
+      expect.objectContaining({ code: "OFFLINE_CRYPTO_UNAVAILABLE" }),
+    );
+    vi.unstubAllGlobals();
     await expect(
       hashPayload({ value: true }, 1024, null),
     ).rejects.toMatchObject({ code: "OFFLINE_CRYPTO_UNAVAILABLE" });

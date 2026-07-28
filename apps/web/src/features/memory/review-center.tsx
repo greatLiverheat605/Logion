@@ -4,9 +4,7 @@ import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
-  databaseNameForUser,
   OfflineVault,
-  openOfflineDatabase,
   ProtectedOfflineRepository,
   SyncClient,
   type JsonObject,
@@ -14,15 +12,21 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductBarChart,
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductProgress,
+  ProductTag,
+  ProductWorkflowStage,
+} from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
+import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -125,6 +129,14 @@ const MASTERY_OPTIONS: readonly { label: string; value: MasteryLevel }[] = [
   { label: "能够熟练应用", value: "proficient" },
   { label: "已经掌握", value: "mastered" },
 ];
+const MASTERY_CHART_LABELS: Record<MasteryLevel, string> = {
+  unknown: "未接触",
+  exposed: "已接触",
+  practicing: "练习中",
+  familiar: "基本熟悉",
+  proficient: "熟练应用",
+  mastered: "已掌握",
+};
 const REVIEW_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short",
@@ -171,13 +183,21 @@ async function decrypt<T extends JsonObject>(
 
 export function ReviewCenter() {
   const { state: session } = useSession();
+  const {
+    database,
+    phase: vaultPhase,
+    revision: vaultRevision,
+    unlock: unlockVault,
+    vault,
+  } = useVaultSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备审查中心……");
+  const [referenceTime] = useState(() => Date.now());
   const [topics, setTopics] = useState<LocalView<TopicPayload>[]>([]);
   const [dependencies, setDependencies] = useState<
     LocalView<DependencyPayload>[]
@@ -198,8 +218,6 @@ export function ReviewCenter() {
     LocalView<ReviewFindingPayload>[]
   >([]);
   const [conflicts, setConflicts] = useState(0);
-  const database = useRef<LogionOfflineDatabase | null>(null);
-  const vault = useRef<OfflineVault | null>(null);
 
   const loadContext = useCallback(async () => {
     try {
@@ -242,7 +260,6 @@ export function ReviewCenter() {
 
   useEffect(() => {
     queueMicrotask(() => void loadContext());
-    return () => database.current?.close();
   }, [loadContext]);
 
   useEffect(() => {
@@ -413,30 +430,29 @@ export function ReviewCenter() {
       new FormData(event.currentTarget).get("passphrase") ?? "",
     );
     try {
-      database.current?.close();
-      const db = await openOfflineDatabase({
-        databaseName: databaseNameForUser(session.user.id),
-        indexedDB: globalThis.indexedDB ?? null,
-        IDBKeyRange: globalThis.IDBKeyRange ?? null,
-      });
-      const localVault = new OfflineVault(db);
-      if ((await db.vaultMetadata.get(session.user.id)) === undefined) {
-        await localVault.initialize(session.user.id, passphrase);
-      } else {
-        await localVault.unlock(session.user.id, passphrase);
-      }
-      database.current = db;
-      vault.current = localVault;
+      const { database: db, vault: localVault } = await unlockVault(passphrase);
       await bootstrap(db, localVault);
       await refresh(db, localVault);
-      setUnlocked(true);
       setStatus("审查数据已解锁；知识点与掌握确认支持断网编辑。");
       event.currentTarget.reset();
     } catch (error) {
-      setUnlocked(false);
       setStatus(errorMessage(error));
     }
   }
+
+  useEffect(() => {
+    const db = database.current;
+    const localVault = vault.current;
+    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    queueMicrotask(
+      () =>
+        void refresh(db, localVault)
+          .then(() => setStatus("复习资料已在应用内解锁。"))
+          .catch((error: unknown) => setStatus(errorMessage(error))),
+    );
+    // Refresh follows the shared Vault revision and selected workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlocked, vaultRevision, workspaceId]);
 
   async function synchronize() {
     const db = database.current;
@@ -893,22 +909,161 @@ export function ReviewCenter() {
     selectedSpace?.visibility === "private" ||
     (selectedWorkspace !== undefined &&
       SHARED_GRAPH_EDITOR_ROLES.has(selectedWorkspace.role));
+  const visibleMastery = mastery.filter(
+    (item) => item.payload.space_id === spaceId,
+  );
+  const visibleSchedules = schedules.filter(
+    (item) => item.payload.space_id === spaceId,
+  );
+  const confirmedMastery = visibleMastery.filter(
+    (item) => item.payload.confirmed_level !== null,
+  ).length;
+  const dueReviews = visibleSchedules.filter(
+    (item) =>
+      item.payload.status === "due" ||
+      new Date(item.payload.next_review_at).getTime() <= referenceTime,
+  ).length;
+  const openPatterns = visiblePatterns.filter(
+    (item) => item.payload.status === "open",
+  ).length;
+  const masteryRate = visibleTopics.length
+    ? (confirmedMastery / visibleTopics.length) * 100
+    : 0;
+  const masteryChart = MASTERY_OPTIONS.map((option) => ({
+    label: MASTERY_CHART_LABELS[option.value],
+    value: visibleMastery.filter(
+      (item) => item.payload.confirmed_level === option.value,
+    ).length,
+  }));
 
   return (
     <main id="main-content" className="settings-page today-page">
-      <header>
-        <p className="eyebrow">LOGION · REVIEW</p>
-        <h1>把掌握判断与复习安排分开记录</h1>
-        <p aria-live="polite">{status}</p>
-        {conflicts > 0 ? (
-          <p className="residual-data-warning" role="alert">
-            有 {conflicts} 项冲突等待处理，系统不会静默覆盖掌握状态。
-          </p>
-        ) : null}
-      </header>
+      <ProductPageHeader
+        eyebrow="REVIEW · ACTIVE RECALL"
+        title="把“看过”变成真正能回忆"
+        description={
+          <>
+            <p>到期队列、主动回忆、掌握变化和错因模式在同一工作流中完成。</p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+        actions={
+          <>
+            {!unlocked ? (
+              <a className="product-action-link" href="#review-vault">
+                解锁本地资料
+              </a>
+            ) : null}
+            <button
+              type="button"
+              disabled={!unlocked}
+              onClick={() => void synchronize()}
+            >
+              立即同步
+            </button>
+          </>
+        }
+      />
+      {conflicts > 0 ? (
+        <p className="residual-data-warning" role="alert">
+          有 {conflicts} 项冲突等待处理，系统不会静默覆盖掌握状态。
+        </p>
+      ) : null}
 
-      <section className="settings-card">
-        <h2>审查上下文</h2>
+      <ProductWorkflowStage
+        badge={
+          <ProductTag tone={dueReviews > 0 ? "warn" : "good"}>
+            {dueReviews > 0 ? `${dueReviews} 项到期复习` : "复习节奏正常"}
+          </ProductTag>
+        }
+        title={
+          dueReviews > 0
+            ? "先完成到期回忆，再补充新知识"
+            : "用一次回忆检查真实掌握度"
+        }
+        stepsLabel="主动回忆闭环"
+        steps={[
+          {
+            label: "完成到期回忆",
+            detail: dueReviews
+              ? `${dueReviews} 项安排已经到期`
+              : `${visibleQuizItems.length} 道回忆题可练习`,
+            state: dueReviews
+              ? "current"
+              : visibleAttempts.length
+                ? "complete"
+                : "pending",
+          },
+          {
+            label: "确认真实掌握",
+            detail: `${confirmedMastery} / ${visibleTopics.length} 个知识点已确认`,
+            state: dueReviews
+              ? "pending"
+              : confirmedMastery
+                ? "complete"
+                : "current",
+          },
+          {
+            label: "处理重复错因",
+            detail: openPatterns
+              ? `${openPatterns} 个开放错因等待处理`
+              : "复盘错误原因并决定是否关闭",
+            state: openPatterns
+              ? "attention"
+              : visibleAttempts.length
+                ? "complete"
+                : "pending",
+          },
+        ]}
+        actions={
+          <a
+            className="product-action-link primary"
+            href={
+              visibleQuizItems.length ? "#active-recall" : "#knowledge-graph"
+            }
+          >
+            {visibleQuizItems.length ? "开始主动回忆" : "建立知识图谱"}
+          </a>
+        }
+      >
+        系统建议只提供线索；掌握度、答题结果与错因处理都由你明确确认，复习安排据此形成。
+      </ProductWorkflowStage>
+
+      <div className="product-metric-grid product-metric-grid-workflow">
+        <ProductMetric
+          label="知识点"
+          value={visibleTopics.length}
+          detail={`${visibleDependencies.length} 条依赖关系`}
+          tone="info"
+        />
+        <ProductMetric
+          label="已确认掌握"
+          value={confirmedMastery}
+          detail={`${Math.round(masteryRate)}% 已留下判断`}
+          tone="good"
+        />
+        <ProductMetric
+          label="待复习"
+          value={dueReviews}
+          detail="来自现有复习计划"
+          tone={dueReviews > 0 ? "warn" : "default"}
+        />
+        <ProductMetric
+          label="开放错因"
+          value={openPatterns}
+          detail={`${visibleAttempts.length} 次答题记录`}
+          tone={openPatterns > 0 ? "bad" : "default"}
+        />
+      </div>
+
+      <ProductDisclosure
+        id="review-vault"
+        summary="复习空间与本地资料"
+        description="切换知识空间并解锁端侧加密内容"
+        defaultOpen={!unlocked}
+      >
         <div className="inline-form">
           <label htmlFor="review-workspace">工作区</label>
           <select
@@ -934,18 +1089,7 @@ export function ReviewCenter() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!unlocked}
-            onClick={() => void synchronize()}
-          >
-            立即同步
-          </button>
         </div>
-      </section>
-
-      <section className="settings-card">
-        <h2>本地解锁</h2>
         <form className="inline-form" onSubmit={unlock}>
           <label htmlFor="review-passphrase">本地口令</label>
           <input
@@ -956,67 +1100,125 @@ export function ReviewCenter() {
             autoComplete="current-password"
             required
           />
-          <button type="submit">{unlocked ? "重新解锁" : "解锁"}</button>
+          <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
         </form>
-      </section>
+      </ProductDisclosure>
 
-      <section className="settings-card">
-        <h2>新增知识点</h2>
-        {!canEditGraph && spaceId ? (
-          <p className="residual-data-warning">
-            当前角色可以阅读共享知识图谱并确认自己的掌握度，但不能修改图谱。
-          </p>
-        ) : null}
-        <form className="planning-form" onSubmit={createTopic}>
-          <label htmlFor="topic-title">名称</label>
-          <input id="topic-title" name="title" maxLength={160} required />
-          <label htmlFor="topic-description">说明</label>
-          <textarea
-            id="topic-description"
-            name="description"
-            maxLength={10000}
-          />
-          <button
-            type="submit"
-            disabled={!unlocked || !spaceId || !canEditGraph}
-          >
-            保存到本地
-          </button>
-        </form>
-      </section>
+      <div className="product-dashboard-grid product-dashboard-grid-wide">
+        <ProductPanel
+          title="掌握度分布"
+          description="仅统计你已经明确确认的掌握等级"
+        >
+          <ProductBarChart items={masteryChart} label="知识掌握度分布" />
+          <ProductProgress label="确认覆盖率" value={masteryRate} tone="good" />
+        </ProductPanel>
+        <ProductPanel
+          title="复习信号"
+          description="根据现有记录聚合，不生成虚构评分"
+        >
+          <div className="product-signal-grid">
+            <div>
+              <span>到期安排</span>
+              <strong>{dueReviews}</strong>
+            </div>
+            <div>
+              <span>形成性测验</span>
+              <strong>{visibleQuizItems.length}</strong>
+            </div>
+            <div>
+              <span>开放错因</span>
+              <strong>{openPatterns}</strong>
+            </div>
+            <div>
+              <span>审查记录</span>
+              <strong>{visibleReviews.length}</strong>
+            </div>
+          </div>
+        </ProductPanel>
+      </div>
 
-      <section className="settings-card">
-        <h2>知识依赖</h2>
-        <form className="planning-form" onSubmit={createDependency}>
-          <label htmlFor="topic-prerequisite">先学知识点</label>
-          <select id="topic-prerequisite" name="prerequisite_topic_id" required>
-            {visibleTopics.map((item) => (
-              <option key={item.entity.entity_id} value={item.entity.entity_id}>
-                {item.payload.title}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="topic-dependent">后学知识点</label>
-          <select id="topic-dependent" name="dependent_topic_id" required>
-            {visibleTopics.map((item) => (
-              <option key={item.entity.entity_id} value={item.entity.entity_id}>
-                {item.payload.title}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={!unlocked || visibleTopics.length < 2 || !canEditGraph}
-          >
-            保存依赖到本地
-          </button>
-        </form>
-        <p>{visibleDependencies.length} 条依赖已记录。</p>
-      </section>
+      <ProductDisclosure
+        id="knowledge-graph"
+        summary="维护知识图谱"
+        description="新增知识点并记录先修依赖；共享空间遵循现有角色权限"
+      >
+        <div className="product-config-grid">
+          <section className="settings-card">
+            <h2>新增知识点</h2>
+            {!canEditGraph && spaceId ? (
+              <p className="residual-data-warning">
+                当前角色可以阅读共享知识图谱并确认自己的掌握度，但不能修改图谱。
+              </p>
+            ) : null}
+            <form className="planning-form" onSubmit={createTopic}>
+              <label htmlFor="topic-title">名称</label>
+              <input id="topic-title" name="title" maxLength={160} required />
+              <label htmlFor="topic-description">说明</label>
+              <textarea
+                id="topic-description"
+                name="description"
+                maxLength={10000}
+              />
+              <button
+                type="submit"
+                disabled={!unlocked || !spaceId || !canEditGraph}
+              >
+                保存到本地
+              </button>
+            </form>
+          </section>
 
-      <section className="settings-card sync-wide-card">
-        <h2>个人掌握与复习</h2>
-        <p>系统建议仅供参考；只有你明确提交的选项才是确认掌握度。</p>
+          <section className="settings-card">
+            <h2>知识依赖</h2>
+            <form className="planning-form" onSubmit={createDependency}>
+              <label htmlFor="topic-prerequisite">先学知识点</label>
+              <select
+                id="topic-prerequisite"
+                name="prerequisite_topic_id"
+                required
+              >
+                {visibleTopics.map((item) => (
+                  <option
+                    key={item.entity.entity_id}
+                    value={item.entity.entity_id}
+                  >
+                    {item.payload.title}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="topic-dependent">后学知识点</label>
+              <select id="topic-dependent" name="dependent_topic_id" required>
+                {visibleTopics.map((item) => (
+                  <option
+                    key={item.entity.entity_id}
+                    value={item.entity.entity_id}
+                  >
+                    {item.payload.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                disabled={
+                  !unlocked || visibleTopics.length < 2 || !canEditGraph
+                }
+              >
+                保存依赖到本地
+              </button>
+            </form>
+            <p>{visibleDependencies.length} 条依赖已记录。</p>
+          </section>
+        </div>
+      </ProductDisclosure>
+
+      <ProductPanel
+        className="sync-wide-card"
+        title="个人掌握与复习"
+        description="系统建议仅供参考；只有你明确提交的选项才是确认掌握度。"
+        aside={
+          <ProductTag tone="info">{visibleTopics.length} 个知识点</ProductTag>
+        }
+      >
         <div className="task-grid">
           {visibleTopics.map((topic) => {
             const current = mastery.find(
@@ -1074,14 +1276,20 @@ export function ReviewCenter() {
             );
           })}
           {visibleTopics.length === 0 ? (
-            <p className="empty-state">当前空间还没有知识点。</p>
+            <ProductEmptyState
+              icon="◎"
+              title="先建立知识图谱"
+              description="从一个核心知识点开始，再补充它与其他概念之间的先修关系。"
+            />
           ) : null}
         </div>
-      </section>
+      </ProductPanel>
 
-      <section className="settings-card">
-        <h2>新增形成性测验</h2>
-        <p>共享题目不会在答题前同步答案；测验仅用于自学，不用于监考或排名。</p>
+      <ProductDisclosure
+        summary="创建形成性测验"
+        description="围绕已有知识点建立主动回忆题；不用于监考或排名"
+      >
+        <p>共享题目不会在答题前同步答案，参考答案仅在提交后出现。</p>
         <form className="planning-form" onSubmit={createQuizItem}>
           <label htmlFor="quiz-topic">关联知识点</label>
           <select id="quiz-topic" name="topic_id" required>
@@ -1118,10 +1326,17 @@ export function ReviewCenter() {
             加密保存题目
           </button>
         </form>
-      </section>
+      </ProductDisclosure>
 
-      <section className="settings-card sync-wide-card">
-        <h2>离线答题</h2>
+      <ProductPanel
+        className="sync-wide-card"
+        id="active-recall"
+        title="主动回忆练习"
+        description="先作答，再查看判定；同时记录信心和错因。"
+        aside={
+          <ProductTag tone="info">{visibleQuizItems.length} 道题</ProductTag>
+        }
+      >
         <div className="task-grid">
           {visibleQuizItems.map((quiz) => {
             const latest = visibleAttempts.find(
@@ -1222,13 +1437,24 @@ export function ReviewCenter() {
             );
           })}
           {visibleQuizItems.length === 0 ? (
-            <p className="empty-state">当前空间还没有测验题。</p>
+            <ProductEmptyState
+              icon="?"
+              title="还没有回忆题"
+              description="为最容易遗忘的知识点创建一题，问题应促使你从记忆中提取，而不是简单识别。"
+            />
           ) : null}
         </div>
-      </section>
+      </ProductPanel>
 
-      <section className="settings-card">
-        <h2>个人错因模式</h2>
+      <ProductPanel
+        title="个人错因模式"
+        description="聚合反复出现的问题，解决后需要你明确关闭。"
+        aside={
+          <ProductTag tone={openPatterns > 0 ? "warn" : "good"}>
+            {openPatterns} 项开放
+          </ProductTag>
+        }
+      >
         {visiblePatterns.map((pattern) => (
           <article className="task-card" key={pattern.entity.entity_id}>
             <p>
@@ -1249,12 +1475,18 @@ export function ReviewCenter() {
           </article>
         ))}
         {visiblePatterns.length === 0 ? (
-          <p className="empty-state">尚未形成错因模式。</p>
+          <ProductEmptyState
+            icon="✓"
+            title="尚未形成重复错因"
+            description="完成更多回忆练习后，这里会汇总需要持续关注的问题。"
+          />
         ) : null}
-      </section>
+      </ProductPanel>
 
-      <section className="settings-card">
-        <h2>创建每日/每周审查</h2>
+      <ProductDisclosure
+        summary="创建每日或每周审查"
+        description="将一段时间内的进展、阻塞和调整沉淀为复盘记录"
+      >
         <form className="planning-form" onSubmit={createAuditReview}>
           <label htmlFor="audit-cadence">周期</label>
           <select id="audit-cadence" name="cadence">
@@ -1271,10 +1503,14 @@ export function ReviewCenter() {
             加密保存草稿
           </button>
         </form>
-      </section>
+      </ProductDisclosure>
 
-      <section className="settings-card sync-wide-card">
-        <h2>审查记录</h2>
+      <ProductPanel
+        className="sync-wide-card"
+        title="审查记录"
+        description="从历史学习证据中提炼进展、阻塞和下一步。"
+        aside={<ProductTag>{visibleReviews.length} 条记录</ProductTag>}
+      >
         <div className="task-grid">
           {visibleReviews.map((review) => {
             const findings = reviewFindings.filter(
@@ -1360,10 +1596,14 @@ export function ReviewCenter() {
             );
           })}
           {visibleReviews.length === 0 ? (
-            <p className="empty-state">尚无审查记录。</p>
+            <ProductEmptyState
+              icon="◫"
+              title="还没有复盘记录"
+              description="完成一次学习周期后，创建审查并记录最重要的发现与下一步。"
+            />
           ) : null}
         </div>
-      </section>
+      </ProductPanel>
     </main>
   );
 }

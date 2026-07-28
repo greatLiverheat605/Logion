@@ -3,6 +3,15 @@
 import type { components } from "@logion/contracts";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductHero,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductTag,
+} from "@/components/product/product-ui";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -149,13 +158,61 @@ export function WorkspaceCenter() {
 
   return (
     <main id="main-content" className="settings-page">
-      <header>
-        <p className="eyebrow">LOGION · WORKSPACES</p>
-        <h1>工作区与空间</h1>
-        <p aria-live="polite">{status}</p>
-      </header>
-      <section className="settings-card">
-        <h2>工作区</h2>
+      <ProductPageHeader
+        eyebrow="WORKSPACES · SPACES · MEMBERS"
+        title="把个人内容和小组协作边界看清楚"
+        description={
+          <>
+            <p>
+              工作区承载成员与治理，Space
+              决定实际内容可见性；管理员不自动读取私人 Space。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+      />
+      <ProductHero
+        badge={<ProductTag tone="info">个人与小组协作</ProductTag>}
+        title={
+          workspaces.find((item) => item.id === selected)?.name ??
+          "创建第一个工作区"
+        }
+        progressLabel="成员容量"
+        progressValue={Math.min(100, (members.length / 10) * 100)}
+      >
+        私有空间只属于自己，共享空间供受邀成员协作；角色和权限继续沿用现有规则。
+      </ProductHero>
+      <div className="product-metric-grid">
+        <ProductMetric
+          label="工作区"
+          value={workspaces.length}
+          detail="可切换上下文"
+          tone="info"
+        />
+        <ProductMetric
+          label="空间"
+          value={spaces.length}
+          detail={`${spaces.filter((item) => item.visibility === "private").length} 个私有`}
+        />
+        <ProductMetric
+          label="成员"
+          value={members.length}
+          detail="最多 10 人定位"
+          tone="good"
+        />
+        <ProductMetric
+          label="共享空间"
+          value={spaces.filter((item) => item.visibility === "shared").length}
+          detail="多人协作"
+        />
+      </div>
+
+      <ProductDisclosure
+        summary="创建或切换工作区"
+        description="工作区承载成员和空间"
+      >
         <form className="inline-form" onSubmit={createWorkspace}>
           <label htmlFor="workspace-name">新工作区名称</label>
           <input id="workspace-name" name="name" maxLength={120} required />
@@ -173,11 +230,14 @@ export function WorkspaceCenter() {
             </option>
           ))}
         </select>
-      </section>
+      </ProductDisclosure>
       {selected ? (
         <>
-          <section className="settings-card">
-            <h2>空间</h2>
+          <ProductPanel
+            title="空间"
+            description="私有空间用于个人资料，共享空间用于受邀协作。"
+            aside={<ProductTag>{spaces.length} 个</ProductTag>}
+          >
             <form className="inline-form" onSubmit={createSpace}>
               <label htmlFor="space-name">空间名称</label>
               <input id="space-name" name="name" maxLength={120} required />
@@ -200,9 +260,19 @@ export function WorkspaceCenter() {
                 </li>
               ))}
             </ul>
-          </section>
-          <section className="settings-card">
-            <h2>成员与邀请</h2>
+            {spaces.length === 0 ? (
+              <ProductEmptyState
+                icon="□"
+                title="还没有空间"
+                description="创建一个私有空间开始个人学习，或创建共享空间邀请成员。"
+              />
+            ) : null}
+          </ProductPanel>
+          <ProductPanel
+            title="成员与邀请"
+            description="受邀成员按现有角色参与查看、审查、贡献或管理。"
+            aside={<ProductTag tone="info">{members.length} / 10</ProductTag>}
+          >
             <form className="inline-form" onSubmit={invite}>
               <label htmlFor="invite-email">邮箱</label>
               <input id="invite-email" name="email" type="email" required />
@@ -243,7 +313,14 @@ export function WorkspaceCenter() {
                 </li>
               ))}
             </ul>
-          </section>
+            {members.length === 0 ? (
+              <ProductEmptyState
+                icon="＋"
+                title="尚无成员记录"
+                description="输入受邀邮箱并选择最小必要角色。"
+              />
+            ) : null}
+          </ProductPanel>
         </>
       ) : null}
     </main>

@@ -2,12 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
+import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
+import { AppModal } from "@/components/app-shell/app-modal";
+import { AppOperationalTools } from "@/components/app-shell/app-operational-tools";
 import { LogoutButton } from "@/features/auth/logout-button";
+import { useSession } from "@/features/auth/session-provider";
+import { useVaultSession } from "@/features/offline/vault-session-provider";
 
-type Overlay = "command" | "notifications" | "capture" | "focus";
-type NavItem = Readonly<{ href: string; icon: string; label: string }>;
+type Overlay = "command" | "notifications";
+type Theme = "light" | "dark";
+type NavItem = Readonly<{ href: string; icon: AppIconName; label: string }>;
 
 const NAV_GROUPS: readonly Readonly<{
   label: string;
@@ -16,32 +28,32 @@ const NAV_GROUPS: readonly Readonly<{
   {
     label: "学习与执行",
     items: [
-      { href: "/app/today", icon: "⌂", label: "今日" },
-      { href: "/app/planning", icon: "⌁", label: "计划" },
-      { href: "/app/review", icon: "◉", label: "复习与掌握" },
-      { href: "/app/exam", icon: "◇", label: "备考" },
+      { href: "/app/today", icon: "home", label: "今日" },
+      { href: "/app/planning", icon: "calendar", label: "计划" },
+      { href: "/app/review", icon: "refresh", label: "复习与掌握" },
+      { href: "/app/exam", icon: "target", label: "备考" },
     ],
   },
   {
     label: "知识与研究",
     items: [
-      { href: "/app/records", icon: "▱", label: "资料与笔记" },
-      { href: "/app/self-study", icon: "▤", label: "自主学习" },
-      { href: "/app/research", icon: "⌬", label: "研究证据" },
-      { href: "/app/collaboration", icon: "◎", label: "导师与小组" },
+      { href: "/app/records", icon: "files", label: "资料与笔记" },
+      { href: "/app/self-study", icon: "book-open", label: "自主学习" },
+      { href: "/app/research", icon: "flask", label: "研究证据" },
+      { href: "/app/collaboration", icon: "users", label: "导师与小组" },
     ],
   },
   {
     label: "系统与治理",
     items: [
-      { href: "/app/ai", icon: "✦", label: "AI Provider" },
-      { href: "/app/templates", icon: "▦", label: "模板与分享" },
-      { href: "/app/search", icon: "⌕", label: "搜索通知日历" },
-      { href: "/app/sync", icon: "⇄", label: "同步与设备" },
-      { href: "/app/workspaces", icon: "⬡", label: "工作区" },
-      { href: "/app/data", icon: "⇩", label: "数据主权" },
-      { href: "/app/security", icon: "◈", label: "账户安全" },
-      { href: "/app/audit", icon: "▣", label: "安全审计" },
+      { href: "/app/ai", icon: "ai", label: "AI Provider" },
+      { href: "/app/templates", icon: "layout-template", label: "模板与分享" },
+      { href: "/app/search", icon: "search", label: "搜索通知日历" },
+      { href: "/app/sync", icon: "refresh", label: "同步与设备" },
+      { href: "/app/workspaces", icon: "folder", label: "工作区" },
+      { href: "/app/data", icon: "download", label: "数据主权" },
+      { href: "/app/security", icon: "shield", label: "账户安全" },
+      { href: "/app/audit", icon: "clipboard", label: "安全审计" },
     ],
   },
 ];
@@ -49,7 +61,7 @@ const NAV_GROUPS: readonly Readonly<{
 const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
 const DEFAULT_NAV_ITEM: NavItem = {
   href: "/app/today",
-  icon: "⌂",
+  icon: "home",
   label: "今日",
 };
 const MOBILE_HREFS = new Set([
@@ -59,52 +71,37 @@ const MOBILE_HREFS = new Set([
   "/app/research",
 ]);
 
-function AppModal({
-  children,
-  eyebrow,
-  onClose,
-  title,
-}: Readonly<{
-  children: ReactNode;
-  eyebrow: string;
-  onClose: () => void;
-  title: string;
-}>) {
-  return (
-    <div className="app-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        aria-label={title}
-        aria-modal="true"
-        className="app-modal panel"
-        role="dialog"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="app-modal-head">
-          <div>
-            <p className="eyebrow">{eyebrow}</p>
-            <h2>{title}</h2>
-          </div>
-          <button
-            aria-label="关闭"
-            className="app-icon-button"
-            type="button"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </header>
-        {children}
-      </section>
-    </div>
-  );
+function subscribeToTheme(onStoreChange: () => void) {
+  const observer = new MutationObserver(onStoreChange);
+  observer.observe(document.documentElement, {
+    attributeFilter: ["data-theme"],
+    attributes: true,
+  });
+  return () => observer.disconnect();
+}
+
+function getThemeSnapshot(): Theme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "light";
 }
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const { state: session } = useSession();
+  const { phase: vaultPhase } = useVaultSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(true);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [query, setQuery] = useState("");
+  const commandButtonRef = useRef<HTMLButtonElement>(null);
+  const theme = useSyncExternalStore(
+    subscribeToTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
 
   const current =
     NAV_ITEMS.find((item) => item.href === pathname) ?? DEFAULT_NAV_ITEM;
@@ -118,6 +115,11 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     setMenuOpen(false);
     setOverlay(null);
   };
+  const accountLabel =
+    session.status === "authenticated"
+      ? session.user.email.split("@", 1)[0] || "学习者"
+      : "学习者";
+  const accountInitial = accountLabel.slice(0, 1).toLocaleUpperCase("zh-CN");
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -129,6 +131,16 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  const toggleTheme = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("app-shell-theme", next);
+    } catch {
+      // The visible theme still changes when storage is unavailable.
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -166,10 +178,10 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           onClick={closeTransientUi}
         >
           <span className="workspace-line">
-            <strong>工作区</strong>
-            <span>⌄</span>
+            <strong>当前工作区</strong>
+            <AppIcon aria-hidden="true" name="chevron-down" size={15} />
           </span>
-          <span className="workspace-privacy">选择或管理当前工作区</span>
+          <span className="workspace-privacy">私有优先 · 点击选择或管理</span>
         </Link>
         <nav className="app-nav-scroll">
           {NAV_GROUPS.map((group) => (
@@ -186,7 +198,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
                     onClick={closeTransientUi}
                   >
                     <span aria-hidden="true" className="app-nav-icon">
-                      {item.icon}
+                      <AppIcon name={item.icon} size={17} />
                     </span>
                     {item.label}
                   </Link>
@@ -197,6 +209,15 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </nav>
         <div className="app-sidebar-foot">
           <span className="tag good">PRIVATE BY DEFAULT</span>
+          <div className="app-account-summary">
+            <span aria-hidden="true" className="app-account-avatar">
+              {accountInitial}
+            </span>
+            <span>
+              <strong>{accountLabel}</strong>
+              <small>个人学习者 · 本地优先</small>
+            </span>
+          </div>
           <LogoutButton />
         </div>
       </aside>
@@ -220,7 +241,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
             >
-              ☰
+              <AppIcon name="menu" />
             </button>
             <span className="app-crumb">{current.label}</span>
             <span
@@ -232,38 +253,44 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           <div className="app-top-actions">
             <button
               className="app-command-trigger"
+              ref={commandButtonRef}
               type="button"
               onClick={() => setOverlay("command")}
             >
-              <span>⌕ 搜索、导航或执行命令…</span>
+              <span className="app-command-copy">
+                <AppIcon name="search" size={16} />
+                搜索、导航或执行命令…
+              </span>
               <kbd>Ctrl K</kbd>
             </button>
             <button
-              aria-label="打开专注计时"
+              aria-label={
+                theme === "dark" ? "切换到浅色主题" : "切换到深色主题"
+              }
               className="app-icon-button"
+              title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
               type="button"
-              onClick={() => setOverlay("focus")}
+              onClick={toggleTheme}
             >
-              ◷
+              <AppIcon name={theme === "dark" ? "sun" : "moon"} />
             </button>
+            <AppOperationalTools />
             <button
               aria-label="打开通知中心"
               className="app-icon-button"
               type="button"
               onClick={() => setOverlay("notifications")}
             >
-              ◇
-            </button>
-            <button
-              className="app-primary-button"
-              type="button"
-              onClick={() => setOverlay("capture")}
-            >
-              ＋ <span className="top-action-label">捕获</span>
+              <AppIcon name="bell" />
             </button>
           </div>
         </header>
-        <div className="app-content">{children}</div>
+        <div
+          className="app-content"
+          key={vaultPhase === "unlocked" ? "vault-unlocked" : "vault-locked"}
+        >
+          {children}
+        </div>
       </div>
 
       <nav aria-label="移动端导航" className="bottom-nav">
@@ -275,12 +302,16 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             key={item.href}
             onClick={closeTransientUi}
           >
-            <b aria-hidden="true">{item.icon}</b>
+            <b aria-hidden="true">
+              <AppIcon name={item.icon} size={18} />
+            </b>
             <span>{item.label}</span>
           </Link>
         ))}
         <button type="button" onClick={() => setMenuOpen(true)}>
-          <b aria-hidden="true">•••</b>
+          <b aria-hidden="true">
+            <AppIcon name="more" size={18} />
+          </b>
           <span>更多</span>
         </button>
       </nav>
@@ -288,6 +319,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       {overlay === "command" ? (
         <AppModal
           eyebrow="COMMAND PALETTE"
+          returnFocusRef={commandButtonRef}
           title="搜索与跳转"
           onClose={() => setOverlay(null)}
         >
@@ -295,8 +327,8 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             搜索页面
           </label>
           <input
-            autoFocus
             className="app-command-input"
+            data-modal-autofocus
             id="app-command-input"
             placeholder="例如：复习、研究、同步…"
             value={query}
@@ -310,7 +342,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
                 key={item.href}
                 onClick={closeTransientUi}
               >
-                <span aria-hidden="true">{item.icon}</span>
+                <span aria-hidden="true">
+                  <AppIcon name={item.icon} size={17} />
+                </span>
                 <strong>{item.label}</strong>
                 <span>打开</span>
               </Link>
@@ -336,56 +370,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           >
             打开搜索、通知与日历
           </Link>
-        </AppModal>
-      ) : null}
-
-      {overlay === "capture" ? (
-        <AppModal
-          eyebrow="UNIVERSAL CAPTURE"
-          title="快速捕获"
-          onClose={() => setOverlay(null)}
-        >
-          <p className="muted">
-            使用现有收件箱保存任务，或进入资料页记录内容。
-          </p>
-          <div className="app-modal-actions">
-            <Link
-              className="app-primary-link"
-              href="/app/self-study"
-              onClick={closeTransientUi}
-            >
-              前往快速收件箱
-            </Link>
-            <Link
-              className="app-secondary-link"
-              href="/app/records"
-              onClick={closeTransientUi}
-            >
-              前往资料与笔记
-            </Link>
-          </div>
-        </AppModal>
-      ) : null}
-
-      {overlay === "focus" ? (
-        <AppModal
-          eyebrow="FOCUS SESSION"
-          title="专注计时"
-          onClose={() => setOverlay(null)}
-        >
-          <div className="app-focus-stage">
-            <div aria-hidden="true" className="app-focus-clock">
-              25:00
-            </div>
-            <p className="muted">从今日中心选择真实任务后开始专注记录。</p>
-            <Link
-              className="app-primary-link"
-              href="/app/today"
-              onClick={closeTransientUi}
-            >
-              打开今日中心
-            </Link>
-          </div>
         </AppModal>
       ) : null}
     </div>

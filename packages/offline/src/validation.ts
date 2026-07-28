@@ -17,12 +17,32 @@ const FORBIDDEN_OBJECT_KEYS = new Set([
 ]);
 export const DEFAULT_MAX_OPERATION_BYTES = 256 * 1024;
 
+function defaultRandomUuidSource(): Pick<Crypto, "randomUUID"> | null {
+  const runtime = globalThis as unknown as { crypto?: Crypto };
+  return runtime.crypto ?? null;
+}
+
 function invalid(): never {
   throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
 }
 
 export function validateUuid(value: unknown): asserts value is string {
   if (typeof value !== "string" || !UUID_PATTERN.test(value)) invalid();
+}
+
+export function secureRandomUuid(
+  source: Pick<Crypto, "randomUUID"> | null = defaultRandomUuidSource(),
+): string {
+  if (source === null || typeof source.randomUUID !== "function") {
+    throw new OfflineStorageError("OFFLINE_CRYPTO_UNAVAILABLE");
+  }
+  try {
+    const value = source.randomUUID();
+    if (!UUID_PATTERN.test(value)) throw new Error("invalid random UUID");
+    return value;
+  } catch (error) {
+    throw new OfflineStorageError("OFFLINE_CRYPTO_UNAVAILABLE", false, error);
+  }
 }
 
 export function validateSyncErrorCode(value: string | null): void {

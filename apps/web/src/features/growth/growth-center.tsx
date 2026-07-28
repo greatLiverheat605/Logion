@@ -3,6 +3,15 @@
 import type { components } from "@logion/contracts";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductTag,
+} from "@/components/product/product-ui";
+import { AppIcon } from "@/components/app-shell/app-icon";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -38,6 +47,11 @@ export function GrowthCenter() {
     Record<string, string>
   >({});
   const [online, setOnline] = useState(true);
+  const [templateQuery, setTemplateQuery] = useState("");
+  const [templateScope, setTemplateScope] = useState<
+    "all" | "private" | "workspace"
+  >("all");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [status, setStatus] = useState(
     "模板安装会复制为独立对象；分享默认只读且可撤销。",
   );
@@ -145,6 +159,26 @@ export function GrowthCenter() {
   const visibleGoals = goalsSpaceId === spaceId ? goals : [];
   const visibleTemplates = dataWorkspaceId === workspaceId ? templates : [];
   const visibleShares = dataWorkspaceId === workspaceId ? shares : [];
+  const normalizedTemplateQuery = templateQuery.trim().toLocaleLowerCase();
+  const filteredTemplates = visibleTemplates.filter((template) => {
+    const matchesScope =
+      templateScope === "all" || template.visibility === templateScope;
+    const matchesQuery =
+      !normalizedTemplateQuery ||
+      [
+        template.name,
+        template.description,
+        template.author_name,
+        template.license,
+        ...template.target_personas,
+      ].some((value) =>
+        value.toLocaleLowerCase().includes(normalizedTemplateQuery),
+      );
+    return matchesScope && matchesQuery;
+  });
+  const selectedTemplate =
+    filteredTemplates.find((template) => template.id === selectedTemplateId) ??
+    filteredTemplates[0];
 
   async function createTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -308,14 +342,33 @@ export function GrowthCenter() {
 
   return (
     <main id="main-content" className="settings-page">
-      <header>
-        <p className="eyebrow">LOGION · REUSE & SHARE</p>
-        <h1>模板与只读分享</h1>
-        <p aria-live="polite">
-          {!online ? "当前离线：模板与分享配置暂不可用。" : status}
-        </p>
-      </header>
-      <section className="settings-card">
+      <ProductPageHeader
+        eyebrow="TEMPLATES · WORKFLOW LIBRARY"
+        title="模板与流程库"
+        description={
+          <>
+            <p>
+              搜索并预览可复用流程，确认来源、结构和风险后再安装为自己的独立副本。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {!online ? "当前离线：模板与分享配置暂不可用。" : status}
+            </p>
+          </>
+        }
+        actions={
+          <a className="product-action-link primary" href="#template-create">
+            <AppIcon name="plus" size={16} />
+            创建模板
+          </a>
+        }
+      />
+
+      <ProductDisclosure
+        summary="模板工作区与安装空间"
+        description={`当前空间：${
+          visibleSpaces.find((item) => item.id === spaceId)?.name ?? "未选择"
+        }`}
+      >
         <label htmlFor="growth-workspace">工作区</label>
         <select
           id="growth-workspace"
@@ -328,7 +381,7 @@ export function GrowthCenter() {
             </option>
           ))}
         </select>
-        <label htmlFor="growth-space">Space</label>
+        <label htmlFor="growth-space">空间</label>
         <select
           id="growth-space"
           value={spaceId}
@@ -340,128 +393,311 @@ export function GrowthCenter() {
             </option>
           ))}
         </select>
+      </ProductDisclosure>
+
+      <div className="product-metric-grid product-metric-grid-compact">
+        <ProductMetric
+          label="可用模板"
+          value={visibleTemplates.length}
+          detail="当前工作区"
+          tone="info"
+        />
+        <ProductMetric
+          label="来源目标"
+          value={visibleGoals.length}
+          detail="可沉淀为模板"
+        />
+        <ProductMetric
+          label="只读分享"
+          value={visibleShares.length}
+          detail={`${visibleShares.filter((item) => item.status === "active").length} 个有效`}
+          tone="good"
+        />
+      </div>
+
+      <section className="product-toolbar" aria-label="模板筛选">
+        <label className="product-search-field" htmlFor="template-search">
+          <AppIcon name="search" size={17} />
+          <input
+            aria-label="搜索模板"
+            id="template-search"
+            type="search"
+            value={templateQuery}
+            placeholder="搜索名称、作者、许可或适用场景"
+            onChange={(event) => setTemplateQuery(event.target.value)}
+          />
+        </label>
+        <div className="product-segmented" aria-label="模板可见性" role="group">
+          {(
+            [
+              ["all", "全部"],
+              ["private", "仅自己"],
+              ["workspace", "工作区"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              aria-pressed={templateScope === value}
+              className={templateScope === value ? "active" : ""}
+              key={value}
+              type="button"
+              onClick={() => setTemplateScope(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </section>
-      <section className="settings-card">
-        <h2>从计划创建模板</h2>
-        <form className="planning-form" onSubmit={importTemplate}>
-          <label>
-            导入结构化模板包（JSON，最大 1 MB）
-            <input
-              name="template_file"
-              type="file"
-              accept="application/json,.json"
-              required
-            />
-          </label>
-          <button disabled={!online || !workspaceId}>校验并导入私有模板</button>
-        </form>
-        <p>
-          示例包位于 <code>examples/templates</code>
-          ；导入不会创建学习记录，安装前仍可检查来源、许可证和外部链接。
-        </p>
-        <form className="planning-form" onSubmit={createTemplate}>
-          <label>
-            来源目标
-            <select name="source_goal_id" required>
-              {visibleGoals.map((goal) => (
-                <option key={goal.goal_id} value={goal.goal_id}>
-                  {goal.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            模板名称
-            <input name="name" maxLength={160} required />
-          </label>
-          <label>
-            说明
-            <textarea name="description" maxLength={1000} />
-          </label>
-          <label>
-            作者显示名
-            <input name="author_name" maxLength={120} required />
-          </label>
-          <label>
-            许可证
-            <input
-              name="license"
-              maxLength={80}
-              placeholder="CC-BY-4.0"
-              required
-            />
-          </label>
-          <label>
-            语言
-            <input name="locale" defaultValue="zh-CN" maxLength={35} required />
-          </label>
-          <label>
-            适用人群（逗号分隔）
-            <input
-              name="target_personas"
-              placeholder="self-study,research"
-              required
-            />
-          </label>
-          <label>
-            变更说明
-            <textarea name="changelog" maxLength={2000} />
-          </label>
-          <label>
-            可见性
-            <select name="visibility" defaultValue="private">
-              <option value="private">仅自己</option>
-              <option value="workspace">工作区成员</option>
-            </select>
-          </label>
-          <button disabled={!online || !visibleGoals.length}>
-            创建不可变版本
-          </button>
-        </form>
-        <ul className="item-list">
-          {visibleTemplates.map((template) => (
-            <li key={template.id}>
-              <span>
-                <strong>
-                  {template.name} · v{template.version_number}
-                </strong>
-                <small>
-                  {template.visibility} · {template.license} · 风险链接{" "}
-                  {Array.isArray(template.risk_metadata.external_links)
-                    ? template.risk_metadata.external_links.length
-                    : 0}
-                </small>
-              </span>
+
+      <div className="product-template-workbench">
+        <ProductPanel
+          className="product-template-catalog"
+          title="模板目录"
+          description="选择模板查看完整说明和安装条件。"
+          aside={
+            <ProductTag tone="info">
+              {filteredTemplates.length} 个结果
+            </ProductTag>
+          }
+        >
+          <div className="product-template-list">
+            {filteredTemplates.map((template) => (
               <button
+                aria-pressed={selectedTemplate?.id === template.id}
+                className={
+                  selectedTemplate?.id === template.id
+                    ? "product-template-card selected"
+                    : "product-template-card"
+                }
+                key={template.id}
                 type="button"
-                disabled={!online || !spaceId || template.status !== "active"}
-                onClick={() => void installTemplate(template)}
+                onClick={() => setSelectedTemplateId(template.id)}
               >
-                安装独立副本
+                <span className="product-template-icon" aria-hidden="true">
+                  <AppIcon name="layout-template" size={19} />
+                </span>
+                <span className="product-template-card-body">
+                  <strong>{template.name}</strong>
+                  <small>{template.description || "未填写模板说明"}</small>
+                  <span className="product-template-meta">
+                    v{template.version_number} · {template.author_name} ·{" "}
+                    {template.license}
+                  </span>
+                </span>
+                <ProductTag
+                  tone={template.visibility === "private" ? "default" : "info"}
+                >
+                  {template.visibility === "private" ? "仅自己" : "工作区"}
+                </ProductTag>
               </button>
+            ))}
+            {filteredTemplates.length === 0 ? (
+              <ProductEmptyState
+                icon="▦"
+                title={visibleTemplates.length ? "没有匹配模板" : "模板库为空"}
+                description={
+                  visibleTemplates.length
+                    ? "尝试清除搜索词或切换可见性筛选。"
+                    : "从现有目标创建模板，或导入经过检查的结构化模板包。"
+                }
+              />
+            ) : null}
+          </div>
+        </ProductPanel>
+
+        <ProductPanel
+          className="product-template-preview"
+          title="安装预览"
+          description="模板只复制流程结构，不复制原有学习记录。"
+        >
+          {selectedTemplate ? (
+            <div className="product-template-preview-body">
+              <span
+                className="product-template-preview-icon"
+                aria-hidden="true"
+              >
+                <AppIcon name="layout-template" size={25} />
+              </span>
+              <div>
+                <ProductTag
+                  tone={selectedTemplate.status === "active" ? "good" : "warn"}
+                >
+                  {selectedTemplate.status === "active" ? "可以安装" : "已撤回"}
+                </ProductTag>
+                <h2>{selectedTemplate.name}</h2>
+                <p>{selectedTemplate.description || "未填写模板说明。"}</p>
+              </div>
+              <dl className="product-detail-list">
+                <div>
+                  <dt>版本</dt>
+                  <dd>v{selectedTemplate.version_number}</dd>
+                </div>
+                <div>
+                  <dt>作者</dt>
+                  <dd>{selectedTemplate.author_name}</dd>
+                </div>
+                <div>
+                  <dt>许可</dt>
+                  <dd>{selectedTemplate.license}</dd>
+                </div>
+                <div>
+                  <dt>语言</dt>
+                  <dd>{selectedTemplate.locale}</dd>
+                </div>
+                <div>
+                  <dt>外部链接</dt>
+                  <dd>
+                    {Array.isArray(
+                      selectedTemplate.risk_metadata.external_links,
+                    )
+                      ? selectedTemplate.risk_metadata.external_links.length
+                      : 0}{" "}
+                    个
+                  </dd>
+                </div>
+                <div>
+                  <dt>适用场景</dt>
+                  <dd>
+                    {selectedTemplate.target_personas.join("、") || "未标注"}
+                  </dd>
+                </div>
+              </dl>
               {typeof (
-                template.object_graph.goal_plan as Record<string, unknown>
+                selectedTemplate.object_graph.goal_plan as Record<
+                  string,
+                  unknown
+                >
               )?.target_day_offset === "number" ? (
-                <label>
+                <label className="product-template-date">
                   安装起始日期
                   <input
                     type="date"
-                    value={installStartDates[template.id] ?? ""}
+                    value={installStartDates[selectedTemplate.id] ?? ""}
                     onChange={(event) =>
                       setInstallStartDates((current) => ({
                         ...current,
-                        [template.id]: event.target.value,
+                        [selectedTemplate.id]: event.target.value,
                       }))
                     }
                   />
                 </label>
               ) : null}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="settings-card">
-        <h2>创建最小只读快照</h2>
+              <button
+                className="primary-action"
+                type="button"
+                disabled={
+                  !online || !spaceId || selectedTemplate.status !== "active"
+                }
+                onClick={() => void installTemplate(selectedTemplate)}
+              >
+                安装为独立副本
+              </button>
+            </div>
+          ) : (
+            <ProductEmptyState
+              icon="▦"
+              title="选择一个模板"
+              description="选择左侧模板后，这里会显示来源、许可、风险和安装条件。"
+            />
+          )}
+        </ProductPanel>
+      </div>
+
+      <div id="template-create">
+        <ProductDisclosure
+          summary="导入或创建模板"
+          description="校验结构化模板包，或从现有计划生成不可变版本"
+        >
+          <div className="product-config-grid">
+            <form className="planning-form" onSubmit={importTemplate}>
+              <label>
+                导入结构化模板包（JSON，最大 1 MB）
+                <input
+                  name="template_file"
+                  type="file"
+                  accept="application/json,.json"
+                  required
+                />
+              </label>
+              <button disabled={!online || !workspaceId}>
+                校验并导入私有模板
+              </button>
+            </form>
+            <p>
+              示例包位于 <code>examples/templates</code>
+              ；导入不会创建学习记录，安装前仍可检查来源、许可证和外部链接。
+            </p>
+            <form className="planning-form" onSubmit={createTemplate}>
+              <label>
+                来源目标
+                <select name="source_goal_id" required>
+                  {visibleGoals.map((goal) => (
+                    <option key={goal.goal_id} value={goal.goal_id}>
+                      {goal.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                模板名称
+                <input name="name" maxLength={160} required />
+              </label>
+              <label>
+                说明
+                <textarea name="description" maxLength={1000} />
+              </label>
+              <label>
+                作者显示名
+                <input name="author_name" maxLength={120} required />
+              </label>
+              <label>
+                许可证
+                <input
+                  name="license"
+                  maxLength={80}
+                  placeholder="CC-BY-4.0"
+                  required
+                />
+              </label>
+              <label>
+                语言
+                <input
+                  name="locale"
+                  defaultValue="zh-CN"
+                  maxLength={35}
+                  required
+                />
+              </label>
+              <label>
+                适用人群（逗号分隔）
+                <input
+                  name="target_personas"
+                  placeholder="self-study,research"
+                  required
+                />
+              </label>
+              <label>
+                变更说明
+                <textarea name="changelog" maxLength={2000} />
+              </label>
+              <label>
+                可见性
+                <select name="visibility" defaultValue="private">
+                  <option value="private">仅自己</option>
+                  <option value="workspace">工作区成员</option>
+                </select>
+              </label>
+              <button disabled={!online || !visibleGoals.length}>
+                创建不可变版本
+              </button>
+            </form>
+          </div>
+        </ProductDisclosure>
+      </div>
+
+      <ProductDisclosure
+        summary="创建最小只读分享"
+        description="只选择必要字段，并设置明确有效期"
+      >
         <form className="planning-form" onSubmit={createShare}>
           <label>
             来源目标
@@ -517,6 +753,13 @@ export function GrowthCenter() {
             </a>
           </p>
         ) : null}
+      </ProductDisclosure>
+
+      <ProductPanel
+        title="只读分享记录"
+        description="查看状态和到期时间，并可立即撤销现有链接。"
+        aside={<ProductTag>{visibleShares.length} 条</ProductTag>}
+      >
         <ul className="item-list">
           {visibleShares.map((share) => (
             <li key={share.id}>
@@ -539,7 +782,14 @@ export function GrowthCenter() {
             </li>
           ))}
         </ul>
-      </section>
+        {visibleShares.length === 0 ? (
+          <ProductEmptyState
+            icon="↗"
+            title="尚无只读分享"
+            description="需要展示路线时，只公开必要字段并设置较短有效期。"
+          />
+        ) : null}
+      </ProductPanel>
     </main>
   );
 }

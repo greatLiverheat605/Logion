@@ -1,10 +1,9 @@
 "use client";
 
 import type { components } from "@logion/contracts";
-import type {
-  LogionOfflineDatabase,
-  OfflineSearchResult,
+import {
   OfflineSearchRepository,
+  type OfflineSearchResult,
 } from "@logion/offline";
 import {
   type FormEvent,
@@ -14,7 +13,17 @@ import {
   useState,
 } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductHero,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductTag,
+} from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
+import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -33,7 +42,6 @@ const CATEGORIES = [
   "sync",
   "security",
   "ai",
-  "billing",
   "system",
 ] as const;
 
@@ -62,7 +70,13 @@ function offlineResult(row: OfflineSearchResult): DisplayResult {
 
 export function EngagementCenter() {
   const { state: session } = useSession();
-  const database = useRef<LogionOfflineDatabase | null>(null);
+  const {
+    database,
+    phase: vaultPhase,
+    revision: vaultRevision,
+    unlock: unlockVault,
+    vault,
+  } = useVaultSession();
   const offlineSearch = useRef<OfflineSearchRepository | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
@@ -72,7 +86,7 @@ export function EngagementCenter() {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [dataWorkspaceId, setDataWorkspaceId] = useState("");
   const [calendarToken, setCalendarToken] = useState("");
-  const [offlineUnlocked, setOfflineUnlocked] = useState(false);
+  const offlineUnlocked = vaultPhase === "unlocked";
   const [online, setOnline] = useState(true);
   const [status, setStatus] = useState(
     "搜索不会把查询正文写入日志或第三方服务。",
@@ -111,7 +125,11 @@ export function EngagementCenter() {
         ]);
       setNotifications(
         Array.isArray(notificationResult.notifications)
-          ? notificationResult.notifications
+          ? notificationResult.notifications.filter((notification) =>
+              CATEGORIES.includes(
+                notification.category as (typeof CATEGORIES)[number],
+              ),
+            )
           : [],
       );
       setPreference(preferenceResult);
@@ -135,13 +153,23 @@ export function EngagementCenter() {
     return () => {
       window.removeEventListener("online", updateOnline);
       window.removeEventListener("offline", updateOnline);
-      database.current?.close();
     };
   }, [loadWorkspaces]);
 
   useEffect(() => {
     if (workspaceId && online) queueMicrotask(() => void loadData(workspaceId));
   }, [loadData, online, workspaceId]);
+
+  useEffect(() => {
+    if (offlineUnlocked && database.current && vault.current) {
+      offlineSearch.current = new OfflineSearchRepository(
+        database.current,
+        vault.current,
+      );
+    } else {
+      offlineSearch.current = null;
+    }
+  }, [database, offlineUnlocked, vault, vaultRevision]);
 
   const visibleNotifications =
     dataWorkspaceId === workspaceId ? notifications : [];
@@ -152,33 +180,10 @@ export function EngagementCenter() {
     event.preventDefault();
     if (session.status !== "authenticated") return;
     try {
-      const {
-        databaseNameForUser,
-        OfflineSearchRepository,
-        OfflineVault,
-        openOfflineDatabase,
-      } = await import("@logion/offline");
-      const db = await openOfflineDatabase({
-        databaseName: databaseNameForUser(session.user.id),
-        indexedDB: globalThis.indexedDB ?? null,
-        IDBKeyRange: globalThis.IDBKeyRange ?? null,
-      });
-      if ((await db.vaultMetadata.get(session.user.id)) === undefined) {
-        db.close();
-        setStatus(
-          "本设备尚未初始化离线保险箱，请先在学习页面完成初始化与同步。",
-        );
-        return;
-      }
-      const localVault = new OfflineVault(db);
-      await localVault.unlock(
-        session.user.id,
+      const { database: db, vault: localVault } = await unlockVault(
         String(new FormData(event.currentTarget).get("passphrase") ?? ""),
       );
-      database.current?.close();
-      database.current = db;
       offlineSearch.current = new OfflineSearchRepository(db, localVault);
-      setOfflineUnlocked(true);
       setStatus("离线搜索已解锁，只检索本设备已缓存且未删除的数据。");
       event.currentTarget.reset();
     } catch (error) {
@@ -308,14 +313,71 @@ export function EngagementCenter() {
     }
   }
 
+  const unreadNotifications = visibleNotifications.filter(
+    (notification) => notification.read_at === null,
+  ).length;
+  const activeFeeds = visibleFeeds.filter(
+    (feed) => feed.status === "active",
+  ).length;
+
   return (
     <main id="main-content" className="settings-page">
-      <header>
-        <p className="eyebrow">LOGION · FIND & REMIND</p>
-        <h1>搜索、通知与日历</h1>
-        <p aria-live="polite">{status}</p>
-      </header>
-      <section className="settings-card">
+      <ProductPageHeader
+        eyebrow="SEARCH · NOTIFICATIONS · CALENDAR"
+        title="在一个入口找到内容和下一步行动"
+        description={
+          <>
+            <p>
+              统一搜索覆盖笔记、任务、资料、实验与审计摘要；通知和日历只保留需要处理的上下文。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+      />
+      <ProductHero
+        badge={
+          <ProductTag tone={online ? "good" : "warn"}>
+            {online ? "在线检索" : "离线缓存"}
+          </ProductTag>
+        }
+        title={
+          results.length
+            ? `找到 ${results.length} 项相关内容`
+            : "搜索目标、笔记、论文与任务"
+        }
+        progressLabel="离线资料可用"
+        progressValue={offlineUnlocked ? 100 : 0}
+      >
+        查询正文不会写入日志或发送给第三方；离线时可在解锁后的本机缓存中继续查找。
+      </ProductHero>
+      <div className="product-metric-grid">
+        <ProductMetric
+          label="搜索结果"
+          value={results.length}
+          detail={online ? "服务器权限过滤" : "本机缓存"}
+          tone="info"
+        />
+        <ProductMetric
+          label="未读通知"
+          value={unreadNotifications}
+          detail={`${visibleNotifications.length} 条通知`}
+          tone={unreadNotifications ? "warn" : "good"}
+        />
+        <ProductMetric label="日历订阅" value={activeFeeds} detail="当前有效" />
+        <ProductMetric
+          label="离线搜索"
+          value={offlineUnlocked ? "已解锁" : "未解锁"}
+          detail="本地保险箱"
+          tone={offlineUnlocked ? "good" : "default"}
+        />
+      </div>
+
+      <ProductDisclosure
+        summary="搜索工作区"
+        description="所有服务器搜索结果继续遵循现有权限过滤"
+      >
         <label htmlFor="engagement-workspace">工作区</label>
         <select
           id="engagement-workspace"
@@ -328,28 +390,34 @@ export function EngagementCenter() {
             </option>
           ))}
         </select>
-      </section>
-      <section className="settings-card">
-        <h2>统一搜索</h2>
-        <form className="planning-form" onSubmit={search}>
-          <label>
-            查询
-            <input name="query" minLength={2} maxLength={100} required />
-          </label>
-          <button>搜索{online ? "服务器" : "本机缓存"}</button>
-        </form>
-        <form className="planning-form" onSubmit={unlockOffline}>
-          <label>
-            离线保险箱口令
-            <input
-              name="passphrase"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <button disabled={offlineUnlocked}>解锁离线搜索</button>
-        </form>
+      </ProductDisclosure>
+
+      <ProductPanel
+        title="统一搜索"
+        description="在线搜索服务器索引，离线搜索已解锁的本机缓存。"
+        aside={<ProductTag tone="info">{results.length} 项结果</ProductTag>}
+      >
+        <div className="product-search-controls">
+          <form className="planning-form" onSubmit={search}>
+            <label>
+              查询
+              <input name="query" minLength={2} maxLength={100} required />
+            </label>
+            <button>搜索{online ? "服务器" : "本机缓存"}</button>
+          </form>
+          <form className="planning-form" onSubmit={unlockOffline}>
+            <label>
+              离线保险箱口令
+              <input
+                name="passphrase"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            <button disabled={offlineUnlocked}>解锁离线搜索</button>
+          </form>
+        </div>
         <ul className="item-list">
           {results.map((result) => (
             <li key={`${result.object_type}:${result.object_id}`}>
@@ -363,9 +431,19 @@ export function EngagementCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h2>通知偏好</h2>
+        {results.length === 0 ? (
+          <ProductEmptyState
+            icon="⌕"
+            title="输入关键词开始搜索"
+            description="至少输入两个字符；可搜索目标、任务、笔记、论文等现有内容。"
+          />
+        ) : null}
+      </ProductPanel>
+
+      <ProductDisclosure
+        summary="通知偏好"
+        description="设置类别、时区和安静时间；安全通知不可关闭"
+      >
         <form
           key={visiblePreference?.version ?? 0}
           className="planning-form"
@@ -420,6 +498,17 @@ export function EngagementCenter() {
           </label>
           <button disabled={!online}>保存通知偏好</button>
         </form>
+      </ProductDisclosure>
+
+      <ProductPanel
+        title="通知中心"
+        description="集中处理学习、协作、同步与安全提醒。"
+        aside={
+          <ProductTag tone={unreadNotifications ? "warn" : "good"}>
+            {unreadNotifications} 条未读
+          </ProductTag>
+        }
+      >
         <ul className="item-list">
           {visibleNotifications.map((notification) => (
             <li key={notification.id}>
@@ -441,9 +530,19 @@ export function EngagementCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h2>只读日历订阅</h2>
+        {visibleNotifications.length === 0 ? (
+          <ProductEmptyState
+            icon="✓"
+            title="暂无通知"
+            description="需要处理的学习、协作、同步与安全提醒会出现在这里。"
+          />
+        ) : null}
+      </ProductPanel>
+
+      <ProductDisclosure
+        summary="创建只读日历订阅"
+        description="只包含任务、考试和复习标题/时间"
+      >
         <p>订阅仅包含任务、考试和复习标题/时间，不包含笔记、附件或错题正文。</p>
         <form className="planning-form" onSubmit={createFeed}>
           <label>
@@ -460,6 +559,13 @@ export function EngagementCenter() {
             </a>
           </p>
         ) : null}
+      </ProductDisclosure>
+
+      <ProductPanel
+        title="日历订阅"
+        description="查看现有订阅状态，并随时撤销 URL。"
+        aside={<ProductTag>{activeFeeds} 个有效</ProductTag>}
+      >
         <ul className="item-list">
           {visibleFeeds.map((feed) => (
             <li key={feed.id}>
@@ -479,7 +585,14 @@ export function EngagementCenter() {
             </li>
           ))}
         </ul>
-      </section>
+        {visibleFeeds.length === 0 ? (
+          <ProductEmptyState
+            icon="□"
+            title="尚无日历订阅"
+            description="需要在日历中查看任务、考试和复习时间时，再创建只读订阅。"
+          />
+        ) : null}
+      </ProductPanel>
     </main>
   );
 }

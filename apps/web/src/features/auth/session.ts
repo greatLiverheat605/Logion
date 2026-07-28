@@ -5,6 +5,8 @@ import { type ApiClient, LogionApiError } from "@/lib/api/client";
 type AuthResponse = components["schemas"]["AuthResponse"];
 export type SessionUser = components["schemas"]["UserResponse"];
 
+const REFRESH_EARLY_MS = 60_000;
+
 export type SessionState =
   | { status: "loading" }
   | { status: "anonymous" }
@@ -77,6 +79,15 @@ function invalidSuccessResponse(): LogionApiError {
 export interface SessionCoordinator {
   bootstrap(): Promise<SessionState>;
   refresh(): Promise<SessionState>;
+}
+
+export function sessionRefreshDelay(
+  sessionExpiresAt: string,
+  nowMs = Date.now(),
+): number | null {
+  const expiresAtMs = Date.parse(sessionExpiresAt);
+  if (!Number.isFinite(expiresAtMs)) return null;
+  return Math.max(0, expiresAtMs - nowMs - REFRESH_EARLY_MS);
 }
 
 function isAnonymousError(error: unknown): boolean {
@@ -161,8 +172,8 @@ export function createSessionCoordinator(
   return {
     async bootstrap(): Promise<SessionState> {
       try {
-        const user = await authApi.me();
-        return { status: "authenticated", sessionExpiresAt: null, user };
+        await authApi.me();
+        return refresh();
       } catch (error) {
         if (!isAnonymousError(error)) return errorState(error);
         return refresh();

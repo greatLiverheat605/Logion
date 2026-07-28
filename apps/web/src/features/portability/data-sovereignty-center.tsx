@@ -1,8 +1,19 @@
 "use client";
 
 import type { components } from "@logion/contracts";
+import { secureRandomUuid } from "@logion/offline";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductHero,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductTag,
+} from "@/components/product/product-ui";
+import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -11,6 +22,8 @@ type DataImport = components["schemas"]["ImportPreviewResponse"];
 type Space = components["schemas"]["SpaceResponse"];
 
 function errorText(error: unknown) {
+  const capabilityMessage = offlineCapabilityMessage(error);
+  if (capabilityMessage !== null) return capabilityMessage;
   if (error instanceof LogionApiError)
     return `操作未完成（${error.code}，请求编号：${error.requestId}）。`;
   return "操作未完成，请稍后重试。";
@@ -103,7 +116,7 @@ export function DataSovereigntyCenter() {
         {
           method: "POST",
           csrf: true,
-          body: JSON.stringify({ id: crypto.randomUUID(), confirmation }),
+          body: JSON.stringify({ id: secureRandomUuid(), confirmation }),
         },
       );
       event.currentTarget.reset();
@@ -143,7 +156,7 @@ export function DataSovereigntyCenter() {
           method: "POST",
           csrf: true,
           body: JSON.stringify({
-            id: crypto.randomUUID(),
+            id: secureRandomUuid(),
             source_format: String(data.get("source_format") ?? "markdown"),
             source_filename: String(data.get("source_filename") ?? "import.md"),
             content: String(data.get("content") ?? ""),
@@ -206,12 +219,62 @@ export function DataSovereigntyCenter() {
 
   return (
     <main id="main-content" className="settings-page">
-      <header>
-        <p className="eyebrow">LOGION · DATA SOVEREIGNTY</p>
-        <h1>数据导出、迁移与删除</h1>
-        <p aria-live="polite">{status}</p>
-      </header>
-      <section className="settings-card">
+      <ProductPageHeader
+        eyebrow="DATA SOVEREIGNTY · PORTABILITY"
+        title="导出、迁移、备份与删除都可验证"
+        description={
+          <>
+            <p>
+              先预览，再执行；导出的数据包可以脱离 Logion
+              独立阅读，并附带哈希清单。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+      />
+      <ProductHero
+        badge={<ProductTag tone="good">开放格式</ProductTag>}
+        title="你的学习资料应当可以独立阅读和迁移"
+        progressLabel="私有导入空间"
+        progressValue={spaces.length ? 100 : 0}
+      >
+        导出包含版本化 JSON、Markdown、CSV 与
+        BibTeX；导入先生成预览，不恢复原权限或原始 ID。
+      </ProductHero>
+      <div className="product-metric-grid">
+        <ProductMetric
+          label="导出任务"
+          value={visibleExports.length}
+          detail={`${visibleExports.filter((item) => item.status === "succeeded").length} 个已完成`}
+          tone="info"
+        />
+        <ProductMetric
+          label="导入预览"
+          value={visibleImports.length}
+          detail={`${visibleImports.filter((item) => item.status === "previewed").length} 个待确认`}
+          tone="warn"
+        />
+        <ProductMetric
+          label="私有空间"
+          value={spaces.length}
+          detail="导入目标"
+          tone="good"
+        />
+        <ProductMetric
+          label="当前工作区"
+          value={
+            workspaces.find((item) => item.id === workspaceId)?.name ?? "未选择"
+          }
+          detail="数据边界"
+        />
+      </div>
+
+      <ProductDisclosure
+        summary="数据工作区"
+        description="选择要导出或导入的现有工作区"
+      >
         <label htmlFor="data-workspace">工作区</label>
         <select
           id="data-workspace"
@@ -224,9 +287,14 @@ export function DataSovereigntyCenter() {
             </option>
           ))}
         </select>
-      </section>
-      <section className="settings-card">
-        <h2>可独立阅读的数据包</h2>
+      </ProductDisclosure>
+      <ProductPanel
+        title="可独立阅读的数据包"
+        description="后台生成加密数据包，完成后提供短期下载。"
+        aside={
+          <ProductTag tone="info">{visibleExports.length} 个任务</ProductTag>
+        }
+      >
         <p>
           ZIP 包含版本化 JSON、笔记 Markdown、任务 CSV 与论文
           BibTeX；不包含登录凭据、恢复材料、AI 密钥、AI 输入或分享/日历令牌。
@@ -267,9 +335,27 @@ export function DataSovereigntyCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h2>预览后导入</h2>
+        {visibleExports.length === 0 ? (
+          <ProductEmptyState
+            icon="↓"
+            title="尚未创建导出"
+            description="需要备份或迁移时，输入确认词生成一份加密数据包。"
+          />
+        ) : null}
+      </ProductPanel>
+      <ProductPanel
+        title="预览后导入"
+        description="解析不执行脚本、不访问链接；确认前不会写入。"
+        aside={
+          <ProductTag tone="warn">
+            {
+              visibleImports.filter((item) => item.status === "previewed")
+                .length
+            }{" "}
+            个待确认
+          </ProductTag>
+        }
+      >
         <p>
           支持 Logion export v1 JSON、Markdown、带 title 列的 CSV 和保守解析的
           BibTeX。解析过程不执行脚本、不访问链接，也不会恢复原权限或原始 ID。
@@ -335,18 +421,29 @@ export function DataSovereigntyCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h2>服务器备份与恢复</h2>
+        {visibleImports.length === 0 ? (
+          <ProductEmptyState
+            icon="↑"
+            title="尚无导入预览"
+            description="粘贴受支持格式的内容，先检查对象数、警告与目标空间。"
+          />
+        ) : null}
+      </ProductPanel>
+      <ProductDisclosure
+        summary="服务器备份与恢复"
+        description="了解个人数据导出与灾难恢复备份的边界"
+      >
         <p>
           管理员会把 PostgreSQL、附件和版本清单组成 AES-256-GCM
           加密备份，并在隔离空环境定期验证恢复。恢复会更换同步
           epoch，旧设备必须重新同步。
           本页的数据导出用于个人迁移，不能代替服务器灾难恢复备份。
         </p>
-      </section>
-      <section className="settings-card">
-        <h2>删除账户</h2>
+      </ProductDisclosure>
+      <ProductDisclosure
+        summary="危险操作：删除账户"
+        description="立即撤销会话并进入现有删除宽限流程"
+      >
         <p>
           删除请求会立即撤销会话、分享和日历订阅。若你仍拥有有其他成员的工作区，必须先转移所有权。
           宽限期内可重新登录并在受限恢复页取消；到期后清理个人数据并去标识化最小审计记录。
@@ -363,7 +460,7 @@ export function DataSovereigntyCenter() {
           </label>
           <button className="danger-button">请求删除账户</button>
         </form>
-      </section>
+      </ProductDisclosure>
     </main>
   );
 }

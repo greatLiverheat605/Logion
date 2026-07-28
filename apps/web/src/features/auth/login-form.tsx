@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { components } from "@logion/contracts";
 
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
@@ -35,11 +35,17 @@ function encodeBase64url(value: ArrayBuffer): string {
 }
 
 export function LoginForm() {
+  const [clientReady, setClientReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<
     Extract<LoginOutcome, { kind: "mfa_required" }>["challenge"] | null
   >(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setClientReady(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +174,7 @@ export function LoginForm() {
       }
     >
       {challenge === null ? (
-        <form className="auth-form" onSubmit={login}>
+        <form className="auth-form" method="post" onSubmit={login}>
           <label htmlFor="login-email">邮箱</label>
           <input
             id="login-email"
@@ -199,20 +205,20 @@ export function LoginForm() {
             required
           />
           {requestId !== null ? <FormError requestId={requestId} /> : null}
-          <button type="submit" disabled={pending}>
+          <button type="submit" disabled={pending || !clientReady}>
             {pending ? "正在登录…" : "登录"}
           </button>
           <button
             className="secondary-button"
             type="button"
             onClick={() => void loginWithPasskey()}
-            disabled={pending}
+            disabled={pending || !clientReady}
           >
             使用 Passkey 登录
           </button>
         </form>
       ) : (
-        <form className="auth-form" onSubmit={verifyMfa}>
+        <form className="auth-form" method="post" onSubmit={verifyMfa}>
           <label htmlFor="mfa-method">验证方式</label>
           <select
             id="mfa-method"
@@ -236,14 +242,14 @@ export function LoginForm() {
             required
           />
           {requestId !== null ? <FormError requestId={requestId} /> : null}
-          <button type="submit" disabled={pending}>
+          <button type="submit" disabled={pending || !clientReady}>
             {pending ? "正在验证…" : "验证并登录"}
           </button>
           <button
             className="secondary-button"
             type="button"
             onClick={() => setChallenge(null)}
-            disabled={pending}
+            disabled={pending || !clientReady}
           >
             取消
           </button>

@@ -4,10 +4,9 @@ import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
-  databaseNameForUser,
   noteDocumentStateId,
+  OfflineStorageError,
   OfflineVault,
-  openOfflineDatabase,
   ProtectedOfflineRepository,
   SyncClient,
   YjsNoteRepository,
@@ -16,15 +15,21 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductMarkdownPreview,
+  ProductPageHeader,
+  ProductPanel,
+  ProductTag,
+  ProductTaskRow,
+} from "@/components/product/product-ui";
+import { AppIcon } from "@/components/app-shell/app-icon";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
+import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -51,9 +56,15 @@ type ResourcePayload = JsonObject & {
 };
 
 function userMessage(error: unknown) {
-  return error instanceof LogionApiError
-    ? `操作未完成（请求编号：${error.requestId}）`
-    : "网络暂不可用，修改已保存在本设备。";
+  const capabilityMessage = offlineCapabilityMessage(error);
+  if (capabilityMessage !== null) return capabilityMessage;
+  if (error instanceof LogionApiError) {
+    return `操作未完成（请求编号：${error.requestId}）`;
+  }
+  if (error instanceof OfflineStorageError) {
+    return "本地资料操作未完成；未确认写入的数据不会标记为已保存。";
+  }
+  return "操作未完成，请检查网络与本地资料状态后重试。";
 }
 
 function safeExternalUrl(value: string | null): string | null {
@@ -96,20 +107,25 @@ async function decrypt<T>(
 
 export function ContentCenter() {
   const { state: session } = useSession();
+  const {
+    database,
+    phase: vaultPhase,
+    revision: vaultRevision,
+    unlock: unlockVault,
+    vault,
+  } = useVaultSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备记录与资料库……");
   const [notes, setNotes] = useState<View<NotePayload>[]>([]);
   const [resources, setResources] = useState<View<ResourcePayload>[]>([]);
   const [resourceType, setResourceType] = useState<"link" | "pdf_index">(
     "link",
   );
-  const database = useRef<LogionOfflineDatabase | null>(null);
-  const vault = useRef<OfflineVault | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -131,7 +147,6 @@ export function ContentCenter() {
 
   useEffect(() => {
     queueMicrotask(() => void load());
-    return () => database.current?.close();
   }, [load]);
 
   useEffect(() => {
@@ -229,32 +244,34 @@ export function ContentCenter() {
     event.preventDefault();
     if (session.status !== "authenticated") return;
     try {
-      const db = await openOfflineDatabase({
-        databaseName: databaseNameForUser(session.user.id),
-        indexedDB: globalThis.indexedDB ?? null,
-        IDBKeyRange: globalThis.IDBKeyRange ?? null,
-      });
-      const localVault = new OfflineVault(db);
       const passphrase = String(
         new FormData(event.currentTarget).get("passphrase") ?? "",
       );
-      if ((await db.vaultMetadata.get(session.user.id)) === undefined) {
-        await localVault.initialize(session.user.id, passphrase);
-      } else {
-        await localVault.unlock(session.user.id, passphrase);
-      }
-      database.current?.close();
-      database.current = db;
-      vault.current = localVault;
+      const { database: db, vault: localVault } = await unlockVault(passphrase);
       await bootstrap(db, localVault);
       await refresh(db, localVault);
-      setUnlocked(true);
-      setStatus("已解锁。Markdown 只按纯文本预览，不执行其中的 HTML。");
+      setStatus("已在应用内解锁。Markdown 只按纯文本预览，不执行其中的 HTML。");
       event.currentTarget.reset();
     } catch (error) {
       setStatus(userMessage(error));
     }
   }
+
+  useEffect(() => {
+    const db = database.current;
+    const localVault = vault.current;
+    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    queueMicrotask(
+      () =>
+        void refresh(db, localVault)
+          .then(() =>
+            setStatus("本地资料已在应用内解锁；Markdown 预览不会执行 HTML。"),
+          )
+          .catch((error: unknown) => setStatus(userMessage(error))),
+    );
+    // Refresh follows the shared Vault revision and selected workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlocked, vaultRevision, workspaceId]);
 
   async function synchronize() {
     const db = database.current;
@@ -441,15 +458,47 @@ export function ContentCenter() {
   const visibleResources = resources.filter(
     (item) => item.payload.space_id === spaceId,
   );
+  const noteCharacters = visibleNotes.reduce(
+    (total, item) => total + item.payload.markdown_body.length,
+    0,
+  );
+  const indexedPages = visibleResources.reduce(
+    (total, item) => total + item.payload.page_index.length,
+    0,
+  );
+  const latestNote = visibleNotes.at(-1);
   return (
     <main id="main-content" className="settings-page content-page">
-      <header>
-        <p className="eyebrow">LOGION · RECORDS</p>
-        <h1>笔记与资料索引</h1>
-        <p aria-live="polite">{status}</p>
-      </header>
-      <section className="settings-card">
-        <h2>上下文与本地解锁</h2>
+      <ProductPageHeader
+        eyebrow="RECORDS · MARKDOWN WORKBENCH"
+        title="资料与笔记"
+        description={
+          <>
+            <p>
+              在同一工作台中管理资料、书写 Markdown，并用安全预览检查内容结构。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+        actions={
+          <button
+            type="button"
+            disabled={!unlocked}
+            onClick={() => void synchronize()}
+          >
+            <AppIcon name="refresh" size={16} />
+            立即同步
+          </button>
+        }
+      />
+
+      <ProductDisclosure
+        summary="资料库位置与本地解锁"
+        description="选择工作区、空间并解锁端侧加密内容"
+        defaultOpen={!unlocked}
+      >
         <div className="inline-form">
           <label htmlFor="content-workspace">工作区</label>
           <select
@@ -475,13 +524,6 @@ export function ContentCenter() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!unlocked}
-            onClick={() => void synchronize()}
-          >
-            立即同步
-          </button>
         </div>
         <form className="inline-form" onSubmit={unlock}>
           <label htmlFor="content-passphrase">本地口令</label>
@@ -492,26 +534,172 @@ export function ContentCenter() {
             minLength={10}
             required
           />
-          <button type="submit">解锁</button>
+          <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
         </form>
+      </ProductDisclosure>
+
+      <section className="product-records-summary" aria-label="资料库概览">
+        <article>
+          <span>Markdown 笔记</span>
+          <strong>{visibleNotes.length}</strong>
+          <small>{noteCharacters} 个字符</small>
+        </article>
+        <article>
+          <span>外部资料</span>
+          <strong>{visibleResources.length}</strong>
+          <small>链接与索引</small>
+        </article>
+        <article>
+          <span>PDF 索引页</span>
+          <strong>{indexedPages}</strong>
+          <small>不上传 PDF 正文</small>
+        </article>
+        <article>
+          <span>最近编辑</span>
+          <strong>{latestNote?.payload.title ?? "暂无笔记"}</strong>
+          <small>{unlocked ? "本地资料已解锁" : "等待本地解锁"}</small>
+        </article>
       </section>
-      <section className="settings-card">
-        <h2>新建 Markdown 笔记</h2>
-        <form
-          className="planning-form"
-          onSubmit={(event) => void saveNote(event)}
+
+      <div className="product-records-workbench">
+        <ProductPanel
+          className="product-records-library"
+          title="知识库"
+          description="当前空间中的笔记与资料索引。"
+          aside={
+            <ProductTag>
+              {visibleNotes.length + visibleResources.length} 项
+            </ProductTag>
+          }
         >
-          <label htmlFor="note-title">标题</label>
-          <input id="note-title" name="title" maxLength={200} required />
-          <label htmlFor="note-body">正文</label>
-          <textarea id="note-body" name="markdown_body" maxLength={500000} />
-          <button type="submit" disabled={!unlocked}>
-            保存到本地
-          </button>
-        </form>
-      </section>
-      <section className="settings-card">
-        <h2>登记资料</h2>
+          <div className="product-records-group">
+            <h3>笔记</h3>
+            {visibleNotes
+              .slice(-6)
+              .reverse()
+              .map((note) => (
+                <div className="product-record-row" key={note.entity.entity_id}>
+                  <span aria-hidden="true">
+                    <AppIcon name="book-open" size={16} />
+                  </span>
+                  <span>
+                    <strong>{note.payload.title}</strong>
+                    <small>{note.payload.markdown_body.length} 个字符</small>
+                  </span>
+                </div>
+              ))}
+            {visibleNotes.length === 0 ? (
+              <p className="product-muted-note">还没有笔记。</p>
+            ) : null}
+          </div>
+          <div className="product-records-group">
+            <h3>资料</h3>
+            {visibleResources
+              .slice(-6)
+              .reverse()
+              .map((resource) => (
+                <div
+                  className="product-record-row"
+                  key={resource.entity.entity_id}
+                >
+                  <span aria-hidden="true">
+                    <AppIcon name="files" size={16} />
+                  </span>
+                  <span>
+                    <strong>{resource.payload.title}</strong>
+                    <small>
+                      {resource.payload.resource_type === "link"
+                        ? "外部链接"
+                        : "PDF 索引"}
+                    </small>
+                  </span>
+                </div>
+              ))}
+            {visibleResources.length === 0 ? (
+              <p className="product-muted-note">还没有资料索引。</p>
+            ) : null}
+          </div>
+        </ProductPanel>
+
+        <ProductPanel
+          className="product-form-panel product-records-editor"
+          title="新建 Markdown 笔记"
+          description="从一个问题开始，用标题、列表、引用和代码块组织理解。"
+          aside={
+            <ProductTag tone={unlocked ? "good" : "warn"}>
+              {unlocked ? "可以保存" : "请先解锁"}
+            </ProductTag>
+          }
+        >
+          <form
+            className="planning-form product-editor-form"
+            onSubmit={(event) => void saveNote(event)}
+          >
+            <label htmlFor="note-title">标题</label>
+            <input id="note-title" name="title" maxLength={200} required />
+            <label htmlFor="note-body">正文</label>
+            <div
+              className="product-editor-toolbar"
+              aria-label="支持的 Markdown 语法"
+            >
+              <span>H1</span>
+              <span>H2</span>
+              <span>• 列表</span>
+              <span>“ 引用</span>
+              <span>{`</>`} 代码</span>
+            </div>
+            <textarea
+              id="note-body"
+              name="markdown_body"
+              maxLength={500000}
+              placeholder={
+                "# 核心问题\n\n## 我的理解\n\n- 关键概念\n- 证据与例子\n\n> 下一步要验证什么？"
+              }
+            />
+            <button type="submit" disabled={!unlocked}>
+              保存笔记到本地
+            </button>
+          </form>
+        </ProductPanel>
+
+        <ProductPanel
+          className="product-records-outline"
+          title="写作提纲"
+          description="让每篇记录都能回到问题、证据和下一步。"
+        >
+          <div className="product-task-list">
+            <ProductTaskRow
+              icon="01"
+              title="核心问题"
+              description="这篇笔记要回答什么"
+            />
+            <ProductTaskRow
+              icon="02"
+              title="我的理解"
+              description="拆分概念与推理过程"
+            />
+            <ProductTaskRow
+              icon="03"
+              title="证据来源"
+              description="连接资料或 PDF 页码"
+            />
+            <ProductTaskRow
+              icon="04"
+              title="下一步"
+              description="留下待验证的问题"
+            />
+          </div>
+          <div className="product-writing-tip">
+            <AppIcon name="ai" size={17} />
+            <p>当前版本只提供结构提示，不会自动读取或改写你的私有笔记。</p>
+          </div>
+        </ProductPanel>
+      </div>
+
+      <ProductDisclosure
+        summary="登记外部资料"
+        description="保存安全链接或 PDF 页码索引，不上传 PDF 正文"
+      >
         <form className="planning-form" onSubmit={saveResource}>
           <label htmlFor="resource-type">类型</label>
           <select
@@ -557,14 +745,22 @@ export function ContentCenter() {
             保存资料索引
           </button>
         </form>
-      </section>
-      <section className="settings-card sync-wide-card">
-        <h2>笔记</h2>
+      </ProductDisclosure>
+
+      <ProductPanel
+        className="sync-wide-card"
+        title="笔记工作区"
+        description="编辑已保存内容，并在旁侧查看不执行 HTML 的安全 Markdown 预览。"
+        aside={<ProductTag tone="info">{visibleNotes.length} 篇</ProductTag>}
+      >
         <div className="content-grid">
           {visibleNotes.map((note) => (
-            <article className="task-card" key={note.entity.entity_id}>
+            <article
+              className="task-card product-note-workbench"
+              key={note.entity.entity_id}
+            >
               <form
-                className="planning-form"
+                className="planning-form product-editor-form"
                 onSubmit={(event) => void saveNote(event, note)}
               >
                 <label htmlFor={`title-${note.entity.entity_id}`}>标题</label>
@@ -577,6 +773,16 @@ export function ContentCenter() {
                 <label htmlFor={`body-${note.entity.entity_id}`}>
                   Markdown
                 </label>
+                <div
+                  className="product-editor-toolbar"
+                  aria-label="支持的 Markdown 语法"
+                >
+                  <span>H1</span>
+                  <span>H2</span>
+                  <span>• 列表</span>
+                  <span>“ 引用</span>
+                  <span>{`</>`} 代码</span>
+                </div>
                 <textarea
                   id={`body-${note.entity.entity_id}`}
                   name="markdown_body"
@@ -584,21 +790,34 @@ export function ContentCenter() {
                 />
                 <button type="submit">保存修改</button>
               </form>
-              <details>
-                <summary>安全纯文本预览</summary>
-                <pre className="markdown-safe-preview">
-                  {note.payload.markdown_body}
-                </pre>
-              </details>
+              <section
+                className="product-note-preview"
+                aria-label={`${note.payload.title} 安全预览`}
+              >
+                <header>
+                  <span>安全预览</span>
+                  <small>HTML 不执行</small>
+                </header>
+                <ProductMarkdownPreview value={note.payload.markdown_body} />
+              </section>
             </article>
           ))}
           {visibleNotes.length === 0 ? (
-            <p className="empty-state">暂无笔记。</p>
+            <ProductEmptyState
+              icon="✎"
+              title="资料库中还没有笔记"
+              description="从上方编辑器创建第一篇，建议从一个正在解决的问题开始。"
+            />
           ) : null}
         </div>
-      </section>
-      <section className="settings-card sync-wide-card">
-        <h2>资料</h2>
+      </ProductPanel>
+
+      <ProductPanel
+        className="sync-wide-card"
+        title="资料索引"
+        description="集中查看外部来源和 PDF 页码定位。"
+        aside={<ProductTag>{visibleResources.length} 项</ProductTag>}
+      >
         <div className="content-grid">
           {visibleResources.map((resource) => (
             <article className="task-card" key={resource.entity.entity_id}>
@@ -630,10 +849,14 @@ export function ContentCenter() {
             </article>
           ))}
           {visibleResources.length === 0 ? (
-            <p className="empty-state">暂无资料。</p>
+            <ProductEmptyState
+              icon="↗"
+              title="尚未登记外部资料"
+              description="保存一条可信链接，或为本地 PDF 建立页码索引。"
+            />
           ) : null}
         </div>
-      </section>
+      </ProductPanel>
     </main>
   );
 }
