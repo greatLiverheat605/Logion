@@ -9,6 +9,14 @@ import {
   useState,
 } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductHero,
+  ProductMetric,
+  ProductPanel,
+  ProductTag,
+} from "@/components/product/product-ui";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -255,9 +263,6 @@ export function ProviderCenter() {
     if (!workspaceId || !canConfigure || !online) return;
     const data = new FormData(event.currentTarget);
     const tokenValue = String(data.get("monthly_token_budget") ?? "").trim();
-    const costValue = String(
-      data.get("monthly_cost_budget_minor") ?? "",
-    ).trim();
     try {
       await browserApiClient.request(
         `/api/v1/workspaces/${workspaceId}/ai/budget`,
@@ -267,13 +272,13 @@ export function ProviderCenter() {
           body: JSON.stringify({
             expected_version: budget?.version ? budget.version : null,
             monthly_token_budget: tokenValue ? Number(tokenValue) : null,
-            monthly_cost_budget_minor: costValue ? Number(costValue) : null,
-            currency: String(data.get("currency") ?? "USD"),
+            monthly_cost_budget_minor: null,
+            currency: "USD",
           }),
         },
       );
       await loadProviderData(workspaceId);
-      setStatus("AI 月度预算已更新。正式运行会在服务端再次校验余额。");
+      setStatus("AI 月度 Token 上限已更新。正式运行会在服务端再次校验用量。");
     } catch (error) {
       setStatus(errorText(error));
     }
@@ -296,18 +301,14 @@ export function ProviderCenter() {
             supports_json: data.get("supports_json") === "on",
             supports_stream: data.get("supports_stream") === "on",
             context_window: Number(data.get("context_window")) || null,
-            pricing_currency: String(data.get("pricing_currency") ?? "USD"),
-            input_cost_per_million_minor: Number(
-              data.get("input_cost_per_million_minor") ?? 0,
-            ),
-            output_cost_per_million_minor: Number(
-              data.get("output_cost_per_million_minor") ?? 0,
-            ),
+            pricing_currency: "USD",
+            input_cost_per_million_minor: 0,
+            output_cost_per_million_minor: 0,
           }),
         },
       );
       await loadProviderData(workspaceId);
-      setStatus(`${model.display_name} 的能力与价格覆盖已更新。`);
+      setStatus(`${model.display_name} 的能力配置已更新。`);
     } catch (error) {
       setStatus(errorText(error));
     }
@@ -369,18 +370,47 @@ export function ProviderCenter() {
       className="settings-page"
       aria-labelledby="provider-center-heading"
     >
-      <header>
-        <p className="eyebrow">LOGION · AI GATEWAY</p>
-        <h2 id="provider-center-heading">AI Provider</h2>
-        <p aria-live="polite">{visibleStatus}</p>
-      </header>
-      <section className="settings-card">
-        <h2>安全边界</h2>
-        <p>
-          Provider 密钥仅在服务端信封加密保存，不进入
-          IndexedDB、导出、日志或浏览器响应。
-          仅在你确认“测试并发现模型”后，服务端才会发送一次受限请求。
-        </p>
+      <ProductHero
+        badge={
+          <ProductTag tone={canConfigure ? "info" : "warn"}>
+            {canConfigure ? "管理员配置" : "只读状态"}
+          </ProductTag>
+        }
+        title={<span id="provider-center-heading">模型连接与任务路由</span>}
+      >
+        Provider 密钥仅在服务端信封加密保存，不进入
+        IndexedDB、导出、日志或浏览器响应；连接测试也需要你明确触发。
+      </ProductHero>
+      <p aria-live="polite">{visibleStatus}</p>
+      <div className="product-metric-grid">
+        <ProductMetric
+          label="Provider"
+          value={visibleProviders.length}
+          detail={`${visibleProviders.filter((item) => item.enabled).length} 个已启用`}
+          tone="info"
+        />
+        <ProductMetric
+          label="发现模型"
+          value={visibleModels.length}
+          detail={`${visibleModels.filter((item) => item.enabled).length} 个可用`}
+          tone="good"
+        />
+        <ProductMetric
+          label="任务路由"
+          value={routes.length}
+          detail="主选与降级候选"
+        />
+        <ProductMetric
+          label="连接状态"
+          value={online ? "在线" : "离线"}
+          detail="核心学习功能独立可用"
+          tone={online ? "good" : "warn"}
+        />
+      </div>
+      <ProductDisclosure
+        summary="安全边界与工作区"
+        description="选择配置所属工作区并查看密钥保护说明"
+      >
         {!online ? (
           <p role="status">
             当前离线：已有学习数据仍可编辑，Provider 配置暂时只读。
@@ -398,9 +428,11 @@ export function ProviderCenter() {
             </option>
           ))}
         </select>
-      </section>
-      <section className="settings-card">
-        <h2>新增 OpenAI-compatible Provider</h2>
+      </ProductDisclosure>
+      <ProductDisclosure
+        summary="新增 OpenAI-compatible Provider"
+        description="加密保存服务地址、密钥和连接策略"
+      >
         <form className="planning-form" onSubmit={createProvider}>
           <label htmlFor="provider-name">名称</label>
           <input id="provider-name" name="name" maxLength={120} required />
@@ -448,9 +480,14 @@ export function ProviderCenter() {
             加密保存配置
           </button>
         </form>
-      </section>
-      <section className="settings-card">
-        <h2>已配置 Provider</h2>
+      </ProductDisclosure>
+      <ProductPanel
+        title="已配置 Provider"
+        description="检查启用状态、密钥状态与最近一次健康检查。"
+        aside={
+          <ProductTag tone="info">{visibleProviders.length} 项</ProductTag>
+        }
+      >
         {visibleProviders.length ? (
           <ul className="item-list">
             {visibleProviders.map((provider) => (
@@ -496,11 +533,18 @@ export function ProviderCenter() {
             ))}
           </ul>
         ) : (
-          <p>没有可显示的 Provider 配置。</p>
+          <ProductEmptyState
+            icon="◇"
+            title="尚未配置 Provider"
+            description="学习、复习与研究功能不受影响；需要 AI 时再添加连接。"
+          />
         )}
-      </section>
-      <section className="settings-card">
-        <h2>已发现模型</h2>
+      </ProductPanel>
+      <ProductPanel
+        title="已发现模型"
+        description="能力信息来自明确触发的 Provider 发现结果。"
+        aside={<ProductTag>{visibleModels.length} 个模型</ProductTag>}
+      >
         {visibleModels.length ? (
           <ul className="item-list">
             {visibleModels.map((model) => {
@@ -515,7 +559,7 @@ export function ProviderCenter() {
                     </small>
                   </span>
                   <details>
-                    <summary>能力与价格覆盖</summary>
+                    <summary>能力配置</summary>
                     <form
                       className="planning-form"
                       onSubmit={(event) => void updateModel(event, model)}
@@ -563,37 +607,8 @@ export function ProviderCenter() {
                           defaultValue={model.context_window ?? ""}
                         />
                       </label>
-                      <label>
-                        计价币种
-                        <input
-                          name="pricing_currency"
-                          pattern="[A-Za-z]{3}"
-                          defaultValue={model.pricing_currency}
-                          required
-                        />
-                      </label>
-                      <label>
-                        每百万输入 Token（最小货币单位）
-                        <input
-                          name="input_cost_per_million_minor"
-                          type="number"
-                          min={0}
-                          defaultValue={model.input_cost_per_million_minor}
-                          required
-                        />
-                      </label>
-                      <label>
-                        每百万输出 Token（最小货币单位）
-                        <input
-                          name="output_cost_per_million_minor"
-                          type="number"
-                          min={0}
-                          defaultValue={model.output_cost_per_million_minor}
-                          required
-                        />
-                      </label>
                       <button disabled={!online || !canConfigure}>
-                        保存模型覆盖
+                        保存模型配置
                       </button>
                     </form>
                   </details>
@@ -602,14 +617,18 @@ export function ProviderCenter() {
             })}
           </ul>
         ) : (
-          <p>尚未发现模型。模型列表不会在离线状态下刷新。</p>
+          <ProductEmptyState
+            icon="⌁"
+            title="尚未发现模型"
+            description="选择一个已启用 Provider 执行“测试并发现模型”；离线时不会刷新。"
+          />
         )}
-      </section>
-      <section className="settings-card">
-        <h2>月度预算</h2>
-        <p>
-          留空表示不设置该项上限。金额使用币种的最小单位，例如 USD 使用美分。
-        </p>
+      </ProductPanel>
+      <ProductDisclosure
+        summary="AI Token 使用上限"
+        description="限制每月可调用的 Token 数量，避免意外占用过多本机资源"
+      >
+        <p>留空表示不设置 Token 上限；上限只用于资源保护。</p>
         <form
           key={budget?.version ?? 0}
           className="planning-form"
@@ -624,34 +643,17 @@ export function ProviderCenter() {
               defaultValue={budget?.monthly_token_budget ?? ""}
             />
           </label>
-          <label>
-            成本上限（最小货币单位）
-            <input
-              name="monthly_cost_budget_minor"
-              type="number"
-              min={1}
-              defaultValue={budget?.monthly_cost_budget_minor ?? ""}
-            />
-          </label>
-          <label>
-            币种
-            <input
-              name="currency"
-              pattern="[A-Za-z]{3}"
-              defaultValue={budget?.currency ?? "USD"}
-              required
-            />
-          </label>
           <button disabled={!online || !canConfigure || !workspaceId}>
-            保存预算
+            保存 Token 上限
           </button>
         </form>
-      </section>
-      <section className="settings-card">
-        <h2>任务路由</h2>
-        <p>
-          任务类型由你定义；按列表顺序使用已勾选模型，首个为主选，其余为降级候选。
-        </p>
+      </ProductDisclosure>
+      <ProductPanel
+        title="任务路由"
+        description="按顺序使用已勾选模型，首个为主选，其余为降级候选。"
+        aside={<ProductTag tone="info">{routes.length} 条</ProductTag>}
+      >
+        <p>任务类型由你定义；路由只决定已有模型的选择顺序。</p>
         <form className="planning-form" onSubmit={createRoute}>
           <label>
             路由名称
@@ -735,9 +737,13 @@ export function ProviderCenter() {
             ))}
           </ul>
         ) : (
-          <p>尚未配置任务路由。</p>
+          <ProductEmptyState
+            icon="⇢"
+            title="尚未配置任务路由"
+            description="发现并启用模型后，为常用任务建立一条明确路由。"
+          />
         )}
-      </section>
+      </ProductPanel>
     </section>
   );
 }

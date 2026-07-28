@@ -13,17 +13,30 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: "dark",
-  themeColor: "#07111f",
+  colorScheme: "light dark",
+  themeColor: [
+    { color: "#f4f5f7", media: "(prefers-color-scheme: light)" },
+    { color: "#1c1c1e", media: "(prefers-color-scheme: dark)" },
+  ],
 };
+
+const themeBootstrap = `(()=>{try{const k="app-shell-theme";const s=localStorage.getItem(k);const t=s==="light"||s==="dark"?s:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch{document.documentElement.dataset.theme="light"}})()`;
 
 export default async function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   // Dynamic HTML lets Next attach the per-request CSP nonce to hydration scripts.
-  await headers();
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+          nonce={nonce}
+          suppressHydrationWarning
+        />
+      </head>
       <body>
         <a className="skip-link" href="#main-content">
           跳到主要内容

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     device_cookie_name: str = "logion_device"
     access_ttl_minutes: int = Field(default=15, ge=5, le=60)
     refresh_ttl_days: int = Field(default=30, ge=1, le=90)
+    refresh_reuse_grace_seconds: int = Field(default=10, ge=1, le=30)
     require_origin_header: bool = True
     legacy_registration_enabled: bool = True
     registration_mode: Literal["open", "invite", "closed"] = "open"

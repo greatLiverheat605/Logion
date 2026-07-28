@@ -638,8 +638,63 @@ describe("conflict center and attachment queue", () => {
     await expect(
       vault.initialize(ids.user, "correct horse battery staple"),
     ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await db.syncState.put({
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      schema_version: 4,
+      sync_epoch: ids.conflict,
+      cursor: 3,
+      bootstrap_state: "ready",
+      last_sync_at: "2026-07-23T00:00:00Z",
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    await db.bootstrapManifests.put({
+      workspace_id: ids.workspace,
+      snapshot_id: ids.conflict,
+      device_id: ids.device,
+      sync_epoch: ids.conflict,
+      snapshot_schema_version: 1,
+      chunk_count: 1,
+      cursor: 3,
+      snapshot_checksum: `sha256:${"a".repeat(64)}`,
+      created_at: "2026-07-23T00:00:00Z",
+      received_chunks: [],
+      received_records: 1,
+      status: "staging",
+    });
+    await db.bootstrapRecords.put({
+      workspace_id: ids.workspace,
+      snapshot_id: ids.conflict,
+      chunk_index: 0,
+      record_index: 0,
+      entity_type: "note",
+      entity_id: ids.entity,
+      version: 1,
+      created_at: "2026-07-23T00:00:00Z",
+      updated_at: "2026-07-23T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: { markdown: "staged private research" },
+      payload_hash: await hashPayload({
+        markdown: "staged private research",
+      }),
+    });
     await vault.wipeLocalData();
-    expect(await db.vaultRecords.count()).toBe(0);
+    await expect(
+      Promise.all([
+        db.vaultMetadata.count(),
+        db.vaultRecords.count(),
+        db.entities.count(),
+        db.outbox.count(),
+        db.syncState.count(),
+        db.bootstrapManifests.count(),
+        db.bootstrapRecords.count(),
+        db.conflicts.count(),
+        db.attachmentQueue.count(),
+      ]),
+    ).resolves.toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
     expect(vault.unlocked).toBe(false);
   });
 

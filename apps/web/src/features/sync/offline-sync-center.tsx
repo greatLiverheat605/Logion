@@ -6,9 +6,8 @@ import {
   AttachmentQueueRepository,
   BootstrapRepository,
   ConflictRepository,
-  databaseNameForUser,
+  OfflineStorageError,
   OfflineVault,
-  openOfflineDatabase,
   ProtectedOfflineRepository,
   SyncClient,
   type AttachmentQueueEntry,
@@ -17,15 +16,16 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductEmptyState,
+  ProductMetric,
+  ProductTag,
+} from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
+import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import { ApiAttachmentUploadTransport } from "./attachment-upload-transport";
@@ -33,6 +33,8 @@ import { ApiAttachmentUploadTransport } from "./attachment-upload-transport";
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
 type ConnectionState = "offline" | "online";
+
+const CLEAR_DEVICE_CONFIRMATION = "CLEAR THIS DEVICE";
 
 interface ConflictView {
   conflict: LocalConflict;
@@ -45,8 +47,13 @@ function currentConnection(): ConnectionState {
 }
 
 function userMessage(error: unknown): string {
+  const capabilityMessage = offlineCapabilityMessage(error);
+  if (capabilityMessage !== null) return capabilityMessage;
   if (error instanceof LogionApiError) {
     return `操作未完成（请求编号：${error.requestId}）。`;
+  }
+  if (error instanceof OfflineStorageError) {
+    return "本地资料操作未完成；本设备上的既有数据保持不变。";
   }
   return "操作未完成；本地数据保持不变，请检查解锁状态或稍后重试。";
 }
@@ -108,18 +115,26 @@ function fieldDiff(view: ConflictView) {
 
 export function OfflineSyncCenter() {
   const { state: session } = useSession();
+  const {
+    clearLocalData,
+    database,
+    lock: lockVault,
+    phase: vaultPhase,
+    revision: vaultRevision,
+    unlock: unlockVault,
+    vault,
+  } = useVaultSession();
   const [connection, setConnection] = useState<ConnectionState>("offline");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在读取同步上下文…");
   const [conflicts, setConflicts] = useState<ConflictView[]>([]);
   const [attachments, setAttachments] = useState<AttachmentQueueEntry[]>([]);
   const [mergeConflictId, setMergeConflictId] = useState<string | null>(null);
   const [mergeDraft, setMergeDraft] = useState("");
-  const database = useRef<LogionOfflineDatabase | null>(null);
-  const vault = useRef<OfflineVault | null>(null);
+  const [clearConfirmation, setClearConfirmation] = useState("");
 
   const loadContext = useCallback(async () => {
     try {
@@ -156,7 +171,6 @@ export function OfflineSyncCenter() {
     return () => {
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
-      database.current?.close();
     };
   }, [loadContext]);
 
@@ -253,42 +267,54 @@ export function OfflineSyncCenter() {
       new FormData(event.currentTarget).get("passphrase") ?? "",
     );
     try {
-      database.current?.close();
-      const db = await openOfflineDatabase({
-        databaseName: databaseNameForUser(session.user.id),
-        indexedDB: globalThis.indexedDB ?? null,
-        IDBKeyRange: globalThis.IDBKeyRange ?? null,
-      });
-      const localVault = new OfflineVault(db);
-      if ((await db.vaultMetadata.get(session.user.id)) === undefined) {
-        await localVault.initialize(session.user.id, passphrase);
-      } else {
-        await localVault.unlock(session.user.id, passphrase);
-      }
-      database.current = db;
-      vault.current = localVault;
+      const { database: db, vault: localVault } = await unlockVault(passphrase);
       await bootstrap(db, localVault);
       await refresh(db, localVault);
-      setUnlocked(true);
       setStatus("本地资料已解锁；冲突正文只在当前页面内存中显示。");
       event.currentTarget.reset();
     } catch (error) {
-      setUnlocked(false);
       setStatus(userMessage(error));
     }
   }
 
+  useEffect(() => {
+    const db = database.current;
+    const localVault = vault.current;
+    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    queueMicrotask(
+      () =>
+        void refresh(db, localVault)
+          .then(() => setStatus("本地资料已在应用内解锁。"))
+          .catch((error: unknown) => setStatus(userMessage(error))),
+    );
+    // Refresh follows the shared Vault revision and selected workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlocked, vaultRevision, workspaceId]);
+
   function lock() {
-    vault.current?.lock();
-    database.current?.close();
-    database.current = null;
-    vault.current = null;
-    setUnlocked(false);
+    lockVault();
     setConflicts([]);
     setAttachments([]);
     setMergeConflictId(null);
     setMergeDraft("");
     setStatus("本地资料已锁定。");
+  }
+
+  async function clearThisDevice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (clearConfirmation !== CLEAR_DEVICE_CONFIRMATION) return;
+    setStatus("正在清除此账户在本设备上的离线数据…");
+    try {
+      await clearLocalData();
+      setConflicts([]);
+      setAttachments([]);
+      setMergeConflictId(null);
+      setMergeDraft("");
+      setClearConfirmation("");
+      setStatus("本设备上的离线数据已清除；服务器数据没有改变。");
+    } catch (error) {
+      setStatus(userMessage(error));
+    }
   }
 
   async function synchronize(): Promise<void> {
@@ -422,6 +448,32 @@ export function OfflineSyncCenter() {
 
   return (
     <section aria-label="同步状态" className="sync-grid">
+      <div className="product-metric-grid sync-wide-card">
+        <ProductMetric
+          label="连接状态"
+          value={connection === "online" ? "在线" : "离线"}
+          detail="离线编辑仍保存在本机"
+          tone={connection === "online" ? "good" : "warn"}
+        />
+        <ProductMetric
+          label="本地资料"
+          value={unlocked ? "已解锁" : "已锁定"}
+          detail="端侧保险箱"
+          tone={unlocked ? "good" : "default"}
+        />
+        <ProductMetric
+          label="待处理冲突"
+          value={conflicts.length}
+          detail="不会静默覆盖"
+          tone={conflicts.length ? "bad" : "good"}
+        />
+        <ProductMetric
+          label="附件队列"
+          value={attachments.length}
+          detail="上传后校验哈希"
+          tone={attachments.length ? "info" : "default"}
+        />
+      </div>
       <article className="settings-card sync-status-card">
         <div>
           <p className="eyebrow">Connection</p>
@@ -431,6 +483,9 @@ export function OfflineSyncCenter() {
           className={`status-orb status-${connection}`}
           aria-hidden="true"
         />
+        <ProductTag tone={connection === "online" ? "good" : "warn"}>
+          {connection === "online" ? "网络可用" : "本地优先"}
+        </ProductTag>
         <p aria-live="polite">{status}</p>
         {unlocked ? (
           <button type="button" onClick={() => void synchronize()}>
@@ -488,9 +543,11 @@ export function OfflineSyncCenter() {
         </div>
         {!unlocked ? <p>解锁后才能查看加密的本地与服务器版本。</p> : null}
         {unlocked && conflicts.length === 0 ? (
-          <div className="empty-state">
-            <p>目前没有需要人工选择的冲突。</p>
-          </div>
+          <ProductEmptyState
+            icon="✓"
+            title="没有待处理冲突"
+            description="当前设备与服务器之间没有需要人工选择的版本。"
+          />
         ) : null}
         {conflicts.map((view) => (
           <section key={view.conflict.conflict_id} className="settings-card">
@@ -610,9 +667,11 @@ export function OfflineSyncCenter() {
           <span className="count-badge">{attachments.length}</span>
         </div>
         {attachments.length === 0 ? (
-          <div className="empty-state">
-            <p>没有等待处理的附件。</p>
-          </div>
+          <ProductEmptyState
+            icon="✓"
+            title="附件队列为空"
+            description="等待上传或重试的附件会出现在这里。"
+          />
         ) : null}
         <ul>
           {attachments.map((attachment) => (
@@ -628,6 +687,37 @@ export function OfflineSyncCenter() {
             </li>
           ))}
         </ul>
+      </article>
+
+      <article className="settings-card sync-wide-card device-clear-card">
+        <div>
+          <p className="eyebrow">Device data</p>
+          <h2>清除此设备数据</h2>
+          <p>
+            删除当前账户保存在此浏览器中的保险箱、离线副本、待同步操作、冲突、附件队列和同步游标。服务器数据不会删除，其他设备不受影响。
+          </p>
+        </div>
+        <form className="device-clear-form" onSubmit={clearThisDevice}>
+          <label>
+            输入 <code>{CLEAR_DEVICE_CONFIRMATION}</code> 确认
+            <input
+              value={clearConfirmation}
+              onChange={(event) => setClearConfirmation(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          <button
+            className="danger-button"
+            type="submit"
+            disabled={
+              clearConfirmation !== CLEAR_DEVICE_CONFIRMATION ||
+              vaultPhase === "clearing"
+            }
+          >
+            {vaultPhase === "clearing" ? "正在清除…" : "清除此设备数据"}
+          </button>
+        </form>
       </article>
 
       <aside className="residual-data-warning sync-wide-card" role="note">

@@ -29,6 +29,7 @@ export {
 export {
   databaseNameForUser,
   DEFAULT_MAX_OPERATION_BYTES,
+  secureRandomUuid,
   validateMutation,
   validatePayload,
   validateSyncErrorCode,

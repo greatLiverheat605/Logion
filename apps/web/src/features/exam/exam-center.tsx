@@ -4,9 +4,7 @@ import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
-  databaseNameForUser,
   OfflineVault,
-  openOfflineDatabase,
   ProtectedOfflineRepository,
   SyncClient,
   type JsonObject,
@@ -14,15 +12,22 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductBarChart,
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductProgress,
+  ProductSparkline,
+  ProductTag,
+  ProductWorkflowStage,
+} from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
+import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -96,7 +101,12 @@ function SyllabusTree({
     <ul>
       {children.map((node) => (
         <li key={node.entity.entity_id}>
-          {node.payload.title} · 重要度 {node.payload.importance} · 未开始
+          {node.payload.title} · 重要度 {node.payload.importance} ·{" "}
+          {node.payload.coverage_status === "covered"
+            ? "已覆盖"
+            : node.payload.coverage_status === "in_progress"
+              ? "进行中"
+              : "未开始"}
           <SyllabusTree nodes={nodes} parentId={node.entity.entity_id} />
         </li>
       ))}
@@ -144,6 +154,13 @@ function countdown(examAt: string | null): string {
 
 export function ExamCenter() {
   const { state: session } = useSession();
+  const {
+    database,
+    phase: vaultPhase,
+    revision: vaultRevision,
+    unlock: unlockVault,
+    vault,
+  } = useVaultSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
@@ -153,7 +170,7 @@ export function ExamCenter() {
     "scheduled",
   );
   const [syllabusSubjectId, setSyllabusSubjectId] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备备考空间……");
   const [exams, setExams] = useState<ExamView[]>([]);
   const [subjects, setSubjects] = useState<ProtectedView<SubjectPayload>[]>([]);
@@ -166,8 +183,6 @@ export function ExamCenter() {
   const [scoreRecords, setScoreRecords] = useState<
     ProtectedView<ScoreRecordPayload>[]
   >([]);
-  const database = useRef<LogionOfflineDatabase | null>(null);
-  const vault = useRef<OfflineVault | null>(null);
 
   const loadContext = useCallback(async () => {
     try {
@@ -208,7 +223,6 @@ export function ExamCenter() {
 
   useEffect(() => {
     queueMicrotask(() => void loadContext());
-    return () => database.current?.close();
   }, [loadContext]);
 
   useEffect(() => {
@@ -318,30 +332,29 @@ export function ExamCenter() {
       new FormData(event.currentTarget).get("passphrase") ?? "",
     );
     try {
-      database.current?.close();
-      const db = await openOfflineDatabase({
-        databaseName: databaseNameForUser(session.user.id),
-        indexedDB: globalThis.indexedDB ?? null,
-        IDBKeyRange: globalThis.IDBKeyRange ?? null,
-      });
-      const localVault = new OfflineVault(db);
-      if ((await db.vaultMetadata.get(session.user.id)) === undefined) {
-        await localVault.initialize(session.user.id, passphrase);
-      } else {
-        await localVault.unlock(session.user.id, passphrase);
-      }
-      database.current = db;
-      vault.current = localVault;
+      const { database: db, vault: localVault } = await unlockVault(passphrase);
       await bootstrap(db, localVault);
       await refresh(db, localVault);
-      setUnlocked(true);
       setStatus("备考资料已解锁；考试可断网创建并稍后同步。");
       event.currentTarget.reset();
     } catch (error) {
-      setUnlocked(false);
       setStatus(message(error));
     }
   }
+
+  useEffect(() => {
+    const db = database.current;
+    const localVault = vault.current;
+    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    queueMicrotask(
+      () =>
+        void refresh(db, localVault)
+          .then(() => setStatus("备考资料已在应用内解锁。"))
+          .catch((error: unknown) => setStatus(message(error))),
+    );
+    // Refresh follows the shared Vault revision and selected workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlocked, vaultRevision, workspaceId]);
 
   async function synchronize() {
     const db = database.current;
@@ -658,17 +671,155 @@ export function ExamCenter() {
         (mock) => mock.entity.entity_id === item.payload.mock_exam_id,
       ),
   );
+  const primaryExam =
+    visibleExams.find((item) => item.payload.status === "active") ??
+    visibleExams.find((item) => item.payload.status === "planning") ??
+    visibleExams[0];
+  const coveredNodes = visibleNodes.filter(
+    (item) => item.payload.coverage_status === "covered",
+  ).length;
+  const coverageRate = visibleNodes.length
+    ? (coveredNodes / visibleNodes.length) * 100
+    : 0;
+  const normalizedScores = visibleScores.map((item) =>
+    item.payload.score_scale_max > 0
+      ? (item.payload.score / item.payload.score_scale_max) * 100
+      : 0,
+  );
+  const latestNormalizedScore = normalizedScores.at(-1) ?? 0;
+  const subjectWeightChart = visibleSubjects.map((subject) => ({
+    label: subject.payload.name,
+    value: subject.payload.weight_basis_points / 100,
+  }));
 
   return (
     <main id="main-content" className="settings-page today-page">
-      <header>
-        <p className="eyebrow">LOGION · EXAM</p>
-        <h1>用自己的考试上下文建立备考倒计时</h1>
-        <p aria-live="polite">{status}</p>
-      </header>
+      <ProductPageHeader
+        eyebrow="EXAM · PREPARATION COCKPIT"
+        title="围绕大纲覆盖与错题风险安排备考"
+        description={
+          <>
+            <p>倒计时只是背景，核心是科目覆盖、模考趋势和下一批补救任务。</p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+        actions={
+          <>
+            {!unlocked ? (
+              <a className="product-action-link" href="#exam-vault">
+                解锁本地资料
+              </a>
+            ) : null}
+            <button
+              type="button"
+              disabled={!unlocked}
+              onClick={() => void synchronize()}
+            >
+              立即同步
+            </button>
+          </>
+        }
+      />
 
-      <section className="settings-card">
-        <h2>备考上下文</h2>
+      <ProductWorkflowStage
+        badge={
+          <ProductTag tone={primaryExam ? "warn" : "info"}>
+            {primaryExam
+              ? countdown(primaryExam.payload.exam_at)
+              : "尚未建立考试"}
+          </ProductTag>
+        }
+        title={primaryExam?.payload.title ?? "建立你的第一个备考目标"}
+        stepsLabel="备考推进流程"
+        steps={[
+          {
+            label: "建立考试目标",
+            detail: primaryExam
+              ? countdown(primaryExam.payload.exam_at)
+              : "记录日期、目标分和计分尺度",
+            state: primaryExam ? "complete" : "current",
+          },
+          {
+            label: "覆盖重点大纲",
+            detail: `${coveredNodes} / ${visibleNodes.length} 个节点已覆盖`,
+            state: !primaryExam
+              ? "pending"
+              : visibleNodes.length === 0 || coverageRate < 100
+                ? "current"
+                : "complete",
+          },
+          {
+            label: "完成一次模考",
+            detail: visibleScores.length
+              ? `最近得分率 ${Math.round(latestNormalizedScore)}%`
+              : `${visibleMocks.length} 场模考已安排`,
+            state: visibleScores.length
+              ? "complete"
+              : visibleMocks.length
+                ? "current"
+                : "pending",
+          },
+        ]}
+        actions={
+          <a
+            className="product-action-link primary"
+            href={
+              primaryExam && visibleNodes.length > 0
+                ? "#mock-practice"
+                : "#exam-setup"
+            }
+          >
+            {!primaryExam
+              ? "建立考试目标"
+              : visibleNodes.length === 0
+                ? "配置科目与大纲"
+                : "安排或记录模考"}
+          </a>
+        }
+      >
+        {primaryExam
+          ? primaryExam.payload.exam_at
+            ? `${EXAM_DATE_FORMATTER.format(new Date(primaryExam.payload.exam_at))} · 目标 ${primaryExam.payload.target_score ?? "未设置"}${primaryExam.payload.score_scale_max ? ` / ${primaryExam.payload.score_scale_max}` : ""}`
+            : "考试日期待定；可以先整理科目、大纲和第一场模考。"
+          : "从真实考试日期、科目权重和大纲覆盖开始，再用模考成绩校准复习重点。"}
+      </ProductWorkflowStage>
+
+      <div className="product-metric-grid product-metric-grid-workflow">
+        <ProductMetric
+          label="备考项目"
+          value={visibleExams.length}
+          detail={`${visibleSubjects.length} 个科目`}
+          tone="info"
+        />
+        <ProductMetric
+          label="大纲覆盖"
+          value={`${Math.round(coverageRate)}%`}
+          detail={`${coveredNodes} / ${visibleNodes.length} 个节点`}
+          tone="good"
+        />
+        <ProductMetric
+          label="最近模考"
+          value={
+            visibleScores.length ? `${Math.round(latestNormalizedScore)}%` : "—"
+          }
+          detail={`${visibleScores.length} 次成绩记录`}
+          tone={visibleScores.length ? "info" : "default"}
+        />
+        <ProductMetric
+          label="模考计划"
+          value={visibleMocks.length}
+          detail="限时练习"
+        />
+      </div>
+
+      <ProductDisclosure
+        id="exam-vault"
+        summary="备考空间与本地资料"
+        description="选择工作区、空间并解锁端侧加密内容"
+        defaultOpen={!unlocked}
+      >
         <div className="inline-form">
           <label htmlFor="exam-workspace">工作区</label>
           <select
@@ -694,18 +845,7 @@ export function ExamCenter() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!unlocked}
-            onClick={() => void synchronize()}
-          >
-            立即同步
-          </button>
         </div>
-      </section>
-
-      <section className="settings-card">
-        <h2>本地解锁</h2>
         <form className="inline-form" onSubmit={unlock}>
           <label htmlFor="exam-passphrase">本地口令</label>
           <input
@@ -716,199 +856,295 @@ export function ExamCenter() {
             autoComplete="current-password"
             required
           />
-          <button type="submit">{unlocked ? "重新解锁" : "解锁"}</button>
+          <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
         </form>
-      </section>
+      </ProductDisclosure>
 
-      <section className="settings-card">
-        <h2>创建考试</h2>
-        <form className="planning-form" onSubmit={createExam}>
-          <label htmlFor="exam-title">名称</label>
-          <input id="exam-title" name="title" maxLength={160} required />
-          <label htmlFor="exam-date-status">日期状态</label>
-          <select
-            id="exam-date-status"
-            name="date_status"
-            value={dateStatus}
-            onChange={(event) =>
-              setDateStatus(event.target.value as "scheduled" | "undetermined")
-            }
-          >
-            <option value="scheduled">日期已确定</option>
-            <option value="undetermined">日期待定</option>
-          </select>
-          {dateStatus === "scheduled" ? (
-            <div>
-              <label htmlFor="exam-at">考试时间（{EXAM_TIMEZONE}）</label>
+      <div className="product-dashboard-grid product-dashboard-grid-wide">
+        <ProductPanel
+          title="科目权重"
+          description="从已保存科目权重生成，不补充示例数据"
+        >
+          {subjectWeightChart.length ? (
+            <ProductBarChart items={subjectWeightChart} label="科目权重分布" />
+          ) : (
+            <ProductEmptyState
+              icon="◫"
+              title="尚未设置科目"
+              description="创建考试后添加科目与权重。"
+            />
+          )}
+        </ProductPanel>
+        <ProductPanel
+          title="模考趋势"
+          description="按成绩记录顺序展示标准化得分"
+        >
+          {normalizedScores.length ? (
+            <>
+              <ProductSparkline
+                values={normalizedScores}
+                label="模考成绩趋势"
+              />
+              <ProductProgress
+                label="最近一次得分率"
+                value={latestNormalizedScore}
+                tone="info"
+              />
+            </>
+          ) : (
+            <ProductEmptyState
+              icon="⌁"
+              title="等待第一场模考"
+              description="完成模考并记录成绩后，这里会出现真实趋势。"
+            />
+          )}
+        </ProductPanel>
+      </div>
+
+      <ProductDisclosure
+        id="exam-setup"
+        summary="配置考试、科目与大纲"
+        description="按顺序建立备考结构，所有内容沿用现有加密与同步流程"
+      >
+        <div className="product-config-grid">
+          <section className="settings-card">
+            <h2>创建考试</h2>
+            <form className="planning-form" onSubmit={createExam}>
+              <label htmlFor="exam-title">名称</label>
+              <input id="exam-title" name="title" maxLength={160} required />
+              <label htmlFor="exam-date-status">日期状态</label>
+              <select
+                id="exam-date-status"
+                name="date_status"
+                value={dateStatus}
+                onChange={(event) =>
+                  setDateStatus(
+                    event.target.value as "scheduled" | "undetermined",
+                  )
+                }
+              >
+                <option value="scheduled">日期已确定</option>
+                <option value="undetermined">日期待定</option>
+              </select>
+              {dateStatus === "scheduled" ? (
+                <div>
+                  <label htmlFor="exam-at">考试时间（{EXAM_TIMEZONE}）</label>
+                  <input
+                    id="exam-at"
+                    name="exam_at"
+                    type="datetime-local"
+                    required
+                  />
+                </div>
+              ) : null}
+              <label htmlFor="exam-target">目标分（可选）</label>
               <input
-                id="exam-at"
-                name="exam_at"
-                type="datetime-local"
+                id="exam-target"
+                name="target_score"
+                type="number"
+                min={0}
+              />
+              <label htmlFor="exam-scale">满分（填写目标分时必填）</label>
+              <input
+                id="exam-scale"
+                name="score_scale_max"
+                type="number"
+                min={1}
+              />
+              <button type="submit" disabled={!unlocked || !spaceId}>
+                加密保存考试
+              </button>
+            </form>
+          </section>
+
+          <section className="settings-card">
+            <h2>科目与权重</h2>
+            <form className="planning-form" onSubmit={createSubject}>
+              <label htmlFor="subject-exam">所属考试</label>
+              <select id="subject-exam" name="exam_id" required>
+                <option value="">请选择</option>
+                {visibleExams.map((exam) => (
+                  <option
+                    key={exam.entity.entity_id}
+                    value={exam.entity.entity_id}
+                  >
+                    {exam.payload.title}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="subject-name">科目名称</label>
+              <input id="subject-name" name="name" maxLength={160} required />
+              <label htmlFor="subject-weight">权重（百分比，可为 0）</label>
+              <input
+                id="subject-weight"
+                name="weight_percent"
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                defaultValue={0}
                 required
               />
-            </div>
-          ) : null}
-          <label htmlFor="exam-target">目标分（可选）</label>
-          <input id="exam-target" name="target_score" type="number" min={0} />
-          <label htmlFor="exam-scale">满分（填写目标分时必填）</label>
-          <input id="exam-scale" name="score_scale_max" type="number" min={1} />
-          <button type="submit" disabled={!unlocked || !spaceId}>
-            加密保存考试
-          </button>
-        </form>
-      </section>
-
-      <section className="settings-card">
-        <h2>科目与权重</h2>
-        <form className="planning-form" onSubmit={createSubject}>
-          <label htmlFor="subject-exam">所属考试</label>
-          <select id="subject-exam" name="exam_id" required>
-            <option value="">请选择</option>
-            {visibleExams.map((exam) => (
-              <option key={exam.entity.entity_id} value={exam.entity.entity_id}>
-                {exam.payload.title}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="subject-name">科目名称</label>
-          <input id="subject-name" name="name" maxLength={160} required />
-          <label htmlFor="subject-weight">权重（百分比，可为 0）</label>
-          <input
-            id="subject-weight"
-            name="weight_percent"
-            type="number"
-            min={0}
-            max={100}
-            step={0.01}
-            defaultValue={0}
-            required
-          />
-          <button
-            type="submit"
-            disabled={!unlocked || visibleExams.length === 0}
-          >
-            加密保存科目
-          </button>
-        </form>
-      </section>
-
-      <section className="settings-card">
-        <h2>考试大纲</h2>
-        <form className="planning-form" onSubmit={createSyllabusNode}>
-          <label htmlFor="syllabus-subject">所属科目</label>
-          <select
-            id="syllabus-subject"
-            name="subject_id"
-            value={syllabusSubjectId}
-            onChange={(event) => setSyllabusSubjectId(event.target.value)}
-            required
-          >
-            <option value="">请选择</option>
-            {visibleSubjects.map((subject) => (
-              <option
-                key={subject.entity.entity_id}
-                value={subject.entity.entity_id}
+              <button
+                type="submit"
+                disabled={!unlocked || visibleExams.length === 0}
               >
-                {subject.payload.name}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="syllabus-parent">父节点（可选）</label>
-          <select id="syllabus-parent" name="parent_id">
-            <option value="">顶层节点</option>
-            {visibleNodes
-              .filter((node) => node.payload.subject_id === syllabusSubjectId)
-              .map((node) => (
+                加密保存科目
+              </button>
+            </form>
+          </section>
+
+          <section className="settings-card">
+            <h2>考试大纲</h2>
+            <form className="planning-form" onSubmit={createSyllabusNode}>
+              <label htmlFor="syllabus-subject">所属科目</label>
+              <select
+                id="syllabus-subject"
+                name="subject_id"
+                value={syllabusSubjectId}
+                onChange={(event) => setSyllabusSubjectId(event.target.value)}
+                required
+              >
+                <option value="">请选择</option>
+                {visibleSubjects.map((subject) => (
+                  <option
+                    key={subject.entity.entity_id}
+                    value={subject.entity.entity_id}
+                  >
+                    {subject.payload.name}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="syllabus-parent">父节点（可选）</label>
+              <select id="syllabus-parent" name="parent_id">
+                <option value="">顶层节点</option>
+                {visibleNodes
+                  .filter(
+                    (node) => node.payload.subject_id === syllabusSubjectId,
+                  )
+                  .map((node) => (
+                    <option
+                      key={node.entity.entity_id}
+                      value={node.entity.entity_id}
+                    >
+                      {node.payload.title}
+                    </option>
+                  ))}
+              </select>
+              <label htmlFor="syllabus-title">节点名称</label>
+              <input
+                id="syllabus-title"
+                name="title"
+                maxLength={240}
+                required
+              />
+              <label htmlFor="syllabus-importance">重要度</label>
+              <select
+                id="syllabus-importance"
+                name="importance"
+                defaultValue="3"
+              >
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <button type="submit" disabled={!unlocked || !syllabusSubjectId}>
+                加密保存大纲节点
+              </button>
+            </form>
+          </section>
+        </div>
+      </ProductDisclosure>
+
+      <ProductPanel
+        className="sync-wide-card"
+        id="mock-practice"
+        title="模考与成绩记录"
+        description="建立限时练习，完成后记录真实得分和用时。"
+        aside={
+          <ProductTag tone="info">{visibleScores.length} 次成绩</ProductTag>
+        }
+      >
+        <div className="product-config-grid">
+          <form className="planning-form" onSubmit={createMockExam}>
+            <label htmlFor="mock-exam">所属考试</label>
+            <select id="mock-exam" name="exam_id" required>
+              <option value="">请选择</option>
+              {visibleExams.map((exam) => (
                 <option
-                  key={node.entity.entity_id}
-                  value={node.entity.entity_id}
+                  key={exam.entity.entity_id}
+                  value={exam.entity.entity_id}
                 >
-                  {node.payload.title}
+                  {exam.payload.title}
                 </option>
               ))}
-          </select>
-          <label htmlFor="syllabus-title">节点名称</label>
-          <input id="syllabus-title" name="title" maxLength={240} required />
-          <label htmlFor="syllabus-importance">重要度</label>
-          <select id="syllabus-importance" name="importance" defaultValue="3">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-          <button type="submit" disabled={!unlocked || !syllabusSubjectId}>
-            加密保存大纲节点
-          </button>
-        </form>
-      </section>
-
-      <section className="settings-card sync-wide-card">
-        <h2>模考与成绩趋势</h2>
-        <form className="planning-form" onSubmit={createMockExam}>
-          <label htmlFor="mock-exam">所属考试</label>
-          <select id="mock-exam" name="exam_id" required>
-            <option value="">请选择</option>
-            {visibleExams.map((exam) => (
-              <option key={exam.entity.entity_id} value={exam.entity.entity_id}>
-                {exam.payload.title}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="mock-title">模考名称</label>
-          <input id="mock-title" name="title" maxLength={160} required />
-          <label htmlFor="mock-duration">限时（分钟）</label>
-          <input
-            id="mock-duration"
-            name="duration_minutes"
-            type="number"
-            min={1}
-            max={1440}
-            required
-          />
-          <button
-            type="submit"
-            disabled={!unlocked || visibleExams.length === 0}
-          >
-            加密保存模考
-          </button>
-        </form>
-        <form className="planning-form" onSubmit={createScoreRecord}>
-          <label htmlFor="score-mock">已完成模考</label>
-          <select id="score-mock" name="mock_exam_id" required>
-            <option value="">请选择</option>
-            {visibleMocks.map((mock) => (
-              <option key={mock.entity.entity_id} value={mock.entity.entity_id}>
-                {mock.payload.title}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="score-value">得分</label>
-          <input id="score-value" name="score" type="number" min={0} required />
-          <label htmlFor="score-scale">满分</label>
-          <input
-            id="score-scale"
-            name="score_scale_max"
-            type="number"
-            min={1}
-            required
-          />
-          <label htmlFor="score-duration">实际用时（分钟）</label>
-          <input
-            id="score-duration"
-            name="duration_minutes"
-            type="number"
-            min={0}
-            max={1440}
-            required
-          />
-          <button
-            type="submit"
-            disabled={!unlocked || visibleMocks.length === 0}
-          >
-            记录正式成绩
-          </button>
-        </form>
+            </select>
+            <label htmlFor="mock-title">模考名称</label>
+            <input id="mock-title" name="title" maxLength={160} required />
+            <label htmlFor="mock-duration">限时（分钟）</label>
+            <input
+              id="mock-duration"
+              name="duration_minutes"
+              type="number"
+              min={1}
+              max={1440}
+              required
+            />
+            <button
+              type="submit"
+              disabled={!unlocked || visibleExams.length === 0}
+            >
+              加密保存模考
+            </button>
+          </form>
+          <form className="planning-form" onSubmit={createScoreRecord}>
+            <label htmlFor="score-mock">已完成模考</label>
+            <select id="score-mock" name="mock_exam_id" required>
+              <option value="">请选择</option>
+              {visibleMocks.map((mock) => (
+                <option
+                  key={mock.entity.entity_id}
+                  value={mock.entity.entity_id}
+                >
+                  {mock.payload.title}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="score-value">得分</label>
+            <input
+              id="score-value"
+              name="score"
+              type="number"
+              min={0}
+              required
+            />
+            <label htmlFor="score-scale">满分</label>
+            <input
+              id="score-scale"
+              name="score_scale_max"
+              type="number"
+              min={1}
+              required
+            />
+            <label htmlFor="score-duration">实际用时（分钟）</label>
+            <input
+              id="score-duration"
+              name="duration_minutes"
+              type="number"
+              min={0}
+              max={1440}
+              required
+            />
+            <button
+              type="submit"
+              disabled={!unlocked || visibleMocks.length === 0}
+            >
+              记录正式成绩
+            </button>
+          </form>
+        </div>
         <ol>
           {visibleScores.map((record) => {
             const mock = visibleMocks.find(
@@ -925,10 +1161,14 @@ export function ExamCenter() {
             );
           })}
         </ol>
-      </section>
+      </ProductPanel>
 
-      <section className="settings-card sync-wide-card">
-        <h2>我的考试</h2>
+      <ProductPanel
+        className="sync-wide-card"
+        title="我的考试"
+        description="集中查看倒计时、目标分、科目与大纲结构。"
+        aside={<ProductTag>{visibleExams.length} 项</ProductTag>}
+      >
         <div className="task-grid">
           {visibleExams.map((exam) => (
             <article className="task-card" key={exam.entity.entity_id}>
@@ -971,10 +1211,14 @@ export function ExamCenter() {
             </article>
           ))}
           {visibleExams.length === 0 ? (
-            <p className="empty-state">当前空间还没有考试。</p>
+            <ProductEmptyState
+              icon="◎"
+              title="当前空间还没有考试"
+              description="打开上方配置面板，先录入考试名称和日期；日期尚未确定也可以开始。"
+            />
           ) : null}
         </div>
-      </section>
+      </ProductPanel>
     </main>
   );
 }

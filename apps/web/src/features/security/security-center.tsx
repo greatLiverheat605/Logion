@@ -3,6 +3,15 @@
 import type { components } from "@logion/contracts";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
+import {
+  ProductDisclosure,
+  ProductEmptyState,
+  ProductHero,
+  ProductMetric,
+  ProductPageHeader,
+  ProductPanel,
+  ProductTag,
+} from "@/components/product/product-ui";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Device = components["schemas"]["DeviceResponse"];
@@ -227,13 +236,80 @@ export function SecurityCenter() {
 
   return (
     <main id="main-content" className="settings-page">
-      <header>
-        <p className="eyebrow">LOGION · SECURITY</p>
-        <h1>账户安全</h1>
-        <p aria-live="polite">{status}</p>
-      </header>
-      <section className="settings-card">
-        <h2>设备与会话</h2>
+      <ProductPageHeader
+        eyebrow="SECURITY · ACCOUNT PROTECTION"
+        title="用清晰状态管理登录方式和设备"
+        description={
+          <>
+            <p>
+              安全页优先回答“哪里有风险、下一步做什么”，同时保留 Passkey、TOTP
+              和会话管理。
+            </p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+      />
+      <ProductHero
+        badge={
+          <ProductTag tone={totp?.enabled ? "good" : "warn"}>
+            {totp?.enabled ? "双因素已启用" : "建议启用双因素"}
+          </ProductTag>
+        }
+        title={
+          totp?.enabled && passkeys.length
+            ? "账户已有多层保护"
+            : "补齐第二种登录与恢复方式"
+        }
+        progressLabel="保护完成度"
+        progressValue={
+          (((passkeys.some((item) => item.revoked_at === null) ? 1 : 0) +
+            (totp?.enabled ? 1 : 0) +
+            (devices.some((item) => item.current && item.revoked_at === null)
+              ? 1
+              : 0)) /
+            3) *
+          100
+        }
+      >
+        定期检查已登录设备，优先使用 Passkey，并妥善离线保存一次性恢复码。
+      </ProductHero>
+      <div className="product-metric-grid">
+        <ProductMetric
+          label="有效设备"
+          value={devices.filter((item) => item.revoked_at === null).length}
+          detail={`${devices.length} 条设备记录`}
+          tone="info"
+        />
+        <ProductMetric
+          label="有效 Passkey"
+          value={passkeys.filter((item) => item.revoked_at === null).length}
+          detail="抗钓鱼凭据"
+          tone="good"
+        />
+        <ProductMetric
+          label="TOTP"
+          value={totp?.enabled ? "已启用" : "未启用"}
+          detail="第二验证因素"
+          tone={totp?.enabled ? "good" : "warn"}
+        />
+        <ProductMetric
+          label="恢复码"
+          value={totp?.recovery_codes_remaining ?? 0}
+          detail="剩余可用数量"
+        />
+      </div>
+
+      <ProductPanel
+        title="设备与会话"
+        description="确认当前和其他设备，撤销不再使用的访问。"
+        aside={
+          <ProductTag tone="info">
+            {devices.filter((item) => item.revoked_at === null).length} 个有效
+          </ProductTag>
+        }
+      >
         <ul className="item-list">
           {devices.map((device) => (
             <li key={device.id}>
@@ -252,9 +328,23 @@ export function SecurityCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h2>Passkey</h2>
+        {devices.length === 0 ? (
+          <ProductEmptyState
+            icon="◇"
+            title="暂无设备记录"
+            description="成功登录的设备会出现在这里。"
+          />
+        ) : null}
+      </ProductPanel>
+      <ProductPanel
+        title="Passkey"
+        description="添加可命名、可撤销的抗钓鱼登录凭据。"
+        aside={
+          <ProductTag tone="good">
+            {passkeys.filter((item) => item.revoked_at === null).length} 个有效
+          </ProductTag>
+        }
+      >
         <form className="inline-form" onSubmit={registerPasskey}>
           <label htmlFor="passkey-name">名称</label>
           <input id="passkey-name" name="name" maxLength={80} required />
@@ -276,9 +366,23 @@ export function SecurityCenter() {
             </li>
           ))}
         </ul>
-      </section>
-      <section className="settings-card">
-        <h2>认证器与恢复码</h2>
+        {passkeys.length === 0 ? (
+          <ProductEmptyState
+            icon="＋"
+            title="还没有 Passkey"
+            description="为当前设备或安全密钥添加一个容易识别的名称。"
+          />
+        ) : null}
+      </ProductPanel>
+      <ProductDisclosure
+        summary="认证器与恢复码"
+        description={
+          totp?.enabled ? "管理动态码和一次性恢复码" : "启用第二验证因素"
+        }
+        defaultOpen={
+          !totp?.enabled || enrollment !== null || recoveryCodes.length > 0
+        }
+      >
         {totp?.enabled ? (
           <>
             <p>已启用，剩余恢复码：{totp.recovery_codes_remaining}</p>
@@ -337,7 +441,7 @@ export function SecurityCenter() {
             </ul>
           </div>
         ) : null}
-      </section>
+      </ProductDisclosure>
     </main>
   );
 }

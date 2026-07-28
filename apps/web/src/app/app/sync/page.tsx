@@ -1,13 +1,14 @@
 import { OfflineSyncCenter } from "@/features/sync/offline-sync-center";
+import { ProductPageHeader } from "@/components/product/product-ui";
 
 export default function SyncPage() {
   return (
     <main className="app-shell sync-shell">
-      <header className="page-head">
-        <p className="eyebrow">Offline control plane</p>
-        <h1>同步与设备</h1>
-        <p>本地编辑始终优先；只有无法安全合并的内容才需要你选择。</p>
-      </header>
+      <ProductPageHeader
+        eyebrow="SYNC · OFFLINE-FIRST CONTROL"
+        title="离线继续工作，冲突始终显式处理"
+        description="设备状态、同步队列、附件和冲突合并集中展示，不用猜数据是否已经安全保存。"
+      />
       <OfflineSyncCenter />
     </main>
   );

@@ -7,6 +7,19 @@ const ITERATIONS = 310_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+function requireCrypto(): Crypto {
+  const runtime = globalThis as unknown as { crypto?: Partial<Crypto> };
+  const secureCrypto = runtime.crypto;
+  if (
+    secureCrypto === undefined ||
+    secureCrypto.subtle === undefined ||
+    typeof secureCrypto.getRandomValues !== "function"
+  ) {
+    throw new OfflineStorageError("OFFLINE_CRYPTO_UNAVAILABLE");
+  }
+  return secureCrypto as Crypto;
+}
+
 function encode(value: Uint8Array): string {
   return btoa(String.fromCharCode(...value));
 }
@@ -21,14 +34,15 @@ async function deriveKey(
   salt: Uint8Array<ArrayBuffer>,
   iterations: number,
 ): Promise<CryptoKey> {
-  const material = await crypto.subtle.importKey(
+  const secureCrypto = requireCrypto();
+  const material = await secureCrypto.subtle.importKey(
     "raw",
     encoder.encode(passphrase),
     "PBKDF2",
     false,
     ["deriveKey"],
   );
-  return crypto.subtle.deriveKey(
+  return secureCrypto.subtle.deriveKey(
     { name: "PBKDF2", hash: "SHA-256", salt, iterations },
     material,
     { name: "AES-GCM", length: 256 },
@@ -54,11 +68,12 @@ export class OfflineVault {
     ) {
       throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
     }
-    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const secureCrypto = requireCrypto();
+    const salt = secureCrypto.getRandomValues(new Uint8Array(16));
     const key = await deriveKey(passphrase, salt, ITERATIONS);
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const iv = secureCrypto.getRandomValues(new Uint8Array(12));
     const verifier = new Uint8Array(
-      await crypto.subtle.encrypt(
+      await secureCrypto.subtle.encrypt(
         { name: "AES-GCM", iv },
         key,
         encoder.encode("logion-v1"),
@@ -82,12 +97,13 @@ export class OfflineVault {
       throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
     }
     try {
+      const secureCrypto = requireCrypto();
       const key = await deriveKey(
         passphrase,
         decode(metadata.salt),
         metadata.iterations,
       );
-      const clear = await crypto.subtle.decrypt(
+      const clear = await secureCrypto.subtle.decrypt(
         { name: "AES-GCM", iv: decode(metadata.verifier_iv) },
         key,
         decode(metadata.verifier_ciphertext),
@@ -95,8 +111,14 @@ export class OfflineVault {
       if (decoder.decode(clear) !== "logion-v1")
         throw new Error("invalid verifier");
       this.key = key;
-    } catch {
+    } catch (error) {
       this.key = null;
+      if (
+        error instanceof OfflineStorageError &&
+        error.code === "OFFLINE_CRYPTO_UNAVAILABLE"
+      ) {
+        throw error;
+      }
       throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
     }
   }
@@ -123,9 +145,10 @@ export class OfflineVault {
     validateUuid(recordId);
     validateUuid(workspaceId);
     const key = this.requireKey();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const secureCrypto = requireCrypto();
+    const iv = secureCrypto.getRandomValues(new Uint8Array(12));
     const ciphertext = new Uint8Array(
-      await crypto.subtle.encrypt(
+      await secureCrypto.subtle.encrypt(
         {
           name: "AES-GCM",
           iv,
@@ -153,7 +176,7 @@ export class OfflineVault {
     if (record.workspace_id !== workspaceId) {
       throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
     }
-    const clear = await crypto.subtle.decrypt(
+    const clear = await requireCrypto().subtle.decrypt(
       {
         name: "AES-GCM",
         iv: decode(record.iv),
@@ -174,6 +197,9 @@ export class OfflineVault {
         this.database.vaultRecords,
         this.database.entities,
         this.database.outbox,
+        this.database.syncState,
+        this.database.bootstrapManifests,
+        this.database.bootstrapRecords,
         this.database.conflicts,
         this.database.attachmentQueue,
       ],
@@ -183,6 +209,9 @@ export class OfflineVault {
           this.database.vaultRecords.clear(),
           this.database.entities.clear(),
           this.database.outbox.clear(),
+          this.database.syncState.clear(),
+          this.database.bootstrapManifests.clear(),
+          this.database.bootstrapRecords.clear(),
           this.database.conflicts.clear(),
           this.database.attachmentQueue.clear(),
         ]);

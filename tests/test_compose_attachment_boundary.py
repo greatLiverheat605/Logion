@@ -44,3 +44,21 @@ def test_attachment_consumers_retain_least_privilege_mounts() -> None:
     assert "attachments_data:/attachments:ro" in backup
     assert 'group_add: ["10001"]' in backup
     assert "attachment-init:" in backup
+
+
+def test_refresh_rotation_grace_is_explicit_for_api_and_worker() -> None:
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    api = service_block(compose, "api", "worker")
+    worker = service_block(compose, "worker", "web")
+
+    expected = "LOGION_REFRESH_REUSE_GRACE_SECONDS: ${LOGION_REFRESH_REUSE_GRACE_SECONDS:-10}"
+    assert expected in api
+    assert expected in worker
+
+
+def test_reverse_proxy_is_loopback_only_by_default() -> None:
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    reverse_proxy = service_block(compose, "reverse-proxy", "backup")
+
+    assert '"127.0.0.1:8080:8080"' in reverse_proxy
+    assert '\n      - "8080:8080"' not in reverse_proxy

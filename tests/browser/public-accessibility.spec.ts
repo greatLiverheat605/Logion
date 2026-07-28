@@ -70,3 +70,13 @@ test("reduced-motion preference does not leave forced animation", async ({
   );
   expect(movingElements).toBe(0);
 });
+
+test("theme bootstrap applies a persisted preference before hydration", async ({
+  page,
+}) => {
+  await page.goto("/auth/login");
+  await page.evaluate(() => localStorage.setItem("app-shell-theme", "dark"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.evaluate(() => localStorage.removeItem("app-shell-theme"));
+});
