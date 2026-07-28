@@ -254,6 +254,7 @@ pnpm contracts:check
 
 ## 项目文档
 
+- [已完成功能与系统操作手册](docs/user-guide.md)
 - [架构决策记录](docs/adr/README.md)
 - [安全设计与威胁模型](docs/security/)
 - [离线存储规范](docs/offline/)

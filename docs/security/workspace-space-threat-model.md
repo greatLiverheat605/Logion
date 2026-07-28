@@ -22,7 +22,7 @@
 
 | 资产/边界           | 安全要求                                                                          |
 | ------------------- | --------------------------------------------------------------------------------- |
-| Workspace           | 租户、配额、导出、备份与未来计费边界；不得跨 Workspace 聚合用户正文               |
+| Workspace           | 数据隔离、配额、导出与备份边界；不得跨 Workspace 聚合用户正文                     |
 | WorkspaceMembership | 用户与租户的权威关系；角色只允许 `owner/admin/editor/contributor/reviewer/viewer` |
 | Private Space       | 仅 owner 可见；管理 Workspace 不授予正文读取权                                    |
 | Shared Space        | active membership 可见；创建和后续写入由命名 permission 决定                      |
@@ -49,7 +49,7 @@
 
 ## 角色与隐私说明
 
-Owner 拥有全部 Workspace 级命名权限，但这不改变 Private Space 的 owner-only 规则。Admin 不拥有安全/账单权限。Editor 可创建 Shared Space；Contributor、Reviewer 和 Viewer 不能创建 Shared Space，但可在 Workspace 中创建自己的 Private Space。后续业务对象必须使用相同 AuthorizationService，而不能复制角色条件。
+Owner 拥有全部 Workspace 级命名权限，但这不改变 Private Space 的 owner-only 规则。Admin 不拥有 `workspace.manage_security` 权限。Editor 可创建 Shared Space；Contributor、Reviewer 和 Viewer 不能创建 Shared Space，但可在 Workspace 中创建自己的 Private Space。后续业务对象必须使用相同 AuthorizationService，而不能复制角色条件。
 
 ## 迁移与回退
 

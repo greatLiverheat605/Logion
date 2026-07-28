@@ -15,7 +15,7 @@ Compose volume 只是服务端恢复副本，不是最终灾备。Production 必
 ## 配置
 
 1. 在仓库外生成密钥：`openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`。
-2. 存入密钥管理器，或仅 Owner 可读的 `./secrets/backup.key`，不得提交。
+2. 存入密钥管理器，或保存为 `./secrets/backup.key`，不得提交。使用仓库 Compose 运行时，文件应由 `root` 持有、组设为容器专用 GID `10001`、权限设为 `0640`；不得向该宿主机组添加登录用户。
 3. 将 `LOGION_BACKUP_SECRET_SOURCE` 指向宿主机文件，将 `LOGION_BACKUP_KEY_ID` 设为稳定代际标签。
 4. 启动 Backup 服务。它先写临时密文，再原子重命名并写 checksum。
 5. 确认异地复制和保留监控；本地 `LOGION_BACKUP_RETENTION_DAYS` 默认 14 天。

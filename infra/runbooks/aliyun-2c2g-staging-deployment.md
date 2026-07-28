@@ -2,11 +2,11 @@
 
 > 文档状态：可执行测试基线
 >
-> 最后核对：2026-07-24
+> 最后核对：2026-07-27
 >
 > 目标环境：阿里云 ECS/轻量应用服务器、Ubuntu 24.04 LTS x86_64、2 核 2 GB
 >
-> 使用范围：个人使用与约 30 人低频封闭测试
+> 使用范围：个人使用与最多 10 人低频封闭测试
 > 环境性质：`staging / closed technical test`，不是 Production
 
 ## 0. 如何使用本手册
@@ -61,36 +61,51 @@ free -h 和 df -h / 输出：
 
 当前代码能够生成加密的邮件发件箱记录，但还没有阿里云邮件推送投递适配器。在适配器完成前，邮箱验证和找回密码不能视为可用。当前备份服务只写入服务器 Docker 卷；复制到私有 OSS 之前，不具备异地灾备能力。
 
+因此，服务器已有可登录 Owner 时应优先执行保留数据替换，既有账户可继续登录。全新安装或空环境重置可以完成容器、迁移和健康验收，但在邮件投递适配器完成前无法通过正常产品链路创建并验证首个 Owner；不得通过开启 legacy/open 注册、读取数据库密文或手工伪造验证状态绕过。
+
 ### 1.3 固定候选版本
 
 本手册固定使用已经通过 Main candidate 的不可变候选：
 
 ```text
-source commit: 0957bc14e6477da7dc145962e48615c1bf1df574
-Main run:      30024715871
+source commit: dd1382b12cfedabc5f57c99817268b46285053b2
+Main run:      30196665349
 app version:   0.1.0
 Alembic head:  0034_sync_conflicts
 offline schema: 4
 sync protocol: sync-v1
 ```
 
-镜像必须按摘要引用：
+四个应用镜像必须按摘要引用：
 
 ```text
 web:
-ghcr.io/greatliverheat605/logion-web@sha256:7210702a926e34717fd5ec2fa942ff3822e1c6b04ce7b9f5eabb280e0f44a5ff
+ghcr.io/greatliverheat605/logion-web@sha256:4adcdd82538b995dc41d4cdbfefed3a19c2d4d5932e38d7b01889503e1286427
 
 api:
-ghcr.io/greatliverheat605/logion-api@sha256:7fdabaa65903dfdb306f206eeb028232b9ac7fff9d2d5163abc316d838a98626
+ghcr.io/greatliverheat605/logion-api@sha256:0cdda3f7c638101e784c650639f06d27d57f4beff1764d36136e304503a995a2
 
 worker:
-ghcr.io/greatliverheat605/logion-worker@sha256:75ecdb9a81881959d9091c00adf3bad9a526af3d5899c1e75dbc0512ae3b2335
+ghcr.io/greatliverheat605/logion-worker@sha256:c96a9d2eb7ad2e9e35eb6c3a559b95cd947f68d430a2cde4bbb92757a1b6cbd4
 
 backup:
-ghcr.io/greatliverheat605/logion-backup@sha256:d658a39e87d636053fd594e250f7d6cdcf4735cbae29feccb457668696e8860a
+ghcr.io/greatliverheat605/logion-backup@sha256:e3aa881a0aca6ce5dafa3ea111a78d12c1643b30a3d576b1d6e648f1d65ccd67
 ```
 
-这些镜像当前允许匿名拉取。不要改成 `latest`，不要只写普通版本标签，也不要在 2 GB 服务器上重新构建。
+三个直接运行的基础镜像通过 AWS Public ECR 的 Docker Official Images 镜像按摘要引用；下列摘要与对应 Docker Hub 官方标签的多架构 manifest 摘要一致：
+
+```text
+postgres 17.10-alpine:
+public.ecr.aws/docker/library/postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+
+redis 8.6.1-alpine:
+public.ecr.aws/docker/library/redis@sha256:2afba59292f25f5d1af200496db41bea2c6c816b059f57ae74703a50a03a27d0
+
+nginx 1.29.6-alpine:
+public.ecr.aws/docker/library/nginx@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0
+```
+
+阿里云部分地域无法直接连接 Docker Hub，专属镜像加速器也可能对新标签返回 `not found`。本手册因此不依赖 Docker Hub 在线拉取，且不使用来源不明的公共镜像站。GHCR 与 Public ECR 镜像当前允许匿名拉取；不要改成 `latest`，不要只写普通版本标签，也不要在 2 GB 服务器上重新构建。
 
 ## 2. 阿里云控制台预检查
 
@@ -149,7 +164,7 @@ ghcr.io/greatliverheat605/logion-backup@sha256:d658a39e87d636053fd594e250f7d6cdc
 - [ ] 服务器是 x86_64；
 - [ ] 系统盘至少 40 GB；
 - [ ] 安全组没有公开 8080、5432、6379；
-- [ ] 没有重要数据需要保留。
+- [ ] 已确认是全新服务器，或已为旧版本选择“保留数据替换/明确空环境重置”。
 
 ## 3. 服务器身份与资源检查
 
@@ -324,15 +339,238 @@ systemctl status docker --no-pager
 journalctl -u docker --since '10 minutes ago' --no-pager | tail -n 100
 ```
 
-## 7. 获取固定版本部署文件
+## 7. 识别旧版本并获取固定版本
+
+本节分为两条路径：
+
+- `/opt/logion` 不存在：执行 7.2 的全新安装路径；
+- `/opt/logion` 已存在：执行 7.1 的旧版本处理路径，然后直接进入第 8 节。
+
+默认保留 PostgreSQL、Redis、附件和备份卷。不要把“清除旧版本”理解为删除数据卷；旧源码目录只在新版本验收并稳定运行后清理。
+
+### 7.1 已有旧版本：清点、停写、备份和归档
+
+先创建仅 root 可读的升级记录目录，并确认旧部署位置：
 
 ```bash
-install -d -m 0750 /opt/logion
+install -d -m 0700 /root/logion-upgrade
+date -u +%Y-%m-%dT%H:%M:%SZ | tee /root/logion-upgrade/started-at.txt
+
+test -d /opt/logion
+test -f /opt/logion/compose.yaml
+test -f /opt/logion/.env
+test ! -L /opt/logion/.env
+test -f /opt/logion/secrets/backup.key
+test ! -L /opt/logion/secrets/backup.key
+stat -c '%a %U:%G %n' \
+  /opt/logion/.env \
+  /opt/logion/secrets \
+  /opt/logion/secrets/backup.key
+```
+
+停止条件：旧目录不在 `/opt/logion`、`.env` 或备份密钥缺失、文件是符号链接、`.env`/密钥可被无关用户读取，或旧部署没有可验证的 Backup 服务。备份容器以非 root 用户运行；密钥必须由 `root` 持有，并仅向 Compose 已配置的专用补充组 `10001` 提供只读权限。此时不要生成新密钥，也不要删除旧目录或卷。
+
+在同一个 Bash 会话中定义旧部署命令。`-p logion` 与仓库顶层 `name: logion` 共同固定 Compose 项目名，避免目录改名后生成另一组卷：
+
+```bash
+cd /opt/logion
+
+OLD_COMPOSE=(docker compose -p logion -f compose.yaml)
+if test -f compose.beta.yaml; then
+  OLD_COMPOSE+=(-f compose.beta.yaml)
+fi
+
+grep -Eq '^name:[[:space:]]+logion[[:space:]]*$' compose.yaml
+"${OLD_COMPOSE[@]}" config --quiet
+"${OLD_COMPOSE[@]}" ps -a
+docker compose ls
+docker volume ls --filter label=com.docker.compose.project=logion
+```
+
+至少应看到 `logion_postgres_data`、`logion_attachments_data` 和 `logion_backup_data`。如果旧环境已有用户但这些卷缺失，停止；不要让新 Compose 自动创建空卷后继续。
+
+记录不含秘密的版本和数据概况：
+
+```bash
+git status --short --branch
+git rev-parse HEAD | tee /root/logion-upgrade/old-source-sha.txt
+
+"${OLD_COMPOSE[@]}" exec -T postgres sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT version_num FROM alembic_version"' \
+  | tee /root/logion-upgrade/old-alembic-head.txt
+
+"${OLD_COMPOSE[@]}" exec -T postgres sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM users"' \
+  | tee /root/logion-upgrade/old-user-count.txt
+
+"${OLD_COMPOSE[@]}" exec -T postgres sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM workspace_memberships WHERE role = \$\$owner\$\$ AND status = \$\$active\$\$"' \
+  | tee /root/logion-upgrade/old-active-owner-count.txt
+```
+
+升级前先确认旧环境仍健康。若任一核心服务异常，停止并先定位故障，避免把既有故障带入替换过程：
+
+```bash
+"${OLD_COMPOSE[@]}" ps
+curl --fail --silent http://127.0.0.1:8080/healthz
+echo
+```
+
+开始维护窗口。先停止入口和所有应用写入者，保留 PostgreSQL 与 Redis 运行：
+
+```bash
+"${OLD_COMPOSE[@]}" stop reverse-proxy web api worker backup
+"${OLD_COMPOSE[@]}" ps -a
+```
+
+生成一次加密备份，并通过同一 Backup 镜像与同一密钥验证：
+
+```bash
+"${OLD_COMPOSE[@]}" run --rm --no-deps \
+  -e LOGION_BACKUP_ONCE=true \
+  backup
+
+LATEST_BACKUP="$("${OLD_COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint sh backup -c \
+  'find /backups -maxdepth 1 -type f -name "logion-*.backup" | sort | tail -n 1')"
+
+test -n "${LATEST_BACKUP}"
+"${OLD_COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint logion-verify-backup \
+  backup "${LATEST_BACKUP}"
+```
+
+把加密备份和校验文件复制到 Compose 卷外。此步骤不解密数据：
+
+```bash
+EXPORT_CONTAINER=logion-upgrade-backup-export
+docker rm -f "${EXPORT_CONTAINER}" 2>/dev/null || true
+
+"${OLD_COMPOSE[@]}" run --name "${EXPORT_CONTAINER}" -d --no-deps \
+  --entrypoint sh backup -c 'sleep 600'
+
+docker cp \
+  "${EXPORT_CONTAINER}:${LATEST_BACKUP}" \
+  /root/logion-upgrade/
+docker cp \
+  "${EXPORT_CONTAINER}:${LATEST_BACKUP}.sha256" \
+  /root/logion-upgrade/
+docker rm -f "${EXPORT_CONTAINER}"
+
+chmod 600 /root/logion-upgrade/logion-*.backup*
+cd /root/logion-upgrade
+sha256sum -c "$(basename "${LATEST_BACKUP}").sha256"
+```
+
+随后执行一次隔离恢复演练。恢复目标是临时空数据库，不是当前数据库：
+
+```bash
+cd /opt/logion
+RESTORE_DB="logion_upgrade_restore_$(date -u +%Y%m%d%H%M%S)"
+
+"${OLD_COMPOSE[@]}" exec -T postgres sh -c \
+  'createdb -U "$POSTGRES_USER" "$1"' sh "${RESTORE_DB}"
+
+"${OLD_COMPOSE[@]}" run --rm --no-deps \
+  --entrypoint logion-restore-backup \
+  backup \
+  "${LATEST_BACKUP}" \
+  "${RESTORE_DB}" \
+  "/tmp/${RESTORE_DB}_attachments"
+
+"${OLD_COMPOSE[@]}" exec -T postgres sh -c \
+  'psql -U "$POSTGRES_USER" -d "$1" -Atc "SELECT version_num FROM alembic_version"' \
+  sh "${RESTORE_DB}"
+
+case "${RESTORE_DB}" in
+  logion_upgrade_restore_*) ;;
+  *) echo '拒绝删除未识别的恢复演练数据库' >&2; exit 1 ;;
+esac
+
+"${OLD_COMPOSE[@]}" exec -T postgres sh -c \
+  'dropdb -U "$POSTGRES_USER" "$1"' sh "${RESTORE_DB}"
+```
+
+把 `/root/logion-upgrade/` 中最新的 `.backup`、`.sha256` 和旧版本记录复制到服务器外。备份密钥也必须通过独立的安全渠道保存；不要把密钥与备份放在同一个公开位置。未完成服务器外复制前，不得执行空环境重置或清理旧目录。
+
+#### 可选：明确不要旧数据时执行空环境重置
+
+默认跳过本小节。只有你确认旧 PostgreSQL、Redis、附件和服务器内备份全部不再需要，并且服务器外的加密备份、校验文件和对应备份密钥均已验证可用时，才执行以下命令。
+
+先检查四个精确命名卷，不允许用 `prune` 代替：
+
+```bash
+docker volume inspect \
+  logion_postgres_data \
+  logion_redis_data \
+  logion_attachments_data \
+  logion_backup_data
+```
+
+关闭 `logion` 项目的全部容器，但尚不删除卷：
+
+```bash
+cd /opt/logion
+"${OLD_COMPOSE[@]}" down --remove-orphans
+docker volume ls --filter label=com.docker.compose.project=logion
+```
+
+需要人工输入完整确认词才能删除四个精确命名卷：
+
+```bash
+read -r -p '输入 DELETE_LOGION_LOCAL_DATA 确认清空旧数据: ' CONFIRM
+test "${CONFIRM}" = DELETE_LOGION_LOCAL_DATA
+unset CONFIRM
+
+docker volume rm \
+  logion_postgres_data \
+  logion_redis_data \
+  logion_attachments_data \
+  logion_backup_data
+
+touch /root/logion-upgrade/empty-reset-approved
+docker volume ls --filter label=com.docker.compose.project=logion
+```
+
+任一卷提示仍在使用或名称不匹配时立即停止，不要改用 `docker volume prune`、`docker system prune -a --volumes` 或删除 `/var/lib/docker`。
+
+归档旧源码并获取新版本。归档目录暂时保留旧 `.env` 与密钥，只允许 root 读取：
+
+```bash
+cd /opt
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+OLD_DIR="/opt/logion.before-${STAMP}"
+mv /opt/logion "${OLD_DIR}"
+chmod 0700 "${OLD_DIR}"
+printf '%s\n' "${OLD_DIR}" >/root/logion-upgrade/old-directory.txt
+
+git clone https://github.com/greatLiverheat605/Logion.git /opt/logion
+cd /opt/logion
+git checkout --detach dd1382b12cfedabc5f57c99817268b46285053b2
+
+if ! test -f /root/logion-upgrade/empty-reset-approved; then
+  install -m 0600 "${OLD_DIR}/.env" /opt/logion/.env
+  install -d -m 0700 /opt/logion/secrets
+  install -m 0640 \
+    "${OLD_DIR}/secrets/backup.key" \
+    /opt/logion/secrets/backup.key
+  chown root:10001 /opt/logion/secrets/backup.key
+fi
+```
+
+如果保留了数据卷，此时旧应用写入者仍停止，继续执行 8.2，不要执行 8.1。如果明确执行了空环境重置，则继续执行 8.1，生成一套只用于新空环境的密钥。
+
+### 7.2 全新安装：获取固定源码
+
+只有 `/opt/logion` 不存在时执行：
+
+```bash
+test ! -e /opt/logion
 cd /opt
 
 git clone https://github.com/greatLiverheat605/Logion.git logion
 cd /opt/logion
-git checkout --detach 0957bc14e6477da7dc145962e48615c1bf1df574
+git checkout --detach dd1382b12cfedabc5f57c99817268b46285053b2
 git status --short --branch
 git rev-parse HEAD
 ```
@@ -340,19 +578,16 @@ git rev-parse HEAD
 预期 HEAD：
 
 ```text
-0957bc14e6477da7dc145962e48615c1bf1df574
-```
-
-如果 `/opt/logion` 已经存在，不要覆盖或删除，先检查：
-
-```bash
-cd /opt/logion
-git status --short --branch
+dd1382b12cfedabc5f57c99817268b46285053b2
 ```
 
 ## 8. 生成环境密钥
 
 所有密钥在服务器本地生成。不要从示例文件复制开发密钥。
+
+### 8.1 全新安装
+
+只有执行了 7.2 的全新安装路径，或在 7.1 明确完成空环境重置时，运行本小节：
 
 ```bash
 cd /opt/logion
@@ -374,11 +609,12 @@ BACKUP_KEY="$(random_urlsafe)"
 read -r -p '首个 Owner 邮箱: ' LOGION_BOOTSTRAP_OWNER_EMAIL
 
 printf '%s' "${BACKUP_KEY}" >secrets/backup.key
-chmod 600 secrets/backup.key
+chown root:10001 secrets/backup.key
+chmod 640 secrets/backup.key
 
 cat >.env <<EOF
 LOGION_ENV=staging
-LOGION_VERSION=0957bc14e6477da7dc145962e48615c1bf1df574
+LOGION_VERSION=dd1382b12cfedabc5f57c99817268b46285053b2
 LOGION_LOG_LEVEL=INFO
 
 POSTGRES_DB=logion
@@ -413,10 +649,10 @@ LOGION_BACKUP_RETENTION_DAYS=7
 LOGION_BACKUP_SECRET_SOURCE=./secrets/backup.key
 LOGION_BACKUP_KEY_ID=beta-v1
 
-LOGION_WEB_IMAGE=ghcr.io/greatliverheat605/logion-web@sha256:7210702a926e34717fd5ec2fa942ff3822e1c6b04ce7b9f5eabb280e0f44a5ff
-LOGION_API_IMAGE=ghcr.io/greatliverheat605/logion-api@sha256:7fdabaa65903dfdb306f206eeb028232b9ac7fff9d2d5163abc316d838a98626
-LOGION_WORKER_IMAGE=ghcr.io/greatliverheat605/logion-worker@sha256:75ecdb9a81881959d9091c00adf3bad9a526af3d5899c1e75dbc0512ae3b2335
-LOGION_BACKUP_IMAGE=ghcr.io/greatliverheat605/logion-backup@sha256:d658a39e87d636053fd594e250f7d6cdcf4735cbae29feccb457668696e8860a
+LOGION_WEB_IMAGE=ghcr.io/greatliverheat605/logion-web@sha256:4adcdd82538b995dc41d4cdbfefed3a19c2d4d5932e38d7b01889503e1286427
+LOGION_API_IMAGE=ghcr.io/greatliverheat605/logion-api@sha256:0cdda3f7c638101e784c650639f06d27d57f4beff1764d36136e304503a995a2
+LOGION_WORKER_IMAGE=ghcr.io/greatliverheat605/logion-worker@sha256:c96a9d2eb7ad2e9e35eb6c3a559b95cd947f68d430a2cde4bbb92757a1b6cbd4
+LOGION_BACKUP_IMAGE=ghcr.io/greatliverheat605/logion-backup@sha256:e3aa881a0aca6ce5dafa3ea111a78d12c1643b30a3d576b1d6e648f1d65ccd67
 
 NEXT_TELEMETRY_DISABLED=1
 EOF
@@ -426,14 +662,80 @@ unset POSTGRES_PASSWORD LOGION_SECRET_KEY
 unset TOTP_KEY EMAIL_KEY AI_KEY EXPORT_KEY BACKUP_KEY
 ```
 
+### 8.2 已有旧版本：保留密钥并更新非秘密配置
+
+只有执行了 7.1 的保留数据替换路径时运行本小节。必须继续使用旧数据库对应的数据库密码、认证密钥、TOTP/邮件/AI/导出加密密钥和备份密钥；重新生成这些值会造成登录失效或既有密文、备份无法恢复。
+
+先确认 7.1 已复制必要文件：
+
+```bash
+cd /opt/logion
+test -f .env
+test ! -L .env
+test -f secrets/backup.key
+test ! -L secrets/backup.key
+test -f /root/logion-upgrade/old-active-owner-count.txt
+```
+
+仅替换候选版本、镜像和注册门控等非秘密项：
+
+```bash
+set_env_value() {
+  key="$1"
+  value="$2"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*$|${key}=${value}|" .env
+  else
+    printf '%s=%s\n' "${key}" "${value}" >>.env
+  fi
+}
+
+set_env_value LOGION_ENV staging
+set_env_value LOGION_VERSION dd1382b12cfedabc5f57c99817268b46285053b2
+set_env_value LOGION_LEGACY_REGISTRATION_ENABLED false
+set_env_value LOGION_REGISTRATION_MODE invite
+set_env_value LOGION_BACKUP_SECRET_SOURCE ./secrets/backup.key
+
+set_env_value LOGION_WEB_IMAGE \
+  ghcr.io/greatliverheat605/logion-web@sha256:4adcdd82538b995dc41d4cdbfefed3a19c2d4d5932e38d7b01889503e1286427
+set_env_value LOGION_API_IMAGE \
+  ghcr.io/greatliverheat605/logion-api@sha256:0cdda3f7c638101e784c650639f06d27d57f4beff1764d36136e304503a995a2
+set_env_value LOGION_WORKER_IMAGE \
+  ghcr.io/greatliverheat605/logion-worker@sha256:c96a9d2eb7ad2e9e35eb6c3a559b95cd947f68d430a2cde4bbb92757a1b6cbd4
+set_env_value LOGION_BACKUP_IMAGE \
+  ghcr.io/greatliverheat605/logion-backup@sha256:e3aa881a0aca6ce5dafa3ea111a78d12c1643b30a3d576b1d6e648f1d65ccd67
+
+OLD_OWNER_COUNT="$(tr -d '[:space:]' </root/logion-upgrade/old-active-owner-count.txt)"
+case "${OLD_OWNER_COUNT}" in
+  ''|*[!0-9]*) echo '旧 Owner 数量记录无效' >&2; exit 1 ;;
+esac
+
+if test "${OLD_OWNER_COUNT}" -gt 0; then
+  set_env_value LOGION_BOOTSTRAP_OWNER_EMAIL ''
+else
+  read -r -p '首个 Owner 邮箱: ' LOGION_BOOTSTRAP_OWNER_EMAIL
+  set_env_value LOGION_BOOTSTRAP_OWNER_EMAIL "${LOGION_BOOTSTRAP_OWNER_EMAIL}"
+  unset LOGION_BOOTSTRAP_OWNER_EMAIL
+fi
+
+chmod 600 .env
+chown root:10001 secrets/backup.key
+chmod 640 secrets/backup.key
+chmod 700 secrets
+unset OLD_OWNER_COUNT
+unset -f set_env_value
+```
+
+不要复制旧源码、旧 Compose 覆盖文件或示例密钥；只保留上述实际运行数据所必需的密钥与配置值。
+
 只检查权限与变量名：
 
 ```bash
-stat -c '%a %U:%G %n' .env secrets secrets/backup.key
+stat -c '%u:%g:%a %n' .env secrets secrets/backup.key
 grep -E '^[A-Z0-9_]+=' .env | cut -d= -f1
 ```
 
-预期：`.env` 与 `backup.key` 权限为 `600`，`secrets` 为 `700`。
+预期：`.env` 为 `0:0:600`，`secrets` 为 `0:0:700`，`backup.key` 为 `0:10001:640`。`10001` 是备份容器的专用补充组；不得向该宿主机组添加登录用户。
 
 禁止执行或发送：
 
@@ -517,14 +819,37 @@ services:
 EOF
 ```
 
-定义一个简短命令，减少遗漏覆盖文件的风险：
+创建阿里云网络使用的基础镜像注册表覆盖。该文件只改变镜像来源，不改变服务、端口、卷或数据模型：
+
+```bash
+cat >compose.registry.yaml <<'EOF'
+services:
+  postgres:
+    image: public.ecr.aws/docker/library/postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+
+  redis:
+    image: public.ecr.aws/docker/library/redis@sha256:2afba59292f25f5d1af200496db41bea2c6c816b059f57ae74703a50a03a27d0
+
+  reverse-proxy:
+    image: public.ecr.aws/docker/library/nginx@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0
+EOF
+
+chmod 0644 compose.registry.yaml
+```
+
+定义一个简短命令，减少遗漏低内存、端口和注册表覆盖文件的风险：
 
 ```bash
 cat >/usr/local/bin/logion-compose <<'EOF'
 #!/bin/sh
 set -eu
 cd /opt/logion
-exec docker compose -f compose.yaml -f compose.beta.yaml "$@"
+exec docker compose \
+  -p logion \
+  -f compose.yaml \
+  -f compose.beta.yaml \
+  -f compose.registry.yaml \
+  "$@"
 EOF
 
 chmod 0755 /usr/local/bin/logion-compose
@@ -534,7 +859,10 @@ chmod 0755 /usr/local/bin/logion-compose
 
 ```bash
 logion-compose config --quiet
+logion-compose config --images
 ```
+
+`config --images` 必须显示四个 `ghcr.io/greatliverheat605/logion-*` 摘要和三个 `public.ecr.aws/docker/library/*` 摘要，不能再显示 `docker.io/library/postgres`、`docker.io/library/redis` 或 `docker.io/library/nginx`。
 
 检查 8080 最终只绑定回环地址。该命令只投影 `reverse-proxy` 的端口字段，不输出服务环境变量：
 
@@ -559,28 +887,122 @@ published: "8080"
 - [ ] Git HEAD 是固定候选提交；
 - [ ] `.env` 与备份密钥权限正确；
 - [ ] `config --quiet` 通过；
+- [ ] 三个基础镜像已由 `compose.registry.yaml` 固定到 Public ECR 摘要；
 - [ ] 8080 只绑定 `127.0.0.1`。
 
 ## 10. 拉取不可变镜像
 
+### 10.1 注册表连通性与正常拉取
+
+先验证两个实际使用的注册表可连接。以下命令只输出 HTTP 状态码，不发送凭据：
+
+```bash
+curl -sS -o /dev/null -I \
+  --connect-timeout 10 \
+  -w 'Public ECR HTTP %{http_code}\n' \
+  https://public.ecr.aws/v2/
+
+curl -sS -o /dev/null -I \
+  --connect-timeout 10 \
+  -w 'GHCR HTTP %{http_code}\n' \
+  https://ghcr.io/v2/
+```
+
+Public ECR 常见响应为 `401`，GHCR 对 `HEAD /v2/` 常见响应为 `405`；两者都表示 DNS、TCP 和 TLS 已连接。`000`、超时或连接拒绝必须停止处理网络问题。
+
 ```bash
 cd /opt/logion
+logion-compose config --quiet
+logion-compose config --images
 logion-compose pull
 ```
 
-拉取过程不能出现 `Building`。验证摘要：
+### 10.2 拉取过慢时的安全处理
+
+只要下载字节仍在增加，优先等待完成。中断 `docker pull` 不会修改数据库或命名卷；连续 15 分钟没有任何进度时可按 `Ctrl-C`，随后重跑相同命令，Docker 会复用已经完整下载的内容层。
+
+先检查磁盘，根分区可用空间低于 15 GB 时停止，不要通过删除数据卷腾挪空间：
 
 ```bash
-docker image inspect \
-  ghcr.io/greatliverheat605/logion-web@sha256:7210702a926e34717fd5ec2fa942ff3822e1c6b04ce7b9f5eabb280e0f44a5ff \
-  --format '{{json .RepoDigests}}'
-
-docker image inspect \
-  ghcr.io/greatliverheat605/logion-api@sha256:7fdabaa65903dfdb306f206eeb028232b9ac7fff9d2d5163abc316d838a98626 \
-  --format '{{json .RepoDigests}}'
+df -h /
+docker system df
 ```
 
-如果 GHCR 返回 `401`，停止并确认包可见性；不要把 GitHub Token 写入 `.env` 或命令历史。
+2 核 2 GB 服务器可把并发限制为 2，并分组拉取，减少多条跨境连接互相争抢：
+
+```bash
+cd /opt/logion
+
+COMPOSE_PARALLEL_LIMIT=2 logion-compose pull \
+  postgres redis reverse-proxy
+
+COMPOSE_PARALLEL_LIMIT=2 logion-compose pull \
+  api worker web backup attachment-init
+```
+
+不要使用 `--ignore-pull-failures`，也不要在镜像未完整到位时执行迁移。阿里云实例有较低公网带宽上限时，可在控制台临时提高带宽，拉取和摘要验证完成后再恢复原值。
+
+如果 Public ECR/GHCR 可以连接但传输速度无法接受，可以在一台可信且网络较快、安装了 Docker 的电脑上准备离线镜像包。先在服务器生成只包含镜像引用的清单：
+
+```bash
+cd /opt/logion
+logion-compose config --images \
+  | sort -u \
+  >/root/logion-image-references.txt
+```
+
+把该清单和同一固定提交的部署文件复制到可信电脑。在可信电脑执行：
+
+```bash
+while IFS= read -r IMAGE; do
+  docker pull "${IMAGE}"
+  docker image inspect "${IMAGE}" >/dev/null
+done <logion-image-references.txt
+
+mapfile -t IMAGES <logion-image-references.txt
+docker save "${IMAGES[@]}" \
+  | gzip -1 \
+  >logion-images-dd1382b.tar.gz
+
+sha256sum logion-images-dd1382b.tar.gz \
+  >logion-images-dd1382b.tar.gz.sha256
+unset IMAGES IMAGE
+```
+
+通过私有 OSS（禁止公共读写，优先 RAM 角色或短期凭据）或受信任的 SSH 通道传到服务器。不要把镜像包上传到公开网盘。服务器端先验证再导入：
+
+```bash
+sha256sum -c logion-images-dd1382b.tar.gz.sha256
+gzip -dc logion-images-dd1382b.tar.gz | docker load
+
+while IFS= read -r IMAGE; do
+  docker image inspect "${IMAGE}" >/dev/null
+done </root/logion-image-references.txt
+unset IMAGE
+```
+
+只有七个精确引用全部能被 `docker image inspect` 找到时，才可以跳过在线 `logion-compose pull` 并继续第 11 节。离线包校验失败、加载后缺少精确引用或来源不可信时必须停止。
+
+### 10.3 拉取结果验证
+
+拉取过程不能出现 `Building`，也不能再请求 `docker.io/library/*`。验证七个精确摘要：
+
+```bash
+for IMAGE in \
+  public.ecr.aws/docker/library/postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193 \
+  public.ecr.aws/docker/library/redis@sha256:2afba59292f25f5d1af200496db41bea2c6c816b059f57ae74703a50a03a27d0 \
+  public.ecr.aws/docker/library/nginx@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0 \
+  ghcr.io/greatliverheat605/logion-web@sha256:4adcdd82538b995dc41d4cdbfefed3a19c2d4d5932e38d7b01889503e1286427 \
+  ghcr.io/greatliverheat605/logion-api@sha256:0cdda3f7c638101e784c650639f06d27d57f4beff1764d36136e304503a995a2 \
+  ghcr.io/greatliverheat605/logion-worker@sha256:c96a9d2eb7ad2e9e35eb6c3a559b95cd947f68d430a2cde4bbb92757a1b6cbd4 \
+  ghcr.io/greatliverheat605/logion-backup@sha256:e3aa881a0aca6ce5dafa3ea111a78d12c1643b30a3d576b1d6e648f1d65ccd67
+do
+  docker image inspect "${IMAGE}" --format '{{json .RepoDigests}}'
+done
+unset IMAGE
+```
+
+如果 Public ECR 无法连接，停止；不要退回无法访问的 Docker Hub，也不要临时改用来源不明的镜像站。如果 GHCR 拉取返回 `401` 或 `denied`，停止并确认包可见性；不要把 GitHub Token 写入 `.env` 或命令历史。
 
 ## 11. 启动底层服务与迁移数据库
 
@@ -738,7 +1160,11 @@ ss -lntp | grep ':8080'
 
 首次启动前，`.env` 必须保持 `LOGION_REGISTRATION_MODE=invite`、`LOGION_LEGACY_REGISTRATION_ENABLED=false`，并将 `LOGION_BOOTSTRAP_OWNER_EMAIL` 设为首个 Owner 的邮箱。
 
-在浏览器打开 `http://localhost:8080/auth/register`，使用该邮箱提交注册，完成邮件验证并设置密码。随后打开 `http://localhost:8080/auth/login`，确认可以登录且个人工作区已经创建。
+已有旧版本且保留数据时，先用既有 Owner 打开 `http://localhost:8080/auth/login`，确认能够登录、原工作区可见且抽样数据完整。旧环境已有用户时，8.2 已清空 `LOGION_BOOTSTRAP_OWNER_EMAIL`，不要重新开放引导。
+
+全新安装或空环境重置时，当前版本尚无阿里云邮件投递适配器。你可以完成服务器、容器、数据库迁移、健康检查和页面渲染验收，但必须把“首个 Owner 注册/邮箱验证/登录”标记为阻断项，等待邮件适配器单独实现和测试。不要从 `email_outbox` 解密或提取 token，不要手工修改验证状态，也不要将注册模式改为 `open`。
+
+邮件投递适配器可用后，才能在浏览器打开 `http://localhost:8080/auth/register`，使用引导邮箱提交注册，完成邮箱验证并设置密码。随后打开 `http://localhost:8080/auth/login`，确认可以登录且个人工作区已经创建。
 
 Owner 创建成功后，立即清空引导邮箱并重启 API 与 worker，关闭引导口子：
 
@@ -756,13 +1182,16 @@ logion-compose up -d --no-build --force-recreate api worker
 ### 检查点 D
 
 - [ ] 首页、登录页真实渲染；
-- [ ] 第一个账户可以登录；
+- [ ] 保留数据替换时，既有 Owner 可以登录且原数据抽样正确；
+- [ ] 全新空环境时，首个 Owner 注册已在邮件适配器可用后通过，或已明确记录为阻断项；
 - [ ] 个人工作区已自动创建；
 - [ ] 注册模式保持 `invite`，旧注册接口保持关闭；
-- [ ] `LOGION_BOOTSTRAP_OWNER_EMAIL` 已清空；
+- [ ] 已有 Owner 时 `LOGION_BOOTSTRAP_OWNER_EMAIL` 已清空；尚无 Owner 时只保留预定引导邮箱；
 - [ ] 容器没有 OOM 或反复重启。
 
 ## 16. 功能验收顺序
+
+只有既有 Owner 可以登录，或邮件投递适配器完成后首个 Owner 已正常创建时，才执行本节。尚未满足时跳过本节并保留阻断记录，不能用未认证接口或数据库直改代替。
 
 使用测试数据依次验证：
 
@@ -783,6 +1212,8 @@ logion-compose up -d --no-build --force-recreate api worker
 15. 审计日志。
 
 每完成一项记录：测试账户、设备、时间、操作、预期、实际、错误码和是否产生数据。不要在记录中保存密码、令牌或用户内容。
+
+第 9、10 项必须按照 [阿里云真实同步验收手册](./aliyun-real-sync-acceptance.md) 执行。该手册覆盖真实 FastAPI 检查、双浏览器双向同步、离线 Outbox、恢复回读、Vault 锁定、失败路由和验收记录；本机 Mock Server 或只返回固定 JSON 的接口不能替代这项验证。
 
 ## 17. 备份验证
 
@@ -877,13 +1308,67 @@ rm -rf /opt/logion
 
 这些命令可能删除数据库、Redis、附件、备份或部署证据。
 
-## 20. 更新与回滚
+## 20. 新版本稳定后清理旧应用文件
+
+只有满足以下全部条件后，才清理 7.1 创建的旧源码归档：
+
+- 新版本已连续稳定运行至少 24 小时；
+- 健康检查、登录、注册关闭、核心功能和资源检查均通过；
+- 新版本至少生成并验证了一份加密备份；
+- 加密备份、`.sha256` 和相应备份密钥已分别保存到服务器外；
+- 不需要用旧目录核对配置差异。
+
+先确认当前版本和运行容器，不读取 `.env` 内容：
+
+```bash
+cd /opt/logion
+test "$(git rev-parse HEAD)" = dd1382b12cfedabc5f57c99817268b46285053b2
+logion-compose ps
+curl --fail --silent http://127.0.0.1:8080/healthz
+echo
+```
+
+再读取并严格校验归档路径：
+
+```bash
+OLD_DIR="$(cat /root/logion-upgrade/old-directory.txt)"
+case "${OLD_DIR}" in
+  /opt/logion.before-20??????T??????Z) ;;
+  *) echo '拒绝清理未识别的旧目录' >&2; exit 1 ;;
+esac
+
+test "${OLD_DIR}" != /opt/logion
+test -d "${OLD_DIR}"
+test "$(dirname "${OLD_DIR}")" = /opt
+ls -ld "${OLD_DIR}"
+```
+
+人工确认 `ls -ld` 只指向带 UTC 时间戳的 `/opt/logion.before-*` 后，删除该旧应用目录：
+
+```bash
+rm -rf --one-file-system -- "${OLD_DIR}"
+test ! -e "${OLD_DIR}"
+rm -f /root/logion-upgrade/old-directory.txt
+unset OLD_DIR
+```
+
+该操作只清理旧源码及其中的旧配置副本，不删除 `logion_*` 数据卷。云盘和 SSD 上的文件删除不等同于密码学安全擦除；如果怀疑旧密钥曾泄漏，应按密钥轮换与恢复验证流程处理，不能依赖重复覆盖文件。
+
+可选清理没有标签且不被任何容器引用的悬空镜像：
+
+```bash
+docker image prune
+```
+
+不要加 `-a` 或 `--volumes`。仍有标签的旧候选镜像可以保留，磁盘空间不足时再逐个核对容器引用后按精确镜像 ID 删除。
+
+## 21. 更新与回滚
 
 更新前记录：
 
 - 新源提交；
 - 成功的 Main run ID；
-- 四个镜像摘要；
+- 四个应用镜像和三个基础镜像摘要；
 - 当前和目标 Alembic head；
 - 当前离线 schema 与同步协议；
 - 最近加密备份文件、校验值与验证时间。
@@ -903,21 +1388,21 @@ rm -rf /opt/logion
 
 数据库迁移后不能假设旧镜像可回滚。旧二进制无法读取新 schema 时应保留兼容候选并前向修复，恢复数据库必须经过人工批准和恢复演练。
 
-## 21. 常见故障路由
+## 22. 常见故障路由
 
-### 21.1 `no matching manifest for linux/arm64`
+### 22.1 `no matching manifest for linux/arm64`
 
 服务器是 ARM 架构。停止部署，换用 x86_64 实例或先构建并审核 ARM 候选，不能在服务器临时构建。
 
-### 21.2 `!override` 无法解析
+### 22.2 `!override` 无法解析
 
 Compose 版本过旧。提供 `docker compose version`，升级 Compose 后重试。不要删除端口覆盖继续运行。
 
-### 21.3 GHCR `401` 或 `denied`
+### 22.3 GHCR `401` 或 `denied`
 
 先确认镜像包是否仍允许匿名拉取。若改为私有，使用只有 `read:packages` 权限的短期 Token，通过 `docker login ghcr.io --password-stdin` 输入；不要把 Token 写入 `.env`、脚本或聊天。
 
-### 21.4 API ready 返回 503
+### 22.4 API ready 返回 503
 
 执行：
 
@@ -928,7 +1413,7 @@ logion-compose logs --tail 100 api postgres redis
 
 不要重复迁移或删除卷。
 
-### 21.5 浏览器打不开页面
+### 22.5 浏览器打不开页面
 
 依次检查：
 
@@ -939,7 +1424,7 @@ ss -lntp | grep ':8080'
 
 然后确认本机 SSH 隧道仍在运行、访问的是 `http://localhost:8080`，而不是服务器公网 IP。
 
-### 21.6 注册返回 403
+### 22.6 注册返回 403
 
 确认请求头是：
 
@@ -949,7 +1434,7 @@ Origin: http://localhost:8080
 
 不要通过放宽全部 CORS 来源解决。
 
-### 21.7 容器被 OOMKilled
+### 22.7 容器被 OOMKilled
 
 执行：
 
@@ -962,32 +1447,64 @@ docker inspect $(logion-compose ps -q) \
 
 停止新增用户和 AI/附件测试。持续 OOM 时升级到 4 GB。
 
-### 21.8 Backup 反复退出
+### 22.8 Backup 反复退出
 
-检查文件权限和有限日志：
+检查文件权限、容器用户和有限日志：
 
 ```bash
-stat -c '%a %U:%G %n' secrets/backup.key
+stat -c '%u:%g:%a %n' secrets/backup.key
+logion-compose exec -T backup id
 logion-compose logs --tail 100 backup
 ```
 
-不要显示 `backup.key` 内容。
+预期密钥为 `0:10001:640`，容器用户的补充组包含 `10001`。如果密钥仍是 `0:0:600`，备份脚本会在读取密钥前静默退出并进入重启循环。只修复所有权与权限，不要读取、替换或重新生成密钥：
 
-## 22. 阶段完成标准
+```bash
+chown root:10001 secrets/backup.key
+chmod 640 secrets/backup.key
+logion-compose up -d --no-build --force-recreate backup
+```
 
-只有同时满足以下条件，才可称为“Logion 阿里云封闭技术测试环境已部署”：
+随后必须按第 17 节生成并验证一份加密备份。不要显示 `backup.key` 内容，也不要把密钥改成全局可读。
 
-- [ ] 固定提交与四个镜像摘要一致；
+### 22.9 Docker Hub 超时或阿里云加速器返回 `not found`
+
+阿里云部分地域直连 `registry-1.docker.io:443` 可能超时，专属 `mirror.aliyuncs.com` 也可能尚未同步新标签。先检查最终镜像投影：
+
+```bash
+logion-compose config --images
+```
+
+只要第 9 节的 `compose.registry.yaml` 已正确加载，PostgreSQL、Redis 和 Nginx 就应显示为 `public.ecr.aws/docker/library/*@sha256:...`，`logion-compose pull` 不再请求 Docker Hub。Public ECR 也不可达时停止；不得删除数据卷、降低摘要固定要求、使用 `latest` 或切换到来源不明的公共镜像站。
+
+## 23. 阶段完成标准
+
+### 23.1 技术栈部署完成
+
+同时满足以下条件，可以记录为“Logion 阿里云封闭技术环境已启动”，但尚不代表账户与完整功能可用：
+
+- [ ] 固定提交、四个应用镜像和三个基础镜像摘要一致；
 - [ ] 没有服务器本地构建；
 - [ ] 8080 只监听 `127.0.0.1`；
 - [ ] PostgreSQL、Redis、API、Worker、Web、Nginx healthy；
 - [ ] Alembic head 为 `0034_sync_conflicts`；
 - [ ] API ready 包含 application/database/redis；
-- [ ] 第一个测试账户可以登录；
 - [ ] 旧注册接口已关闭；
 - [ ] 无 OOMKilled；
 - [ ] 加密备份已生成并验证；
 - [ ] 已记录邮件和 OSS 未完成项；
 - [ ] 未开放 Production，未声称高可用。
 
-30 人 Beta 前还必须补齐域名/HTTPS、阿里云邮件投递、OSS 自动异地备份、告警、真实双设备、实体 Safari/iOS、读屏和生产型容量验证。
+### 23.2 封闭功能测试可用
+
+在 23.1 全部通过的基础上，还必须满足：
+
+- [ ] 保留数据替换时，既有 Owner 可以登录且原数据抽样正确；或
+- [ ] 全新空环境已完成邮件投递适配器，并通过首个 Owner 注册、邮箱验证与登录；
+- [ ] 第 16 节中本次需要的功能 Smoke 已通过；
+- [ ] 真实 FastAPI 环境中的双浏览器在线、离线、恢复与回读同步验收已通过；
+- [ ] 注册模式保持 `invite`，引导完成后引导邮箱已清空。
+
+“邮件投递适配器未实现”只能作为技术栈部署的已知阻断记录，不能算作封闭功能测试可用。
+
+扩大到 10 人封闭测试前，还必须补齐域名/HTTPS、阿里云邮件投递、OSS 自动异地备份、告警、真实双设备、实体 Safari/iOS、读屏和面向该规模的容量验证。
