@@ -297,19 +297,6 @@ class IdentityService:
         token, auth_session, user, device = row
         self.validate_csrf(auth_session, csrf_header, csrf_cookie)
         now = datetime.now(UTC)
-        if token.status != "active":
-            await self._revoke_session(db, auth_session, reason="refresh_reuse", now=now)
-            db.add(
-                new_audit_event(
-                    request_id=request_id,
-                    event_type="identity.refresh_reuse_detected",
-                    result="revoked",
-                    actor_id=user.id,
-                    target_id=auth_session.id,
-                )
-            )
-            return RefreshOutcome(issued=None, reuse_detected=True)
-
         if (
             token.expires_at <= now
             or auth_session.refresh_expires_at <= now
@@ -321,6 +308,29 @@ class IdentityService:
             await self._revoke_session(db, auth_session, reason="expired", now=now)
             return RefreshOutcome(issued=None)
 
+        rotation_token = token
+        recovered_rotation = False
+        if token.status != "active":
+            rotation_token = await self._recover_refresh_rotation(
+                db,
+                token=token,
+                auth_session=auth_session,
+                now=now,
+            )
+            if rotation_token is None:
+                await self._revoke_session(db, auth_session, reason="refresh_reuse", now=now)
+                db.add(
+                    new_audit_event(
+                        request_id=request_id,
+                        event_type="identity.refresh_reuse_detected",
+                        result="revoked",
+                        actor_id=user.id,
+                        target_id=auth_session.id,
+                    )
+                )
+                return RefreshOutcome(issued=None, reuse_detected=True)
+            recovered_rotation = True
+
         access_token = self._security.new_access_token()
         next_refresh_token = self._security.new_refresh_token()
         next_token = RefreshToken(
@@ -331,9 +341,9 @@ class IdentityService:
         db.add(next_token)
         await db.flush()
 
-        token.status = "rotated"
-        token.used_at = now
-        token.replaced_by_id = next_token.id
+        rotation_token.status = "rotated"
+        rotation_token.used_at = now
+        rotation_token.replaced_by_id = next_token.id
         auth_session.access_token_hash = self._security.token_hash(access_token)
         auth_session.access_expires_at = now + timedelta(minutes=self._settings.access_ttl_minutes)
         auth_session.last_seen_at = now
@@ -346,9 +356,23 @@ class IdentityService:
                 result="success",
                 actor_id=user.id,
                 target_id=auth_session.id,
-                metadata={"rotation_counter": auth_session.rotation_counter},
+                metadata={
+                    "recovered_rotation": recovered_rotation,
+                    "rotation_counter": auth_session.rotation_counter,
+                },
             )
         )
+        if recovered_rotation:
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="identity.refresh_rotation_recovered",
+                    result="success",
+                    actor_id=user.id,
+                    target_id=auth_session.id,
+                    metadata={"rotation_counter": auth_session.rotation_counter},
+                )
+            )
         secrets = SessionSecrets(
             access_token=access_token,
             refresh_token=next_refresh_token,
@@ -357,6 +381,42 @@ class IdentityService:
         return RefreshOutcome(
             issued=IssuedSession(user=user, session=auth_session, device=device, secrets=secrets)
         )
+
+    async def _recover_refresh_rotation(
+        self,
+        db: AsyncSession,
+        *,
+        token: RefreshToken,
+        auth_session: AuthSession,
+        now: datetime,
+    ) -> RefreshToken | None:
+        if (
+            token.status != "rotated"
+            or token.used_at is None
+            or token.replaced_by_id is None
+            or token.used_at > now
+            or now - token.used_at > timedelta(seconds=self._settings.refresh_reuse_grace_seconds)
+        ):
+            return None
+
+        active_tokens = list(
+            (
+                await db.scalars(
+                    select(RefreshToken)
+                    .where(
+                        RefreshToken.session_id == auth_session.id,
+                        RefreshToken.status == "active",
+                    )
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if len(active_tokens) != 1:
+            return None
+        active_token = active_tokens[0]
+        if active_token.expires_at <= now:
+            return None
+        return active_token
 
     def validate_csrf(
         self,

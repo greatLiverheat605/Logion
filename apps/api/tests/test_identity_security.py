@@ -136,6 +136,13 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
     )
 
     assert settings.cookie_secure is True
+    assert settings.refresh_reuse_grace_seconds == 10
+
+
+@pytest.mark.parametrize("seconds", [0, 31])
+def test_refresh_reuse_grace_is_strictly_bounded(seconds: int) -> None:
+    with pytest.raises(ValidationError, match="refresh_reuse_grace_seconds"):
+        Settings(refresh_reuse_grace_seconds=seconds)
 
 
 def test_webauthn_rp_id_must_match_every_origin() -> None:

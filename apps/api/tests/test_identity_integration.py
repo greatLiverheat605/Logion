@@ -1,8 +1,14 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.config import get_settings
+from logion_api.db import session_factory
+from logion_api.identity.models import AuditEvent, RefreshToken
+from logion_api.identity.security import IdentitySecurity
 from logion_api.main import app
+from sqlalchemy import select
 
 
 @pytest.mark.integration
@@ -46,6 +52,99 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         )
         assert refreshed.status_code == 200, refreshed.text
         assert client.cookies["logion_refresh"] != old_refresh
+
+        invalid_csrf_client = AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={**headers, "X-CSRF-Token": "invalid-csrf"},
+        )
+        invalid_csrf_client.cookies.set(
+            "logion_refresh",
+            old_refresh,
+            domain="test.local",
+            path="/",
+        )
+        invalid_csrf_client.cookies.set(
+            "logion_csrf",
+            "invalid-csrf",
+            domain="test.local",
+            path="/",
+        )
+        try:
+            invalid_csrf = await invalid_csrf_client.post("/api/v1/auth/refresh")
+        finally:
+            await invalid_csrf_client.aclose()
+        assert invalid_csrf.status_code == 403
+        assert invalid_csrf.json()["code"] == "AUTH_CSRF_INVALID"
+
+        recovery_client = AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={**headers, "X-CSRF-Token": csrf},
+        )
+        recovery_client.cookies.set(
+            "logion_refresh",
+            old_refresh,
+            domain="test.local",
+            path="/",
+        )
+        recovery_client.cookies.set(
+            "logion_csrf",
+            csrf,
+            domain="test.local",
+            path="/",
+        )
+        try:
+            recovered = await recovery_client.post("/api/v1/auth/refresh")
+        finally:
+            await recovery_client.aclose()
+        assert recovered.status_code == 200, recovered.text
+        assert recovery_client.cookies["logion_refresh"] != old_refresh
+
+        second_recovery_client = AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={**headers, "X-CSRF-Token": csrf},
+        )
+        second_recovery_client.cookies.set(
+            "logion_refresh",
+            old_refresh,
+            domain="test.local",
+            path="/",
+        )
+        second_recovery_client.cookies.set(
+            "logion_csrf",
+            csrf,
+            domain="test.local",
+            path="/",
+        )
+        try:
+            recovered_again = await second_recovery_client.post("/api/v1/auth/refresh")
+        finally:
+            await second_recovery_client.aclose()
+        assert recovered_again.status_code == 200, recovered_again.text
+        assert second_recovery_client.cookies["logion_refresh"] != old_refresh
+
+        settings = get_settings()
+        security = IdentitySecurity(settings.secret_key.get_secret_value())
+        async with session_factory() as db:
+            stale_token = await db.scalar(
+                select(RefreshToken).where(
+                    RefreshToken.token_hash == security.token_hash(old_refresh)
+                )
+            )
+            assert stale_token is not None
+            recovered_event = await db.scalar(
+                select(AuditEvent.id).where(
+                    AuditEvent.event_type == "identity.refresh_rotation_recovered",
+                    AuditEvent.target_id == stale_token.session_id,
+                )
+            )
+            assert recovered_event is not None
+            stale_token.used_at = datetime.now(UTC) - timedelta(
+                seconds=settings.refresh_reuse_grace_seconds + 1
+            )
+            await db.commit()
 
         reuse_client = AsyncClient(
             transport=ASGITransport(app=app),
