@@ -2,23 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
 import { AppOperationalTools } from "@/components/app-shell/app-operational-tools";
+import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 
 type Overlay = "command" | "notifications";
-type Theme = "light" | "dark";
 type NavItem = Readonly<{ href: string; icon: AppIconName; label: string }>;
 
 const NAV_GROUPS: readonly Readonly<{
@@ -71,23 +65,6 @@ const MOBILE_HREFS = new Set([
   "/app/research",
 ]);
 
-function subscribeToTheme(onStoreChange: () => void) {
-  const observer = new MutationObserver(onStoreChange);
-  observer.observe(document.documentElement, {
-    attributeFilter: ["data-theme"],
-    attributes: true,
-  });
-  return () => observer.disconnect();
-}
-
-function getThemeSnapshot(): Theme {
-  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-}
-
-function getServerThemeSnapshot(): Theme {
-  return "light";
-}
-
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { state: session } = useSession();
@@ -97,11 +74,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [query, setQuery] = useState("");
   const commandButtonRef = useRef<HTMLButtonElement>(null);
-  const theme = useSyncExternalStore(
-    subscribeToTheme,
-    getThemeSnapshot,
-    getServerThemeSnapshot,
-  );
 
   const current =
     NAV_ITEMS.find((item) => item.href === pathname) ?? DEFAULT_NAV_ITEM;
@@ -131,16 +103,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       window.removeEventListener("offline", update);
     };
   }, []);
-
-  const toggleTheme = () => {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem("app-shell-theme", next);
-    } catch {
-      // The visible theme still changes when storage is unavailable.
-    }
-  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -263,17 +225,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               </span>
               <kbd>Ctrl K</kbd>
             </button>
-            <button
-              aria-label={
-                theme === "dark" ? "切换到浅色主题" : "切换到深色主题"
-              }
-              className="app-icon-button"
-              title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
-              type="button"
-              onClick={toggleTheme}
-            >
-              <AppIcon name={theme === "dark" ? "sun" : "moon"} />
-            </button>
+            <ThemeToggle className="app-icon-button" />
             <AppOperationalTools />
             <button
               aria-label="打开通知中心"
