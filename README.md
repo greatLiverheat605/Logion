@@ -8,7 +8,7 @@ Logion 是一个面向长期学习与研究的离线优先工作系统。它把�
 项目定位是个人及最多 10 人的小规模自托管使用。Logion 保留多用户 Workspace、邀请、角色权限和审计能力，但不包含计费、套餐、公开注册、公共营销站或 SaaS 运营后台。
 
 > 当前版本处于封闭预发布准备阶段，尚未作为公开稳定生产版本发布。仓库已包含阿里云事务邮件
-> 适配器；部署者仍须在目标环境完成真实投递、域名/TLS、异地不可变备份、告警、实体手机和
+> 适配器；部署者仍须在目标环境完成真实投递、域名/TLS、Windows 异机加密备份、告警、实体手机和
 > 24 小时观察验证。
 
 ## 目录
@@ -259,6 +259,7 @@ pnpm contracts:check
 - [已完成功能与系统操作手册](docs/user-guide.md)
 - [0.1.0 发布候选冻结记录](docs/release/0.1.0-rc-freeze.md)
 - [0.1.0-rc2 预发布准备记录](docs/release/0.1.0-rc2-prerelease.md)
+- [产品与技术路线图](docs/roadmap.md)
 - [架构决策记录](docs/adr/README.md)
 - [安全设计与威胁模型](docs/security/)
 - [离线存储规范](docs/offline/)
@@ -266,6 +267,7 @@ pnpm contracts:check
 - [可观测性约定](docs/operations/observability-contract.md)
 - [基础设施与部署](infra/README.md)
 - [阿里云邮件推送与预发布验收](infra/runbooks/aliyun-directmail-prerelease.md)
+- [Windows 异机加密备份](infra/runbooks/windows-off-host-backup.md)
 - [贡献指南](CONTRIBUTING.md)
 - [变更日志](CHANGELOG.md)
 
@@ -286,7 +288,7 @@ pnpm contracts:check
 
 - 阿里云邮件适配器只发送邮箱验证、密码找回和安全通知；Workspace 邀请 Token 仍需通过可信
   渠道交付。
-- 域名、TLS、ECS RAM 角色、发信域名、云端密钥管理和异地不可变备份由部署者配置并验收。
+- 域名、TLS、ECS RAM 角色、发信域名、云端密钥管理和 Windows 异机加密备份由部署者配置并验收。
 - 物理 iOS/Safari、人工屏幕阅读器和真实低配服务器容量仍需在目标环境验证。
 - Compose 是参考自托管拓扑，不代表对任意云平台的生产承诺。
 

@@ -93,7 +93,7 @@ dig +short CNAME <DKIM_SELECTOR>._domainkey.mail.<ROOT_DOMAIN>
 ```
 
 DirectMail 的该动作不支持更细资源范围时才使用 `Resource: "*"`；不要改成 `dm:*`，不要附加
-RAM、ECS、OSS 或其他管理权限。
+RAM、ECS 或其他管理权限。
 
 ### 3.3 创建并绑定 ECS RAM 角色
 

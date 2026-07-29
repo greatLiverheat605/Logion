@@ -10,7 +10,10 @@ Backup 服务生成 `logion-TIMESTAMP-KEYID.backup`，这是一个 AES-256-GCM �
 
 相邻 `.sha256` 校验密文字节，AES-GCM 验证解密包。备份密钥是 base64url 编码的随机 32 字节值，挂载到 `/run/secrets/logion_backup_key`，绝不能进入镜像、数据库、manifest、环境变量或日志。`LOGION_BACKUP_KEY_ID` 非秘密，只标识单独托管的密钥代际。
 
-Compose volume 只是服务端恢复副本，不是最终灾备。Production 必须把不可变加密产物及 sidecar 复制到不同账户/区域并启用保留锁。TOTP、邮件、AI、导出和备份 keyring 均需分别托管；丢失全部代际将导致加密记录或备份不可恢复。
+Compose volume 只是服务端恢复副本，不是最终灾备。Logion 不使用 OSS；Production 必须按
+[Windows 异机加密备份手册](./windows-off-host-backup.md)把不可变加密产物及 sidecar 下载到受控电脑，
+执行本地保留策略并定期恢复演练。TOTP、邮件、AI、导出和备份 keyring 均需分别托管；丢失全部
+代际将导致加密记录或备份不可恢复。
 
 ## 配置
 
@@ -18,7 +21,8 @@ Compose volume 只是服务端恢复副本，不是最终灾备。Production 必
 2. 存入密钥管理器，或保存为 `./secrets/backup.key`，不得提交。使用仓库 Compose 运行时，文件应由 `root` 持有、组设为容器专用 GID `10001`、权限设为 `0640`；不得向该宿主机组添加登录用户。
 3. 将 `LOGION_BACKUP_SECRET_SOURCE` 指向宿主机文件，将 `LOGION_BACKUP_KEY_ID` 设为稳定代际标签。
 4. 启动 Backup 服务。它先写临时密文，再原子重命名并写 checksum。
-5. 确认异地复制和保留监控；本地 `LOGION_BACKUP_RETENTION_DAYS` 默认 14 天。
+5. 确认 Windows 异机同步和保留监控；服务器 `LOGION_BACKUP_RETENTION_DAYS` 默认 14 天，Windows
+   默认保留最近 30 份日备份和最近 12 个月每月最新的一份。
 
 ## 安全校验
 

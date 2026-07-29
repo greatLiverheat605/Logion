@@ -63,8 +63,8 @@ test -f /opt/logion/secrets/backup.key
 
 1. 等本轮代码合并到 `main`，Main 与 capacity 工作流对同一 SHA 全绿；
 2. 生成并下载经过验证的 rc2 candidate manifest、SBOM、provenance 和安全报告；
-3. 完成域名解析、阿里云邮件发信域名/RAM、HTTPS、私有 OSS 与告警准备；
-4. 对旧版本停写，生成并验证加密备份，复制到 ECS 外和私有 OSS；
+3. 完成域名解析、阿里云邮件发信域名/RAM、HTTPS、Windows 异机备份与告警准备；
+4. 对旧版本停写，生成并验证加密备份，下载到受控 Windows 电脑；
 5. 保留数据卷与原密钥，替换为 manifest 对应的源码和四个 digest 镜像；
 6. 迁移、启动、健康检查、真实邮件、真实同步和实体手机验收；
 7. 标记为 `prerelease` 并观察至少 24 小时；
@@ -84,13 +84,13 @@ TLS 校验、使用长期 AccessKey、删除卷或从数据库提取 Token 绕�
 - 注册保持 `invite` 或 `closed`，旧注册入口关闭，引导 Owner 邮箱已清空；
 - 邮箱验证、找回密码和安全通知已经接入真实邮件投递并通过测试；
 - Workspace 邀请 Token 只通过可信渠道交付，不声称已发送邀请邮件；
-- 已生成部署前加密备份，并把密文备份和校验文件复制到私有 OSS；
+- 已生成部署前加密备份，并把密文备份和校验文件下载到受控 Windows 电脑；
 - 已在独立空环境完成一次恢复演练；
 - API、容器、磁盘、内存、备份和证书到期告警已经送达真实接收人；
 - 已有 Owner 完成登录、正常刷新、核心写入、同步和退出测试；
 - 新版本稳定观察期结束前不删除旧源码、旧镜像或任何数据卷。
 
-如果真实邮件投递、OSS 异地备份、恢复演练、实体手机验收或 24 小时观察尚未完成，只能继续
+如果真实邮件投递、Windows 异机备份、恢复演练、实体手机验收或 24 小时观察尚未完成，只能继续
 作为预发布环境，不能标记为生产就绪。
 
 ## 2. 推荐网络拓扑
@@ -114,7 +114,7 @@ Compose reverse-proxy
         |---------------- Worker（内部数据 + 独立出方向）
                                   |---- 阿里云邮件推送 HTTPS
 
-Backup 加密产物 ---- ECS RAM 角色 ---- 私有 OSS 异地副本
+Backup 加密产物 ---- 受限 SSH/SCP ---- Windows 异机密文副本
 ```
 
 安全组入方向只允许：
@@ -137,7 +137,7 @@ Backup 加密产物 ---- ECS RAM 角色 ---- 私有 OSS 异地副本
 | 系统盘 | 60 GB，磁盘告警阈值 75%                                               |
 | 域名   | 已备案且解析到 ECS 公网 IP                                            |
 | TLS    | 有效证书、自动续期、TLS 1.2/1.3                                       |
-| OSS    | 私有 Bucket、服务端加密、版本控制或保留策略                           |
+| 备份   | Windows `F:\LogionBackups` 异机密文、SHA-256 校验和计划任务           |
 | RAM    | ECS RAM 角色；不要在服务器保存长期 AccessKey                          |
 | 日志   | 至少保留应用错误、容器事件和审计事件；禁止采集 Cookie、令牌和用户正文 |
 | 告警   | 健康、5xx、OOM/重启、磁盘、备份超时、证书到期                         |
@@ -164,17 +164,15 @@ dig +short CNAME <DKIM_SELECTOR>._domainkey.mail.<ROOT_DOMAIN>
 `<DKIM_SELECTOR>` 与所有 TXT/CNAME 值必须来自当前控制台，不照抄示例。不要把应用域名的 A 记录
 错误指向邮件域名，也不要在未配置 IPv6 时留下不可达的 AAAA。
 
-### 3.2 邮件、RAM、OSS 与告警
+### 3.2 邮件、RAM、异机备份与告警
 
 - 按[邮件手册第 3 节](./aliyun-directmail-prerelease.md#3-阿里云控制台准备)创建只允许
   `dm:SingleSendMail` 的策略并绑定 ECS RAM 角色；
 - 不创建或保存 RAM 用户长期 AccessKey，不把临时 Security Token 打印到终端；
-- 创建私有 OSS Bucket，禁止公共读写，启用服务端加密、版本控制或保留策略；Bucket 与 ECS 同地域
-  可减少费用和延迟，但仍应考虑跨地域/跨账号灾备；
-- 当前仓库不包含 OSS 上传守护程序。预发布前必须由运维在宿主机配置经过审核的 OSS 复制任务，
-  只上传加密 `.backup` 和 `.sha256`，绝不上传备份密钥；没有完成复制和空环境恢复演练时保持
-  `prerelease`；
-- 为健康、5xx、OOM/重启、磁盘、备份、OSS 复制、证书、邮件积压、退信和投诉配置真实接收人。
+- 项目不使用 OSS。按 [Windows 异机加密备份手册](./windows-off-host-backup.md)配置受限 SSH 密钥和
+  Windows 计划任务，只下载加密 `.backup` 和 `.sha256`，绝不复制备份密钥；没有完成下载、校验
+  和空环境恢复演练时保持 `prerelease`；
+- 为健康、5xx、OOM/重启、磁盘、备份同步、证书、邮件积压、退信和投诉配置真实接收人。
 
 ## 4. 生产环境变量
 
@@ -423,9 +421,9 @@ sha256sum -c "$(basename "${LATEST_BACKUP}").sha256"
 ```
 
 再按[备份恢复手册](./backup-restore.md#空环境演练)恢复到独立空数据库验证，不得覆盖当前数据库。
-随后使用已经审核的宿主机 OSS 复制方式，把本次确切的加密 `.backup` 与 `.sha256` 上传到私有
-Bucket，并从另一台受控设备或控制台核对对象大小、校验值、加密和私有 ACL。备份密钥必须通过
-独立安全渠道保存，绝不上传到同一个 Bucket。
+随后按 [Windows 异机加密备份手册](./windows-off-host-backup.md)把本次确切的加密 `.backup` 与
+`.sha256` 下载到 `F:\LogionBackups\encrypted`，从 Windows 重新计算 SHA-256。备份密钥必须通过
+独立安全渠道保存在 `F:\LogionRecoveryKey\backup.key`，不得放入备份目录。
 
 本节成功前旧应用已经停止写入。若决定中止升级且尚未移动 `/opt/logion`，执行
 `logion-compose start` 并重新检查 `/health`；不要在半完成状态继续对外服务。
@@ -433,10 +431,9 @@ Bucket，并从另一台受控设备或控制台核对对象大小、校验值�
 停止条件：
 
 - 备份验证失败；
-- OSS 对象不是私有；
 - 没有异地副本；
 - 最近一次恢复演练失败或没有记录；
-- 需要把长期 AccessKey 写入 `.env` 才能上传。
+- SSH host key 变化、下载哈希不一致或需要关闭校验才能复制。
 
 ## 7. 不可变候选替换
 
@@ -719,7 +716,7 @@ logion-compose up -d --no-build --force-recreate api worker
 | Swap                                  | 持续 15 分钟超过 1 GiB         |
 | 磁盘                                  | 使用率达到 75%/85% 两级告警    |
 | 加密备份                              | 26 小时未成功或校验失败        |
-| OSS 异地复制                          | 26 小时无新对象                |
+| Windows 异机备份                      | 48 小时无新校验成功记录        |
 | TLS 证书                              | 距到期 30/14/7 天              |
 | 邮件 Outbox                           | 最老 pending 超过 5 分钟       |
 | 邮件永久失败/退信/投诉                | 任意新增                       |
@@ -742,7 +739,7 @@ logion-compose up -d --no-build --force-recreate api worker
 - 新版本连续稳定运行至少 24 小时；
 - 登录、刷新、核心写入、同步、备份和告警均通过；
 - 无 OOM、反复重启或持续 5xx；
-- 部署后备份已验证并复制到 OSS；
+- 部署后备份已验证并下载到 Windows 异机目录；
 - 不再需要旧目录核对配置差异。
 
 读取部署时记录的旧目录，并严格校验路径：
@@ -793,7 +790,7 @@ docker image prune
 - source commit、CI run 和镜像摘要；
 - Alembic head；
 - 生产域名和证书到期日；
-- 备份验证及 OSS 复制时间；
+- 备份验证及 Windows 异机同步时间；
 - 浏览器、同步和恢复验收结果；
 - 容器 OOM/重启、资源快照；
 - 告警测试结果；
