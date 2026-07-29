@@ -123,6 +123,10 @@ def test_production_identity_configuration_accepts_https_origin() -> None:
         email_delivery_encryption_keys={
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"e" * 32).decode().rstrip("="))
         },
+        email_delivery_provider="aliyun_directmail",
+        email_public_base_url="https://logion.example",
+        aliyun_directmail_account_name="no-reply@mail.example.com",
+        aliyun_directmail_ram_role_name="LogionDirectMailSender",
         ai_credential_active_encryption_key_id="production-v1",
         ai_credential_encryption_keys={
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"a" * 32).decode().rstrip("="))

@@ -9,6 +9,7 @@ from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.service import PortabilityService
 from logion_api.workspaces.service import WorkspaceService
 
+from logion_worker.email_delivery import EmailDeliveryService
 from logion_worker.health import health_payload
 
 
@@ -25,10 +26,13 @@ async def run_worker() -> None:
     execution = AIExecutionService(settings)
     portability = PortabilityService(settings, WorkspaceService(settings))
     deletion = AccountDeletionService(settings)
+    email_delivery = EmailDeliveryService(settings)
     print(json.dumps({**health_payload(), "event": "worker_started"}))
     while not stop.is_set():
         try:
-            handled = await portability.execute_next()
+            handled = await email_delivery.execute_next()
+            if not handled:
+                handled = await portability.execute_next()
             if not handled:
                 handled = await execution.execute_next()
             if not handled:
