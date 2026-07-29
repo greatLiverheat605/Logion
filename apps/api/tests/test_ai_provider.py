@@ -89,6 +89,10 @@ def test_ai_encryption_key_is_validated_and_replaced_in_production() -> None:
             totp_encryption_keys={"production-v1": SecretStr(encoded)},
             email_delivery_active_encryption_key_id="production-v1",
             email_delivery_encryption_keys={"production-v1": SecretStr(encoded)},
+            email_delivery_provider="aliyun_directmail",
+            email_public_base_url="https://logion.example",
+            aliyun_directmail_account_name="no-reply@mail.example.com",
+            aliyun_directmail_ram_role_name="LogionDirectMailSender",
             ai_credential_active_encryption_key_id="development-v1",
         )
 

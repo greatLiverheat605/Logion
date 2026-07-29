@@ -26,6 +26,8 @@ def test_license_policy_accepts_allowed_internal_and_classifier_mapped_packages(
         node_packages=[package("frontend", "MIT"), package("libvips", "LGPL-3.0-or-later")],
         py_packages=[
             package("logion-api", ""),
+            package("dual-licensed-client", "Apache-2.0 AND MIT"),
+            package("vendor-client", "Apache License 2.0"),
             package("uvloop", "MIT License"),
             package("library", "", "License :: OSI Approved :: Apache Software License"),
         ],

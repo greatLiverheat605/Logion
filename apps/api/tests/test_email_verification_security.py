@@ -56,6 +56,10 @@ def _production_settings(**overrides: object) -> dict[str, object]:
         "email_delivery_encryption_keys": {
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"e" * 32).decode())
         },
+        "email_delivery_provider": "aliyun_directmail",
+        "email_public_base_url": "https://logion.example",
+        "aliyun_directmail_account_name": "no-reply@mail.example.com",
+        "aliyun_directmail_ram_role_name": "LogionDirectMailSender",
         "ai_credential_active_encryption_key_id": "production-v1",
         "ai_credential_encryption_keys": {
             "production-v1": SecretStr(base64.urlsafe_b64encode(b"a" * 32).decode())
@@ -85,6 +89,17 @@ def test_production_rejects_development_email_key_and_legacy_registration() -> N
         Settings(**_production_settings(legacy_registration_enabled=True))
     with pytest.raises(ValidationError, match="LOGION_REGISTRATION_MODE"):
         Settings(**_production_settings(registration_mode="open"))
+
+
+def test_production_requires_real_email_delivery_configuration() -> None:
+    with pytest.raises(ValidationError, match="EMAIL_DELIVERY_PROVIDER"):
+        Settings(**_production_settings(email_delivery_provider="disabled"))
+    with pytest.raises(ValidationError, match="EMAIL_PUBLIC_BASE_URL"):
+        Settings(
+            **_production_settings(
+                email_public_base_url="http://logion.example",
+            )
+        )
 
 
 def test_blank_bootstrap_owner_email_disables_bootstrap_without_weakening_validation() -> None:

@@ -70,13 +70,22 @@
 
 ### 5. 可靠邮件投递
 
-身份用例只写事务性邮件 Outbox，不直接依赖具体邮件 SDK。Outbox ID 是 Provider 幂等键；
-Worker 通过 `EmailDeliveryPort` 投递，记录租约、尝试次数、发送状态和最小化 Provider 回执。
+身份用例只写事务性邮件 Outbox，不直接依赖具体邮件 SDK。Outbox ID 是 Logion 内部幂等键；
+Worker 通过投递端口记录租约、尝试次数、发送状态和最小化 Provider 回执。
 
 异步投递需要短暂持有 token 和收件地址，因此 Outbox payload 必须使用独立、版本化的投递
 密钥进行认证加密，AAD 绑定 outbox ID、用户、用途和密钥版本。不得复用 TOTP KEK。成功发送、
 永久失败或过期后清除密文；日志、指标、审计、死信和 Provider 元数据均不得包含 token 或完整
-邮箱。开发环境使用可检查的本地投递适配器，生产 Provider 选择不属于本 ADR。
+邮箱。
+
+2026-07-28 的生产适配器使用阿里云邮件推送：官方 ECS RAM 凭据组件只通过 IMDSv2 获取短期
+凭据，Logion 按 ACS3-HMAC-SHA256 签名 `SingleSendMail` HTTPS 请求。投递客户端固定官方
+Endpoint、禁用系统代理和重定向，关闭点击追踪。旧版 DirectMail SDK 与项目核心加密库版本
+冲突，因此不降低 `cryptography` 安全基线。
+
+`SingleSendMail` 没有供本实现使用的业务幂等键；若 Provider 接收成功后 Worker 在数据库确认前
+崩溃，重试可能产生重复邮件。权威动作仍由数据库的一次性 Token 原子消费，重复邮件不能重复
+激活账户或绕过 MFA。该残余风险通过租约大于网络超时、有限重试和积压监控控制。
 
 ### 6. 安全通知与审计
 

@@ -62,3 +62,24 @@ def test_reverse_proxy_is_loopback_only_by_default() -> None:
 
     assert '"127.0.0.1:8080:8080"' in reverse_proxy
     assert '\n      - "8080:8080"' not in reverse_proxy
+
+
+def test_email_delivery_uses_worker_only_egress_and_imdsv2() -> None:
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    api = service_block(compose, "api", "worker")
+    worker = service_block(compose, "worker", "web")
+
+    expected = (
+        "LOGION_EMAIL_DELIVERY_PROVIDER: "
+        "${LOGION_EMAIL_DELIVERY_PROVIDER:-disabled}"
+    )
+    assert expected in api
+    assert expected in worker
+    assert 'ALIBABA_CLOUD_IMDSV1_DISABLE: "true"' not in api
+    assert 'ALIBABA_CLOUD_IMDSV1_DISABLE: "true"' in worker
+    assert 'HTTP_PROXY: ""' not in api
+    assert 'HTTP_PROXY: ""' in worker
+    assert 'NO_PROXY: "100.100.100.200"' in worker
+    assert "networks: [backend]" in api
+    assert "networks: [backend, egress]" in worker
+    assert "  backend:\n    internal: true\n  egress:\n" in compose

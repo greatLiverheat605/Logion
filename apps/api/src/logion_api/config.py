@@ -139,6 +139,31 @@ class Settings(BaseSettings):
             "development-v1": SecretStr("ZGV2ZWxvcG1lbnQtZW1haWwta2V5LTMyYnl0ZXMhISE")
         }
     )
+    email_delivery_provider: Literal["disabled", "aliyun_directmail"] = "disabled"
+    email_public_base_url: str = Field(
+        default="http://localhost:3000",
+        min_length=8,
+        max_length=2048,
+    )
+    email_delivery_max_attempts: int = Field(default=5, ge=1, le=10)
+    email_delivery_lease_seconds: int = Field(default=120, ge=30, le=600)
+    aliyun_directmail_region_id: str = Field(
+        default="cn-hangzhou",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z0-9-]+$",
+    )
+    aliyun_directmail_endpoint: str | None = Field(default=None, max_length=253)
+    aliyun_directmail_account_name: EmailStr | None = None
+    aliyun_directmail_from_alias: str = Field(default="Logion", min_length=1, max_length=15)
+    aliyun_directmail_ram_role_name: str | None = Field(default=None, max_length=64)
+    aliyun_directmail_tag_name: str | None = Field(
+        default=None,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    aliyun_directmail_connect_timeout_seconds: int = Field(default=5, ge=1, le=15)
+    aliyun_directmail_read_timeout_seconds: int = Field(default=15, ge=5, le=60)
     ai_credential_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,
@@ -164,6 +189,36 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator(
+        "aliyun_directmail_endpoint",
+        "aliyun_directmail_account_name",
+        "aliyun_directmail_ram_role_name",
+        "aliyun_directmail_tag_name",
+        mode="before",
+    )
+    @classmethod
+    def normalize_empty_email_delivery_setting(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("email_public_base_url")
+    @classmethod
+    def normalize_email_public_base_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("LOGION_EMAIL_PUBLIC_BASE_URL must be an HTTP(S) origin only")
+        return value.rstrip("/")
 
     @model_validator(mode="after")
     def validate_security_configuration(self) -> "Settings":
@@ -266,6 +321,59 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"LOGION_DATA_EXPORT_ENCRYPTION_KEYS key {key_id} must decode to 32 bytes"
                 )
+        if self.email_delivery_provider == "aliyun_directmail":
+            minimum_safe_lease = (
+                self.aliyun_directmail_connect_timeout_seconds
+                + self.aliyun_directmail_read_timeout_seconds
+                + 10
+            )
+            if self.email_delivery_lease_seconds < minimum_safe_lease:
+                raise ValueError(
+                    "LOGION_EMAIL_DELIVERY_LEASE_SECONDS must exceed DirectMail network timeouts"
+                )
+            if self.email_public_base_url not in {
+                origin.rstrip("/") for origin in self.allowed_origins
+            }:
+                raise ValueError(
+                    "LOGION_EMAIL_PUBLIC_BASE_URL must match an origin in LOGION_ALLOWED_ORIGINS"
+                )
+            if self.aliyun_directmail_account_name is None:
+                raise ValueError(
+                    "LOGION_ALIYUN_DIRECTMAIL_ACCOUNT_NAME is required for Aliyun DirectMail"
+                )
+            role_name = self.aliyun_directmail_ram_role_name or ""
+            allowed_role_name_characters = (
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.@_-"
+            )
+            if not role_name or any(
+                character not in allowed_role_name_characters for character in role_name
+            ):
+                raise ValueError(
+                    "LOGION_ALIYUN_DIRECTMAIL_RAM_ROLE_NAME must name the attached ECS RAM role"
+                )
+            endpoint = self.aliyun_directmail_endpoint
+            supported_directmail_regions = {
+                "cn-hangzhou",
+                "ap-southeast-1",
+                "us-east-1",
+                "eu-central-1",
+            }
+            if endpoint is None and self.aliyun_directmail_region_id not in (
+                supported_directmail_regions
+            ):
+                raise ValueError("LOGION_ALIYUN_DIRECTMAIL_ENDPOINT is required for this region")
+            if endpoint is not None:
+                normalized_endpoint = endpoint.casefold().rstrip(".")
+                supported_directmail_endpoints = {
+                    "dm.aliyuncs.com",
+                    "dm.ap-southeast-1.aliyuncs.com",
+                    "dm.us-east-1.aliyuncs.com",
+                    "dm.eu-central-1.aliyuncs.com",
+                }
+                if normalized_endpoint not in supported_directmail_endpoints:
+                    raise ValueError(
+                        "LOGION_ALIYUN_DIRECTMAIL_ENDPOINT must be an official aliyuncs.com DM host"
+                    )
         if not set(self.webauthn_origins).issubset(self.allowed_origins):
             raise ValueError("LOGION_WEBAUTHN_ORIGINS must be included in LOGION_ALLOWED_ORIGINS")
         for origin in self.webauthn_origins:
@@ -299,6 +407,12 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS must be replaced in production"
                 )
+            if self.email_delivery_provider != "aliyun_directmail":
+                raise ValueError(
+                    "LOGION_EMAIL_DELIVERY_PROVIDER must enable a production delivery provider"
+                )
+            if not self.email_public_base_url.startswith("https://"):
+                raise ValueError("LOGION_EMAIL_PUBLIC_BASE_URL must use HTTPS in production")
             if self.ai_credential_active_encryption_key_id.startswith("development-"):
                 raise ValueError(
                     "LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS must be replaced in production"
