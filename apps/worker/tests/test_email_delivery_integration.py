@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import timedelta
 from uuid import uuid4
 
@@ -14,6 +15,17 @@ from logion_worker.email_delivery import (
     EmailMessage,
 )
 from sqlalchemy import delete
+
+
+@pytest.fixture(autouse=True)
+async def isolate_email_queue() -> AsyncIterator[None]:
+    async with session_factory() as db:
+        await db.execute(delete(EmailOutbox))
+        await db.commit()
+    yield
+    async with session_factory() as db:
+        await db.execute(delete(EmailOutbox))
+        await db.commit()
 
 
 class RecordingTransport:
