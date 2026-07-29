@@ -30,7 +30,33 @@ test("skip link and authentication controls are keyboard reachable", async ({
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Logion" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "切换到深色主题" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByLabel("邮箱")).toBeFocused();
+});
+
+test("login secondary action remains readable in the light theme", async ({
+  page,
+}) => {
+  await page.goto("/auth/login");
+  await page.evaluate(() => localStorage.setItem("app-shell-theme", "light"));
+  await page.reload();
+
+  const passkeyButton = page.getByRole("button", {
+    name: "使用 Passkey 登录",
+  });
+  await expect(passkeyButton).toBeVisible();
+  const colors = await passkeyButton.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      foreground: style.color,
+    };
+  });
+  expect(colors.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(colors.foreground).not.toBe(colors.background);
 });
 
 for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {

@@ -256,7 +256,7 @@ export function LoginForm() {
         </form>
       )}
       <nav className="auth-links" aria-label="账户帮助">
-        <Link href="/auth/register">创建账户</Link>
+        <Link href="/auth/register">使用邀请注册</Link>
         <Link href="/auth/recover">找回密码</Link>
       </nav>
     </AuthFormShell>
