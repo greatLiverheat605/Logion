@@ -4,6 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 from logion_api.config import Settings
 from logion_api.db import session_factory, utc_now
 from logion_api.identity.email_verification import EmailDeliveryCipher
@@ -17,7 +18,7 @@ from logion_worker.email_delivery import (
 from sqlalchemy import delete
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True, loop_scope="session")
 async def isolate_email_queue() -> AsyncIterator[None]:
     async with session_factory() as db:
         await db.execute(delete(EmailOutbox))
