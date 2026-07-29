@@ -40,9 +40,10 @@ test("skip link and authentication controls are keyboard reachable", async ({
 test("login secondary action remains readable in the light theme", async ({
   page,
 }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("app-shell-theme", "light"),
+  );
   await page.goto("/auth/login");
-  await page.evaluate(() => localStorage.setItem("app-shell-theme", "light"));
-  await page.reload();
 
   const passkeyButton = page.getByRole("button", {
     name: "使用 Passkey 登录",
@@ -100,9 +101,10 @@ test("reduced-motion preference does not leave forced animation", async ({
 test("theme bootstrap applies a persisted preference before hydration", async ({
   page,
 }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("app-shell-theme", "dark"),
+  );
   await page.goto("/auth/login");
-  await page.evaluate(() => localStorage.setItem("app-shell-theme", "dark"));
-  await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.evaluate(() => localStorage.removeItem("app-shell-theme"));
 });
