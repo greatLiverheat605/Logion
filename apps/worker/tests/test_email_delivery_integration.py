@@ -75,6 +75,7 @@ async def test_worker_delivers_active_token_and_clears_encrypted_payload(
     )
     async with session_factory() as db:
         db.add(User(id=user_id, email=email, email_normalized=email.casefold()))
+        await db.flush()
         db.add(
             IdentityActionToken(
                 id=action_id,
@@ -84,6 +85,7 @@ async def test_worker_delivers_active_token_and_clears_encrypted_payload(
                 expires_at=utc_now() + timedelta(hours=1),
             )
         )
+        await db.flush()
         db.add(
             EmailOutbox(
                 id=outbox_id,
@@ -138,6 +140,7 @@ async def test_worker_discards_expired_action_without_sending() -> None:
     )
     async with session_factory() as db:
         db.add(User(id=user_id, email=email, email_normalized=email.casefold()))
+        await db.flush()
         db.add(
             IdentityActionToken(
                 id=action_id,
@@ -147,6 +150,7 @@ async def test_worker_discards_expired_action_without_sending() -> None:
                 expires_at=utc_now() - timedelta(seconds=1),
             )
         )
+        await db.flush()
         db.add(
             EmailOutbox(
                 id=outbox_id,
@@ -180,9 +184,7 @@ async def test_worker_discards_expired_action_without_sending() -> None:
 async def test_worker_retries_then_fails_without_leaking_payload(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    settings = integration_settings().model_copy(
-        update={"email_delivery_max_attempts": 2}
-    )
+    settings = integration_settings().model_copy(update={"email_delivery_max_attempts": 2})
     user_id = uuid4()
     action_id = uuid4()
     outbox_id = uuid4()
@@ -196,6 +198,7 @@ async def test_worker_retries_then_fails_without_leaking_payload(
     )
     async with session_factory() as db:
         db.add(User(id=user_id, email=email, email_normalized=email.casefold()))
+        await db.flush()
         db.add(
             IdentityActionToken(
                 id=action_id,
@@ -205,6 +208,7 @@ async def test_worker_retries_then_fails_without_leaking_payload(
                 expires_at=utc_now() + timedelta(hours=1),
             )
         )
+        await db.flush()
         db.add(
             EmailOutbox(
                 id=outbox_id,
@@ -266,6 +270,7 @@ async def test_worker_does_not_lease_the_same_message_twice() -> None:
     )
     async with session_factory() as db:
         db.add(User(id=user_id, email=email, email_normalized=email.casefold()))
+        await db.flush()
         db.add(
             IdentityActionToken(
                 id=action_id,
@@ -275,6 +280,7 @@ async def test_worker_does_not_lease_the_same_message_twice() -> None:
                 expires_at=utc_now() + timedelta(hours=1),
             )
         )
+        await db.flush()
         db.add(
             EmailOutbox(
                 id=outbox_id,
