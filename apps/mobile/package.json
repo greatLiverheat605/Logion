@@ -1,0 +1,12 @@
+{
+  "name": "@logion/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "android:check": "node scripts/run-gradle.mjs lintDebug testDebugUnitTest assembleDebug",
+    "android:debug": "node scripts/run-gradle.mjs assembleDebug",
+    "android:release": "node scripts/run-gradle.mjs assembleRelease",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

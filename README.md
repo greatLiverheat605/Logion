@@ -62,7 +62,7 @@ AI 是可选增强层。生成结果不能直接修改正式记录、掌握度�
 ## 系统架构
 
 ```text
-Browser / PWA
+Browser / PWA / verified mobile shell
       │
       ▼
 Reverse proxy ── Web (Next.js)
@@ -78,6 +78,7 @@ Reverse proxy ── Web (Next.js)
 
 ```text
 apps/web       Next.js Web/PWA 与离线客户端
+apps/mobile    Android TWA 与 iOS WKWebView 薄壳；鸿蒙生成边界
 apps/api       FastAPI API、认证、同步与 Alembic 迁移
 apps/worker    后台任务和维护作业
 packages/      OpenAPI/同步契约、离线库和共享配置
@@ -260,6 +261,7 @@ pnpm contracts:check
 - [0.1.0 发布候选冻结记录](docs/release/0.1.0-rc-freeze.md)
 - [0.1.0-rc2 预发布准备记录](docs/release/0.1.0-rc2-prerelease.md)
 - [产品与技术路线图](docs/roadmap.md)
+- [移动端架构、状态与真机入口](docs/mobile/README.md)
 - [架构决策记录](docs/adr/README.md)
 - [安全设计与威胁模型](docs/security/)
 - [离线存储规范](docs/offline/)
@@ -290,6 +292,7 @@ pnpm contracts:check
   渠道交付。
 - 域名、TLS、ECS RAM 角色、发信域名、云端密钥管理和 Windows 异机加密备份由部署者配置并验收。
 - 物理 iOS/Safari、人工屏幕阅读器和真实低配服务器容量仍需在目标环境验证。
+- 移动安装包尚未作为稳定版发布；Android、iOS 和 HarmonyOS 必须分别完成签名与实体机门禁。
 - Compose 是参考自托管拓扑，不代表对任意云平台的生产承诺。
 
 ## 许可证

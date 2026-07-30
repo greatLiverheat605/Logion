@@ -56,11 +56,11 @@
 
 采用“共享 Web/PWA 核心 + 薄原生壳”，避免维护三套业务实现：
 
-| 平台    | 交付物       | 实现方向                                                        | 发布条件                                   |
-| ------- | ------------ | --------------------------------------------------------------- | ------------------------------------------ |
-| Android | 签名 APK     | Capacitor 壳加载正式 HTTPS 应用，后续按需增加系统分享和通知     | Android SDK、独立签名 keystore、实体机验收 |
-| iOS     | 真机测试构建 | Capacitor/WKWebView 壳，不上架商店，使用免费 Personal Team 签名 | Mac/Xcode、测试 iPhone，约 7 天后重新安装  |
-| 鸿蒙    | 签名 HAP/APP | 已确认 HarmonyOS 6.x，使用 ArkUI Web 壳，不以 Android APK 代替  | DevEco Studio、鸿蒙签名和实体机            |
+| 平台    | 交付物       | 实现方向                                                     | 发布条件                                   |
+| ------- | ------------ | ------------------------------------------------------------ | ------------------------------------------ |
+| Android | 签名 APK     | Chrome TWA；Digital Asset Links 绑定正式域名和签名证书       | Android SDK、独立签名 keystore、实体机验收 |
+| iOS     | 真机测试构建 | 原生 WKWebView；App-bound domains；无 JavaScript 原生桥      | Mac/Xcode、测试 iPhone，约 7 天后重新安装  |
+| 鸿蒙    | 签名 HAP/APP | HarmonyOS 6.x ArkUI Web；无 JavaScript 原生桥，不用 APK 替代 | DevEco Studio、HarmonyOS 签名和实体机      |
 
 首个移动版不增加后台常驻同步，不在安装包中内置账号、Cookie、API 密钥、恢复密钥或 AI Provider
 密钥。登录、权限、注册、同步和数据模型继续由现有服务端判定。GitHub Release 只上传通过签名、
@@ -82,3 +82,6 @@ iOS 测试构建只保存到 Draft Release/私有构建产物，设备标识、�
 已确认应用标识 `work.logion.app`，并具备 Mac、测试 iPhone、真实 Android 手机和 HarmonyOS 6.x
 华为设备。iOS 使用免费 Apple Personal Team，只做 Xcode 真机安装；测试构建只进入 Draft Release/
 私有构建产物。免费签名通常约 7 天后失效，不承诺 Ad Hoc 分发或长期可安装 IPA。
+
+生产实现不使用 Capacitor 远程 URL。Android、iOS 和鸿蒙壳均不得注册通用 JavaScript 消息桥；系统
+分享、通知或文件选择必须在后续版本中逐项完成威胁建模和权限审查后加入。

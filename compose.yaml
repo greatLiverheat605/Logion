@@ -198,6 +198,7 @@ services:
     environment:
       NODE_ENV: production
       LOGION_PUBLIC_API_URL: http://api:8000
+      LOGION_ANDROID_CERT_SHA256_FINGERPRINTS: ${LOGION_ANDROID_CERT_SHA256_FINGERPRINTS:-[]}
     depends_on:
       api:
         condition: service_healthy
