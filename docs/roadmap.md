@@ -56,11 +56,11 @@
 
 采用“共享 Web/PWA 核心 + 薄原生壳”，避免维护三套业务实现：
 
-| 平台    | 交付物       | 实现方向                                                            | 发布条件                                        |
-| ------- | ------------ | ------------------------------------------------------------------- | ----------------------------------------------- |
-| Android | 签名 APK     | Capacitor 壳加载正式 HTTPS 应用，后续按需增加系统分享和通知         | Android SDK、独立签名 keystore、实体机验收      |
-| iOS     | 签名 IPA     | Capacitor/WKWebView 壳，不上架商店，使用 Ad Hoc 或个人开发签名      | macOS/Xcode、Apple 签名身份、设备 UDID/描述文件 |
-| 鸿蒙    | 签名 HAP/APP | HarmonyOS NEXT 使用 ArkUI Web 壳；旧版鸿蒙先验证 Android APK 兼容性 | DevEco Studio、目标系统版本、鸿蒙签名和实体机   |
+| 平台    | 交付物       | 实现方向                                                       | 发布条件                                        |
+| ------- | ------------ | -------------------------------------------------------------- | ----------------------------------------------- |
+| Android | 签名 APK     | Capacitor 壳加载正式 HTTPS 应用，后续按需增加系统分享和通知    | Android SDK、独立签名 keystore、实体机验收      |
+| iOS     | 签名 IPA     | Capacitor/WKWebView 壳，不上架商店，使用 Ad Hoc 或个人开发签名 | macOS/Xcode、Apple 签名身份、设备 UDID/描述文件 |
+| 鸿蒙    | 签名 HAP/APP | 已确认 HarmonyOS 6.x，使用 ArkUI Web 壳，不以 Android APK 代替 | DevEco Studio、鸿蒙签名和实体机                 |
 
 首个移动版不增加后台常驻同步，不在安装包中内置账号、Cookie、API 密钥、恢复密钥或 AI Provider
 密钥。登录、权限、注册、同步和数据模型继续由现有服务端判定。GitHub Release 只上传通过签名、
@@ -79,9 +79,10 @@ UDID 的 Ad Hoc IPA 只能使用 Draft Release、私有构建产物或私有仓�
 
 ## 4. 当前需要项目所有者确认的移动端输入
 
-1. iOS 是否具备可用的 Mac/Xcode、Apple Developer 签名方式和测试 iPhone；
-2. 华为设备是 HarmonyOS 4.x/兼容 Android，还是 HarmonyOS NEXT 5.x 及以上；
-3. 是否接受应用标识暂定为 `work.logion.app`，以及 GitHub Release 安装包是否保持私有测试范围。
+已确认测试 iPhone、HarmonyOS 6.x 华为设备和应用标识 `work.logion.app`。仍需确认：
 
-在这三项确认前可以完成共享壳设计和 Android 调试包，但不能承诺可长期安装的 iOS IPA 或正确的
-鸿蒙 HAP。
+1. 是否有可用 Mac；没有 Mac 时是否接受 GitHub Actions macOS Runner；
+2. Apple 账号使用免费 Personal Team，还是付费 Apple Developer Program；
+3. 是否同意含设备 UDID 的 iOS Ad Hoc IPA 只保存到 Draft Release/私有构建产物。
+
+Apple 条件确认前可以继续共享壳、Android 和 HarmonyOS 工程，但不能承诺可长期安装的 iOS IPA。
