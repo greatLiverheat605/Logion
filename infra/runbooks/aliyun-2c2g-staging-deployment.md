@@ -54,7 +54,7 @@ free -h 和 df -h / 输出：
 - 公网 Production；
 - 域名与 HTTPS；
 - 阿里云邮件真实投递；
-- OSS 自动异地复制；
+- Windows 自动异机备份；
 - 高可用数据库、托管 Redis 或负载均衡；
 - 真实 Production 容量证明；
 - 自动批准或触发 Production。
@@ -62,8 +62,8 @@ free -h 和 df -h / 输出：
 本手册固定的旧候选只能生成加密邮件发件箱记录，不包含阿里云投递适配器，因此该候选的邮箱
 验证和找回密码不能视为可用。当前仓库的 `0.1.0-rc2` 已新增适配器，但必须改按
 [`aliyun-production-release.md`](./aliyun-production-release.md) 和
-[`aliyun-directmail-prerelease.md`](./aliyun-directmail-prerelease.md) 创建新候选并验收。备份复制到
-私有 OSS 之前，任何候选都不具备异地灾备能力。
+[`aliyun-directmail-prerelease.md`](./aliyun-directmail-prerelease.md) 创建新候选并验收。备份下载到
+受控 Windows 电脑并完成校验之前，任何候选都不具备异地灾备能力。
 
 因此，若仍回放本手册固定的历史候选，服务器已有可登录 Owner 时应优先执行保留数据替换，既有账户可继续登录；全新安装或空环境重置无法通过正常产品链路创建并验证首个 Owner。不得通过开启 legacy/open 注册、读取数据库密文或手工伪造验证状态绕过。当前 `0.1.0-rc2` 不得继续照抄本手册的旧提交和旧镜像摘要，应切换到上面的两份 rc2 手册。
 
@@ -125,7 +125,7 @@ public.ecr.aws/docker/library/nginx@sha256:f46cb72c7df02710e693e863a983ac42f6a95
 | 系统   | Ubuntu 24.04 LTS，Ubuntu 22.04 可接受 |
 | 系统盘 | 最低 40 GB，建议 60 GB                |
 | 公网   | 只用于 SSH 与拉取依赖                 |
-| 备份   | 后续配置私有 OSS                      |
+| 备份   | 后续配置 Windows 异机加密备份         |
 
 如果实例是 ARM64、Windows、CentOS 7 或已经存有其他重要业务，停止并先确认迁移方案。
 
@@ -974,7 +974,7 @@ sha256sum logion-images-dd1382b.tar.gz \
 unset IMAGES IMAGE
 ```
 
-通过私有 OSS（禁止公共读写，优先 RAM 角色或短期凭据）或受信任的 SSH 通道传到服务器。不要把镜像包上传到公开网盘。服务器端先验证再导入：
+通过受信任的 SSH 通道传到服务器。不要把镜像包上传到公开网盘。服务器端先验证再导入：
 
 ```bash
 sha256sum -c logion-images-dd1382b.tar.gz.sha256
@@ -1240,12 +1240,12 @@ logion-compose exec -T backup \
 
 当前仍是同机备份。进入多人测试前必须：
 
-1. 创建私有 OSS Bucket；
-2. 禁止公共读写；
-3. 开启服务端加密、版本控制或保留策略；
-4. 优先使用 ECS RAM 角色，不在服务器保存长期 AccessKey；
-5. 每日复制加密备份及 `.sha256` 到 OSS；
-6. 至少保留 7 天；
+1. 在受控 Windows 电脑准备 `F:\LogionBackups`，磁盘使用 NTFS/ReFS 并启用 BitLocker；
+2. 使用专用 SSH 密钥和固定 host key，不保存服务器密码；
+3. 每日下载加密备份及 `.sha256` 到异机目录；
+4. 下载后重新计算 SHA-256；
+5. 默认保留 30 份日备份和最近 12 个月每月最新的一份；
+6. 恢复密钥与备份密文分开保存；
 7. 完成一次空环境恢复演练。
 
 恢复步骤遵循 [backup-restore.md](./backup-restore.md)，不要直接恢复覆盖当前数据库。
@@ -1497,7 +1497,7 @@ logion-compose config --images
 - [ ] 旧注册接口已关闭；
 - [ ] 无 OOMKilled；
 - [ ] 加密备份已生成并验证；
-- [ ] 已记录邮件和 OSS 未完成项；
+- [ ] 已记录邮件和 Windows 异机备份未完成项；
 - [ ] 未开放 Production，未声称高可用。
 
 ### 23.2 封闭功能测试可用
@@ -1512,4 +1512,4 @@ logion-compose config --images
 
 历史候选的“邮件投递适配器未实现”只能作为技术栈部署的已知阻断记录，不能算作封闭功能测试可用；rc2 必须改用真实邮件投递结果关闭该门禁。
 
-扩大到 10 人封闭测试前，还必须补齐域名/HTTPS、阿里云邮件投递、OSS 自动异地备份、告警、真实双设备、实体 Safari/iOS、读屏和面向该规模的容量验证。
+扩大到 10 人封闭测试前，还必须补齐域名/HTTPS、阿里云邮件投递、Windows 自动异机备份、告警、真实双设备、实体 Safari/iOS、读屏和面向该规模的容量验证。

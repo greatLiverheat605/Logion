@@ -12,11 +12,12 @@
 并按 [`runbooks/aliyun-real-sync-acceptance.md`](runbooks/aliyun-real-sync-acceptance.md) 验收双浏览器、
 离线 Outbox 与恢复回读。
 
-Production 前仍必须补齐 TLS 自动续期、云端密钥管理、异地加密备份、告警接收人、RPO/RTO、
-日志保留、实体手机和 24 小时预发布观察。候选镜像生成 SBOM、provenance 与
+Production 前仍必须补齐 TLS 自动续期、云端密钥管理、Windows 异机加密备份、告警接收人、
+RPO/RTO、日志保留、实体手机和 24 小时预发布观察。候选镜像生成 SBOM、provenance 与
 GitHub/Sigstore attestation；发布前仍须验证选定云平台的签名策略。Backup 服务将 PostgreSQL
-dump、附件和恢复版本元数据放入经认证加密的单一 bundle；同机卷不是最终灾备，异地复制必须
-落到私有 OSS 并完成独立恢复演练。
+dump、附件和恢复版本元数据放入经认证加密的单一 bundle；同机卷不是最终灾备，密文及校验文件
+必须按 [`runbooks/windows-off-host-backup.md`](runbooks/windows-off-host-backup.md) 下载到受控 Windows
+电脑，并完成独立恢复演练。项目不使用 OSS。
 
 完整门禁和未完成事项记录在
 [`../docs/release/0.1.0-rc2-prerelease.md`](../docs/release/0.1.0-rc2-prerelease.md)。任一阻断项未完成时，
