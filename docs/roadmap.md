@@ -56,16 +56,16 @@
 
 采用“共享 Web/PWA 核心 + 薄原生壳”，避免维护三套业务实现：
 
-| 平台    | 交付物       | 实现方向                                                       | 发布条件                                        |
-| ------- | ------------ | -------------------------------------------------------------- | ----------------------------------------------- |
-| Android | 签名 APK     | Capacitor 壳加载正式 HTTPS 应用，后续按需增加系统分享和通知    | Android SDK、独立签名 keystore、实体机验收      |
-| iOS     | 签名 IPA     | Capacitor/WKWebView 壳，不上架商店，使用 Ad Hoc 或个人开发签名 | macOS/Xcode、Apple 签名身份、设备 UDID/描述文件 |
-| 鸿蒙    | 签名 HAP/APP | 已确认 HarmonyOS 6.x，使用 ArkUI Web 壳，不以 Android APK 代替 | DevEco Studio、鸿蒙签名和实体机                 |
+| 平台    | 交付物       | 实现方向                                                        | 发布条件                                   |
+| ------- | ------------ | --------------------------------------------------------------- | ------------------------------------------ |
+| Android | 签名 APK     | Capacitor 壳加载正式 HTTPS 应用，后续按需增加系统分享和通知     | Android SDK、独立签名 keystore、实体机验收 |
+| iOS     | 真机测试构建 | Capacitor/WKWebView 壳，不上架商店，使用免费 Personal Team 签名 | Mac/Xcode、测试 iPhone，约 7 天后重新安装  |
+| 鸿蒙    | 签名 HAP/APP | 已确认 HarmonyOS 6.x，使用 ArkUI Web 壳，不以 Android APK 代替  | DevEco Studio、鸿蒙签名和实体机            |
 
 首个移动版不增加后台常驻同步，不在安装包中内置账号、Cookie、API 密钥、恢复密钥或 AI Provider
 密钥。登录、权限、注册、同步和数据模型继续由现有服务端判定。GitHub Release 只上传通过签名、
-哈希、恶意软件扫描和真机测试的包及校验文件；iOS 未签名产物不能作为可安装 IPA 发布，包含设备
-UDID 的 Ad Hoc IPA 只能使用 Draft Release、私有构建产物或私有仓库，不能公开发布。
+哈希、恶意软件扫描和真机测试的包及校验文件；免费 Personal Team 不作为 Ad Hoc 或长期分发方式，
+iOS 测试构建只保存到 Draft Release/私有构建产物，设备标识、描述文件和签名材料不得公开。
 
 ## 3. 每个版本的统一门禁
 
@@ -77,12 +77,8 @@ UDID 的 Ad Hoc IPA 只能使用 Draft Release、私有构建产物或私有仓�
 - `pnpm ci:fast`、浏览器套件和候选安全门禁全绿；
 - 独立 Pull Request 审查；Production 和 GitHub Release 由人工明确批准。
 
-## 4. 当前需要项目所有者确认的移动端输入
+## 4. 已确认的移动端输入
 
-已确认测试 iPhone、HarmonyOS 6.x 华为设备和应用标识 `work.logion.app`。仍需确认：
-
-1. 是否有可用 Mac；没有 Mac 时是否接受 GitHub Actions macOS Runner；
-2. Apple 账号使用免费 Personal Team，还是付费 Apple Developer Program；
-3. 是否同意含设备 UDID 的 iOS Ad Hoc IPA 只保存到 Draft Release/私有构建产物。
-
-Apple 条件确认前可以继续共享壳、Android 和 HarmonyOS 工程，但不能承诺可长期安装的 iOS IPA。
+已确认应用标识 `work.logion.app`，并具备 Mac、测试 iPhone、真实 Android 手机和 HarmonyOS 6.x
+华为设备。iOS 使用免费 Apple Personal Team，只做 Xcode 真机安装；测试构建只进入 Draft Release/
+私有构建产物。免费签名通常约 7 天后失效，不承诺 Ad Hoc 分发或长期可安装 IPA。

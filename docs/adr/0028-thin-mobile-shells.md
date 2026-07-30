@@ -1,8 +1,8 @@
 # ADR-0028：三端薄壳移动应用
 
-- 状态：Proposed（应用标识和测试设备已部分确认）
+- 状态：Accepted
 - 日期：2026-07-30
-- 决策人：待 Logion project owner 确认签名与设备条件
+- 决策人：Logion project owner
 
 ## 背景
 
@@ -23,8 +23,9 @@ Web/PWA 继续作为权威产品核心。Android 和 iOS 使用 Capacitor 薄壳
 ## 发布边界
 
 - Android：发布 release-signed APK 与 SHA-256；keystore 和口令不上传；
-- iOS：必须由 macOS/Xcode 和 Apple 签名身份产生可安装 IPA。Ad Hoc 描述文件可能包含设备 UDID，
-  因此不得上传到公开 Release；只进入 Draft Release、私有构建产物或用户控制的私有仓库；
+- iOS：使用 Mac、Xcode 和免费 Apple Personal Team 做个人开发签名，只用于已连接的测试 iPhone。
+  该签名通常约 7 天后失效，需要重新安装；免费账号不承诺 Ad Hoc 分发或长期可安装 IPA。测试构建
+  记录只能进入 Draft Release 或私有构建产物，不得公开设备标识、描述文件或签名材料；
 - 鸿蒙：测试机已确认为 HarmonyOS 6.x，按 HarmonyOS NEXT 原生应用处理，交付签名 HAP/APP，
   不把 Android APK 当作鸿蒙安装包；
 - 所有包先经过恶意软件扫描、依赖清单、签名验证、真机登录/Vault/同步/弱网测试，再由人工创建
@@ -35,14 +36,13 @@ Web/PWA 继续作为权威产品核心。Android 和 iOS 使用 Capacitor 薄壳
 已确认：
 
 - 有测试 iPhone；
+- 有可用 Mac；
+- Apple 账号使用免费 Personal Team，不加入付费 Apple Developer Program；
+- 同意 iOS 测试构建只进入 Draft Release/私有构建产物；
+- 有真实 Android 手机用于 APK 验收；
 - 华为测试机为 HarmonyOS 6.x；
 - 接受应用标识 `work.logion.app`。
 
-仍待确认：
-
-1. 是否有可用 Mac；如果没有，是否接受 GitHub Actions 的 macOS Runner 负责编译；
-2. Apple 账号采用免费 Personal Team，还是付费 Apple Developer Program；
-3. iOS Ad Hoc 产物是否同意只放 Draft Release/私有构建产物，不公开设备 UDID。
-
-Apple 条件确认前只开展不依赖 iOS 签名的共享壳、Android 和 HarmonyOS 工程，不承诺可长期安装
-的 IPA。HarmonyOS 6.x 的 HAP 仍需 DevEco Studio、开发者模式和华为签名材料完成真机验收。
+因此 iOS 首版验收方式固定为 Mac/Xcode 连接测试 iPhone 安装，不把免费 Personal Team 构建描述为
+可长期安装的发行 IPA。HarmonyOS 6.x 的 HAP 仍需 DevEco Studio、开发者模式和华为签名材料完成
+真机验收。
