@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Logion</string>
+    <string name="launch_url" translatable="false">https://logion.work/app/today</string>
+    <string name="manage_data_url" translatable="false">https://logion.work/app/data</string>
+    <string name="provider_authority" translatable="false">work.logion.app.fileprovider</string>
+    <string name="asset_statements" translatable="false">[{ "relation": ["delegate_permission/common.handle_all_urls"], "target": { "namespace": "web", "site": "https://logion.work" } }]</string>
+</resources>

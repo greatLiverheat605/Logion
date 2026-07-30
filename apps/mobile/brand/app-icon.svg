@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">Logion</title>
+  <rect width="1024" height="1024" fill="#07111f" />
+  <path d="M308 224v576h428V672H452V224z" fill="#69dbff" />
+  <circle cx="708" cy="316" r="92" fill="#67f2c1" />
+</svg>

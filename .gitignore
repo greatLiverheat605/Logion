@@ -2,6 +2,12 @@
 .env
 .env.*
 !.env.example
+*.jks
+*.keystore
+**/keystore.properties
+**/*.mobileprovision
+**/*.p12
+**/*.p8
 
 # Python
 .venv/
@@ -35,6 +41,15 @@ artifacts/
 playwright-report/
 test-results/
 reports/
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties
+apps/mobile/android/**/build/
+apps/mobile/ios/Logion.xcodeproj/
+apps/mobile/ios/DerivedData/
+apps/mobile/ios/**/*.xcuserdatad/
+apps/mobile/harmony/.hvigor/
+apps/mobile/harmony/**/build/
+apps/mobile/harmony/local.properties
 
 # Local-only planning and review material
 /LOGION_AI_DEVELOPMENT_CONSTRAINTS.md

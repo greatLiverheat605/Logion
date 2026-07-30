@@ -1,0 +1,59 @@
+plugins {
+    id 'com.android.application'
+}
+
+def signingEnvironment = [
+    storeFile: System.getenv('LOGION_ANDROID_KEYSTORE_PATH'),
+    storePassword: System.getenv('LOGION_ANDROID_KEYSTORE_PASSWORD'),
+    keyAlias: System.getenv('LOGION_ANDROID_KEY_ALIAS'),
+    keyPassword: System.getenv('LOGION_ANDROID_KEY_PASSWORD'),
+]
+def hasAnySigningValue = signingEnvironment.values().any { it != null && !it.isBlank() }
+def hasCompleteSigningEnvironment = signingEnvironment.values().every { it != null && !it.isBlank() }
+if (hasAnySigningValue && !hasCompleteSigningEnvironment) {
+    throw new GradleException('Android release signing environment is incomplete.')
+}
+
+android {
+    namespace = "work.logion.app"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId "work.logion.app"
+        minSdkVersion 26
+        targetSdkVersion 36
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    signingConfigs {
+        if (hasCompleteSigningEnvironment) {
+            release {
+                storeFile file(signingEnvironment.storeFile)
+                storePassword signingEnvironment.storePassword
+                keyAlias signingEnvironment.keyAlias
+                keyPassword signingEnvironment.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasCompleteSigningEnvironment) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.2'
+}

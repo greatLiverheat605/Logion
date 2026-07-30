@@ -1,0 +1,72 @@
+name: Mobile builds
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/mobile.yml
+      - .env.example
+      - apps/mobile/**
+      - apps/web/src/app/.well-known/assetlinks.json/route.ts
+      - apps/web/src/lib/mobile/**
+      - compose.yaml
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/mobile.yml
+      - .env.example
+      - apps/mobile/**
+      - apps/web/src/app/.well-known/assetlinks.json/route.ts
+      - apps/web/src/lib/mobile/**
+      - compose.yaml
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @logion/mobile test
+      - run: chmod +x apps/mobile/android/gradlew
+      - run: pnpm --filter @logion/mobile android:check
+      - name: Package debug evidence
+        shell: bash
+        run: |
+          mkdir -p reports/mobile
+          apps/mobile/android/gradlew --no-daemon -p apps/mobile/android \
+            :app:dependencies --configuration releaseRuntimeClasspath \
+            > reports/mobile/android-dependencies.txt
+          cp apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk \
+            reports/mobile/Logion-android-debug.apk
+          sha256sum reports/mobile/Logion-android-debug.apk \
+            > reports/mobile/Logion-android-debug.apk.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: logion-android-debug-${{ github.sha }}
+          path: reports/mobile
+          if-no-files-found: error
+          retention-days: 7
