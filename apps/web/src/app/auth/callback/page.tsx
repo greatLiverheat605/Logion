@@ -1,31 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { userSettingService } from "@/features/settings/user-setting-service";
+import { resolveOnboardingAccess } from "@/features/onboarding/onboarding-access";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    void userSettingService
-      .get("onboarding_completed")
-      .then((setting) => {
+    void resolveOnboardingAccess()
+      .then((access) => {
         if (active) {
-          router.replace(
-            setting?.value === "true" ? "/app/today" : "/onboarding",
-          );
+          router.replace(access === "complete" ? "/app/today" : "/onboarding");
         }
       })
       .catch(() => {
-        if (active) router.replace("/app/today");
+        if (active) setFailed(true);
       });
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [attempt, router]);
+
+  if (failed) {
+    return (
+      <main className="session-state" id="main-content">
+        <h1>无法加载账号设置</h1>
+        <p role="alert">无法确认入门状态，当前不会进入应用。</p>
+        <button
+          type="button"
+          onClick={() => {
+            setFailed(false);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          重试
+        </button>
+      </main>
+    );
+  }
 
   return (
     <main className="session-state" id="main-content" aria-busy="true">

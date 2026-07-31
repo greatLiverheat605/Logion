@@ -9,7 +9,7 @@ export default function AuthenticatedLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <SessionBoundary>
+    <SessionBoundary requireOnboarding>
       <PersonaProvider>
         <VaultSessionProvider>
           <AppShell>{children}</AppShell>

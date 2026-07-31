@@ -5,7 +5,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import type { components } from "@logion/contracts";
 
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
-import { userSettingService } from "@/features/settings/user-setting-service";
+import { resolveOnboardingAccess } from "@/features/onboarding/onboarding-access";
 
 import { AuthFormShell, FormError } from "./auth-form-shell";
 import { createPublicAuthApi, type LoginOutcome } from "./public-auth-api";
@@ -17,12 +17,9 @@ type AuthResponse = components["schemas"]["AuthResponse"];
 
 async function nextRoute(response: AuthResponse): Promise<string> {
   if (response.user.status === "pending_deletion") return "/account/deletion";
-  try {
-    const completed = await userSettingService.get("onboarding_completed");
-    return completed?.value === "true" ? "/app/today" : "/onboarding";
-  } catch {
-    return "/app/today";
-  }
+  return (await resolveOnboardingAccess()) === "complete"
+    ? "/app/today"
+    : "/onboarding";
 }
 
 function decodeBase64url(value: string): ArrayBuffer {
@@ -43,6 +40,8 @@ export function LoginForm() {
   const [clientReady, setClientReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [authenticated, setAuthenticated] = useState<AuthResponse | null>(null);
+  const [settingsBlocked, setSettingsBlocked] = useState(false);
   const [challenge, setChallenge] = useState<
     Extract<LoginOutcome, { kind: "mfa_required" }>["challenge"] | null
   >(null);
@@ -51,6 +50,23 @@ export function LoginForm() {
     const timer = window.setTimeout(() => setClientReady(true), 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  async function routeAuthenticated(response: AuthResponse) {
+    setAuthenticated(response);
+    setSettingsBlocked(false);
+    try {
+      window.location.assign(await nextRoute(response));
+    } catch {
+      setSettingsBlocked(true);
+    }
+  }
+
+  async function retrySettings() {
+    if (authenticated === null) return;
+    setPending(true);
+    await routeAuthenticated(authenticated);
+    setPending(false);
+  }
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,7 +85,7 @@ export function LoginForm() {
       if (outcome.kind === "mfa_required") {
         setChallenge(outcome.challenge);
       } else {
-        window.location.assign(await nextRoute(outcome.response));
+        await routeAuthenticated(outcome.response);
       }
     } catch (error) {
       setRequestId(
@@ -96,7 +112,7 @@ export function LoginForm() {
       });
       form.reset();
       setChallenge(null);
-      window.location.assign(await nextRoute(response));
+      await routeAuthenticated(response);
     } catch (error) {
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",
@@ -159,7 +175,7 @@ export function LoginForm() {
           }),
         },
       );
-      window.location.assign(await nextRoute(authenticated));
+      await routeAuthenticated(authenticated);
     } catch (error) {
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",
@@ -167,6 +183,28 @@ export function LoginForm() {
     } finally {
       setPending(false);
     }
+  }
+
+  if (settingsBlocked) {
+    return (
+      <AuthFormShell
+        title="无法加载账号设置"
+        description="账号已经通过验证，但暂时无法确认入门状态。为避免绕过必选引导，Logion 不会直接进入应用。"
+      >
+        <div className="auth-form">
+          <p className="form-message form-error" role="alert">
+            无法加载账号设置，请重试。
+          </p>
+          <button
+            disabled={pending}
+            type="button"
+            onClick={() => void retrySettings()}
+          >
+            {pending ? "正在重试…" : "重试"}
+          </button>
+        </div>
+      </AuthFormShell>
+    );
   }
 
   return (

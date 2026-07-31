@@ -1,12 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+
+import { resolveOnboardingAccess } from "@/features/onboarding/onboarding-access";
 
 import { SessionProvider, useSession } from "./session-provider";
 
-function SessionStateBoundary({ children }: Readonly<{ children: ReactNode }>) {
+type OnboardingGateState = "checking" | "error" | "ready" | "required";
+
+function SessionStateBoundary({
+  children,
+  requireOnboarding,
+}: Readonly<{ children: ReactNode; requireOnboarding: boolean }>) {
   const { refresh, state } = useSession();
+  const router = useRouter();
+  const [gateState, setGateState] = useState<OnboardingGateState>("checking");
+  const [gateAttempt, setGateAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!requireOnboarding || state.status !== "authenticated") return;
+    let active = true;
+    void resolveOnboardingAccess()
+      .then((access) => {
+        if (!active) return;
+        if (access === "required") {
+          setGateState("required");
+          router.replace("/onboarding");
+        } else {
+          setGateState("ready");
+        }
+      })
+      .catch(() => {
+        if (active) setGateState("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [gateAttempt, requireOnboarding, router, state.status]);
 
   if (state.status === "loading") {
     return (
@@ -41,15 +73,44 @@ function SessionStateBoundary({ children }: Readonly<{ children: ReactNode }>) {
       </main>
     );
   }
+  if (requireOnboarding && gateState === "error") {
+    return (
+      <main id="main-content" className="session-state">
+        <h1>无法加载账号设置</h1>
+        <p role="alert">无法确认入门状态，当前不会进入应用。</p>
+        <button
+          type="button"
+          onClick={() => {
+            setGateState("checking");
+            setGateAttempt((value) => value + 1);
+          }}
+        >
+          重试
+        </button>
+      </main>
+    );
+  }
+  if (requireOnboarding && gateState !== "ready") {
+    return (
+      <main id="main-content" className="session-state" aria-busy="true">
+        <p role="status" aria-live="polite">
+          {gateState === "required" ? "正在进入入门引导…" : "正在加载账号设置…"}
+        </p>
+      </main>
+    );
+  }
   return children;
 }
 
 export function SessionBoundary({
   children,
-}: Readonly<{ children: ReactNode }>) {
+  requireOnboarding = false,
+}: Readonly<{ children: ReactNode; requireOnboarding?: boolean }>) {
   return (
     <SessionProvider>
-      <SessionStateBoundary>{children}</SessionStateBoundary>
+      <SessionStateBoundary requireOnboarding={requireOnboarding}>
+        {children}
+      </SessionStateBoundary>
     </SessionProvider>
   );
 }
