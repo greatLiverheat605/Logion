@@ -23,6 +23,8 @@ import {
   ProductPageHeader,
   ProductPanel,
   ProductProgress,
+  ProductSignalGrid,
+  ProductSignalList,
   ProductTag,
   ProductTaskRow,
   ProductWorkflowStage,
@@ -1025,23 +1027,42 @@ export function TodayCenter() {
               </ProductTag>
             }
           >
-            {conflictCount > 0 ? (
-              <div className="product-signal bad">
-                <strong>{conflictCount} 项同步冲突</strong>
-                <small>需要人工选择保留或合并的版本</small>
-              </div>
-            ) : null}
-            {blockedTasks > 0 ? (
-              <div className="product-signal warn">
-                <strong>{blockedTasks} 项任务受阻</strong>
-                <small>查看阻塞原因并决定下一步</small>
-              </div>
-            ) : null}
-            {pendingVerifications > 0 ? (
-              <div className="product-signal">
-                <strong>{pendingVerifications} 项证据待验收</strong>
-                <small>验收决定始终由你确认</small>
-              </div>
+            {conflictCount + pendingVerifications + blockedTasks > 0 ? (
+              <ProductSignalList
+                label="当前阻塞与待处理信号"
+                items={[
+                  ...(conflictCount > 0
+                    ? [
+                        {
+                          description: "需要人工选择保留或合并的版本",
+                          id: "sync-conflicts",
+                          title: `${conflictCount} 项同步冲突`,
+                          tone: "bad" as const,
+                        },
+                      ]
+                    : []),
+                  ...(blockedTasks > 0
+                    ? [
+                        {
+                          description: "查看阻塞原因并决定下一步",
+                          id: "blocked-tasks",
+                          title: `${blockedTasks} 项任务受阻`,
+                          tone: "warn" as const,
+                        },
+                      ]
+                    : []),
+                  ...(pendingVerifications > 0
+                    ? [
+                        {
+                          description: "验收决定始终由你确认",
+                          id: "pending-verifications",
+                          title: `${pendingVerifications} 项证据待验收`,
+                          tone: "info" as const,
+                        },
+                      ]
+                    : []),
+                ]}
+              />
             ) : null}
             {conflictCount + pendingVerifications + blockedTasks === 0 ? (
               <ProductEmptyState
@@ -1221,24 +1242,27 @@ export function TodayCenter() {
           title="学习活跃度"
           description="当前空间已形成的真实学习记录。"
         >
-          <div className="product-signal-grid">
-            <div>
-              <span>任务</span>
-              <strong>{visibleTasks.length}</strong>
-            </div>
-            <div>
-              <span>专注分钟</span>
-              <strong>{completedMinutes}</strong>
-            </div>
-            <div>
-              <span>证据</span>
-              <strong>{visibleEvidence.length}</strong>
-            </div>
-            <div>
-              <span>验收记录</span>
-              <strong>{visibleVerifications.length}</strong>
-            </div>
-          </div>
+          <ProductSignalGrid
+            label="学习活跃度指标"
+            items={[
+              { id: "tasks", label: "任务", value: visibleTasks.length },
+              {
+                id: "focus-minutes",
+                label: "专注分钟",
+                value: completedMinutes,
+              },
+              {
+                id: "evidence",
+                label: "证据",
+                value: visibleEvidence.length,
+              },
+              {
+                id: "verifications",
+                label: "验收记录",
+                value: visibleVerifications.length,
+              },
+            ]}
+          />
         </ProductPanel>
       </div>
 
