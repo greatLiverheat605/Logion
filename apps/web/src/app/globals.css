@@ -1,5 +1,8 @@
 @import "../components/product/product-signals.css";
+@import "../components/product/product-workbench-state.css";
 @import "../features/personas/dashboard/persona-dashboard.css";
+@import "../features/memory/knowledge-graph-view.css";
+@import "../features/content/content-workbench.css";
 
 :root,
 :root[data-theme="light"] {

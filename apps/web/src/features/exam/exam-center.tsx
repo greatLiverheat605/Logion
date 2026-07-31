@@ -26,9 +26,15 @@ import {
   ProductTag,
   ProductWorkflowStage,
 } from "@/components/product/product-ui";
+import {
+  deriveProductWorkbenchState,
+  ProductWorkbenchStateNotice,
+} from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+
+import { examCoverageRate, normalizeExamScores } from "./exam-workbench-model";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -183,8 +189,15 @@ export function ExamCenter() {
   const [scoreRecords, setScoreRecords] = useState<
     ProtectedView<ScoreRecordPayload>[]
   >([]);
+  const [contextPhase, setContextPhase] = useState<
+    "error" | "loading" | "ready"
+  >("loading");
+  const [dataPhase, setDataPhase] = useState<
+    "error" | "idle" | "loading" | "ready"
+  >("idle");
 
   const loadContext = useCallback(async () => {
+    setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
@@ -200,12 +213,15 @@ export function ExamCenter() {
       );
       setDeviceId(deviceResult.devices.find((item) => item.current)?.id ?? "");
       setStatus("请先解锁本地备考资料。");
+      setContextPhase("ready");
     } catch (error) {
       setStatus(message(error));
+      setContextPhase("error");
     }
   }, []);
 
   const loadSpaces = useCallback(async (selected: string) => {
+    setContextPhase("loading");
     try {
       const result = await browserApiClient.request<{ spaces: Space[] }>(
         `/api/v1/workspaces/${selected}/spaces`,
@@ -216,8 +232,12 @@ export function ExamCenter() {
           ? current
           : (result.spaces[0]?.id ?? ""),
       );
+      setContextPhase("ready");
     } catch (error) {
+      setSpaces([]);
+      setSpaceId("");
       setStatus(message(error));
+      setContextPhase("error");
     }
   }, []);
 
@@ -290,6 +310,7 @@ export function ExamCenter() {
     localVault = vault.current,
   ): Promise<void> {
     if (db === null || localVault === null || !workspaceId) return;
+    setDataPhase("loading");
     const activeDatabase = db;
     const activeVault = localVault;
     async function readProtected<T extends JsonObject>(entityType: string) {
@@ -323,6 +344,7 @@ export function ExamCenter() {
     setSyllabusNodes(nextNodes);
     setMockExams(nextMocks);
     setScoreRecords(nextScores);
+    setDataPhase("ready");
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -350,7 +372,10 @@ export function ExamCenter() {
       () =>
         void refresh(db, localVault)
           .then(() => setStatus("备考资料已在应用内解锁。"))
-          .catch((error: unknown) => setStatus(message(error))),
+          .catch((error: unknown) => {
+            setDataPhase("error");
+            setStatus(message(error));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -678,19 +703,34 @@ export function ExamCenter() {
   const coveredNodes = visibleNodes.filter(
     (item) => item.payload.coverage_status === "covered",
   ).length;
-  const coverageRate = visibleNodes.length
-    ? (coveredNodes / visibleNodes.length) * 100
-    : 0;
-  const normalizedScores = visibleScores.map((item) =>
-    item.payload.score_scale_max > 0
-      ? (item.payload.score / item.payload.score_scale_max) * 100
-      : 0,
+  const coverageRate = examCoverageRate(
+    visibleNodes.map((item) => item.payload),
+  );
+  const normalizedScores = normalizeExamScores(
+    visibleScores.map((item) => item.payload),
   );
   const latestNormalizedScore = normalizedScores.at(-1) ?? 0;
   const subjectWeightChart = visibleSubjects.map((subject) => ({
     label: subject.payload.name,
     value: subject.payload.weight_basis_points / 100,
   }));
+  const allVisibleRecords = [
+    ...visibleExams,
+    ...visibleSubjects,
+    ...visibleNodes,
+    ...visibleMocks,
+    ...visibleScores,
+  ];
+  const examState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData: allVisibleRecords.length > 0,
+    stale: allVisibleRecords.some(
+      (item) => item.entity.sync_status !== "clean",
+    ),
+    unlocked,
+  });
 
   return (
     <main id="main-content" className="settings-page today-page">
@@ -723,6 +763,28 @@ export function ExamCenter() {
         }
       />
 
+      <ProductWorkbenchStateNotice
+        action={
+          examState === "locked" ? (
+            <a className="product-action-link" href="#exam-vault">
+              解锁本地资料
+            </a>
+          ) : examState === "empty" ? (
+            <a className="product-action-link primary" href="#exam-setup">
+              创建第一项考试
+            </a>
+          ) : (
+            <a className="product-action-link" href="#exam-vault">
+              选择工作区与 Space
+            </a>
+          )
+        }
+        emptyDescription="当前 Space 尚无考试、科目或模考记录；先创建考试再逐步配置大纲。"
+        emptyTitle="当前 Space 还没有备考项目"
+        onRetry={() => void loadContext()}
+        state={examState}
+      />
+
       <ProductWorkflowStage
         badge={
           <ProductTag tone={primaryExam ? "warn" : "info"}>
@@ -746,7 +808,7 @@ export function ExamCenter() {
             detail: `${coveredNodes} / ${visibleNodes.length} 个节点已覆盖`,
             state: !primaryExam
               ? "pending"
-              : visibleNodes.length === 0 || coverageRate < 100
+              : visibleNodes.length === 0 || (coverageRate ?? 0) < 100
                 ? "current"
                 : "complete",
           },
@@ -795,9 +857,15 @@ export function ExamCenter() {
         />
         <ProductMetric
           label="大纲覆盖"
-          value={`${Math.round(coverageRate)}%`}
-          detail={`${coveredNodes} / ${visibleNodes.length} 个节点`}
-          tone="good"
+          value={
+            coverageRate === null ? "尚无数据" : `${Math.round(coverageRate)}%`
+          }
+          detail={
+            coverageRate === null
+              ? "添加大纲节点后再计算比例"
+              : `${coveredNodes} / ${visibleNodes.length} 个节点`
+          }
+          tone={coverageRate === null ? "default" : "good"}
         />
         <ProductMetric
           label="最近模考"

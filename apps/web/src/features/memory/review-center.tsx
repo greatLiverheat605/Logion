@@ -26,9 +26,19 @@ import {
   ProductTag,
   ProductWorkflowStage,
 } from "@/components/product/product-ui";
+import {
+  deriveProductWorkbenchState,
+  ProductWorkbenchStateNotice,
+} from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+
+import { KnowledgeGraphView } from "./knowledge-graph-view";
+import {
+  buildKnowledgeGraph,
+  buildSevenDayReviewLoad,
+} from "./review-workbench-model";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -219,8 +229,16 @@ export function ReviewCenter() {
     LocalView<ReviewFindingPayload>[]
   >([]);
   const [conflicts, setConflicts] = useState(0);
+  const [contextPhase, setContextPhase] = useState<
+    "error" | "loading" | "ready"
+  >("loading");
+  const [dataPhase, setDataPhase] = useState<
+    "error" | "idle" | "loading" | "ready"
+  >("idle");
+  const [knowledgeView, setKnowledgeView] = useState<"graph" | "list">("graph");
 
   const loadContext = useCallback(async () => {
+    setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
@@ -236,12 +254,15 @@ export function ReviewCenter() {
       );
       setDeviceId(deviceResult.devices.find((item) => item.current)?.id ?? "");
       setStatus("请解锁本地学习记录。");
+      setContextPhase("ready");
     } catch (error) {
       setStatus(errorMessage(error));
+      setContextPhase("error");
     }
   }, []);
 
   const loadSpaces = useCallback(async (selected: string) => {
+    setContextPhase("loading");
     try {
       const result = await browserApiClient.request<{ spaces: Space[] }>(
         `/api/v1/workspaces/${selected}/spaces`,
@@ -252,10 +273,12 @@ export function ReviewCenter() {
           ? current
           : (result.spaces[0]?.id ?? ""),
       );
+      setContextPhase("ready");
     } catch (error) {
       setSpaces([]);
       setSpaceId("");
       setStatus(errorMessage(error));
+      setContextPhase("error");
     }
   }, []);
 
@@ -329,6 +352,7 @@ export function ReviewCenter() {
     localVault = vault.current,
   ): Promise<void> {
     if (db === null || localVault === null || !workspaceId) return;
+    setDataPhase("loading");
     const entityTypes = [
       "topic",
       "topic_dependency",
@@ -422,6 +446,7 @@ export function ReviewCenter() {
     setAuditReviews(nextAuditReviews);
     setReviewFindings(nextReviewFindings);
     setConflicts(conflictCount);
+    setDataPhase("ready");
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -449,7 +474,10 @@ export function ReviewCenter() {
       () =>
         void refresh(db, localVault)
           .then(() => setStatus("复习资料已在应用内解锁。"))
-          .catch((error: unknown) => setStatus(errorMessage(error))),
+          .catch((error: unknown) => {
+            setDataPhase("error");
+            setStatus(errorMessage(error));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -936,6 +964,45 @@ export function ReviewCenter() {
       (item) => item.payload.confirmed_level === option.value,
     ).length,
   }));
+  const futureReviewLoad = buildSevenDayReviewLoad(
+    visibleSchedules.map((item) => item.payload),
+    new Date(referenceTime),
+  );
+  const allVisibleRecords = [
+    ...visibleTopics,
+    ...visibleDependencies,
+    ...visibleMastery,
+    ...visibleSchedules,
+    ...visibleQuizItems,
+    ...visibleAttempts,
+    ...visiblePatterns,
+    ...visibleReviews,
+  ];
+  const reviewState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData: allVisibleRecords.length > 0,
+    stale:
+      conflicts > 0 ||
+      allVisibleRecords.some((item) => item.entity.sync_status !== "clean"),
+    unlocked,
+  });
+  const knowledgeGraph = buildKnowledgeGraph(
+    visibleTopics.map((topic) => ({
+      description: topic.payload.description,
+      id: topic.entity.entity_id,
+      title: topic.payload.title,
+    })),
+    visibleDependencies.map((dependency) => dependency.payload),
+  );
+  const masteryByTopicId = new Map(
+    visibleMastery.flatMap((item) =>
+      item.payload.confirmed_level
+        ? [[item.payload.topic_id, item.payload.confirmed_level] as const]
+        : [],
+    ),
+  );
 
   return (
     <main id="main-content" className="settings-page today-page">
@@ -966,6 +1033,27 @@ export function ReviewCenter() {
             </button>
           </>
         }
+      />
+      <ProductWorkbenchStateNotice
+        action={
+          reviewState === "locked" ? (
+            <a className="product-action-link" href="#review-vault">
+              解锁本地资料
+            </a>
+          ) : reviewState === "empty" ? (
+            <a className="product-action-link primary" href="#knowledge-graph">
+              建立第一个知识点
+            </a>
+          ) : (
+            <a className="product-action-link" href="#review-vault">
+              选择工作区与 Space
+            </a>
+          )
+        }
+        emptyDescription="当前 Space 尚无知识点、回忆题或复习安排；先建立知识点再形成主动回忆闭环。"
+        emptyTitle="当前 Space 还没有复习资料"
+        onRetry={() => void loadContext()}
+        state={reviewState}
       />
       {conflicts > 0 ? (
         <p className="residual-data-warning" role="alert">
@@ -1041,8 +1129,12 @@ export function ReviewCenter() {
         />
         <ProductMetric
           label="已确认掌握"
-          value={confirmedMastery}
-          detail={`${Math.round(masteryRate)}% 已留下判断`}
+          value={visibleTopics.length ? confirmedMastery : "尚无数据"}
+          detail={
+            visibleTopics.length
+              ? `${Math.round(masteryRate)}% 已留下判断`
+              : "建立知识点后再计算比例"
+          }
           tone="good"
         />
         <ProductMetric
@@ -1137,6 +1229,23 @@ export function ReviewCenter() {
         </ProductPanel>
       </div>
 
+      <ProductPanel
+        title="未来 7 天复习负荷"
+        description="按复习计划的 next_review_at 汇总；逾期项目计入今天，不生成预测值。"
+      >
+        {visibleSchedules.length ? (
+          <ProductBarChart
+            items={futureReviewLoad}
+            label="未来七天到期复习数量"
+          />
+        ) : (
+          <ProductEmptyState
+            description="完成掌握确认或测验后，真实复习安排会显示在这里。"
+            title="尚无未来复习安排"
+          />
+        )}
+      </ProductPanel>
+
       <ProductDisclosure
         id="knowledge-graph"
         summary="维护知识图谱"
@@ -1216,73 +1325,97 @@ export function ReviewCenter() {
         title="个人掌握与复习"
         description="系统建议仅供参考；只有你明确提交的选项才是确认掌握度。"
         aside={
-          <ProductTag tone="info">{visibleTopics.length} 个知识点</ProductTag>
+          <div className="product-segmented" aria-label="知识视图" role="group">
+            <button
+              className={knowledgeView === "graph" ? "active" : undefined}
+              type="button"
+              onClick={() => setKnowledgeView("graph")}
+            >
+              图谱
+            </button>
+            <button
+              className={knowledgeView === "list" ? "active" : undefined}
+              type="button"
+              onClick={() => setKnowledgeView("list")}
+            >
+              列表与掌握确认
+            </button>
+          </div>
         }
       >
-        <div className="task-grid">
-          {visibleTopics.map((topic) => {
-            const current = mastery.find(
-              (item) => item.payload.topic_id === topic.entity.entity_id,
-            );
-            const schedule = schedules.find(
-              (item) => item.payload.topic_id === topic.entity.entity_id,
-            );
-            return (
-              <article className="task-card" key={topic.entity.entity_id}>
-                <div>
-                  <span className="count-badge">
-                    {current?.payload.confirmed_level ?? "未确认"}
-                  </span>
-                  <h3>{topic.payload.title}</h3>
-                  <p>{topic.payload.description || "暂无说明"}</p>
-                  <p>
-                    系统建议：{current?.payload.suggested_level ?? "unknown"}
-                    {current?.payload.suggested_reason
-                      ? ` · ${current.payload.suggested_reason}`
-                      : " · 暂无依据"}
-                  </p>
-                  <p>
-                    下次复习：
-                    {schedule
-                      ? REVIEW_DATE_FORMATTER.format(
-                          new Date(schedule.payload.next_review_at),
-                        )
-                      : "确认后由同步服务生成"}
-                  </p>
-                  <small>{topic.entity.sync_status}</small>
-                </div>
-                <form
-                  className="planning-form"
-                  onSubmit={(event) => void confirmMastery(event, topic)}
-                >
-                  <label htmlFor={`mastery-${topic.entity.entity_id}`}>
-                    我的明确确认
-                  </label>
-                  <select
-                    key={current?.payload.confirmed_level ?? "unknown"}
-                    id={`mastery-${topic.entity.entity_id}`}
-                    name="confirmed_level"
-                    defaultValue={current?.payload.confirmed_level ?? "unknown"}
+        {knowledgeView === "graph" ? (
+          <KnowledgeGraphView
+            masteryByTopicId={masteryByTopicId}
+            nodes={knowledgeGraph}
+          />
+        ) : (
+          <div className="task-grid">
+            {visibleTopics.map((topic) => {
+              const current = mastery.find(
+                (item) => item.payload.topic_id === topic.entity.entity_id,
+              );
+              const schedule = schedules.find(
+                (item) => item.payload.topic_id === topic.entity.entity_id,
+              );
+              return (
+                <article className="task-card" key={topic.entity.entity_id}>
+                  <div>
+                    <span className="count-badge">
+                      {current?.payload.confirmed_level ?? "未确认"}
+                    </span>
+                    <h3>{topic.payload.title}</h3>
+                    <p>{topic.payload.description || "暂无说明"}</p>
+                    <p>
+                      系统建议：{current?.payload.suggested_level ?? "unknown"}
+                      {current?.payload.suggested_reason
+                        ? ` · ${current.payload.suggested_reason}`
+                        : " · 暂无依据"}
+                    </p>
+                    <p>
+                      下次复习：
+                      {schedule
+                        ? REVIEW_DATE_FORMATTER.format(
+                            new Date(schedule.payload.next_review_at),
+                          )
+                        : "确认后由同步服务生成"}
+                    </p>
+                    <small>{topic.entity.sync_status}</small>
+                  </div>
+                  <form
+                    className="planning-form"
+                    onSubmit={(event) => void confirmMastery(event, topic)}
                   >
-                    {MASTERY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="submit">确认并安排复习</button>
-                </form>
-              </article>
-            );
-          })}
-          {visibleTopics.length === 0 ? (
-            <ProductEmptyState
-              icon="◎"
-              title="先建立知识图谱"
-              description="从一个核心知识点开始，再补充它与其他概念之间的先修关系。"
-            />
-          ) : null}
-        </div>
+                    <label htmlFor={`mastery-${topic.entity.entity_id}`}>
+                      我的明确确认
+                    </label>
+                    <select
+                      key={current?.payload.confirmed_level ?? "unknown"}
+                      id={`mastery-${topic.entity.entity_id}`}
+                      name="confirmed_level"
+                      defaultValue={
+                        current?.payload.confirmed_level ?? "unknown"
+                      }
+                    >
+                      {MASTERY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit">确认并安排复习</button>
+                  </form>
+                </article>
+              );
+            })}
+            {visibleTopics.length === 0 ? (
+              <ProductEmptyState
+                icon="◎"
+                title="先建立知识图谱"
+                description="从一个核心知识点开始，再补充它与其他概念之间的先修关系。"
+              />
+            ) : null}
+          </div>
+        )}
       </ProductPanel>
 
       <ProductDisclosure

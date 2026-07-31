@@ -25,9 +25,15 @@ import {
   ProductTaskRow,
   ProductWorkflowStage,
 } from "@/components/product/product-ui";
+import {
+  deriveProductWorkbenchState,
+  ProductWorkbenchStateNotice,
+} from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+
+import { buildPlanningPhaseSequence } from "./planning-workbench-model";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -93,8 +99,15 @@ export function PlanningCenter() {
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备规划工作台……");
   const [goals, setGoals] = useState<PlanningGoalView[]>([]);
+  const [contextPhase, setContextPhase] = useState<
+    "error" | "loading" | "ready"
+  >("loading");
+  const [dataPhase, setDataPhase] = useState<
+    "error" | "idle" | "loading" | "ready"
+  >("idle");
 
   const loadContext = useCallback(async () => {
+    setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
@@ -112,12 +125,15 @@ export function PlanningCenter() {
       setStatus(
         currentDevice ? "请选择空间并解锁本地资料。" : "未找到当前设备。 ",
       );
+      setContextPhase("ready");
     } catch (error) {
       setStatus(message(error));
+      setContextPhase("error");
     }
   }, []);
 
   const loadSpaces = useCallback(async (selectedWorkspace: string) => {
+    setContextPhase("loading");
     try {
       const result = await browserApiClient.request<{ spaces: Space[] }>(
         `/api/v1/workspaces/${selectedWorkspace}/spaces`,
@@ -128,10 +144,12 @@ export function PlanningCenter() {
           ? current
           : (result.spaces[0]?.id ?? ""),
       );
+      setContextPhase("ready");
     } catch (error) {
       setSpaces([]);
       setSpaceId("");
       setStatus(message(error));
+      setContextPhase("error");
     }
   }, []);
 
@@ -148,6 +166,7 @@ export function PlanningCenter() {
     localVault: OfflineVault,
   ) {
     if (!workspaceId) return;
+    setDataPhase("loading");
     const rows = await db.entities
       .where("[workspace_id+entity_type]")
       .equals([workspaceId, "learning_goal"])
@@ -158,6 +177,7 @@ export function PlanningCenter() {
         .map((item) => decryptedGoal(localVault, item)),
     );
     setGoals(nextGoals);
+    setDataPhase("ready");
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -184,7 +204,10 @@ export function PlanningCenter() {
       () =>
         void refreshGoals(db, localVault)
           .then(() => setStatus("规划资料已在应用内解锁。"))
-          .catch((error: unknown) => setStatus(message(error))),
+          .catch((error: unknown) => {
+            setDataPhase("error");
+            setStatus(message(error));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,6 +364,7 @@ export function PlanningCenter() {
       await refreshGoals(db, localVault);
       form.reset();
     } catch (error) {
+      setDataPhase("error");
       setStatus(message(error));
     }
   }
@@ -368,6 +392,17 @@ export function PlanningCenter() {
     currentGoal?.payload.phases.filter(
       (phase) => phase.acceptance_criteria.length === 0,
     ).length ?? 0;
+  const phaseSequence = buildPlanningPhaseSequence(
+    currentGoal?.payload.phases ?? [],
+  );
+  const planningState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData: visibleGoals.length > 0,
+    stale: visibleGoals.some((goal) => goal.entity.sync_status !== "clean"),
+    unlocked,
+  });
 
   return (
     <main id="main-content" className="settings-page planning-page">
@@ -396,6 +431,28 @@ export function PlanningCenter() {
             </a>
           </>
         }
+      />
+
+      <ProductWorkbenchStateNotice
+        action={
+          planningState === "locked" ? (
+            <a className="product-action-link" href="#planning-vault">
+              解锁本地资料
+            </a>
+          ) : planningState === "empty" ? (
+            <a className="product-action-link primary" href="#goal-builder">
+              创建第一条路线
+            </a>
+          ) : (
+            <a className="product-action-link" href="#planning-vault">
+              选择工作区与 Space
+            </a>
+          )
+        }
+        emptyDescription="工作区与 Space 已就绪；创建目标后即可看到阶段、前序提示与验收状态。"
+        emptyTitle="当前 Space 还没有学习路线"
+        onRetry={() => void loadContext()}
+        state={planningState}
       />
 
       <ProductWorkflowStage
@@ -492,7 +549,7 @@ export function PlanningCenter() {
             }
           >
             <div className="product-plan-timeline">
-              {currentGoal.payload.phases.map((phase, index) => (
+              {phaseSequence.map((phase, index) => (
                 <article className="product-plan-phase" key={phase.id}>
                   <header>
                     <span>{String(index + 1).padStart(2, "0")}</span>
@@ -507,9 +564,18 @@ export function PlanningCenter() {
                       "尚未补充阶段说明"}
                   </p>
                   <small>{phase.acceptance_criteria.length} 条验收标准</small>
+                  <small>
+                    {phase.priorPhaseTitle
+                      ? `前序提示：${phase.priorPhaseTitle}`
+                      : "路线起点"}
+                  </small>
                 </article>
               ))}
             </div>
+            <p className="product-muted-note">
+              前序提示仅按阶段 position
+              排序展示，不代表强依赖；显式阶段依赖尚未进入现有数据契约。
+            </p>
           </ProductPanel>
 
           <div className="product-dashboard-grid product-dashboard-grid-wide">

@@ -3,6 +3,7 @@
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
+  AttachmentQueueRepository,
   BootstrapRepository,
   noteDocumentStateId,
   OfflineStorageError,
@@ -11,6 +12,7 @@ import {
   SyncClient,
   YjsNoteRepository,
   type JsonObject,
+  type AttachmentQueueEntry,
   type LocalEntity,
   type LogionOfflineDatabase,
   type SyncTransport,
@@ -26,6 +28,10 @@ import {
   ProductTag,
   ProductTaskRow,
 } from "@/components/product/product-ui";
+import {
+  deriveProductWorkbenchState,
+  ProductWorkbenchStateNotice,
+} from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
@@ -123,11 +129,23 @@ export function ContentCenter() {
   const [status, setStatus] = useState("正在准备记录与资料库……");
   const [notes, setNotes] = useState<View<NotePayload>[]>([]);
   const [resources, setResources] = useState<View<ResourcePayload>[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentQueueEntry[]>([]);
   const [resourceType, setResourceType] = useState<"link" | "pdf_index">(
     "link",
   );
+  const [query, setQuery] = useState("");
+  const [recordKind, setRecordKind] = useState<
+    "all" | "attachment" | "link" | "note" | "pdf_index"
+  >("all");
+  const [contextPhase, setContextPhase] = useState<
+    "error" | "loading" | "ready"
+  >("loading");
+  const [dataPhase, setDataPhase] = useState<
+    "error" | "idle" | "loading" | "ready"
+  >("idle");
 
   const load = useCallback(async () => {
+    setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
@@ -140,8 +158,10 @@ export function ContentCenter() {
       setWorkspaceId(workspaceResult.workspaces[0]?.id ?? "");
       setDeviceId(current?.id ?? "");
       setStatus(current ? "请选择空间并解锁本地资料。" : "未找到当前设备。");
+      setContextPhase("ready");
     } catch (error) {
       setStatus(userMessage(error));
+      setContextPhase("error");
     }
   }, []);
 
@@ -151,18 +171,24 @@ export function ContentCenter() {
 
   useEffect(() => {
     if (!workspaceId) return;
-    queueMicrotask(
-      () =>
-        void browserApiClient
-          .request<{ spaces: Space[] }>(
-            `/api/v1/workspaces/${workspaceId}/spaces`,
-          )
-          .then((result) => {
-            setSpaces(result.spaces);
-            setSpaceId(result.spaces[0]?.id ?? "");
-          })
-          .catch((error: unknown) => setStatus(userMessage(error))),
-    );
+    queueMicrotask(() => {
+      setContextPhase("loading");
+      void browserApiClient
+        .request<{ spaces: Space[] }>(
+          `/api/v1/workspaces/${workspaceId}/spaces`,
+        )
+        .then((result) => {
+          setSpaces(result.spaces);
+          setSpaceId(result.spaces[0]?.id ?? "");
+          setContextPhase("ready");
+        })
+        .catch((error: unknown) => {
+          setSpaces([]);
+          setSpaceId("");
+          setContextPhase("error");
+          setStatus(userMessage(error));
+        });
+    });
   }, [workspaceId]);
 
   async function bootstrap(
@@ -218,7 +244,8 @@ export function ContentCenter() {
 
   async function refresh(db = database.current, localVault = vault.current) {
     if (db === null || localVault === null) return;
-    const [noteRows, resourceRows] = await Promise.all([
+    setDataPhase("loading");
+    const [noteRows, resourceRows, attachmentRows] = await Promise.all([
       db.entities
         .where("[workspace_id+entity_type]")
         .equals([workspaceId, "note"])
@@ -227,6 +254,7 @@ export function ContentCenter() {
         .where("[workspace_id+entity_type]")
         .equals([workspaceId, "resource"])
         .toArray(),
+      db.attachmentQueue.where("workspace_id").equals(workspaceId).toArray(),
     ]);
     const [nextNotes, nextResources] = await Promise.all([
       Promise.all(
@@ -238,6 +266,8 @@ export function ContentCenter() {
     ]);
     setNotes(nextNotes);
     setResources(nextResources);
+    setAttachments(attachmentRows);
+    setDataPhase("ready");
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -267,7 +297,10 @@ export function ContentCenter() {
           .then(() =>
             setStatus("本地资料已在应用内解锁；Markdown 预览不会执行 HTML。"),
           )
-          .catch((error: unknown) => setStatus(userMessage(error))),
+          .catch((error: unknown) => {
+            setDataPhase("error");
+            setStatus(userMessage(error));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -452,11 +485,67 @@ export function ContentCenter() {
     }
   }
 
+  async function queueAttachment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const db = database.current;
+    if (db === null || !workspaceId || !spaceId || !deviceId) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const file = data.get("attachment");
+    const noteId = String(data.get("note_id") ?? "");
+    if (!(file instanceof File) || file.size === 0 || !noteId) {
+      setStatus("请选择已有笔记和一个受支持的附件。");
+      return;
+    }
+    try {
+      await new AttachmentQueueRepository(db).enqueue({
+        attachment_id: crypto.randomUUID(),
+        blob: file,
+        device_id: deviceId,
+        filename: file.name,
+        media_type: file.type,
+        space_id: spaceId,
+        target_id: noteId,
+        target_type: "note",
+        workspace_id: workspaceId,
+      });
+      form.reset();
+      setStatus("附件已进入真实上传队列；可在同步中心上传并完成哈希验证。");
+      await refresh(db, vault.current);
+    } catch (error) {
+      setStatus(userMessage(error));
+    }
+  }
+
   const visibleNotes = notes.filter(
     (item) => item.payload.space_id === spaceId,
   );
   const visibleResources = resources.filter(
     (item) => item.payload.space_id === spaceId,
+  );
+  const visibleAttachments = attachments.filter(
+    (item) => item.space_id === spaceId,
+  );
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matchesQuery = (value: string) =>
+    normalizedQuery === "" ||
+    value.toLocaleLowerCase().includes(normalizedQuery);
+  const filteredNotes = visibleNotes.filter(
+    (item) =>
+      (recordKind === "all" || recordKind === "note") &&
+      matchesQuery(`${item.payload.title} ${item.payload.markdown_body}`),
+  );
+  const filteredResources = visibleResources.filter(
+    (item) =>
+      (recordKind === "all" || recordKind === item.payload.resource_type) &&
+      matchesQuery(
+        `${item.payload.title} ${item.payload.source_url ?? ""} ${item.payload.pdf_filename ?? ""}`,
+      ),
+  );
+  const filteredAttachments = visibleAttachments.filter(
+    (item) =>
+      (recordKind === "all" || recordKind === "attachment") &&
+      matchesQuery(item.filename),
   );
   const noteCharacters = visibleNotes.reduce(
     (total, item) => total + item.payload.markdown_body.length,
@@ -467,6 +556,21 @@ export function ContentCenter() {
     0,
   );
   const latestNote = visibleNotes.at(-1);
+  const contentState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData:
+      visibleNotes.length +
+        visibleResources.length +
+        visibleAttachments.length >
+      0,
+    stale:
+      [...visibleNotes, ...visibleResources].some(
+        (item) => item.entity.sync_status !== "clean",
+      ) || visibleAttachments.some((item) => item.state !== "verified"),
+    unlocked,
+  });
   return (
     <main id="main-content" className="settings-page content-page">
       <ProductPageHeader
@@ -494,7 +598,30 @@ export function ContentCenter() {
         }
       />
 
+      <ProductWorkbenchStateNotice
+        action={
+          contentState === "locked" ? (
+            <a className="product-action-link" href="#records-vault">
+              解锁本地资料
+            </a>
+          ) : contentState === "empty" ? (
+            <a className="product-action-link primary" href="#new-note">
+              创建第一篇笔记
+            </a>
+          ) : (
+            <a className="product-action-link" href="#records-vault">
+              选择工作区与 Space
+            </a>
+          )
+        }
+        emptyDescription="当前 Space 尚无笔记、资料索引或附件；可以从一篇 Markdown 笔记开始。"
+        emptyTitle="当前 Space 还是空资料库"
+        onRetry={() => void load()}
+        state={contentState}
+      />
+
       <ProductDisclosure
+        id="records-vault"
         summary="资料库位置与本地解锁"
         description="选择工作区、空间并解锁端侧加密内容"
         defaultOpen={!unlocked}
@@ -545,9 +672,12 @@ export function ContentCenter() {
           <small>{noteCharacters} 个字符</small>
         </article>
         <article>
-          <span>外部资料</span>
-          <strong>{visibleResources.length}</strong>
-          <small>链接与索引</small>
+          <span>资料与附件</span>
+          <strong>{visibleResources.length + visibleAttachments.length}</strong>
+          <small>
+            {visibleResources.length} 份索引 · {visibleAttachments.length}{" "}
+            个附件
+          </small>
         </article>
         <article>
           <span>PDF 索引页</span>
@@ -560,6 +690,35 @@ export function ContentCenter() {
           <small>{unlocked ? "本地资料已解锁" : "等待本地解锁"}</small>
         </article>
       </section>
+
+      <div className="library-toolbar" role="search">
+        <label className="sr-only" htmlFor="records-search">
+          搜索资料、笔记或附件
+        </label>
+        <input
+          id="records-search"
+          className="input"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="搜索标题、正文、来源或文件名…"
+        />
+        <label className="sr-only" htmlFor="records-kind">
+          资料类型
+        </label>
+        <select
+          id="records-kind"
+          value={recordKind}
+          onChange={(event) =>
+            setRecordKind(event.target.value as typeof recordKind)
+          }
+        >
+          <option value="all">全部类型</option>
+          <option value="note">Markdown 笔记</option>
+          <option value="link">外部链接</option>
+          <option value="pdf_index">PDF 索引</option>
+          <option value="attachment">附件</option>
+        </select>
+      </div>
 
       <div className="product-records-workbench">
         <ProductPanel
@@ -574,7 +733,7 @@ export function ContentCenter() {
         >
           <div className="product-records-group">
             <h3>笔记</h3>
-            {visibleNotes
+            {filteredNotes
               .slice(-6)
               .reverse()
               .map((note) => (
@@ -588,13 +747,13 @@ export function ContentCenter() {
                   </span>
                 </div>
               ))}
-            {visibleNotes.length === 0 ? (
-              <p className="product-muted-note">还没有笔记。</p>
+            {filteredNotes.length === 0 ? (
+              <p className="product-muted-note">当前筛选下没有笔记。</p>
             ) : null}
           </div>
           <div className="product-records-group">
             <h3>资料</h3>
-            {visibleResources
+            {filteredResources
               .slice(-6)
               .reverse()
               .map((resource) => (
@@ -615,13 +774,14 @@ export function ContentCenter() {
                   </span>
                 </div>
               ))}
-            {visibleResources.length === 0 ? (
-              <p className="product-muted-note">还没有资料索引。</p>
+            {filteredResources.length === 0 ? (
+              <p className="product-muted-note">当前筛选下没有资料索引。</p>
             ) : null}
           </div>
         </ProductPanel>
 
         <ProductPanel
+          id="new-note"
           className="product-form-panel product-records-editor"
           title="新建 Markdown 笔记"
           description="从一个问题开始，用标题、列表、引用和代码块组织理解。"
@@ -747,6 +907,36 @@ export function ContentCenter() {
         </form>
       </ProductDisclosure>
 
+      <ProductDisclosure
+        summary="添加笔记附件"
+        description="支持 PNG、JPEG 与纯文本；先进入本地队列，再由同步中心上传并校验哈希"
+      >
+        <form className="planning-form" onSubmit={queueAttachment}>
+          <label htmlFor="attachment-note">关联笔记</label>
+          <select id="attachment-note" name="note_id" required>
+            {visibleNotes.map((note) => (
+              <option key={note.entity.entity_id} value={note.entity.entity_id}>
+                {note.payload.title}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="attachment-file">附件</label>
+          <input
+            id="attachment-file"
+            name="attachment"
+            type="file"
+            accept="image/png,image/jpeg,text/plain"
+            required
+          />
+          <button
+            type="submit"
+            disabled={!unlocked || visibleNotes.length === 0}
+          >
+            加入附件队列
+          </button>
+        </form>
+      </ProductDisclosure>
+
       <ProductPanel
         className="sync-wide-card"
         title="笔记工作区"
@@ -754,7 +944,7 @@ export function ContentCenter() {
         aside={<ProductTag tone="info">{visibleNotes.length} 篇</ProductTag>}
       >
         <div className="content-grid">
-          {visibleNotes.map((note) => (
+          {filteredNotes.map((note) => (
             <article
               className="task-card product-note-workbench"
               key={note.entity.entity_id}
@@ -802,11 +992,11 @@ export function ContentCenter() {
               </section>
             </article>
           ))}
-          {visibleNotes.length === 0 ? (
+          {filteredNotes.length === 0 ? (
             <ProductEmptyState
               icon="✎"
-              title="资料库中还没有笔记"
-              description="从上方编辑器创建第一篇，建议从一个正在解决的问题开始。"
+              title="当前筛选下没有笔记"
+              description="调整搜索条件，或从上方编辑器创建第一篇笔记。"
             />
           ) : null}
         </div>
@@ -819,7 +1009,7 @@ export function ContentCenter() {
         aside={<ProductTag>{visibleResources.length} 项</ProductTag>}
       >
         <div className="content-grid">
-          {visibleResources.map((resource) => (
+          {filteredResources.map((resource) => (
             <article className="task-card" key={resource.entity.entity_id}>
               <h3>{resource.payload.title}</h3>
               <p>
@@ -848,14 +1038,43 @@ export function ContentCenter() {
               </button>
             </article>
           ))}
-          {visibleResources.length === 0 ? (
+          {filteredResources.length === 0 ? (
             <ProductEmptyState
               icon="↗"
-              title="尚未登记外部资料"
-              description="保存一条可信链接，或为本地 PDF 建立页码索引。"
+              title="当前筛选下没有外部资料"
+              description="调整搜索条件，或保存一条可信链接与 PDF 页码索引。"
             />
           ) : null}
         </div>
+      </ProductPanel>
+
+      <ProductPanel
+        className="sync-wide-card"
+        title="附件队列"
+        description="附件状态来自本地真实队列；上传、重试与服务器哈希验证统一在同步中心完成。"
+        aside={<ProductTag>{filteredAttachments.length} 项</ProductTag>}
+      >
+        <div className="content-grid">
+          {filteredAttachments.map((attachment) => (
+            <article className="task-card" key={attachment.attachment_id}>
+              <h3>{attachment.filename}</h3>
+              <p>
+                {attachment.media_type} · {attachment.byte_size} bytes
+              </p>
+              <p>状态：{attachment.state}</p>
+              <small>{attachment.sha256}</small>
+            </article>
+          ))}
+          {filteredAttachments.length === 0 ? (
+            <ProductEmptyState
+              description="为已有笔记添加 PNG、JPEG 或纯文本附件后，真实队列会显示在这里。"
+              title="当前筛选下没有附件"
+            />
+          ) : null}
+        </div>
+        <a className="product-action-link" href="/app/sync">
+          前往同步中心处理附件
+        </a>
       </ProductPanel>
     </main>
   );
