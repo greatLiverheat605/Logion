@@ -3,7 +3,12 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ProductSignalGrid, ProductSignalList } from "./product-ui";
+import {
+  ProductBarChart,
+  ProductSignalGrid,
+  ProductSignalList,
+  ProductSparkline,
+} from "./product-ui";
 
 afterEach(cleanup);
 
@@ -51,5 +56,27 @@ describe("product signal primitives", () => {
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(within(list).getByText("0")).toBeTruthy();
     expect(within(list).queryByText("0%")).toBeNull();
+  });
+
+  it("includes real labels and values in accessible chart summaries", () => {
+    render(
+      <>
+        <ProductBarChart
+          label="任务状态分布"
+          items={[
+            { label: "完成", value: 3 },
+            { label: "待办", value: 2 },
+          ]}
+        />
+        <ProductSparkline label="模考成绩趋势" values={[61, 68, 72]} />
+      </>,
+    );
+
+    expect(
+      screen.getByRole("img", { name: "任务状态分布：完成 3；待办 2" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", { name: "模考成绩趋势：61 → 68 → 72" }),
+    ).toBeTruthy();
   });
 });

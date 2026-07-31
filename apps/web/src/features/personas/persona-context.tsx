@@ -92,6 +92,7 @@ export function PersonaProvider({
 
   const setActivePersona = useCallback(
     async (personaId: string) => {
+      if (activePersona?.id === personaId) return;
       const persona = allPersonas.find(
         (candidate) => candidate.id === personaId,
       );
@@ -102,7 +103,7 @@ export function PersonaProvider({
       });
       applySetting(saved);
     },
-    [allPersonas, applySetting, customPersonas, service],
+    [activePersona?.id, allPersonas, applySetting, customPersonas, service],
   );
 
   const createCustomPersona = useCallback(

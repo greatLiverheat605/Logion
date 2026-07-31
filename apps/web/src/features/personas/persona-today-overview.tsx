@@ -1,23 +1,57 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useMemo, useRef, useState } from "react";
 
 import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
 import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 
-import { ExamDashboard } from "./dashboard/exam-dashboard";
-import { MentorDashboard } from "./dashboard/mentor-dashboard";
 import {
   buildPersonaDashboard,
   type PersonaDashboardSource,
 } from "./dashboard/persona-dashboard-model";
 import { PersonaDashboardHeader } from "./dashboard/persona-dashboard-primitives";
-import { ResearchDashboard } from "./dashboard/research-dashboard";
-import { SelfDashboard } from "./dashboard/self-dashboard";
 import { type BuiltinPersonaId } from "./persona-definitions";
 import { usePersona } from "./persona-context";
+
+function DashboardChunkLoading() {
+  return (
+    <section className="persona-dashboard-state" aria-busy="true">
+      <ProductEmptyState
+        description="正在加载当前画像的首页布局。"
+        icon="…"
+        title="正在准备画像首页"
+      />
+    </section>
+  );
+}
+
+const ExamDashboard = dynamic(
+  () =>
+    import("./dashboard/exam-dashboard").then((module) => module.ExamDashboard),
+  { loading: DashboardChunkLoading },
+);
+const MentorDashboard = dynamic(
+  () =>
+    import("./dashboard/mentor-dashboard").then(
+      (module) => module.MentorDashboard,
+    ),
+  { loading: DashboardChunkLoading },
+);
+const ResearchDashboard = dynamic(
+  () =>
+    import("./dashboard/research-dashboard").then(
+      (module) => module.ResearchDashboard,
+    ),
+  { loading: DashboardChunkLoading },
+);
+const SelfDashboard = dynamic(
+  () =>
+    import("./dashboard/self-dashboard").then((module) => module.SelfDashboard),
+  { loading: DashboardChunkLoading },
+);
 
 export type PersonaDashboardViewState =
   | "empty"

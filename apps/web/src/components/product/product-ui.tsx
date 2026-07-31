@@ -223,13 +223,14 @@ export function ProductSparkline({
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
+  const accessibleSummary = `${label}：${safeValues.join(" → ")}`;
 
   return (
     <svg
       className="product-sparkline"
       viewBox="0 0 100 42"
       role="img"
-      aria-label={label}
+      aria-label={accessibleSummary}
     >
       <path d="M0 37H100M0 21H100M0 5H100" className="product-chart-grid" />
       <polyline points={points} className="product-chart-line" />
@@ -246,8 +247,15 @@ export function ProductBarChart({
 }>) {
   let max = 1;
   for (const item of items) max = Math.max(max, item.value);
+  const accessibleSummary = `${label}：${items
+    .map((item) => `${item.label} ${item.value}`)
+    .join("；")}`;
   return (
-    <div className="product-bar-chart" role="img" aria-label={label}>
+    <div
+      className="product-bar-chart"
+      role="img"
+      aria-label={accessibleSummary}
+    >
       {items.map((item) => (
         <div className="product-bar-column" key={item.label}>
           <span>{item.value}</span>

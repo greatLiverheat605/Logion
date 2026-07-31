@@ -26,9 +26,21 @@ const authenticatedRoutes = [
   "/app/profile",
   "/app/help",
 ];
+const responsiveViewports = [
+  { height: 900, label: "desktop", width: 1440 },
+  { height: 900, label: "1250", width: 1250 },
+  { height: 844, label: "900", width: 900 },
+  { height: 844, label: "720", width: 720 },
+  { height: 844, label: "420", width: 420 },
+  { height: 844, label: "390x844", width: 390 },
+  { height: 640, label: "320x640", width: 320 },
+] as const;
 
 async function completeOnboardingIfNeeded(page: Page) {
   if (!page.url().endsWith("/onboarding")) return;
+  await expect(
+    page.getByRole("heading", { name: "选择你的学习场景" }),
+  ).toBeVisible();
   await page.evaluate(async () => {
     const csrf = document.cookie
       .split(";")
@@ -90,6 +102,7 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
   await completeOnboardingIfNeeded(page);
   await expect(page).toHaveURL(/\/app(?:\/today)?$/);
+  await expect(page.locator(".app-shell-frame")).toBeVisible();
 }
 
 test.describe("authenticated shell", () => {
@@ -122,6 +135,29 @@ test.describe("authenticated shell", () => {
     }
   });
 
+  test("all authenticated routes fit every product breakpoint", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    await signIn(page);
+
+    for (const viewport of responsiveViewports) {
+      await page.setViewportSize(viewport);
+      for (const route of authenticatedRoutes) {
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+        await expect(page.locator("h1")).toBeVisible();
+        const dimensions = await page.evaluate(() => ({
+          clientWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        }));
+        expect(
+          dimensions.scrollWidth,
+          `${route} must fit the ${viewport.label} viewport`,
+        ).toBeLessThanOrEqual(dimensions.clientWidth);
+      }
+    }
+  });
+
   test("theme preference persists across document navigation", async ({
     page,
   }) => {
@@ -140,6 +176,41 @@ test.describe("authenticated shell", () => {
     await expect(root).toHaveAttribute("data-theme", nextTheme);
     await page.goto("/app/planning", { waitUntil: "domcontentloaded" });
     await expect(root).toHaveAttribute("data-theme", nextTheme);
+  });
+
+  test("every authenticated route renders with complete light and dark tokens", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await signIn(page);
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((nextTheme) => {
+        localStorage.setItem("app-shell-theme", nextTheme);
+        document.documentElement.dataset.theme = nextTheme;
+      }, theme);
+      for (const route of authenticatedRoutes) {
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await expect(page.locator("h1")).toBeVisible();
+        const tokens = await page.evaluate(() => {
+          const styles = getComputedStyle(document.documentElement);
+          return [
+            "--bg-app",
+            "--bg-sidebar",
+            "--bg-surface",
+            "--text-primary",
+            "--text-secondary",
+            "--border",
+            "--primary",
+          ].map((name) => styles.getPropertyValue(name).trim());
+        });
+        expect(
+          tokens.every((value) => value.length > 0),
+          `${route} must resolve every ${theme} semantic token`,
+        ).toBe(true);
+      }
+    }
   });
 
   test("command palette traps and restores keyboard focus", async ({
@@ -176,6 +247,67 @@ test.describe("authenticated shell", () => {
     }
     await commandDialog.getByRole("button", { name: "关闭" }).click();
     await expect(commandButton).toBeFocused();
+  });
+
+  test("global keyboard shortcuts and Escape restore their trigger focus", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/app/today");
+
+    const commandButton = page.getByRole("button", {
+      name: /搜索、导航或执行命令/,
+    });
+    await commandButton.focus();
+    await page.keyboard.press("Control+K");
+    await expect(
+      page.getByRole("dialog", { name: "搜索、跳转与执行" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "搜索、跳转与执行" }),
+    ).toHaveCount(0);
+    await expect(commandButton).toBeFocused();
+
+    const notificationButton = page.getByRole("button", {
+      name: "打开通知中心",
+    });
+    await notificationButton.click();
+    await expect(
+      page.getByRole("dialog", { name: /通知中心|未读通知/ }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: /通知中心|未读通知/ }),
+    ).toHaveCount(0);
+    await expect(notificationButton).toBeFocused();
+  });
+
+  test("reduced motion removes non-essential motion on every authenticated route", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signIn(page);
+
+    for (const route of authenticatedRoutes) {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      const movingElements = await page
+        .locator(".app-shell-frame *")
+        .evaluateAll(
+          (elements) =>
+            elements.filter((element) => {
+              const style = getComputedStyle(element);
+              return (
+                (style.animationName !== "none" &&
+                  style.animationDuration !== "0s") ||
+                (style.transitionDuration !== "0s" &&
+                  style.transitionProperty !== "none")
+              );
+            }).length,
+        );
+      expect(movingElements, `${route} must honor reduced motion`).toBe(0);
+    }
   });
 
   test("command palette opens the real capture workflow", async ({ page }) => {

@@ -111,6 +111,11 @@ describe("PersonaProvider", () => {
       activePersonaId: "exam",
       customPersonas: [],
     });
+    expect(service.load).toHaveBeenCalledTimes(1);
+    expect(service.save).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "choose exam" }));
+    await waitFor(() => expect(service.save).toHaveBeenCalledTimes(1));
   });
 
   it("creates a custom persona and persists the expanded list", async () => {

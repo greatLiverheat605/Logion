@@ -883,7 +883,7 @@ function OfflineLearningCenter({
               className="planning-form"
               onSubmit={(e) => submitCollaboration(e, "group_review")}
             >
-              <select name="rubric_id" required>
+              <select aria-label="选择审阅 Rubric" name="rubric_id" required>
                 <option value="">选择 Rubric</option>
                 {visible("rubric").map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
@@ -918,7 +918,7 @@ function OfflineLearningCenter({
               className="planning-form"
               onSubmit={(e) => submitCollaboration(e, "group_feedback")}
             >
-              <select name="review_id" required>
+              <select aria-label="选择反馈所属审阅" name="review_id" required>
                 <option value="">选择审阅</option>
                 {visible("group_review").map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
@@ -936,7 +936,7 @@ function OfflineLearningCenter({
               className="planning-form"
               onSubmit={(e) => submitCollaboration(e, "report_snapshot")}
             >
-              <select name="review_id" required>
+              <select aria-label="选择报告所属审阅" name="review_id" required>
                 <option value="">选择审阅</option>
                 {visible("group_review").map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
@@ -1252,7 +1252,7 @@ function OfflineLearningCenter({
               className="planning-form"
               onSubmit={(e) => submitResearch(e, "research_claim")}
             >
-              <select name="paper_id" required>
+              <select aria-label="选择声明来源论文" name="paper_id" required>
                 <option value="">选择论文</option>
                 {visible("paper_record").map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
@@ -1261,7 +1261,7 @@ function OfflineLearningCenter({
                 ))}
               </select>
               <textarea name="statement" placeholder="研究声明" required />
-              <select name="stance">
+              <select aria-label="选择研究声明立场" name="stance">
                 <option value="supports">支持</option>
                 <option value="opposes">反对</option>
                 <option value="mixed">混合</option>
@@ -1288,7 +1288,11 @@ function OfflineLearningCenter({
               className="planning-form"
               onSubmit={(e) => submitResearch(e, "experiment_run")}
             >
-              <select name="question_id" required>
+              <select
+                aria-label="选择实验所属研究问题"
+                name="question_id"
+                required
+              >
                 <option value="">选择问题</option>
                 {visible("research_question").map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
@@ -1538,7 +1542,7 @@ function OfflineLearningCenter({
             className="planning-form"
             onSubmit={(e) => submit(e, "study_project")}
           >
-            <select name="track_id" required>
+            <select aria-label="选择项目所属学习路线" name="track_id" required>
               <option value="">选择路线</option>
               {visible("learning_track").map((x) => (
                 <option key={x.entity.entity_id} value={x.entity.entity_id}>
@@ -1566,7 +1570,7 @@ function OfflineLearningCenter({
           className="planning-form"
           onSubmit={(e) => submit(e, "deliverable")}
         >
-          <select name="project_id" required>
+          <select aria-label="选择成果所属项目" name="project_id" required>
             <option value="">选择项目</option>
             {visible("study_project").map((x) => (
               <option key={x.entity.entity_id} value={x.entity.entity_id}>

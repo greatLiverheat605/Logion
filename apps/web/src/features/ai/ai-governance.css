@@ -94,6 +94,23 @@
   }
 }
 
+@media (max-width: 24rem) {
+  .app-topbar {
+    gap: 0.5rem;
+    padding-inline: 0.5rem;
+  }
+
+  .app-top-left,
+  .app-top-actions {
+    gap: 0.35rem;
+  }
+
+  .app-shell-frame .app-vault-trigger,
+  .app-shell-frame .app-focus-trigger {
+    display: none;
+  }
+}
+
 .app-notification-button {
   position: relative;
 }
@@ -140,4 +157,15 @@
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-frame,
+  .app-shell-frame *,
+  .app-shell-frame *::before,
+  .app-shell-frame *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
 }
