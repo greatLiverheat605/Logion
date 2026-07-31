@@ -23,6 +23,8 @@ import {
   ProductTag,
 } from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
+import { integrationCapabilityService } from "@/features/integrations/integration-capability-service";
+import type { CalendarFeed as Feed } from "@/features/integrations/integration-capability-model";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -36,7 +38,6 @@ type Workspace = components["schemas"]["WorkspaceResponse"];
 type ServerSearchResult = components["schemas"]["SearchResult"];
 type Notification = components["schemas"]["NotificationResponse"];
 type Preference = components["schemas"]["NotificationPreferenceResponse"];
-type Feed = components["schemas"]["CalendarFeedResponse"];
 type DisplayResult = Pick<
   ServerSearchResult,
   "object_id" | "object_type" | "snippet" | "title" | "updated_at"
@@ -91,10 +92,7 @@ export function EngagementCenter() {
 
   const loadWorkspaces = useCallback(async () => {
     try {
-      const result = await browserApiClient.request<{
-        workspaces: Workspace[];
-      }>("/api/v1/workspaces");
-      const next = Array.isArray(result.workspaces) ? result.workspaces : [];
+      const next = await integrationCapabilityService.listWorkspaces();
       setWorkspaces(next);
       setWorkspaceId((current) =>
         next.some((item) => item.id === current)
@@ -116,9 +114,7 @@ export function EngagementCenter() {
           browserApiClient.request<Preference>(
             `/api/v1/workspaces/${selected}/notification-preferences`,
           ),
-          browserApiClient.request<{ feeds: Feed[] }>(
-            `/api/v1/workspaces/${selected}/calendar-feeds`,
-          ),
+          integrationCapabilityService.listCalendarFeeds(selected),
         ]);
       setNotifications(
         Array.isArray(notificationResult.notifications)
@@ -126,7 +122,7 @@ export function EngagementCenter() {
           : [],
       );
       setPreference(preferenceResult);
-      setFeeds(Array.isArray(feedResult.feeds) ? feedResult.feeds : []);
+      setFeeds(feedResult);
       setDataWorkspaceId(selected);
     } catch (error) {
       setNotifications([]);
@@ -270,15 +266,11 @@ export function EngagementCenter() {
     event.preventDefault();
     if (!workspaceId || !online) return;
     try {
-      const result = await browserApiClient.request<{ token: string }>(
-        `/api/v1/workspaces/${workspaceId}/calendar-feeds`,
+      const result = await integrationCapabilityService.createCalendarFeed(
+        workspaceId,
         {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            name: String(new FormData(event.currentTarget).get("name") ?? ""),
-          }),
+          id: crypto.randomUUID(),
+          name: String(new FormData(event.currentTarget).get("name") ?? ""),
         },
       );
       setCalendarToken(result.token);
@@ -293,13 +285,10 @@ export function EngagementCenter() {
   async function revokeFeed(feed: Feed) {
     if (!workspaceId || !online) return;
     try {
-      await browserApiClient.request(
-        `/api/v1/workspaces/${workspaceId}/calendar-feeds/${feed.id}/revoke`,
-        {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({ expected_version: feed.version }),
-        },
+      await integrationCapabilityService.revokeCalendarFeed(
+        workspaceId,
+        feed.id,
+        feed.version,
       );
       await loadData(workspaceId);
       setStatus("日历订阅已撤销，原 URL 立即失效。");
