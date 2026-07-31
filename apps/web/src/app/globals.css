@@ -1239,6 +1239,69 @@ h1 {
 
 .onboarding-preview p {
   margin: 0.25rem 0 0;
+  max-width: 28rem;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.onboarding-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.onboarding-form label,
+.onboarding-inline-form label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.onboarding-form :is(input, select, textarea),
+.onboarding-inline-form :is(input, select) {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--bg-muted);
+  color: var(--text);
+  font: inherit;
+}
+
+.onboarding-form textarea {
+  resize: vertical;
+}
+
+.onboarding-form :is(input, select, textarea):focus-visible,
+.onboarding-inline-form :is(input, select):focus-visible {
+  border-color: var(--primary);
+  outline: 3px solid color-mix(in srgb, var(--primary) 28%, transparent);
+}
+
+.onboarding-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.onboarding-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.onboarding-divider::before,
+.onboarding-divider::after {
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+  content: "";
 }
 
 .onboarding-actions {
@@ -1267,6 +1330,10 @@ h1 {
 
 @media (max-width: 36rem) {
   .onboarding-persona-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-inline-form {
     grid-template-columns: 1fr;
   }
 }

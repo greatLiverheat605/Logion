@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { SessionBoundary } from "@/features/auth/session-boundary";
+import { VaultSessionProvider } from "@/features/offline/vault-session-provider";
 import { PersonaProvider } from "@/features/personas/persona-context";
 
 export default function OnboardingLayout({
@@ -8,7 +9,9 @@ export default function OnboardingLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <SessionBoundary>
-      <PersonaProvider>{children}</PersonaProvider>
+      <PersonaProvider>
+        <VaultSessionProvider>{children}</VaultSessionProvider>
+      </PersonaProvider>
     </SessionBoundary>
   );
 }
