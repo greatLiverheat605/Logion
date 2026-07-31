@@ -1,0 +1,56 @@
+.product-signal {
+  padding: 0.7rem 0.75rem;
+  border-left: 2px solid var(--cyan);
+  background: var(--bg-muted);
+}
+
+.product-signal + .product-signal {
+  margin-top: 0.55rem;
+}
+
+.product-signal.warn {
+  border-color: var(--amber);
+}
+
+.product-signal.bad {
+  border-color: var(--red);
+}
+
+.product-signal strong,
+.product-signal small {
+  display: block;
+}
+
+.product-signal small {
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.product-signal-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.product-signal-grid > div {
+  min-height: 5.3rem;
+  display: grid;
+  align-content: center;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--bg-muted);
+}
+
+.product-signal-grid span {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.product-signal-grid strong {
+  margin-top: 0.25rem;
+  color: var(--cyan);
+  font-family: var(--font-mono, "Cascadia Code", monospace);
+  font-size: 1.35rem;
+}

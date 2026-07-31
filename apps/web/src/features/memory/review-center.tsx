@@ -22,6 +22,7 @@ import {
   ProductPageHeader,
   ProductPanel,
   ProductProgress,
+  ProductSignalGrid,
   ProductTag,
   ProductWorkflowStage,
 } from "@/components/product/product-ui";
@@ -1116,24 +1117,23 @@ export function ReviewCenter() {
           title="复习信号"
           description="根据现有记录聚合，不生成虚构评分"
         >
-          <div className="product-signal-grid">
-            <div>
-              <span>到期安排</span>
-              <strong>{dueReviews}</strong>
-            </div>
-            <div>
-              <span>形成性测验</span>
-              <strong>{visibleQuizItems.length}</strong>
-            </div>
-            <div>
-              <span>开放错因</span>
-              <strong>{openPatterns}</strong>
-            </div>
-            <div>
-              <span>审查记录</span>
-              <strong>{visibleReviews.length}</strong>
-            </div>
-          </div>
+          <ProductSignalGrid
+            label="复习信号指标"
+            items={[
+              { id: "due", label: "到期安排", value: dueReviews },
+              {
+                id: "quizzes",
+                label: "形成性测验",
+                value: visibleQuizItems.length,
+              },
+              { id: "errors", label: "开放错因", value: openPatterns },
+              {
+                id: "reviews",
+                label: "审查记录",
+                value: visibleReviews.length,
+              },
+            ]}
+          />
         </ProductPanel>
       </div>
 

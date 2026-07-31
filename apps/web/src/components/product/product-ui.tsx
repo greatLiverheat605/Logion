@@ -104,6 +104,64 @@ export function ProductMetric({
   );
 }
 
+type ProductSignalItem = Readonly<{
+  description: ReactNode;
+  id: string;
+  title: ReactNode;
+  tone?: "info" | "warn" | "bad";
+}>;
+
+export function ProductSignalList({
+  items,
+  label,
+}: Readonly<{
+  items: readonly ProductSignalItem[];
+  label: string;
+}>) {
+  return (
+    <div aria-label={label} className="product-signal-list" role="list">
+      {items.map((item) => (
+        <div
+          className={joinClassNames(
+            "product-signal",
+            item.tone && item.tone !== "info" ? item.tone : undefined,
+          )}
+          key={item.id}
+          role="listitem"
+        >
+          <strong>{item.title}</strong>
+          <small>{item.description}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ProductSignalMetric = Readonly<{
+  id: string;
+  label: ReactNode;
+  value: ReactNode;
+}>;
+
+export function ProductSignalGrid({
+  items,
+  label,
+}: Readonly<{
+  items: readonly ProductSignalMetric[];
+  label: string;
+}>) {
+  return (
+    <div aria-label={label} className="product-signal-grid" role="list">
+      {items.map((item) => (
+        <div key={item.id} role="listitem">
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ProductTag({
   children,
   tone = "default",
