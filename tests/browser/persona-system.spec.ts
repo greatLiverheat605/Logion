@@ -160,4 +160,33 @@ test.describe("persona system", () => {
       0,
     );
   });
+
+  test("mobile bottom navigation updates immediately with the persona", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ height: 844, width: 390 });
+    await page.goto("/app/settings");
+    const navigation = page.getByRole("navigation", { name: "移动端导航" });
+
+    await page.getByRole("button", { name: /^切换到：考，/ }).click();
+    await expect(navigation.getByRole("link")).toHaveText([
+      "今日",
+      "备考",
+      "复习",
+      "错题",
+    ]);
+    await expect(navigation.locator('a[href="/app/research"]')).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^切换到：导，/ }).click();
+    await expect(navigation.getByRole("link")).toHaveText([
+      "今日",
+      "计划",
+      "空间",
+      "审计",
+    ]);
+    await navigation.getByRole("button", { name: "更多" }).click();
+    const more = page.getByRole("dialog", { name: "更多" });
+    await expect(more.getByRole("link", { name: /模板/ })).toBeVisible();
+    await expect(more.getByRole("link", { name: /设置/ })).toBeVisible();
+  });
 });
