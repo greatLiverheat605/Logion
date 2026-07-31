@@ -5,9 +5,28 @@ import { useMemo, useRef, useState } from "react";
 
 import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
+import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 
+import { ExamDashboard } from "./dashboard/exam-dashboard";
+import { MentorDashboard } from "./dashboard/mentor-dashboard";
+import {
+  buildPersonaDashboard,
+  type PersonaDashboardSource,
+} from "./dashboard/persona-dashboard-model";
+import { PersonaDashboardHeader } from "./dashboard/persona-dashboard-primitives";
+import { ResearchDashboard } from "./dashboard/research-dashboard";
+import { SelfDashboard } from "./dashboard/self-dashboard";
 import { type BuiltinPersonaId } from "./persona-definitions";
 import { usePersona } from "./persona-context";
+
+export type PersonaDashboardViewState =
+  | "empty"
+  | "error"
+  | "loading"
+  | "locked"
+  | "needs-context"
+  | "offline-stale"
+  | "ready";
 
 interface PersonaEntry {
   description: string;
@@ -15,35 +34,6 @@ interface PersonaEntry {
   icon: AppIconName;
   label: string;
 }
-
-interface PersonaHomeCopy {
-  description: string;
-  eyebrow: string;
-  title: string;
-}
-
-const HOME_COPY: Readonly<Record<BuiltinPersonaId, PersonaHomeCopy>> = {
-  exam: {
-    eyebrow: "EXAM COMMAND",
-    title: "围绕考试、复习和学习记录安排今天",
-    description: "优先呈现应试闭环；画像只调整入口，不改变数据和工作区权限。",
-  },
-  self: {
-    eyebrow: "LEARNING PROJECTS",
-    title: "围绕目标、项目和长期积累推进今天",
-    description: "把自主学习、规划和模板放在手边，保持可执行的个人节奏。",
-  },
-  research: {
-    eyebrow: "RESEARCH MISSION CONTROL",
-    title: "围绕材料、证据和研究计划组织今天",
-    description: "集中知识管理与复习入口，不把画像误用为团队权限。",
-  },
-  mentor: {
-    eyebrow: "MENTOR & GROUP COMMAND",
-    title: "围绕空间、审计和协作治理安排今天",
-    description: "突出共享工作入口；实际可执行操作仍由工作区角色授权。",
-  },
-};
 
 const ROUTE_ENTRIES: Readonly<Record<string, PersonaEntry>> = {
   "/app/audit": {
@@ -96,15 +86,6 @@ const ROUTE_ENTRIES: Readonly<Record<string, PersonaEntry>> = {
   },
 };
 
-const BUILTIN_ENTRY_ORDER: Readonly<
-  Record<BuiltinPersonaId, readonly string[]>
-> = {
-  exam: ["/app/exam", "/app/review", "/app/records"],
-  self: ["/app/self-study", "/app/planning", "/app/templates"],
-  research: ["/app/self-study", "/app/records", "/app/review"],
-  mentor: ["/app/spaces", "/app/audit", "/app/planning"],
-};
-
 const SYSTEM_ROUTES = new Set([
   "/app/today",
   "/app/settings",
@@ -112,7 +93,73 @@ const SYSTEM_ROUTES = new Set([
   "/app/help",
 ]);
 
-export function PersonaTodayOverview() {
+function DashboardState({
+  onRetry,
+  state,
+}: {
+  onRetry: () => void;
+  state: Exclude<
+    PersonaDashboardViewState,
+    "empty" | "offline-stale" | "ready"
+  >;
+}) {
+  const content = {
+    error: {
+      description: "工作区或本地资料读取失败；网络错误不会伪装成空数据。",
+      icon: "!",
+      title: "画像首页暂时无法读取",
+    },
+    loading: {
+      description: "正在读取工作区、成员与本机加密数据。",
+      icon: "…",
+      title: "正在汇总真实首页数据",
+    },
+    locked: {
+      description:
+        "画像指标依赖端侧加密实体，解锁前不会显示猜测值或全零仪表盘。",
+      icon: "◇",
+      title: "先解锁本地资料",
+    },
+    "needs-context": {
+      description: "请先选择工作区与 Space；导师聚合只会读取共享 Space。",
+      icon: "+",
+      title: "还缺少首页上下文",
+    },
+  }[state];
+  const action =
+    state === "error" ? (
+      <button type="button" onClick={onRetry}>
+        重新读取
+      </button>
+    ) : state === "loading" ? undefined : (
+      <a className="product-action-link" href="#today-vault">
+        {state === "locked" ? "解锁本地资料" : "选择工作区与 Space"}
+      </a>
+    );
+  return (
+    <section
+      aria-busy={state === "loading"}
+      className="persona-dashboard-state"
+    >
+      <ProductEmptyState
+        action={action}
+        description={content.description}
+        icon={content.icon}
+        title={content.title}
+      />
+    </section>
+  );
+}
+
+export function PersonaTodayOverview({
+  onRetry,
+  source,
+  state,
+}: {
+  onRetry: () => void;
+  source: PersonaDashboardSource;
+  state: PersonaDashboardViewState;
+}) {
   const { activePersona, allPersonas, isLoading, setActivePersona } =
     usePersona();
   const switchButtonRef = useRef<HTMLButtonElement>(null);
@@ -120,35 +167,14 @@ export function PersonaTodayOverview() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
-  const entries = useMemo(() => {
-    if (!activePersona) return [];
-    const preferred = activePersona.isBuiltin
-      ? BUILTIN_ENTRY_ORDER[activePersona.id as BuiltinPersonaId]
-      : activePersona.routes.filter((route) => !SYSTEM_ROUTES.has(route));
-    return preferred
+  const customEntries = useMemo(() => {
+    if (!activePersona || activePersona.isBuiltin) return [];
+    return activePersona.routes
+      .filter((route) => !SYSTEM_ROUTES.has(route))
       .map((route) => ROUTE_ENTRIES[route])
       .filter((entry): entry is PersonaEntry => entry !== undefined)
       .slice(0, 3);
   }, [activePersona]);
-
-  if (isLoading || !activePersona) {
-    return (
-      <section aria-busy="true" className="persona-today-overview">
-        <p className="product-muted-note" role="status">
-          正在同步你的画像入口……
-        </p>
-      </section>
-    );
-  }
-
-  const copy = activePersona.isBuiltin
-    ? HOME_COPY[activePersona.id as BuiltinPersonaId]
-    : {
-        eyebrow: "CUSTOM PERSONA",
-        title: `按“${activePersona.name}”画像组织今天`,
-        description:
-          activePersona.description || "使用你选择的功能入口组织今天的工作。",
-      };
 
   async function choose(personaId: string) {
     setPendingId(personaId);
@@ -163,65 +189,130 @@ export function PersonaTodayOverview() {
     }
   }
 
-  return (
-    <>
-      <section
-        aria-labelledby="persona-today-title"
-        className="persona-today-overview"
-      >
-        <header className="persona-today-head">
-          <span aria-hidden="true" className="persona-today-mark">
-            {activePersona.icon}
-          </span>
-          <div className="persona-today-copy">
-            <p className="product-eyebrow">{copy.eyebrow}</p>
-            <h2 id="persona-today-title">{copy.title}</h2>
-            <p>{copy.description}</p>
-          </div>
-          <div className="persona-today-actions">
-            <span className="product-tag tone-info">
-              当前画像 · {activePersona.name}
-            </span>
-            <button
-              className="secondary-button"
-              ref={switchButtonRef}
-              type="button"
-              onClick={() => setDialogOpen(true)}
+  const controls = (
+    <button
+      className="secondary-button"
+      ref={switchButtonRef}
+      type="button"
+      onClick={() => setDialogOpen(true)}
+    >
+      切换画像
+    </button>
+  );
+
+  let dashboard;
+  if (isLoading || !activePersona) {
+    dashboard = (
+      <section className="persona-dashboard">
+        <DashboardState onRetry={onRetry} state="loading" />
+      </section>
+    );
+  } else if (!["empty", "offline-stale", "ready"].includes(state)) {
+    const lockedModel = activePersona.isBuiltin
+      ? buildPersonaDashboard(activePersona.id as BuiltinPersonaId, source)
+      : null;
+    dashboard = (
+      <section className="persona-dashboard">
+        {lockedModel ? (
+          <PersonaDashboardHeader
+            controls={controls}
+            model={lockedModel}
+            personaName={activePersona.name}
+            stale={false}
+          />
+        ) : (
+          <header className="persona-dashboard-header">
+            <div>
+              <p className="product-eyebrow">CUSTOM PERSONA</p>
+              <h2>按“{activePersona.name}”组织今天</h2>
+              <p>{activePersona.description}</p>
+            </div>
+            <div className="persona-dashboard-controls">
+              <ProductTag tone="info">
+                当前画像 · {activePersona.name}
+              </ProductTag>
+              {controls}
+            </div>
+          </header>
+        )}
+        <DashboardState
+          onRetry={onRetry}
+          state={
+            state as Exclude<
+              PersonaDashboardViewState,
+              "empty" | "offline-stale" | "ready"
             >
-              切换画像
-            </button>
+          }
+        />
+      </section>
+    );
+  } else if (!activePersona.isBuiltin) {
+    dashboard = (
+      <section
+        aria-label="自定义画像首页"
+        className="persona-dashboard persona-dashboard-custom"
+      >
+        <header className="persona-dashboard-header">
+          <div>
+            <p className="product-eyebrow">CUSTOM PERSONA</p>
+            <h2>按“{activePersona.name}”组织今天</h2>
+            <p>
+              {activePersona.description ||
+                "使用你选择的真实功能入口组织今天的工作。"}
+            </p>
+          </div>
+          <div className="persona-dashboard-controls">
+            <ProductTag tone={state === "offline-stale" ? "warn" : "info"}>
+              {state === "offline-stale"
+                ? "本机数据待同步"
+                : `当前画像 · ${activePersona.name}`}
+            </ProductTag>
+            {controls}
           </div>
         </header>
-
-        {entries.length ? (
-          <nav
-            aria-label={`${activePersona.name}画像推荐入口`}
-            className="persona-today-entry-grid"
-          >
-            {entries.map((entry) => (
-              <Link
-                className="persona-today-entry"
-                href={entry.href}
-                key={entry.href}
-              >
-                <span aria-hidden="true" className="persona-today-entry-icon">
-                  <AppIcon name={entry.icon} size={18} />
-                </span>
-                <span>
-                  <strong>{entry.label}</strong>
-                  <small>{entry.description}</small>
-                </span>
-              </Link>
-            ))}
-          </nav>
-        ) : (
-          <p className="product-muted-note">
-            此画像仅保留基础入口；可前往设置添加更多功能。
-          </p>
-        )}
+        <nav
+          aria-label={`${activePersona.name}画像推荐入口`}
+          className="persona-dashboard-navigation"
+        >
+          {customEntries.map((entry) => (
+            <Link href={entry.href} key={entry.href}>
+              <span aria-hidden="true">
+                <AppIcon name={entry.icon} size={18} />
+              </span>
+              <span>
+                <strong>{entry.label}</strong>
+                <small>{entry.description}</small>
+              </span>
+            </Link>
+          ))}
+        </nav>
       </section>
+    );
+  } else {
+    const personaId = activePersona.id as BuiltinPersonaId;
+    const model = buildPersonaDashboard(personaId, source);
+    const props = {
+      controls,
+      model,
+      personaName: activePersona.name,
+      stale: state === "offline-stale",
+    };
+    dashboard =
+      personaId === "exam" ? (
+        <ExamDashboard {...props} />
+      ) : personaId === "research" ? (
+        <ResearchDashboard {...props} />
+      ) : personaId === "mentor" ? (
+        <MentorDashboard {...props} />
+      ) : (
+        <SelfDashboard {...props} />
+      );
+  }
 
-      {dialogOpen ? (
+  return (
+    <>
+      {dashboard}
+      {dialogOpen && activePersona ? (
         <AppModal
           eyebrow="PERSONA SWITCHER"
           returnFocusRef={switchButtonRef}
@@ -229,7 +320,7 @@ export function PersonaTodayOverview() {
           onClose={() => setDialogOpen(false)}
         >
           <p className="persona-switcher-help">
-            画像只调整导航与首页入口，不改变任何工作区权限。
+            画像只调整导航与首页结构，不改变任何工作区权限。
           </p>
           <div className="persona-switcher-list">
             {allPersonas.map((persona) => {

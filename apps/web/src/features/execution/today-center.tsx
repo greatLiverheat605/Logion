@@ -31,12 +31,43 @@ import {
 } from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
-import { PersonaTodayOverview } from "@/features/personas/persona-today-overview";
+import {
+  type PersonaDashboardRecord,
+  type PersonaDashboardSource,
+} from "@/features/personas/dashboard/persona-dashboard-model";
+import {
+  PersonaTodayOverview,
+  type PersonaDashboardViewState,
+} from "@/features/personas/persona-today-overview";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
+type Member = components["schemas"]["WorkspaceMemberResponse"];
+
+const DASHBOARD_ENTITY_TYPES = [
+  "exam",
+  "exam_subject",
+  "syllabus_node",
+  "mock_exam",
+  "score_record",
+  "review_schedule",
+  "mastery",
+  "learning_goal",
+  "learning_track",
+  "study_project",
+  "deliverable",
+  "research_question",
+  "paper_record",
+  "research_claim",
+  "experiment_run",
+  "research_feedback",
+  "rubric",
+  "group_review",
+  "group_feedback",
+  "review_finding",
+] as const;
 
 type TaskStatus =
   | "backlog"
@@ -159,11 +190,19 @@ export function TodayCenter() {
   } = useVaultSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [membersAvailable, setMembersAvailable] = useState(false);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备今日工作台……");
+  const [contextPhase, setContextPhase] = useState<
+    "error" | "loading" | "ready"
+  >("loading");
+  const [dashboardPhase, setDashboardPhase] = useState<
+    "error" | "idle" | "loading" | "ready"
+  >("idle");
   const [tasks, setTasks] = useState<LocalView<TaskPayload>[]>([]);
   const [sessions, setSessions] = useState<LocalView<SessionPayload>[]>([]);
   const [goals, setGoals] = useState<LocalView<GoalPayload>[]>([]);
@@ -176,8 +215,12 @@ export function TodayCenter() {
     LocalView<ContentReferencePayload>[]
   >([]);
   const [conflictCount, setConflictCount] = useState(0);
+  const [dashboardRecords, setDashboardRecords] = useState<
+    PersonaDashboardRecord[]
+  >([]);
 
   const loadContext = useCallback(async () => {
+    setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
@@ -194,26 +237,46 @@ export function TodayCenter() {
       );
       setDeviceId(currentDevice?.id ?? "");
       setStatus(currentDevice ? "请解锁本地资料。" : "未找到当前设备。");
+      setContextPhase("ready");
     } catch (error) {
       setStatus(errorMessage(error));
+      setContextPhase("error");
     }
   }, []);
 
   const loadSpaces = useCallback(async (selectedWorkspace: string) => {
     try {
-      const result = await browserApiClient.request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${selectedWorkspace}/spaces`,
-      );
-      setSpaces(result.spaces);
+      const [spaceResult, memberResult] = await Promise.all([
+        browserApiClient.request<{ spaces: Space[] }>(
+          `/api/v1/workspaces/${selectedWorkspace}/spaces`,
+        ),
+        browserApiClient
+          .request<{
+            members: Member[];
+          }>(`/api/v1/workspaces/${selectedWorkspace}/members`)
+          .catch((error: unknown) => {
+            if (error instanceof LogionApiError && error.status === 403) {
+              return null;
+            }
+            throw error;
+          }),
+      ]);
+      setSpaces(spaceResult.spaces);
+      setMembers(memberResult?.members ?? []);
+      setMembersAvailable(memberResult !== null);
       setSpaceId((current) =>
-        result.spaces.some((item) => item.id === current)
+        spaceResult.spaces.some((item) => item.id === current)
           ? current
-          : (result.spaces[0]?.id ?? ""),
+          : (spaceResult.spaces[0]?.id ?? ""),
       );
+      setContextPhase("ready");
     } catch (error) {
       setSpaces([]);
+      setMembers([]);
+      setMembersAvailable(false);
       setSpaceId("");
       setStatus(errorMessage(error));
+      setContextPhase("error");
     }
   }, []);
 
@@ -288,6 +351,7 @@ export function TodayCenter() {
     localVault = vault.current,
   ): Promise<void> {
     if (db === null || localVault === null || !workspaceId) return;
+    setDashboardPhase("loading");
     const [
       taskRows,
       sessionRows,
@@ -297,6 +361,7 @@ export function TodayCenter() {
       noteRows,
       resourceRows,
       openConflicts,
+      dashboardRowsByType,
     ] = await Promise.all([
       db.entities
         .where("[workspace_id+entity_type]")
@@ -330,6 +395,14 @@ export function TodayCenter() {
         .where("[workspace_id+status]")
         .equals([workspaceId, "open"])
         .count(),
+      Promise.all(
+        DASHBOARD_ENTITY_TYPES.map((entityType) =>
+          db.entities
+            .where("[workspace_id+entity_type]")
+            .equals([workspaceId, entityType])
+            .toArray(),
+        ),
+      ),
     ]);
     const [
       nextTasks,
@@ -339,6 +412,7 @@ export function TodayCenter() {
       nextVerifications,
       nextNotes,
       nextResources,
+      nextDashboardViews,
     ] = await Promise.all([
       Promise.all(
         taskRows.map((item) => decrypted<TaskPayload>(localVault, item)),
@@ -369,6 +443,11 @@ export function TodayCenter() {
           decrypted<ContentReferencePayload>(localVault, item),
         ),
       ),
+      Promise.all(
+        dashboardRowsByType
+          .flat()
+          .map((item) => decrypted<JsonObject>(localVault, item)),
+      ),
     ]);
     setTasks(nextTasks);
     setSessions(nextSessions);
@@ -378,6 +457,25 @@ export function TodayCenter() {
     setNotes(nextNotes);
     setResources(nextResources);
     setConflictCount(openConflicts);
+    setDashboardRecords(
+      nextDashboardViews.flatMap(({ entity, payload }) => {
+        const dashboardSpaceId = payload.space_id;
+        return typeof dashboardSpaceId === "string"
+          ? [
+              {
+                createdAt: entity.created_at,
+                entityType: entity.entity_type,
+                id: entity.entity_id,
+                payload,
+                spaceId: dashboardSpaceId,
+                syncStatus: entity.sync_status,
+                updatedAt: entity.updated_at,
+              },
+            ]
+          : [];
+      }),
+    );
+    setDashboardPhase("ready");
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -396,6 +494,7 @@ export function TodayCenter() {
       event.currentTarget.reset();
     } catch (error) {
       setStatus(errorMessage(error));
+      setDashboardPhase("error");
     }
   }
 
@@ -409,7 +508,10 @@ export function TodayCenter() {
           .then(() =>
             setStatus("本地资料已在应用内解锁；完成会话不会自动验收任务。"),
           )
-          .catch((error: unknown) => setStatus(errorMessage(error))),
+          .catch((error: unknown) => {
+            setDashboardPhase("error");
+            setStatus(errorMessage(error));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -821,6 +923,57 @@ export function TodayCenter() {
   const nextTask =
     actionableTasks.find((item) => item.payload.status === "in_progress") ??
     actionableTasks[0];
+  const dashboardSource: PersonaDashboardSource = {
+    members: members.map((member) => ({
+      id: member.id,
+      status: member.status,
+    })),
+    membersAvailable,
+    now: new Date(),
+    records: dashboardRecords,
+    selectedSpaceId: spaceId,
+    sessions: sessions.map((item) => ({
+      manualMinutes: item.payload.manual_minutes,
+      spaceId: item.payload.space_id,
+      startedAt: item.payload.started_at,
+      status: item.payload.status,
+    })),
+    spaces: spaces.map((space) => ({
+      id: space.id,
+      visibility: space.visibility,
+    })),
+    tasks: tasks.map((item) => ({
+      dueAt: item.payload.due_at,
+      estimatedMinutes: item.payload.estimated_minutes,
+      plannedAt: item.payload.planned_at,
+      spaceId: item.payload.space_id,
+      status: item.payload.status,
+      title: item.payload.title,
+    })),
+  };
+  const hasPendingDashboardData =
+    conflictCount > 0 ||
+    dashboardRecords.some((record) => record.syncStatus !== "clean") ||
+    [...tasks, ...sessions].some((item) => item.entity.sync_status !== "clean");
+  const dashboardState: PersonaDashboardViewState =
+    contextPhase === "error"
+      ? "error"
+      : contextPhase === "loading"
+        ? "loading"
+        : !workspaceId || !spaceId
+          ? "needs-context"
+          : !unlocked
+            ? "locked"
+            : dashboardPhase === "error"
+              ? "error"
+              : dashboardPhase !== "ready"
+                ? "loading"
+                : hasPendingDashboardData
+                  ? "offline-stale"
+                  : dashboardRecords.length + tasks.length + sessions.length ===
+                      0
+                    ? "empty"
+                    : "ready";
 
   return (
     <main id="main-content" className="settings-page today-page">
@@ -855,7 +1008,11 @@ export function TodayCenter() {
         }
       />
 
-      <PersonaTodayOverview />
+      <PersonaTodayOverview
+        onRetry={() => void loadContext()}
+        source={dashboardSource}
+        state={dashboardState}
+      />
 
       {conflictCount > 0 ? (
         <p className="residual-data-warning" role="alert">
@@ -949,7 +1106,11 @@ export function TodayCenter() {
             <ProductMetric
               label="完成任务"
               value={`${completedTasks} / ${visibleTasks.length}`}
-              detail={`${Math.round(completionRate)}% 完成率`}
+              detail={
+                visibleTasks.length
+                  ? `${Math.round(completionRate)}% 完成率`
+                  : "尚无任务，暂不计算比例"
+              }
               tone="good"
             />
             <ProductMetric
@@ -1232,11 +1393,17 @@ export function TodayCenter() {
       <div className="product-dashboard-grid product-dashboard-grid-wide">
         <ProductPanel title="任务节奏" description="当前空间的任务状态分布">
           <ProductBarChart items={taskStatusChart} label="任务状态分布" />
-          <ProductProgress
-            label="整体完成率"
-            value={completionRate}
-            tone="good"
-          />
+          {visibleTasks.length ? (
+            <ProductProgress
+              label="整体完成率"
+              value={completionRate}
+              tone="good"
+            />
+          ) : (
+            <p className="product-muted-note">
+              创建第一项任务后再计算整体完成率。
+            </p>
+          )}
         </ProductPanel>
         <ProductPanel
           title="学习活跃度"
