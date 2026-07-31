@@ -5,6 +5,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import type { components } from "@logion/contracts";
 
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { userSettingService } from "@/features/settings/user-setting-service";
 
 import { AuthFormShell, FormError } from "./auth-form-shell";
 import { createPublicAuthApi, type LoginOutcome } from "./public-auth-api";
@@ -14,10 +15,14 @@ type PasskeyOptions =
   components["schemas"]["PasskeyAuthenticationOptionsResponse"];
 type AuthResponse = components["schemas"]["AuthResponse"];
 
-function nextRoute(response: AuthResponse): string {
-  return response.user.status === "pending_deletion"
-    ? "/account/deletion"
-    : "/app";
+async function nextRoute(response: AuthResponse): Promise<string> {
+  if (response.user.status === "pending_deletion") return "/account/deletion";
+  try {
+    const completed = await userSettingService.get("onboarding_completed");
+    return completed?.value === "true" ? "/app/today" : "/onboarding";
+  } catch {
+    return "/app/today";
+  }
 }
 
 function decodeBase64url(value: string): ArrayBuffer {
@@ -64,7 +69,7 @@ export function LoginForm() {
       if (outcome.kind === "mfa_required") {
         setChallenge(outcome.challenge);
       } else {
-        window.location.assign(nextRoute(outcome.response));
+        window.location.assign(await nextRoute(outcome.response));
       }
     } catch (error) {
       setRequestId(
@@ -91,7 +96,7 @@ export function LoginForm() {
       });
       form.reset();
       setChallenge(null);
-      window.location.assign(nextRoute(response));
+      window.location.assign(await nextRoute(response));
     } catch (error) {
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",
@@ -154,7 +159,7 @@ export function LoginForm() {
           }),
         },
       );
-      window.location.assign(nextRoute(authenticated));
+      window.location.assign(await nextRoute(authenticated));
     } catch (error) {
       setRequestId(
         error instanceof LogionApiError ? error.requestId : "unavailable",

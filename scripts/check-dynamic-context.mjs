@@ -27,7 +27,7 @@ const isExampleDomain = (domain) =>
     (allowed) => domain === allowed || domain.endsWith(`.${allowed}`),
   );
 const userPathPattern =
-  /(?:[A-Z]:\\Users\\[^\\]+\\|\/Users\/[^/]+\/|\/home\/[^/]+\/)/iu;
+  /(?:[A-Z]:\\Users\\[^\\]+\\|(?<![A-Z0-9])\/Users\/[^/]+\/|(?<![A-Z0-9])\/home\/[^/]+\/)/iu;
 const violations = [];
 
 async function walk(directory) {

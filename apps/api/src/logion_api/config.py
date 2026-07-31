@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     membership_change_limit_per_hour: int = Field(default=60, ge=1, le=1000)
     ownership_transfer_limit_per_hour: int = Field(default=10, ge=1, le=100)
     membership_leave_limit_per_hour: int = Field(default=10, ge=1, le=100)
+    user_setting_write_limit_per_hour: int = Field(default=120, ge=1, le=2000)
     audit_query_limit_per_minute: int = Field(default=60, ge=1, le=600)
     sync_push_limit_per_minute: int = Field(default=120, ge=1, le=1000)
     sync_max_operation_bytes: int = Field(default=262144, ge=1024, le=1048576)

@@ -29,6 +29,7 @@ import {
 } from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { PersonaTodayOverview } from "@/features/personas/persona-today-overview";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -851,6 +852,8 @@ export function TodayCenter() {
           </>
         }
       />
+
+      <PersonaTodayOverview />
 
       {conflictCount > 0 ? (
         <p className="residual-data-warning" role="alert">
