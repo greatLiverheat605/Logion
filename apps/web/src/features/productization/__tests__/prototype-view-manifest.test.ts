@@ -22,6 +22,24 @@ function pageFile(route: string): string {
 }
 
 describe("prototype productization manifest", () => {
+  it("keeps integrations outside the frozen twelve-route persona contract", () => {
+    expect(ALL_ROUTES).toEqual([
+      "/app/today",
+      "/app/self-study",
+      "/app/records",
+      "/app/review",
+      "/app/exam",
+      "/app/planning",
+      "/app/templates",
+      "/app/audit",
+      "/app/spaces",
+      "/app/settings",
+      "/app/profile",
+      "/app/help",
+    ]);
+    expect(ALL_ROUTES).not.toContain("/app/integrations");
+  });
+
   it("accounts for all sixteen reference-prototype views", () => {
     expect(PROTOTYPE_VIEW_IDS).toEqual([
       "command",
