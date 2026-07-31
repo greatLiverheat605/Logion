@@ -152,10 +152,21 @@ test.describe("authenticated shell", () => {
       name: /搜索、导航或执行命令/,
     });
     await commandButton.click();
-    const commandDialog = page.getByRole("dialog", { name: "搜索与跳转" });
+    const commandDialog = page.getByRole("dialog", {
+      name: "搜索、跳转与执行",
+    });
     await expect(
-      commandDialog.getByRole("textbox", { name: "搜索页面" }),
+      commandDialog.getByRole("textbox", { name: "搜索页面或命令" }),
     ).toBeFocused();
+    await expect(
+      commandDialog.getByRole("heading", { name: "学习", exact: true }),
+    ).toBeVisible();
+    await expect(
+      commandDialog.getByRole("heading", { name: "系统", exact: true }),
+    ).toBeVisible();
+    await expect(
+      commandDialog.getByRole("heading", { name: "创建", exact: true }),
+    ).toBeVisible();
     for (let step = 0; step < 20; step += 1) {
       await page.keyboard.press("Tab");
       const focusRemainsInDialog = await page.evaluate(
@@ -165,6 +176,22 @@ test.describe("authenticated shell", () => {
     }
     await commandDialog.getByRole("button", { name: "关闭" }).click();
     await expect(commandButton).toBeFocused();
+  });
+
+  test("command palette opens the real capture workflow", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/app/today");
+
+    await page.getByRole("button", { name: /搜索、导航或执行命令/ }).click();
+    const commandDialog = page.getByRole("dialog", {
+      name: "搜索、跳转与执行",
+    });
+    await commandDialog.getByRole("button", { name: /快速捕获/ }).click();
+
+    const captureDialog = page.getByRole("dialog", { name: "快速捕获" });
+    await expect(
+      captureDialog.getByText("先解锁本地资料", { exact: true }),
+    ).toBeVisible();
   });
 
   test("operational tools expose real Vault gates and restore focus", async ({

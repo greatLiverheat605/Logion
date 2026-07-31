@@ -4,8 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
+import { AppIcon } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
+import {
+  COMMAND_GROUPS,
+  COMMAND_ITEMS,
+  commandItemMatches,
+  DEFAULT_NAV_ITEM,
+  isCommandItemVisible,
+  NAV_GROUPS,
+  NAV_ITEMS,
+} from "@/components/app-shell/app-navigation";
+import { requestOperationalCommand } from "@/components/app-shell/app-operational-events";
 import { AppOperationalTools } from "@/components/app-shell/app-operational-tools";
 import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { LogoutButton } from "@/features/auth/logout-button";
@@ -15,50 +25,6 @@ import { mobileNavigationForPersona } from "@/features/personas/mobile-persona-n
 import { usePersona } from "@/features/personas/persona-context";
 
 type Overlay = "command" | "mobile-more" | "notifications";
-type NavItem = Readonly<{ href: string; icon: AppIconName; label: string }>;
-
-const NAV_GROUPS: readonly Readonly<{
-  label: string;
-  items: readonly NavItem[];
-}>[] = [
-  {
-    label: "每日",
-    items: [{ href: "/app/today", icon: "home", label: "每日工作台" }],
-  },
-  {
-    label: "知识",
-    items: [
-      { href: "/app/self-study", icon: "book-open", label: "自学" },
-      { href: "/app/records", icon: "files", label: "记录" },
-      { href: "/app/review", icon: "refresh", label: "复习" },
-      { href: "/app/exam", icon: "target", label: "考试" },
-    ],
-  },
-  {
-    label: "治理",
-    items: [
-      { href: "/app/planning", icon: "calendar", label: "规划" },
-      { href: "/app/templates", icon: "layout-template", label: "模板" },
-      { href: "/app/audit", icon: "clipboard", label: "审计" },
-      { href: "/app/spaces", icon: "folder", label: "空间" },
-    ],
-  },
-  {
-    label: "系统",
-    items: [
-      { href: "/app/settings", icon: "shield", label: "设置" },
-      { href: "/app/profile", icon: "users", label: "个人" },
-      { href: "/app/help", icon: "book-open", label: "帮助" },
-    ],
-  },
-];
-
-const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
-const DEFAULT_NAV_ITEM: NavItem = {
-  href: "/app/today",
-  icon: "home",
-  label: "今日",
-};
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
@@ -83,10 +49,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       })).filter((group) => group.items.length > 0),
     [isRouteVisible],
   );
-  const visibleNavItems = useMemo(
-    () => visibleNavGroups.flatMap((group) => group.items),
-    [visibleNavGroups],
-  );
   const mobileNavigation = useMemo(
     () =>
       activePersona === null
@@ -96,15 +58,22 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   );
   const current =
     NAV_ITEMS.find((item) => item.href === pathname) ?? DEFAULT_NAV_ITEM;
-  const needle = query.trim().toLocaleLowerCase("zh-CN");
-  const results = needle
-    ? visibleNavItems.filter((item) =>
-        item.label.toLocaleLowerCase("zh-CN").includes(needle),
-      )
-    : visibleNavItems;
+  const commandResults = COMMAND_ITEMS.filter(
+    (item) =>
+      isCommandItemVisible(item, activePersona, isRouteVisible) &&
+      commandItemMatches(item, query),
+  );
+  const groupedCommandResults = COMMAND_GROUPS.map((group) => ({
+    group,
+    items: commandResults.filter((item) => item.group === group),
+  })).filter(({ items }) => items.length > 0);
   const closeTransientUi = () => {
     setMenuOpen(false);
     setOverlay(null);
+  };
+  const executeOperationalCommand = (command: "capture" | "focus") => {
+    setOverlay(null);
+    requestOperationalCommand(command);
   };
   const accountLabel =
     session.status === "authenticated"
@@ -315,37 +284,63 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <AppModal
           eyebrow="COMMAND PALETTE"
           returnFocusRef={commandButtonRef}
-          title="搜索与跳转"
+          title="搜索、跳转与执行"
           onClose={() => setOverlay(null)}
         >
           <label className="sr-only" htmlFor="app-command-input">
-            搜索页面
+            搜索页面或命令
           </label>
           <input
             className="app-command-input"
             data-modal-autofocus
             id="app-command-input"
-            placeholder="例如：复习、研究、同步…"
+            placeholder="例如：复习、研究、同步或捕获…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <div className="app-command-results">
-            {results.map((item) => (
-              <Link
-                className="app-command-result"
-                href={item.href}
-                key={item.href}
-                onClick={closeTransientUi}
-              >
-                <span aria-hidden="true">
-                  <AppIcon name={item.icon} size={17} />
-                </span>
-                <strong>{item.label}</strong>
-                <span>打开</span>
-              </Link>
+            {groupedCommandResults.map(({ group, items }) => (
+              <section className="app-command-group" key={group}>
+                <h3>{group}</h3>
+                {items.map((item) =>
+                  item.kind === "route" ? (
+                    <Link
+                      className="app-command-result"
+                      href={item.href}
+                      key={item.id}
+                      onClick={closeTransientUi}
+                    >
+                      <span aria-hidden="true">
+                        <AppIcon name={item.icon} size={17} />
+                      </span>
+                      <span className="app-command-result-copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.description}</small>
+                      </span>
+                      <span>打开</span>
+                    </Link>
+                  ) : (
+                    <button
+                      className="app-command-result"
+                      key={item.id}
+                      type="button"
+                      onClick={() => executeOperationalCommand(item.action)}
+                    >
+                      <span aria-hidden="true">
+                        <AppIcon name={item.icon} size={17} />
+                      </span>
+                      <span className="app-command-result-copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.description}</small>
+                      </span>
+                      <span>执行</span>
+                    </button>
+                  ),
+                )}
+              </section>
             ))}
-            {results.length === 0 ? (
-              <p className="app-empty-note">没有匹配页面。</p>
+            {commandResults.length === 0 ? (
+              <p className="app-empty-note">没有匹配页面或命令。</p>
             ) : null}
           </div>
         </AppModal>
