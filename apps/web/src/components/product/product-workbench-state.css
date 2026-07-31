@@ -1,0 +1,29 @@
+.product-workbench-state,
+.product-workbench-stale {
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.product-workbench-state .product-empty-state {
+  min-height: 10rem;
+}
+
+.product-workbench-stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.product-workbench-stale strong,
+.product-workbench-stale small {
+  display: block;
+}
+
+.product-workbench-stale small {
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+}

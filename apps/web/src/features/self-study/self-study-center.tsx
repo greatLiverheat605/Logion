@@ -26,10 +26,16 @@ import {
   ProductTag,
   ProductTaskRow,
 } from "@/components/product/product-ui";
+import {
+  deriveProductWorkbenchState,
+  ProductWorkbenchStateNotice,
+} from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+
+import { buildSelfStudySummary } from "./self-study-workbench-model";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -129,7 +135,14 @@ function OfflineLearningCenter({
     group_feedback: [],
     report_snapshot: [],
   });
+  const [contextPhase, setContextPhase] = useState<
+    "error" | "loading" | "ready"
+  >("loading");
+  const [dataPhase, setDataPhase] = useState<
+    "error" | "idle" | "loading" | "ready"
+  >("idle");
   const loadContext = useCallback(async () => {
+    setContextPhase("loading");
     try {
       const [w, d] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
@@ -149,12 +162,15 @@ function OfflineLearningCenter({
             ? "请解锁本地研究资料。"
             : "请解锁本地自主学习资料。",
       );
+      setContextPhase("ready");
     } catch (error) {
       setStatus(errorMessage(error));
+      setContextPhase("error");
     }
   }, [mode]);
   const loadSpaces = useCallback(
     async (id: string) => {
+      setContextPhase("loading");
       try {
         const r = await browserApiClient.request<{ spaces: Space[] }>(
           `/api/v1/workspaces/${id}/spaces`,
@@ -169,8 +185,12 @@ function OfflineLearningCenter({
             ? current
             : (eligible[0]?.id ?? ""),
         );
+        setContextPhase("ready");
       } catch (error) {
+        setSpaces([]);
+        setSpaceId("");
         setStatus(errorMessage(error));
+        setContextPhase("error");
       }
     },
     [mode],
@@ -233,6 +253,7 @@ function OfflineLearningCenter({
   }
   async function refresh(db = database.current, localVault = vault.current) {
     if (!db || !localVault || !workspaceId) return;
+    setDataPhase("loading");
     const activeDb = db,
       activeVault = localVault;
     const kinds: Kind[] = [
@@ -272,6 +293,7 @@ function OfflineLearningCenter({
       }),
     );
     setRecords(Object.fromEntries(entries) as Record<Kind, View[]>);
+    setDataPhase("ready");
   }
   async function unlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -306,7 +328,10 @@ function OfflineLearningCenter({
                   : "自主学习资料已在应用内解锁。",
             ),
           )
-          .catch((error: unknown) => setStatus(errorMessage(error))),
+          .catch((error: unknown) => {
+            setDataPhase("error");
+            setStatus(errorMessage(error));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -573,6 +598,33 @@ function OfflineLearningCenter({
     selectedRole === "admin" ||
     selectedRole === "editor";
   const canReviewShared = canPlanShared || selectedRole === "reviewer";
+  const selfStudyRecords = [
+    ...visible("learning_track"),
+    ...visible("study_project"),
+    ...visible("inbox_item"),
+    ...visible("deliverable"),
+  ];
+  const selfStudySummary = buildSelfStudySummary({
+    tracks: visible("learning_track").map((item) => ({
+      id: item.entity.entity_id,
+    })),
+    projects: visible("study_project").map((item) => ({
+      id: item.entity.entity_id,
+      parentId: String(item.payload.track_id ?? "") || null,
+    })),
+    deliverables: visible("deliverable").map((item) => ({
+      id: item.entity.entity_id,
+      parentId: String(item.payload.project_id ?? "") || null,
+    })),
+  });
+  const selfStudyState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData: selfStudyRecords.length > 0,
+    stale: selfStudyRecords.some((item) => item.entity.sync_status !== "clean"),
+    unlocked,
+  });
   const contextControls = (
     <ProductDisclosure
       summary={
@@ -1201,6 +1253,30 @@ function OfflineLearningCenter({
           </>
         }
       />
+      <ProductWorkbenchStateNotice
+        action={
+          selfStudyState === "locked" ? (
+            <a className="product-action-link" href="#self-study-context">
+              解锁本地资料
+            </a>
+          ) : selfStudyState === "empty" ? (
+            <a
+              className="product-action-link primary"
+              href="#self-study-create"
+            >
+              创建第一条路线
+            </a>
+          ) : (
+            <a className="product-action-link" href="#self-study-context">
+              选择工作区与 Space
+            </a>
+          )
+        }
+        emptyDescription="当前 Space 尚无收件箱、路线、项目或成果；先创建路线，再建立可交付项目。"
+        emptyTitle="当前 Space 还没有自主学习记录"
+        onRetry={() => void loadContext()}
+        state={selfStudyState}
+      />
       <ProductHero
         badge={<ProductTag tone="info">学习项目工作台</ProductTag>}
         title={
@@ -1208,14 +1284,10 @@ function OfflineLearningCenter({
             ? String(visible("study_project").at(-1)?.payload.title)
             : "建立一条围绕成果的学习路线"
         }
-        progressLabel="项目成果覆盖"
-        progressValue={
-          visible("study_project").length
-            ? (visible("deliverable").length /
-                visible("study_project").length) *
-              100
-            : 0
+        progressLabel={
+          selfStudySummary.projectCoverage === null ? undefined : "项目成果覆盖"
         }
+        progressValue={selfStudySummary.projectCoverage ?? undefined}
       >
         快速收集想法，把它们组织为路线与项目，最终用真实成果证明学习已经发生。
       </ProductHero>
@@ -1228,23 +1300,27 @@ function OfflineLearningCenter({
         />
         <ProductMetric
           label="学习路线"
-          value={visible("learning_track").length}
+          value={selfStudySummary.trackCount}
           detail="长期主题"
           tone="info"
         />
         <ProductMetric
           label="进行项目"
-          value={visible("study_project").length}
-          detail="成果驱动"
+          value={selfStudySummary.projectCount}
+          detail={
+            selfStudySummary.orphanProjectCount
+              ? `${selfStudySummary.orphanProjectCount} 个项目缺少有效路线`
+              : "成果驱动"
+          }
         />
         <ProductMetric
           label="成果证据"
-          value={visible("deliverable").length}
+          value={selfStudySummary.deliverableCount}
           detail="已完成记录"
           tone="good"
         />
       </div>
-      {contextControls}
+      <div id="self-study-context">{contextControls}</div>
 
       <div className="product-dashboard-grid product-dashboard-grid-wide">
         <ProductPanel
@@ -1299,6 +1375,7 @@ function OfflineLearningCenter({
       </div>
 
       <ProductDisclosure
+        id="self-study-create"
         summary="创建学习路线与项目"
         description="路线定义长期方向，项目定义可交付成果"
       >
