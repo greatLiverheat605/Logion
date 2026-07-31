@@ -44,6 +44,12 @@ function Consumer() {
       </button>
       <button
         type="button"
+        onClick={() => void persona.setActivePersona("self")}
+      >
+        choose self
+      </button>
+      <button
+        type="button"
         onClick={() =>
           void persona.createCustomPersona({
             id: customPersona.id,
@@ -115,6 +121,24 @@ describe("PersonaProvider", () => {
     expect(service.save).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "choose exam" }));
+    await waitFor(() => expect(service.save).toHaveBeenCalledTimes(1));
+  });
+
+  it("persists the default persona when no setting exists yet", async () => {
+    const service = renderProvider(null);
+    await waitFor(() =>
+      expect(screen.getByTestId("active").textContent).toBe("self"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "choose self" }));
+
+    await waitFor(() => expect(service.save).toHaveBeenCalledTimes(1));
+    expect(service.save).toHaveBeenCalledWith({
+      activePersonaId: "self",
+      customPersonas: [],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "choose self" }));
     await waitFor(() => expect(service.save).toHaveBeenCalledTimes(1));
   });
 
