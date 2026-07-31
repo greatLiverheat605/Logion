@@ -30,6 +30,8 @@ from logion_api.identity.schemas import (
     UserResponse,
 )
 from logion_api.identity.service import normalize_email
+from logion_api.users.dependencies import UserSettingServiceDependency
+from logion_api.users.schemas import UserSettingWrite
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(prefix="/api/v1/auth", tags=["identity"])
@@ -92,6 +94,7 @@ async def register(
     db: DatabaseSession,
     service: IdentityServiceDependency,
     workspaces: WorkspaceServiceDependency,
+    user_settings: UserSettingServiceDependency,
     limiter: RateLimiterDependency,
     settings: SettingsDependency,
 ) -> AuthResponse:
@@ -121,6 +124,17 @@ async def register(
             db,
             issued.user.id,
             request_id=request_id(request),
+        )
+        await user_settings.update(
+            db,
+            issued.user.id,
+            [
+                UserSettingWrite(
+                    key="onboarding_completed",
+                    value="false",
+                    version=0,
+                )
+            ],
         )
     try:
         await db.commit()

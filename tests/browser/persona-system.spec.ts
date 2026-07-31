@@ -45,6 +45,39 @@ async function signIn(page: Page) {
   });
 }
 
+test("a newly registered account is forced into onboarding on first login", async ({
+  browserName,
+  isMobile,
+  page,
+}) => {
+  test.skip(
+    browserName !== "chromium" || isMobile,
+    "Runs once against the registration service.",
+  );
+  await page.goto("/auth/login");
+  const email = `persona-onboarding-${crypto.randomUUID()}@example.com`;
+  const password = "a-strong-password-123";
+  const registered = await page.request.post("/api/v1/auth/register", {
+    data: {
+      device_name: "Persona onboarding guard",
+      email,
+      password,
+    },
+    headers: { Origin: new URL(page.url()).origin },
+  });
+  expect(registered.status(), await registered.text()).toBe(201);
+
+  await page.context().clearCookies();
+  await page.goto("/auth/login");
+  await page.getByLabel("邮箱").fill(email);
+  await page.getByLabel("密码").fill(password);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/app/today");
+  await expect(page).toHaveURL(/\/onboarding$/);
+});
+
 test.describe("persona system", () => {
   test.describe.configure({ mode: "serial" });
   test.skip(
