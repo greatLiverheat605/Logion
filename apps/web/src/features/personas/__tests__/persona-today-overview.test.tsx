@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PersonaProvider } from "../persona-context";
+import type { PersonaSetting } from "../persona-setting-service";
 import { PersonaTodayOverview } from "../persona-today-overview";
 
 afterEach(cleanup);
@@ -21,7 +22,9 @@ describe("PersonaTodayOverview", () => {
         activePersonaId: "exam",
         customPersonas: [],
       }),
-      save: vi.fn().mockResolvedValue(undefined),
+      save: vi
+        .fn<(setting: PersonaSetting) => Promise<PersonaSetting>>()
+        .mockImplementation((setting) => Promise.resolve(setting)),
     };
     render(
       <PersonaProvider service={service}>

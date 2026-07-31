@@ -6,7 +6,11 @@ import {
   type PersonaDefinition,
   type PersonaId,
 } from "./persona-definitions";
-import { browserApiClient, type ApiClient } from "@/lib/api/client";
+import {
+  browserApiClient,
+  type ApiClient,
+  LogionApiError,
+} from "@/lib/api/client";
 
 type UserSettingListResponse = components["schemas"]["UserSettingListResponse"];
 
@@ -70,6 +74,7 @@ export function parsePersonaSetting(value: string): PersonaSetting {
 }
 
 export class PersonaSettingService {
+  private current: PersonaSetting | null = null;
   private version = 0;
 
   constructor(private readonly api: ApiClient = browserApiClient) {}
@@ -81,15 +86,55 @@ export class PersonaSettingService {
     );
     const setting = response.settings.find((item) => item.key === KEY);
     if (!setting) {
+      this.current = null;
       this.version = 0;
       return null;
     }
     const parsed = parsePersonaSetting(setting.value);
+    this.current = parsed;
     this.version = setting.version;
     return parsed;
   }
 
-  async save(setting: PersonaSetting): Promise<void> {
+  async save(setting: PersonaSetting): Promise<PersonaSetting> {
+    const base = this.current;
+    try {
+      await this.write(setting);
+      this.current = setting;
+      return setting;
+    } catch (error) {
+      if (!(error instanceof LogionApiError) || error.status !== 409) {
+        throw error;
+      }
+    }
+
+    const latest = await this.load();
+    const desiredIds = new Set(
+      setting.customPersonas.map((persona) => persona.id),
+    );
+    const locallyDeletedIds = new Set(
+      (base?.customPersonas ?? [])
+        .filter((persona) => !desiredIds.has(persona.id))
+        .map((persona) => persona.id),
+    );
+    const mergedById = new Map(
+      (latest?.customPersonas ?? [])
+        .filter((persona) => !locallyDeletedIds.has(persona.id))
+        .map((persona) => [persona.id, persona]),
+    );
+    for (const persona of setting.customPersonas) {
+      mergedById.set(persona.id, persona);
+    }
+    const merged: PersonaSetting = {
+      activePersonaId: setting.activePersonaId,
+      customPersonas: [...mergedById.values()],
+    };
+    await this.write(merged);
+    this.current = merged;
+    return merged;
+  }
+
+  private async write(setting: PersonaSetting): Promise<void> {
     const value = JSON.stringify(setting);
     parsePersonaSetting(value);
     if (value.length > MAX_VALUE_LENGTH) {
