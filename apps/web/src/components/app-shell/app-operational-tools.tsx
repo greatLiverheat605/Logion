@@ -740,7 +740,7 @@ export function AppOperationalTools() {
       </button>
       <button
         aria-label="打开专注计时"
-        className="app-icon-button"
+        className="app-icon-button app-focus-trigger"
         ref={focusButtonRef}
         type="button"
         onClick={() => openOverlay("focus")}

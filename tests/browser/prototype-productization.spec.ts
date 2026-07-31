@@ -3,6 +3,14 @@ import { expect, test, type Page } from "@playwright/test";
 const email = process.env.LOGION_E2E_EMAIL;
 const password = process.env.LOGION_E2E_PASSWORD;
 
+async function openAiDraftForm(page: Page) {
+  await page
+    .locator("details")
+    .filter({ hasText: "创建结构化草稿" })
+    .locator("summary")
+    .click();
+}
+
 async function signIn(page: Page) {
   await page.goto("/auth/login");
   await page.getByLabel("邮箱").fill(email ?? "");
@@ -10,6 +18,9 @@ async function signIn(page: Page) {
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
   if (page.url().endsWith("/onboarding")) {
+    await expect(
+      page.getByRole("heading", { name: "选择你的学习场景" }),
+    ).toBeVisible();
     await page.evaluate(async () => {
       const csrf = document.cookie
         .split(";")
@@ -64,6 +75,7 @@ async function signIn(page: Page) {
     });
     await page.goto("/app/today");
   }
+  await expect(page.locator(".app-shell-frame")).toBeVisible();
 }
 
 test.describe("prototype productization", () => {
@@ -139,6 +151,7 @@ test.describe("prototype productization", () => {
     ).toBeVisible();
 
     await page.goto("/app/ai");
+    await openAiDraftForm(page);
     await expect(
       page.getByLabel("我已明确选择并核对上述发送来源与内容范围"),
     ).toBeVisible();
@@ -154,6 +167,7 @@ test.describe("prototype productization", () => {
     await expect(
       aiNavigation.getByRole("link", { name: "运行与草稿" }),
     ).toBeVisible();
+    await openAiDraftForm(page);
     await expect(
       page.getByRole("button", { name: "预检发送范围与预算" }),
     ).toBeVisible();
