@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { usePersona } from "@/features/personas/persona-context";
 
 type Overlay = "command" | "notifications";
 type NavItem = Readonly<{ href: string; icon: AppIconName; label: string }>;
@@ -20,34 +21,33 @@ const NAV_GROUPS: readonly Readonly<{
   items: readonly NavItem[];
 }>[] = [
   {
-    label: "学习与执行",
+    label: "每日",
+    items: [{ href: "/app/today", icon: "home", label: "每日工作台" }],
+  },
+  {
+    label: "知识",
     items: [
-      { href: "/app/today", icon: "home", label: "今日" },
-      { href: "/app/planning", icon: "calendar", label: "计划" },
-      { href: "/app/review", icon: "refresh", label: "复习与掌握" },
-      { href: "/app/exam", icon: "target", label: "备考" },
+      { href: "/app/self-study", icon: "book-open", label: "自学" },
+      { href: "/app/records", icon: "files", label: "记录" },
+      { href: "/app/review", icon: "refresh", label: "复习" },
+      { href: "/app/exam", icon: "target", label: "考试" },
     ],
   },
   {
-    label: "知识与研究",
+    label: "治理",
     items: [
-      { href: "/app/records", icon: "files", label: "资料与笔记" },
-      { href: "/app/self-study", icon: "book-open", label: "自主学习" },
-      { href: "/app/research", icon: "flask", label: "研究证据" },
-      { href: "/app/collaboration", icon: "users", label: "导师与小组" },
+      { href: "/app/planning", icon: "calendar", label: "规划" },
+      { href: "/app/templates", icon: "layout-template", label: "模板" },
+      { href: "/app/audit", icon: "clipboard", label: "审计" },
+      { href: "/app/spaces", icon: "folder", label: "空间" },
     ],
   },
   {
-    label: "系统与治理",
+    label: "系统",
     items: [
-      { href: "/app/ai", icon: "ai", label: "AI Provider" },
-      { href: "/app/templates", icon: "layout-template", label: "模板与分享" },
-      { href: "/app/search", icon: "search", label: "搜索通知日历" },
-      { href: "/app/sync", icon: "refresh", label: "同步与设备" },
-      { href: "/app/workspaces", icon: "folder", label: "工作区" },
-      { href: "/app/data", icon: "download", label: "数据主权" },
-      { href: "/app/security", icon: "shield", label: "账户安全" },
-      { href: "/app/audit", icon: "clipboard", label: "安全审计" },
+      { href: "/app/settings", icon: "shield", label: "设置" },
+      { href: "/app/profile", icon: "users", label: "个人" },
+      { href: "/app/help", icon: "book-open", label: "帮助" },
     ],
   },
 ];
@@ -69,20 +69,37 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { state: session } = useSession();
   const { phase: vaultPhase } = useVaultSession();
+  const {
+    activePersona,
+    isLoading: personaLoading,
+    isRouteVisible,
+  } = usePersona();
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(true);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [query, setQuery] = useState("");
   const commandButtonRef = useRef<HTMLButtonElement>(null);
 
+  const visibleNavGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => isRouteVisible(item.href)),
+      })).filter((group) => group.items.length > 0),
+    [isRouteVisible],
+  );
+  const visibleNavItems = useMemo(
+    () => visibleNavGroups.flatMap((group) => group.items),
+    [visibleNavGroups],
+  );
   const current =
     NAV_ITEMS.find((item) => item.href === pathname) ?? DEFAULT_NAV_ITEM;
   const needle = query.trim().toLocaleLowerCase("zh-CN");
   const results = needle
-    ? NAV_ITEMS.filter((item) =>
+    ? visibleNavItems.filter((item) =>
         item.label.toLocaleLowerCase("zh-CN").includes(needle),
       )
-    : NAV_ITEMS;
+    : visibleNavItems;
   const closeTransientUi = () => {
     setMenuOpen(false);
     setOverlay(null);
@@ -146,7 +163,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           <span className="workspace-privacy">私有优先 · 点击选择或管理</span>
         </Link>
         <nav className="app-nav-scroll">
-          {NAV_GROUPS.map((group) => (
+          {visibleNavGroups.map((group) => (
             <section className="app-nav-group" key={group.label}>
               <h2 className="app-nav-label">{group.label}</h2>
               {group.items.map((item) => {
@@ -170,6 +187,26 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           ))}
         </nav>
         <div className="app-sidebar-foot">
+          <Link
+            aria-label={
+              activePersona
+                ? `当前画像：${activePersona.name}，前往画像设置`
+                : "画像加载中"
+            }
+            className="persona-indicator"
+            href="/app/settings"
+            onClick={closeTransientUi}
+          >
+            <span aria-hidden="true" className="persona-indicator-icon">
+              {activePersona?.icon ?? "…"}
+            </span>
+            <span>
+              <strong>{activePersona?.name ?? "画像加载中"}</strong>
+              <small>
+                {personaLoading ? "正在同步偏好" : activePersona?.description}
+              </small>
+            </span>
+          </Link>
           <span className="tag good">PRIVATE BY DEFAULT</span>
           <div className="app-account-summary">
             <span aria-hidden="true" className="app-account-avatar">
@@ -246,20 +283,22 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       </div>
 
       <nav aria-label="移动端导航" className="bottom-nav">
-        {NAV_ITEMS.filter((item) => MOBILE_HREFS.has(item.href)).map((item) => (
-          <Link
-            aria-current={pathname === item.href ? "page" : undefined}
-            className={pathname === item.href ? "active" : ""}
-            href={item.href}
-            key={item.href}
-            onClick={closeTransientUi}
-          >
-            <b aria-hidden="true">
-              <AppIcon name={item.icon} size={18} />
-            </b>
-            <span>{item.label}</span>
-          </Link>
-        ))}
+        {visibleNavItems
+          .filter((item) => MOBILE_HREFS.has(item.href))
+          .map((item) => (
+            <Link
+              aria-current={pathname === item.href ? "page" : undefined}
+              className={pathname === item.href ? "active" : ""}
+              href={item.href}
+              key={item.href}
+              onClick={closeTransientUi}
+            >
+              <b aria-hidden="true">
+                <AppIcon name={item.icon} size={18} />
+              </b>
+              <span>{item.label}</span>
+            </Link>
+          ))}
         <button type="button" onClick={() => setMenuOpen(true)}>
           <b aria-hidden="true">
             <AppIcon name="more" size={18} />

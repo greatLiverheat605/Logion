@@ -43,6 +43,7 @@ from logion_api.portability.routes import router as portability_router
 from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
 from logion_api.sync.routes import router as sync_router
+from logion_api.users.routes import router as user_settings_router
 from logion_api.workspaces.invitation_routes import (
     invitation_router,
     workspace_invitation_router,
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
     application.include_router(workspace_invitation_router)
     application.include_router(workspace_router)
     application.include_router(sync_router)
+    application.include_router(user_settings_router)
     application.include_router(planning_router)
     application.include_router(execution_router)
     application.include_router(content_router)

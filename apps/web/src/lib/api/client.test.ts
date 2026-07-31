@@ -45,6 +45,21 @@ describe("API client security boundary", () => {
     );
   });
 
+  it("encodes caller query values without allowing a query-bearing path", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({ settings: [] }));
+    const client = createApiClient({ fetchImplementation });
+
+    await client.request("/api/v1/users/me/settings", {
+      query: { key: "persona & theme" },
+    });
+
+    expect(fetchImplementation.mock.calls[0]?.[0]).toBe(
+      "/api/v1/users/me/settings?key=persona+%26+theme",
+    );
+  });
+
   it("copies only the CSRF cookie into the protected request header", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

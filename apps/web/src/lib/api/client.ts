@@ -42,6 +42,7 @@ export interface ApiRequestOptions extends Omit<
 > {
   csrf?: boolean;
   headers?: HeadersInit;
+  query?: Readonly<Record<string, string>>;
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -195,6 +196,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       );
       const {
         csrf: _csrf,
+        query,
         timeoutMs: _timeoutMs,
         ...fetchOptions
       } = requestOptions;
@@ -202,14 +204,18 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       void _timeoutMs;
       let response: Response;
       try {
-        response = await fetchImplementation(path, {
-          ...fetchOptions,
-          cache: "no-store",
-          credentials: "same-origin",
-          headers,
-          redirect: "error",
-          signal,
-        });
+        const search = query ? new URLSearchParams(query).toString() : "";
+        response = await fetchImplementation(
+          search ? `${path}?${search}` : path,
+          {
+            ...fetchOptions,
+            cache: "no-store",
+            credentials: "same-origin",
+            headers,
+            redirect: "error",
+            signal,
+          },
+        );
       } catch (error) {
         if (error instanceof LogionApiError) throw error;
         throw new LogionApiError({

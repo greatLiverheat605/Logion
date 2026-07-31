@@ -21,7 +21,61 @@ const authenticatedRoutes = [
   "/app/sync",
   "/app/data",
   "/app/ai",
+  "/app/spaces",
+  "/app/settings",
+  "/app/profile",
+  "/app/help",
 ];
+
+async function completeOnboardingIfNeeded(page: Page) {
+  if (!page.url().endsWith("/onboarding")) return;
+  await page.evaluate(async () => {
+    const csrf = document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("logion_csrf="))
+      ?.slice("logion_csrf=".length);
+    if (!csrf) throw new Error("Missing CSRF cookie");
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const current = (await fetch("/api/v1/users/me/settings", {
+        credentials: "same-origin",
+      }).then((response) => response.json())) as {
+        settings: Array<{ key: string; value: string; version: number }>;
+      };
+      const byKey = new Map(
+        current.settings.map((setting) => [setting.key, setting]),
+      );
+      const updates = [];
+      if (!byKey.has("persona")) {
+        updates.push({
+          key: "persona",
+          value: '{"activePersonaId":"self","customPersonas":[]}',
+          version: 0,
+        });
+      }
+      const onboarding = byKey.get("onboarding_completed");
+      if (onboarding?.value !== "true") {
+        updates.push({
+          key: "onboarding_completed",
+          value: "true",
+          version: onboarding?.version ?? 0,
+        });
+      }
+      if (updates.length === 0) return;
+      const saved = await fetch("/api/v1/users/me/settings", {
+        body: JSON.stringify({ settings: updates }),
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        method: "PUT",
+      });
+      if (saved.ok) return;
+      if (saved.status !== 409)
+        throw new Error(`Setting seed failed: ${saved.status}`);
+    }
+    throw new Error("Setting seed did not converge");
+  });
+  await page.goto("/app/today");
+}
 
 async function signIn(page: Page) {
   await page.goto("/auth/login");
@@ -33,6 +87,8 @@ async function signIn(page: Page) {
   await page.getByLabel("邮箱").fill(email ?? "");
   await page.getByLabel("密码").fill(password ?? "");
   await submitButton.click();
+  await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
+  await completeOnboardingIfNeeded(page);
   await expect(page).toHaveURL(/\/app(?:\/today)?$/);
 }
 

@@ -75,7 +75,7 @@ free -h 和 df -h / 输出：
 source commit: dd1382b12cfedabc5f57c99817268b46285053b2
 Main run:      30196665349
 app version:   0.1.0
-Alembic head:  0034_sync_conflicts
+Alembic head:  0035_add_user_settings
 offline schema: 4
 sync protocol: sync-v1
 ```
@@ -1041,7 +1041,7 @@ logion-compose run --rm --no-deps api \
 预期包含：
 
 ```text
-0034_sync_conflicts
+0035_add_user_settings
 ```
 
 迁移失败时不要重复执行、不要删除卷，提供迁移错误和：
@@ -1492,7 +1492,7 @@ logion-compose config --images
 - [ ] 没有服务器本地构建；
 - [ ] 8080 只监听 `127.0.0.1`；
 - [ ] PostgreSQL、Redis、API、Worker、Web、Nginx healthy；
-- [ ] Alembic head 为 `0034_sync_conflicts`；
+- [ ] Alembic head 为 `0035_add_user_settings`；
 - [ ] API ready 包含 application/database/redis；
 - [ ] 旧注册接口已关闭；
 - [ ] 无 OOMKilled；
