@@ -1,0 +1,40 @@
+.product-experiment-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.product-experiment-comparison > section {
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.product-experiment-comparison h3,
+.product-experiment-comparison ul {
+  margin: 0;
+}
+
+.product-experiment-comparison ul {
+  padding: 0;
+  list-style: none;
+}
+
+.product-experiment-comparison li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.product-experiment-comparison li:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .product-experiment-comparison {
+    grid-template-columns: 1fr;
+  }
+}

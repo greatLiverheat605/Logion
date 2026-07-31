@@ -3,6 +3,8 @@
 @import "../features/personas/dashboard/persona-dashboard.css";
 @import "../features/memory/knowledge-graph-view.css";
 @import "../features/content/content-workbench.css";
+@import "../features/self-study/research-experiment-comparison.css";
+@import "../features/execution/evidence-trace.css";
 
 :root,
 :root[data-theme="light"] {

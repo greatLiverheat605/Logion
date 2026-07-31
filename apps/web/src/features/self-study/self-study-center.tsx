@@ -35,6 +35,12 @@ import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
+import { eligibleCollaborationSpaces } from "./collaboration-workbench-model";
+import { ResearchExperimentComparison } from "./research-experiment-comparison";
+import {
+  buildMetricComparison,
+  researchQuestionCoverage,
+} from "./research-workbench-model";
 import { buildSelfStudySummary } from "./self-study-workbench-model";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -79,6 +85,18 @@ function errorMessage(error: unknown) {
   return error instanceof LogionApiError
     ? `操作未完成（请求编号：${error.requestId}）。`
     : "网络暂不可用；内容仍保存在本机 Outbox。";
+}
+
+function safeResearchUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value === "") return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.href
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function SelfStudyCenter() {
@@ -178,7 +196,7 @@ function OfflineLearningCenter({
         setSpaces(r.spaces);
         const eligible =
           mode === "collaboration"
-            ? r.spaces.filter((space) => space.visibility === "shared")
+            ? eligibleCollaborationSpaces(r.spaces)
             : r.spaces;
         setSpaceId((current) =>
           eligible.some((space) => space.id === current)
@@ -457,7 +475,7 @@ function OfflineLearningCenter({
         await commit(kind, {
           title: String(data.get("title")),
           citation_key: String(data.get("citation_key")),
-          source_url: null,
+          source_url: String(data.get("source_url") ?? "") || null,
         });
       if (kind === "research_question")
         await commit(kind, {
@@ -526,6 +544,10 @@ function OfflineLearningCenter({
     kind: Kind,
   ) {
     event.preventDefault();
+    if (spaces.find((space) => space.id === spaceId)?.visibility !== "shared") {
+      setStatus("协作审阅只能写入当前账号有权访问的共享 Space。");
+      return;
+    }
     const form = event.currentTarget,
       data = new FormData(form);
     try {
@@ -592,12 +614,71 @@ function OfflineLearningCenter({
     filteredResearchPapers.find(
       (paper) => paper.entity.entity_id === selectedPaperId,
     ) ?? filteredResearchPapers[0];
+  const researchQuestions = visible("research_question");
+  const researchRuns = visible("experiment_run");
+  const researchMetrics = visible("metric_record");
+  const researchCoverage = researchQuestionCoverage(
+    researchQuestions.map((item) => item.entity.entity_id),
+    researchRuns.map((item) => ({
+      id: item.entity.entity_id,
+      parentId: String(item.payload.question_id ?? "") || null,
+    })),
+  );
+  const metricComparison = buildMetricComparison(
+    researchRuns.map((item) => ({
+      id: item.entity.entity_id,
+      title: String(item.payload.title),
+    })),
+    researchMetrics.map((item) => ({
+      id: item.entity.entity_id,
+      name: String(item.payload.name),
+      runId: String(item.payload.run_id),
+      unit: String(item.payload.unit ?? ""),
+      value: Number(item.payload.value),
+    })),
+  );
   const selectedRole = workspaces.find((x) => x.id === workspaceId)?.role;
   const canPlanShared =
     selectedRole === "owner" ||
     selectedRole === "admin" ||
     selectedRole === "editor";
   const canReviewShared = canPlanShared || selectedRole === "reviewer";
+  const collaborationRecords = [
+    ...visible("rubric"),
+    ...visible("group_review"),
+    ...visible("group_feedback"),
+    ...visible("report_snapshot"),
+  ];
+  const collaborationState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(
+      workspaceId &&
+      spaceId &&
+      spaces.find((space) => space.id === spaceId)?.visibility === "shared",
+    ),
+    hasData: collaborationRecords.length > 0,
+    stale: collaborationRecords.some(
+      (item) => item.entity.sync_status !== "clean",
+    ),
+    unlocked,
+  });
+  const researchRecords = [
+    ...researchPapers,
+    ...visible("research_claim"),
+    ...researchQuestions,
+    ...researchRuns,
+    ...researchMetrics,
+    ...visible("research_feedback"),
+  ];
+  const researchState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData: researchRecords.length > 0,
+    stale: researchRecords.some((item) => item.entity.sync_status !== "clean"),
+    unlocked,
+  });
   const selfStudyRecords = [
     ...visible("learning_track"),
     ...visible("study_project"),
@@ -716,6 +797,23 @@ function OfflineLearningCenter({
             </>
           }
         />
+        <ProductWorkbenchStateNotice
+          action={
+            collaborationState === "locked" ? (
+              <a className="product-action-link" href="#collaboration-context">
+                解锁本地资料
+              </a>
+            ) : (
+              <a className="product-action-link" href="#collaboration-context">
+                选择共享 Space
+              </a>
+            )
+          }
+          emptyDescription="共享 Space 已就绪；创建 Rubric 后才能发起可追溯审阅。"
+          emptyTitle="当前共享 Space 还没有审阅"
+          onRetry={() => void loadContext()}
+          state={collaborationState}
+        />
         <ProductHero
           badge={<ProductTag tone="info">最多 10 人协作</ProductTag>}
           title={
@@ -759,7 +857,7 @@ function OfflineLearningCenter({
             detail="不可变结果"
           />
         </div>
-        {contextControls}
+        <div id="collaboration-context">{contextControls}</div>
 
         <ProductDisclosure
           summary="配置 Rubric 并发起审阅"
@@ -900,7 +998,24 @@ function OfflineLearningCenter({
             </>
           }
         />
-        {contextControls}
+        <ProductWorkbenchStateNotice
+          action={
+            researchState === "locked" ? (
+              <a className="product-action-link" href="#research-context">
+                解锁本地资料
+              </a>
+            ) : (
+              <a className="product-action-link" href="#research-context">
+                选择研究 Space
+              </a>
+            )
+          }
+          emptyDescription="当前 Space 尚无论文、声明、问题或运行；先登记可信来源。"
+          emptyTitle="当前 Space 还没有研究记录"
+          onRetry={() => void loadContext()}
+          state={researchState}
+        />
+        <div id="research-context">{contextControls}</div>
 
         <section className="product-research-summary" aria-label="研究证据概览">
           <article>
@@ -1015,6 +1130,26 @@ function OfflineLearningCenter({
                       : "尚未创建研究问题"}
                   </strong>
                 </section>
+                <section className="product-reader-question">
+                  <span>正文来源</span>
+                  {safeResearchUrl(selectedPaper.payload.source_url) ? (
+                    <a
+                      href={
+                        safeResearchUrl(selectedPaper.payload.source_url) ??
+                        undefined
+                      }
+                      rel="noreferrer noopener"
+                      target="_blank"
+                    >
+                      打开论文外部来源
+                    </a>
+                  ) : (
+                    <strong>尚未登记来源地址</strong>
+                  )}
+                  <small>
+                    当前契约只保存来源索引；正文不复制进本地，结构化声明作为可追溯标注回流。
+                  </small>
+                </section>
                 <div className="product-reader-claims">
                   <h3>关联声明</h3>
                   {visible("research_claim")
@@ -1055,17 +1190,17 @@ function OfflineLearningCenter({
             title="证据进度"
             description="检查研究链路是否从来源走到验证。"
           >
-            <ProductProgress
-              label="实验覆盖率"
-              value={
-                visible("research_question").length
-                  ? (visible("experiment_run").length /
-                      visible("research_question").length) *
-                    100
-                  : 0
-              }
-              tone="good"
-            />
+            {researchCoverage === null ? (
+              <p className="product-muted-note">
+                创建研究问题后再计算有真实运行覆盖的问题比例。
+              </p>
+            ) : (
+              <ProductProgress
+                label="问题实验覆盖率"
+                value={researchCoverage}
+                tone="good"
+              />
+            )}
             <ProductBarChart
               label="研究证据链数量"
               items={[
@@ -1106,6 +1241,11 @@ function OfflineLearningCenter({
             >
               <input name="title" placeholder="论文标题" required />
               <input name="citation_key" placeholder="引用键" required />
+              <input
+                name="source_url"
+                type="url"
+                placeholder="论文来源 URL（可选）"
+              />
               <button disabled={!unlocked}>保存论文索引</button>
             </form>
             <form
@@ -1234,6 +1374,12 @@ function OfflineLearningCenter({
               />
             ) : null}
           </div>
+        </ProductPanel>
+        <ProductPanel
+          title="实验指标比较"
+          description="只并列同名、同单位且关联真实运行的有限数值；不自动换算或推断优劣。"
+        >
+          <ResearchExperimentComparison comparison={metricComparison} />
         </ProductPanel>
       </main>
     );

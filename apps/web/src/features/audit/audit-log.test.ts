@@ -62,4 +62,16 @@ describe("audit event filters", () => {
     );
     expect(filterAuditEvents(events, "login", "all", "workspace")).toEqual([]);
   });
+
+  it("can locate an event by its traceable target id", () => {
+    const targetId = "01900000-0000-7000-8000-000000000099";
+    expect(
+      filterAuditEvents(
+        [{ ...events[0]!, target_id: targetId }],
+        targetId,
+        "all",
+        "all",
+      ),
+    ).toHaveLength(1);
+  });
 });

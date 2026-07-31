@@ -1607,6 +1607,23 @@ export function TodayCenter() {
                   <h3>{task?.payload.title ?? "待验收任务"}</h3>
                   <p>{evidenceItem?.payload.summary || "关联证据已记录"}</p>
                   <small>人工验收 · {verification.entity.sync_status}</small>
+                  <dl className="product-evidence-trace">
+                    <div>
+                      <dt>任务</dt>
+                      <dd>{verification.payload.task_id}</dd>
+                    </div>
+                    <div>
+                      <dt>证据</dt>
+                      <dd>{verification.payload.evidence_id}</dd>
+                    </div>
+                    <div>
+                      <dt>验收记录</dt>
+                      <dd>{verification.entity.entity_id}</dd>
+                    </div>
+                  </dl>
+                  <Link className="product-action-link" href="/app/audit">
+                    核对服务器审计时间线
+                  </Link>
                 </div>
                 {verification.payload.verdict === "pending" ? (
                   <form

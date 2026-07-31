@@ -66,7 +66,7 @@ async function signIn(page: Page) {
   }
 }
 
-test.describe("prototype productization phase 4", () => {
+test.describe("prototype productization", () => {
   test.skip(
     !email || !password,
     "Set LOGION_E2E_EMAIL and LOGION_E2E_PASSWORD for authenticated workbench checks.",
@@ -117,5 +117,30 @@ test.describe("prototype productization phase 4", () => {
     await expect(
       page.getByRole("link", { name: "前往同步中心处理附件" }),
     ).toHaveAttribute("href", "/app/sync");
+  });
+
+  test("research, collaboration and AI retain real source and permission gates", async ({
+    page,
+  }) => {
+    await page.goto("/app/research");
+    await expect(page.getByPlaceholder("论文来源 URL（可选）")).toHaveAttribute(
+      "type",
+      "url",
+    );
+    await expect(
+      page.getByRole("heading", { name: "实验指标比较" }),
+    ).toBeVisible();
+
+    await page.goto("/app/collaboration");
+    await expect(
+      page.getByRole("heading", {
+        name: /先解锁本地资料|还缺少工作台上下文/,
+      }),
+    ).toBeVisible();
+
+    await page.goto("/app/ai");
+    await expect(
+      page.getByLabel("我已明确选择并核对上述发送来源与内容范围"),
+    ).toBeVisible();
   });
 });

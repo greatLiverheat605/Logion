@@ -32,9 +32,12 @@ export function filterAuditEvents(
     if (targetType !== "all" && event.target_type !== targetType) return false;
     if (!normalizedQuery) return true;
 
-    return [event.event_type, event.result, event.target_type].some((value) =>
-      value.toLocaleLowerCase().includes(normalizedQuery),
-    );
+    return [
+      event.event_type,
+      event.result,
+      event.target_type,
+      event.target_id ?? "",
+    ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
   });
 }
 
@@ -113,7 +116,7 @@ export function AuditLog() {
             ? `最近活动：${latestEvent.event_type}`
             : "等待第一条身份活动记录"
         }
-        progressLabel="成功事件占比"
+        progressLabel={events.length ? "成功事件占比" : undefined}
         progressValue={
           events.length ? (successfulEvents / events.length) * 100 : 0
         }
@@ -228,6 +231,12 @@ export function AuditLog() {
                 <span className="product-audit-target">
                   <small>目标类型</small>
                   <code>{event.target_type}</code>
+                  {event.target_id ? (
+                    <>
+                      <small>目标 ID</small>
+                      <code>{event.target_id}</code>
+                    </>
+                  ) : null}
                 </span>
               </li>
             );
