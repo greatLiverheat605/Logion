@@ -5,6 +5,8 @@
 @import "../features/content/content-workbench.css";
 @import "../features/self-study/research-experiment-comparison.css";
 @import "../features/execution/evidence-trace.css";
+@import "../features/ai/ai-governance.css";
+@import "../features/sync/sync-system.css";
 
 :root,
 :root[data-theme="light"] {

@@ -1,7 +1,13 @@
 "use client";
 
 import type { components } from "@logion/contracts";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ProductDisclosure,
@@ -15,10 +21,23 @@ import {
 } from "@/components/product/product-ui";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
+import {
+  type AISendScope,
+  describeAISendScope,
+  describeCostBudget,
+  describeTokenBudget,
+} from "./ai-send-preview";
+
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Run = components["schemas"]["AIRunResponse"];
 type Draft = components["schemas"]["AIOutputDraftResponse"];
 type Preview = components["schemas"]["AIRouteResolveResponse"];
+type RunCreate = components["schemas"]["AIRunCreate"];
+type PendingRun = Readonly<{
+  payload: RunCreate;
+  preview: Preview;
+  scope: AISendScope;
+}>;
 
 function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
@@ -39,6 +58,9 @@ export function AIRunCenter() {
   const [dataWorkspaceId, setDataWorkspaceId] = useState("");
   const [online, setOnline] = useState(true);
   const [status, setStatus] = useState("AI 只生成草稿，不会自动修改正式记录。");
+  const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
+  const [sendConsent, setSendConsent] = useState(false);
+  const runFormRef = useRef<HTMLFormElement>(null);
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
   const canUse =
     selectedWorkspace !== undefined && selectedWorkspace.role !== "viewer";
@@ -111,7 +133,7 @@ export function AIRunCenter() {
   ).length;
   const reviewedDrafts = visibleDrafts.length - pendingDrafts;
 
-  async function createRun(event: FormEvent<HTMLFormElement>) {
+  async function previewRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspaceId || !canUse || !online) return;
     const form = event.currentTarget;
@@ -149,36 +171,51 @@ export function AIRunCenter() {
       );
       const first = preview.candidates[0];
       if (!first) throw new Error("No route candidate");
-      const confirmed = window.confirm(
-        `将发送字段“${inputName}”至 Provider ${first.provider_id} / 模型 ${first.model_id}。` +
-          `预计使用 ${first.estimated_tokens} Token。` +
-          "内容可能离开当前部署区域；AI 只生成待审草稿。确认发送？",
-      );
-      if (!confirmed) {
-        setStatus("已取消，内容未发送至 Provider。");
-        return;
-      }
+      setPendingRun({
+        payload: {
+          id: crypto.randomUUID(),
+          idempotency_key: crypto.randomUUID(),
+          task_type: String(data.get("task_type") ?? ""),
+          target_type: String(data.get("target_type") ?? ""),
+          target_id: String(data.get("target_id") ?? ""),
+          target_version: Number(data.get("target_version") ?? 1),
+          input_fields: { [inputName]: inputValue },
+          expected_output_fields: [outputName],
+          requested_output_tokens: requestedOutputTokens,
+          retain_input: data.get("retain_input") === "on",
+          send_confirmed: true,
+        },
+        preview,
+        scope: {
+          fieldName: inputName,
+          targetId: String(data.get("target_id") ?? ""),
+          targetType: String(data.get("target_type") ?? ""),
+          valueLength: inputValue.length,
+        },
+      });
+      setSendConsent(false);
+      setStatus("预检完成。请核对发送范围、Provider、模型和预算后再确认。");
+    } catch (error) {
+      setPendingRun(null);
+      setSendConsent(false);
+      setStatus(errorText(error));
+    }
+  }
+
+  async function sendPreviewedRun() {
+    if (!workspaceId || !pendingRun || !sendConsent || !online) return;
+    try {
       await browserApiClient.request(
         `/api/v1/workspaces/${workspaceId}/ai/runs`,
         {
           method: "POST",
           csrf: true,
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            idempotency_key: crypto.randomUUID(),
-            task_type: String(data.get("task_type") ?? ""),
-            target_type: String(data.get("target_type") ?? ""),
-            target_id: String(data.get("target_id") ?? ""),
-            target_version: Number(data.get("target_version") ?? 1),
-            input_fields: { [inputName]: inputValue },
-            expected_output_fields: [outputName],
-            requested_output_tokens: requestedOutputTokens,
-            retain_input: data.get("retain_input") === "on",
-            send_confirmed: true,
-          }),
+          body: JSON.stringify(pendingRun.payload),
         },
       );
-      form.reset();
+      runFormRef.current?.reset();
+      setPendingRun(null);
+      setSendConsent(false);
       await loadData(workspaceId);
       setStatus("AI 运行已入队；可随时刷新状态或请求取消。");
     } catch (error) {
@@ -236,7 +273,11 @@ export function AIRunCenter() {
   }
 
   return (
-    <section className="settings-page" aria-labelledby="ai-runs-heading">
+    <section
+      className="settings-page"
+      id="ai-run-center"
+      aria-labelledby="ai-runs-heading"
+    >
       <ProductPageHeader
         eyebrow="AI PROVIDER · GROUNDED DRAFTS"
         title={
@@ -308,7 +349,11 @@ export function AIRunCenter() {
         <select
           id="ai-run-workspace"
           value={workspaceId}
-          onChange={(event) => setWorkspaceId(event.target.value)}
+          onChange={(event) => {
+            setWorkspaceId(event.target.value);
+            setPendingRun(null);
+            setSendConsent(false);
+          }}
         >
           {workspaces.map((workspace) => (
             <option key={workspace.id} value={workspace.id}>
@@ -322,7 +367,15 @@ export function AIRunCenter() {
         summary="创建结构化草稿"
         description="明确目标、发送字段和预期输出，再执行预检"
       >
-        <form className="planning-form" onSubmit={createRun}>
+        <form
+          className="planning-form"
+          ref={runFormRef}
+          onInput={() => {
+            setPendingRun(null);
+            setSendConsent(false);
+          }}
+          onSubmit={previewRun}
+        >
           <label>
             任务类型
             <input name="task_type" pattern="[a-z][a-z0-9_.-]*" required />
@@ -385,9 +438,71 @@ export function AIRunCenter() {
             我已明确选择并核对上述发送来源与内容范围
           </label>
           <button disabled={!online || !canUse || !workspaceId}>
-            预检并确认发送
+            预检发送范围与预算
           </button>
         </form>
+        {pendingRun ? (
+          <ProductPanel
+            className="ai-send-confirmation"
+            title="发送前最终确认"
+            description="以下信息来自刚完成的真实路由预检；修改表单后必须重新预检。"
+            aside={<ProductTag tone="warn">尚未发送</ProductTag>}
+          >
+            <dl className="ai-send-confirmation-grid">
+              <div>
+                <dt>数据范围</dt>
+                <dd>{describeAISendScope(pendingRun.scope)}</dd>
+              </div>
+              <div>
+                <dt>Provider</dt>
+                <dd>{pendingRun.preview.candidates[0]?.provider_id}</dd>
+              </div>
+              <div>
+                <dt>模型</dt>
+                <dd>{pendingRun.preview.candidates[0]?.model_id}</dd>
+              </div>
+              <div>
+                <dt>Token 预算</dt>
+                <dd>{describeTokenBudget(pendingRun.preview)}</dd>
+              </div>
+              <div>
+                <dt>费用预算</dt>
+                <dd>{describeCostBudget(pendingRun.preview)}</dd>
+              </div>
+              <div>
+                <dt>结果边界</dt>
+                <dd>内容可能离开当前部署区域；结果只进入待审草稿。</dd>
+              </div>
+            </dl>
+            <label className="ai-send-consent">
+              <input
+                type="checkbox"
+                checked={sendConsent}
+                onChange={(event) => setSendConsent(event.target.checked)}
+              />
+              我确认上述数据范围、Provider、模型与预算信息，可以发送
+            </label>
+            <div className="app-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingRun(null);
+                  setSendConsent(false);
+                  setStatus("已取消，内容未发送至 Provider。");
+                }}
+              >
+                取消发送
+              </button>
+              <button
+                type="button"
+                disabled={!sendConsent || !online}
+                onClick={() => void sendPreviewedRun()}
+              >
+                确认并发送到 Provider
+              </button>
+            </div>
+          </ProductPanel>
+        ) : null}
       </ProductDisclosure>
 
       <ProductPanel
