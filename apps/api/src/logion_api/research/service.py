@@ -57,6 +57,8 @@ class ResearchService:
             .with_for_update()
         )
         entity_id = values.pop("id")
+        if model is PaperRecord and values.get("source_url") is not None:
+            values["source_url"] = str(values["source_url"])
         if await db.get(model, entity_id) is not None:
             raise APIError(
                 code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409

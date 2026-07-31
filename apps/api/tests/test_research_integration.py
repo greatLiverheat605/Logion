@@ -76,7 +76,7 @@ async def test_research_evidence_loop_is_personal_and_offline() -> None:
                 "id": str(ids["paper_record"]),
                 "title": "Private paper",
                 "citation_key": "private-citation",
-                "source_url": None,
+                "source_url": "https://example.com/private-paper",
             },
             "research_claim": {
                 "id": str(ids["research_claim"]),
@@ -121,6 +121,7 @@ async def test_research_evidence_loop_is_personal_and_offline() -> None:
         assert (
             await owner.post(f"{base}/papers", json=payloads["paper_record"])
         ).status_code == 403
+        created: dict[str, dict[str, object]] = {}
         for kind in TYPES:
             result = await owner.post(
                 f"{base}/{paths[kind]}",
@@ -128,6 +129,8 @@ async def test_research_evidence_loop_is_personal_and_offline() -> None:
                 json=payloads[kind],
             )
             assert result.status_code == 201, result.text
+            created[kind] = result.json()
+        assert created["paper_record"]["source_url"] == "https://example.com/private-paper"
         assert len((await owner.get(base)).json()["papers"]) == 1
         assert all(not values for values in (await learner.get(base)).json().values())
 
@@ -163,7 +166,7 @@ async def test_research_evidence_loop_is_personal_and_offline() -> None:
                 "space_id": str(space_id),
                 "title": "Offline paper",
                 "citation_key": "offline-key",
-                "source_url": None,
+                "source_url": "https://example.com/offline-paper",
             },
             "research_claim": {
                 "space_id": str(space_id),
