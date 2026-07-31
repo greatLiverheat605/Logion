@@ -11,9 +11,10 @@ import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { mobileNavigationForPersona } from "@/features/personas/mobile-persona-navigation";
 import { usePersona } from "@/features/personas/persona-context";
 
-type Overlay = "command" | "notifications";
+type Overlay = "command" | "mobile-more" | "notifications";
 type NavItem = Readonly<{ href: string; icon: AppIconName; label: string }>;
 
 const NAV_GROUPS: readonly Readonly<{
@@ -58,12 +59,6 @@ const DEFAULT_NAV_ITEM: NavItem = {
   icon: "home",
   label: "今日",
 };
-const MOBILE_HREFS = new Set([
-  "/app/today",
-  "/app/planning",
-  "/app/review",
-  "/app/research",
-]);
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
@@ -91,6 +86,13 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const visibleNavItems = useMemo(
     () => visibleNavGroups.flatMap((group) => group.items),
     [visibleNavGroups],
+  );
+  const mobileNavigation = useMemo(
+    () =>
+      activePersona === null
+        ? { overflow: [], primary: [] }
+        : mobileNavigationForPersona(activePersona),
+    [activePersona],
   );
   const current =
     NAV_ITEMS.find((item) => item.href === pathname) ?? DEFAULT_NAV_ITEM;
@@ -283,23 +285,25 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       </div>
 
       <nav aria-label="移动端导航" className="bottom-nav">
-        {visibleNavItems
-          .filter((item) => MOBILE_HREFS.has(item.href))
-          .map((item) => (
-            <Link
-              aria-current={pathname === item.href ? "page" : undefined}
-              className={pathname === item.href ? "active" : ""}
-              href={item.href}
-              key={item.href}
-              onClick={closeTransientUi}
-            >
-              <b aria-hidden="true">
-                <AppIcon name={item.icon} size={18} />
-              </b>
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        <button type="button" onClick={() => setMenuOpen(true)}>
+        {mobileNavigation.primary.map((item) => (
+          <Link
+            aria-current={pathname === item.href ? "page" : undefined}
+            className={pathname === item.href ? "active" : ""}
+            href={item.href}
+            key={item.href}
+            onClick={closeTransientUi}
+          >
+            <b aria-hidden="true">
+              <AppIcon name={item.icon} size={18} />
+            </b>
+            <span>{item.label}</span>
+          </Link>
+        ))}
+        <button
+          aria-expanded={overlay === "mobile-more"}
+          type="button"
+          onClick={() => setOverlay("mobile-more")}
+        >
           <b aria-hidden="true">
             <AppIcon name="more" size={18} />
           </b>
@@ -342,6 +346,34 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             ))}
             {results.length === 0 ? (
               <p className="app-empty-note">没有匹配页面。</p>
+            ) : null}
+          </div>
+        </AppModal>
+      ) : null}
+
+      {overlay === "mobile-more" ? (
+        <AppModal
+          eyebrow="PERSONA NAVIGATION"
+          title="更多"
+          onClose={() => setOverlay(null)}
+        >
+          <div className="app-command-results">
+            {mobileNavigation.overflow.map((item) => (
+              <Link
+                className="app-command-result"
+                href={item.href}
+                key={item.href}
+                onClick={closeTransientUi}
+              >
+                <span aria-hidden="true">
+                  <AppIcon name={item.icon} size={17} />
+                </span>
+                <strong>{item.label}</strong>
+                <span>打开</span>
+              </Link>
+            ))}
+            {mobileNavigation.overflow.length === 0 ? (
+              <p className="app-empty-note">当前画像没有更多入口。</p>
             ) : null}
           </div>
         </AppModal>
