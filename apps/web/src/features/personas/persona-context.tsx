@@ -48,6 +48,7 @@ export function PersonaProvider({
   const [activePersona, setActivePersonaState] =
     useState<PersonaDefinition | null>(null);
   const [customPersonas, setCustomPersonas] = useState<PersonaDefinition[]>([]);
+  const [hasPersistedSetting, setHasPersistedSetting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const allPersonas = useMemo(
@@ -57,6 +58,7 @@ export function PersonaProvider({
 
   const applySetting = useCallback((setting: PersonaSetting) => {
     const candidates = [...BUILTIN_PERSONAS, ...setting.customPersonas];
+    setHasPersistedSetting(true);
     setCustomPersonas(setting.customPersonas);
     setActivePersonaState(
       candidates.find((persona) => persona.id === setting.activePersonaId) ??
@@ -72,6 +74,7 @@ export function PersonaProvider({
         if (!active) return;
         const custom = setting?.customPersonas ?? [];
         const candidates = [...BUILTIN_PERSONAS, ...custom];
+        setHasPersistedSetting(setting !== null);
         setCustomPersonas(custom);
         setActivePersonaState(
           candidates.find(
@@ -92,7 +95,7 @@ export function PersonaProvider({
 
   const setActivePersona = useCallback(
     async (personaId: string) => {
-      if (activePersona?.id === personaId) return;
+      if (hasPersistedSetting && activePersona?.id === personaId) return;
       const persona = allPersonas.find(
         (candidate) => candidate.id === personaId,
       );
@@ -103,7 +106,14 @@ export function PersonaProvider({
       });
       applySetting(saved);
     },
-    [activePersona?.id, allPersonas, applySetting, customPersonas, service],
+    [
+      activePersona?.id,
+      allPersonas,
+      applySetting,
+      customPersonas,
+      hasPersistedSetting,
+      service,
+    ],
   );
 
   const createCustomPersona = useCallback(
