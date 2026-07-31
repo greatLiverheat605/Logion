@@ -1,6 +1,5 @@
 "use client";
 
-import type { components } from "@logion/contracts";
 import { secureRandomUuid } from "@logion/offline";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
@@ -14,12 +13,14 @@ import {
   ProductTag,
 } from "@/components/product/product-ui";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
+import { integrationCapabilityService } from "@/features/integrations/integration-capability-service";
+import type {
+  DataExport,
+  DataImport,
+  Space,
+  Workspace,
+} from "@/features/integrations/integration-capability-model";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
-
-type Workspace = components["schemas"]["WorkspaceResponse"];
-type DataExport = components["schemas"]["ExportResponse"];
-type DataImport = components["schemas"]["ImportPreviewResponse"];
-type Space = components["schemas"]["SpaceResponse"];
 
 function errorText(error: unknown) {
   const capabilityMessage = offlineCapabilityMessage(error);
@@ -43,10 +44,7 @@ export function DataSovereigntyCenter() {
 
   const loadWorkspaces = useCallback(async () => {
     try {
-      const result = await browserApiClient.request<{
-        workspaces: Workspace[];
-      }>("/api/v1/workspaces");
-      const next = Array.isArray(result.workspaces) ? result.workspaces : [];
+      const next = await integrationCapabilityService.listWorkspaces();
       setWorkspaces(next);
       setWorkspaceId((current) =>
         next.some((item) => item.id === current)
@@ -60,26 +58,11 @@ export function DataSovereigntyCenter() {
 
   const loadData = useCallback(async (selected: string) => {
     try {
-      const [exportResult, importResult, spaceResult] = await Promise.all([
-        browserApiClient.request<{ exports: DataExport[] }>(
-          `/api/v1/workspaces/${selected}/data-exports`,
-        ),
-        browserApiClient.request<{ imports: DataImport[] }>(
-          `/api/v1/workspaces/${selected}/data-imports`,
-        ),
-        browserApiClient.request<{ spaces: Space[] }>(
-          `/api/v1/workspaces/${selected}/spaces`,
-        ),
-      ]);
-      const nextSpaces = Array.isArray(spaceResult.spaces)
-        ? spaceResult.spaces.filter((space) => space.visibility === "private")
-        : [];
-      setExports(
-        Array.isArray(exportResult.exports) ? exportResult.exports : [],
-      );
-      setImports(
-        Array.isArray(importResult.imports) ? importResult.imports : [],
-      );
+      const result =
+        await integrationCapabilityService.loadPortability(selected);
+      const nextSpaces = result.privateSpaces;
+      setExports(result.exports);
+      setImports(result.imports);
       setSpaces(nextSpaces);
       setTargetSpaceId((current) =>
         nextSpaces.some((space) => space.id === current)
@@ -111,14 +94,10 @@ export function DataSovereigntyCenter() {
       new FormData(event.currentTarget).get("confirmation") ?? "",
     );
     try {
-      await browserApiClient.request(
-        `/api/v1/workspaces/${workspaceId}/data-exports`,
-        {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({ id: secureRandomUuid(), confirmation }),
-        },
-      );
+      await integrationCapabilityService.createExport(workspaceId, {
+        id: secureRandomUuid(),
+        confirmation,
+      });
       event.currentTarget.reset();
       await loadData(workspaceId);
       setStatus("导出已进入后台队列；完成后会出现在列表中并发送站内通知。");
@@ -130,13 +109,10 @@ export function DataSovereigntyCenter() {
   async function cancelExport(item: DataExport) {
     if (!workspaceId) return;
     try {
-      await browserApiClient.request(
-        `/api/v1/workspaces/${workspaceId}/data-exports/${item.id}/cancel`,
-        {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({ expected_version: item.version }),
-        },
+      await integrationCapabilityService.cancelExport(
+        workspaceId,
+        item.id,
+        item.version,
       );
       await loadData(workspaceId);
       setStatus("导出任务已取消，未完成的产物不会保留。");
@@ -150,19 +126,14 @@ export function DataSovereigntyCenter() {
     if (!workspaceId) return;
     const data = new FormData(event.currentTarget);
     try {
-      await browserApiClient.request(
-        `/api/v1/workspaces/${workspaceId}/data-imports/preview`,
-        {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({
-            id: secureRandomUuid(),
-            source_format: String(data.get("source_format") ?? "markdown"),
-            source_filename: String(data.get("source_filename") ?? "import.md"),
-            content: String(data.get("content") ?? ""),
-          }),
-        },
-      );
+      await integrationCapabilityService.previewImport(workspaceId, {
+        id: secureRandomUuid(),
+        source_format: String(
+          data.get("source_format") ?? "markdown",
+        ) as DataImport["source_format"],
+        source_filename: String(data.get("source_filename") ?? "import.md"),
+        content: String(data.get("content") ?? ""),
+      });
       event.currentTarget.reset();
       await loadData(workspaceId);
       setStatus(
@@ -176,18 +147,10 @@ export function DataSovereigntyCenter() {
   async function commitImport(item: DataImport) {
     if (!workspaceId || !targetSpaceId) return;
     try {
-      await browserApiClient.request(
-        `/api/v1/workspaces/${workspaceId}/data-imports/${item.id}/commit`,
-        {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({
-            target_space_id: targetSpaceId,
-            expected_version: item.version,
-            confirmation: "IMPORT",
-          }),
-        },
-      );
+      await integrationCapabilityService.commitImport(workspaceId, item.id, {
+        target_space_id: targetSpaceId,
+        expected_version: item.version,
+      });
       await loadData(workspaceId);
       setStatus(
         "导入已在单个事务中完成；所有对象均使用新 ID。原权限和原 ID 未被恢复。",
