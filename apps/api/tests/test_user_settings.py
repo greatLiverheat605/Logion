@@ -147,10 +147,12 @@ async def test_user_settings_are_private_versioned_and_atomic() -> None:
         await register(other, "other")
         csrf = {"X-CSRF-Token": owner.cookies["logion_csrf"]}
 
-        empty = await owner.get("/api/v1/users/me/settings")
-        assert empty.status_code == 200
-        assert empty.headers["Cache-Control"] == "no-store"
-        assert empty.json() == {"settings": []}
+        initial = await owner.get("/api/v1/users/me/settings")
+        assert initial.status_code == 200
+        assert initial.headers["Cache-Control"] == "no-store"
+        assert initial.json() == {
+            "settings": [{"key": "onboarding_completed", "value": "false", "version": 1}]
+        }
 
         payload = {
             "activePersonaId": "self",
@@ -190,7 +192,9 @@ async def test_user_settings_are_private_versioned_and_atomic() -> None:
         persona = await owner.get("/api/v1/users/me/settings", params={"key": "persona"})
         assert persona.status_code == 200
         assert json.loads(persona.json()["settings"][0]["value"]) == payload
-        assert (await other.get("/api/v1/users/me/settings")).json() == {"settings": []}
+        assert (await other.get("/api/v1/users/me/settings")).json() == {
+            "settings": [{"key": "onboarding_completed", "value": "false", "version": 1}]
+        }
 
         stale = await owner.put(
             "/api/v1/users/me/settings",

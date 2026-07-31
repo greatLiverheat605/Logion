@@ -28,8 +28,12 @@
 密码、MFA 与 Passkey 登录成功后统一读取 `onboarding_completed`：
 
 - 值为 `"true"`：进入 `/app/today`。
-- 不存在或不是 `"true"`：进入 `/onboarding`（存量账号的缺失回填见三态策略）。
+- 值为 `"false"` 或其他非 `"true"` 值：进入 `/onboarding`。
+- 设置不存在：判定为阶段 1 上线前的存量账号，静默写入 `"true"` 后放行。
 - 设置读取失败时重试一次；仍失败则显示阻塞错误和重试按钮，不得降级进入应用。
 - `/app/*` 在认证后继续执行同一检查，未完成引导时跳转 `/onboarding`。
+
+新账号在邮箱确认或兼容注册流程创建个人工作区的同一事务内写入
+`onboarding_completed: "false"`，因此不会与设置缺失的存量账号混淆。
 
 完成 7 步引导后，前端通过现有 UserSetting PUT 写入 `onboarding_completed: "true"`。

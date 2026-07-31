@@ -17,6 +17,7 @@ from logion_api.identity.models import (
     User,
 )
 from logion_api.main import app
+from logion_api.users.models import UserSetting
 from logion_api.workspaces.models import Space, WorkspaceInvitation, WorkspaceMembership
 from sqlalchemy import func, select
 
@@ -149,6 +150,13 @@ async def test_email_registration_is_uniform_encrypted_single_use_and_no_auto_lo
                 ).all()
             )
             assert len(memberships) == 1
+            onboarding = await db.get(
+                UserSetting,
+                {"user_id": user_id, "key": "onboarding_completed"},
+            )
+            assert onboarding is not None
+            assert onboarding.value == "false"
+            assert onboarding.version == 1
             private_spaces = int(
                 await db.scalar(
                     select(func.count(Space.id)).where(

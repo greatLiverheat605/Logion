@@ -24,6 +24,8 @@ from logion_api.identity.schemas import (
     RegistrationStartRequest,
 )
 from logion_api.identity.service import normalize_email
+from logion_api.users.dependencies import UserSettingServiceDependency
+from logion_api.users.schemas import UserSettingWrite
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(prefix="/api/v1/auth", tags=["identity"])
@@ -157,6 +159,7 @@ async def confirm_email_verification(
     db: DatabaseSession,
     service: EmailVerificationServiceDependency,
     workspaces: WorkspaceServiceDependency,
+    user_settings: UserSettingServiceDependency,
     limiter: RateLimiterDependency,
     settings: SettingsDependency,
 ) -> MessageResponse:
@@ -177,6 +180,17 @@ async def confirm_email_verification(
         db,
         user.id,
         request_id=request_id(request),
+    )
+    await user_settings.update(
+        db,
+        user.id,
+        [
+            UserSettingWrite(
+                key="onboarding_completed",
+                value="false",
+                version=0,
+            )
+        ],
     )
     await db.commit()
     response.headers["Cache-Control"] = "no-store"

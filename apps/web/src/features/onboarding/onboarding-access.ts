@@ -8,6 +8,7 @@ interface OnboardingSetting {
 
 export interface OnboardingSettingReader {
   get: (key: string) => Promise<OnboardingSetting | null>;
+  set: (key: string, value: string) => Promise<OnboardingSetting>;
 }
 
 export type OnboardingAccess = "complete" | "required";
@@ -26,5 +27,9 @@ export async function resolveOnboardingAccess(
   service: OnboardingSettingReader = userSettingService,
 ): Promise<OnboardingAccess> {
   const setting = await loadOnboardingSettingWithRetry(service);
-  return setting?.value === "true" ? "complete" : "required";
+  if (setting === null) {
+    await service.set(ONBOARDING_KEY, "true");
+    return "complete";
+  }
+  return setting.value === "true" ? "complete" : "required";
 }
