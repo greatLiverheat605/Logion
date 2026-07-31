@@ -624,6 +624,7 @@ export function AppOperationalTools() {
       await readFocusData();
       try {
         await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+        await readFocusData();
         setFeedback({ message: "专注会话已开始并同步。", tone: "success" });
       } catch {
         setFeedback({
