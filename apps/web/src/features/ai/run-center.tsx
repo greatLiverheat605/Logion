@@ -119,6 +119,10 @@ export function AIRunCenter() {
     const inputName = String(data.get("input_name") ?? "");
     const inputValue = String(data.get("input_value") ?? "");
     const outputName = String(data.get("output_name") ?? "");
+    if (data.get("source_confirmed") !== "on") {
+      setStatus("请先确认发送内容只来自你明确选择并核对的来源。");
+      return;
+    }
     const requestedOutputTokens = Number(
       data.get("requested_output_tokens") ?? 1,
     );
@@ -261,7 +265,7 @@ export function AIRunCenter() {
             ? `${pendingDrafts} 份草稿等待你的决定`
             : "创建一份可追溯、可拒绝的 AI 草稿"
         }
-        progressLabel="草稿审查率"
+        progressLabel={visibleDrafts.length ? "草稿审查率" : undefined}
         progressValue={
           visibleDrafts.length
             ? (reviewedDrafts / visibleDrafts.length) * 100
@@ -376,6 +380,10 @@ export function AIRunCenter() {
             <input name="retain_input" type="checkbox" />
             运行结束后仍保留加密输入
           </label>
+          <label>
+            <input name="source_confirmed" type="checkbox" required />
+            我已明确选择并核对上述发送来源与内容范围
+          </label>
           <button disabled={!online || !canUse || !workspaceId}>
             预检并确认发送
           </button>
@@ -438,15 +446,13 @@ export function AIRunCenter() {
           </ProductTag>
         }
       >
-        <ProductProgress
-          label="审查完成率"
-          value={
-            visibleDrafts.length
-              ? (reviewedDrafts / visibleDrafts.length) * 100
-              : 0
-          }
-          tone="good"
-        />
+        {visibleDrafts.length ? (
+          <ProductProgress
+            label="审查完成率"
+            value={(reviewedDrafts / visibleDrafts.length) * 100}
+            tone="good"
+          />
+        ) : null}
         {visibleDrafts.map((draft) => (
           <form
             key={`${draft.id}:${draft.version}`}
