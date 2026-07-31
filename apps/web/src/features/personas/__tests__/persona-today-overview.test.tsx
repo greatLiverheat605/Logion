@@ -6,12 +6,24 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PersonaProvider } from "../persona-context";
 import type { PersonaSetting } from "../persona-setting-service";
 import { PersonaTodayOverview } from "../persona-today-overview";
+
+const source = {
+  members: [],
+  membersAvailable: true,
+  now: new Date("2026-07-31T08:00:00.000Z"),
+  records: [],
+  selectedSpaceId: "space-1",
+  sessions: [],
+  spaces: [{ id: "space-1", visibility: "private" as const }],
+  tasks: [],
+};
 
 afterEach(cleanup);
 
@@ -28,15 +40,17 @@ describe("PersonaTodayOverview", () => {
     };
     render(
       <PersonaProvider service={service}>
-        <PersonaTodayOverview />
+        <PersonaTodayOverview onRetry={vi.fn()} source={source} state="empty" />
       </PersonaProvider>,
     );
 
     await screen.findByRole("heading", {
-      name: "围绕考试、复习和学习记录安排今天",
+      name: "用真实日期、复习与成绩安排备考",
     });
     expect(
-      screen.getByRole("link", { name: /考试/ }).getAttribute("href"),
+      within(screen.getByRole("navigation", { name: "考画像首要入口" }))
+        .getByRole("link", { name: /^考试/ })
+        .getAttribute("href"),
     ).toBe("/app/exam");
 
     fireEvent.click(screen.getByRole("button", { name: "切换画像" }));
@@ -49,7 +63,7 @@ describe("PersonaTodayOverview", () => {
     await waitFor(() =>
       expect(
         screen.getByRole("heading", {
-          name: "围绕空间、审计和协作治理安排今天",
+          name: "只在授权共享范围内组织协作与审阅",
         }),
       ).toBeTruthy(),
     );
@@ -58,4 +72,34 @@ describe("PersonaTodayOverview", () => {
       customPersonas: [],
     });
   });
+
+  it.each([
+    ["loading", "正在汇总真实首页数据"],
+    ["needs-context", "还缺少首页上下文"],
+    ["locked", "先解锁本地资料"],
+    ["error", "画像首页暂时无法读取"],
+  ] as const)(
+    "renders the %s state without presenting it as empty",
+    async (state, title) => {
+      const service = {
+        load: vi.fn().mockResolvedValue({
+          activePersonaId: "self",
+          customPersonas: [],
+        }),
+        save: vi.fn(),
+      };
+      render(
+        <PersonaProvider service={service}>
+          <PersonaTodayOverview
+            onRetry={vi.fn()}
+            source={source}
+            state={state}
+          />
+        </PersonaProvider>,
+      );
+
+      expect(await screen.findByRole("heading", { name: title })).toBeTruthy();
+      expect(screen.queryByText("尚无项目", { exact: true })).toBeNull();
+    },
+  );
 });

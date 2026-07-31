@@ -1,4 +1,5 @@
 @import "../components/product/product-signals.css";
+@import "../features/personas/dashboard/persona-dashboard.css";
 
 :root,
 :root[data-theme="light"] {

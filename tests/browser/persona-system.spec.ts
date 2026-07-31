@@ -136,9 +136,33 @@ test.describe("persona system", () => {
     await page.goto("/app/today");
     await expect(
       page.getByRole("heading", {
-        name: "围绕空间、审计和协作治理安排今天",
+        name: "只在授权共享范围内组织协作与审阅",
       }),
     ).toBeVisible();
+  });
+
+  test("today heading follows all four built-in personas even while the Vault is locked", async ({
+    page,
+  }) => {
+    const expectations = [
+      ["考", "用真实日期、复习与成绩安排备考"],
+      ["学", "让目标、项目与成果形成连续进展"],
+      ["研", "把问题、论文、声明与运行放在同一证据链"],
+      ["导", "只在授权共享范围内组织协作与审阅"],
+    ] as const;
+
+    await page.goto("/app/settings");
+    for (const [persona, heading] of expectations) {
+      await page
+        .getByRole("button", { name: new RegExp(`^切换到：${persona}，`) })
+        .click();
+      await page.goto("/app/today");
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "先解锁本地资料" }),
+      ).toBeVisible();
+      await page.goto("/app/settings");
+    }
   });
 
   test("creates and removes a custom persona", async ({ page }) => {
