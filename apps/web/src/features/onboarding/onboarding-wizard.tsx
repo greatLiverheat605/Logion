@@ -8,12 +8,26 @@ import { PersonaSelectionStep } from "./steps/persona-selection-step";
 
 const STEPS = [
   { id: "persona", label: "画像", title: "选择你的学习场景", required: true },
-  { id: "goal", label: "目标", title: "设置首个学习目标", required: true },
-  { id: "record", label: "记录", title: "添加第一条学习记录", required: true },
-  { id: "review", label: "复习", title: "体验复习功能", required: true },
-  { id: "templates", label: "模板", title: "探索模板库", required: true },
-  { id: "invite", label: "协作", title: "邀请协作者", required: false },
-  { id: "profile", label: "个人", title: "完成个人设置", required: true },
+  {
+    id: "workspace",
+    label: "工作区",
+    title: "创建或选择工作区",
+    required: true,
+  },
+  { id: "space", label: "空间", title: "创建或选择空间", required: true },
+  {
+    id: "passphrase",
+    label: "口令",
+    title: "设置本机数据口令",
+    required: true,
+  },
+  {
+    id: "template",
+    label: "模板",
+    title: "从模板库挑一个起点",
+    required: false,
+  },
+  { id: "goal", label: "目标", title: "设定今日目标", required: true },
   { id: "complete", label: "开始", title: "开始使用 Logion", required: true },
 ] as const;
 
@@ -21,12 +35,11 @@ const STEP_DESCRIPTIONS: Readonly<
   Record<(typeof STEPS)[number]["id"], string>
 > = {
   persona: "选择与你当前目标最接近的导航方案。",
-  goal: "进入每日工作台后，可创建第一个可衡量的学习目标。",
-  record: "把资料、笔记或练习结果沉淀为第一条记录。",
-  review: "复习中心会根据已有材料组织后续巩固任务。",
-  templates: "模板可帮助你快速建立计划、记录和复习结构。",
-  invite: "需要团队协作时，可在空间页邀请导师或同伴。",
-  profile: "个人页用于补充资料；画像仍可随时在设置中调整。",
+  workspace: "选择已有工作区，或创建一个新的学习工作区。",
+  space: "在当前工作区中选择或创建承载学习内容的空间。",
+  passphrase: "设置仅用于本机数据解锁的口令。",
+  template: "可以选择一个模板作为起点，也可以暂时跳过。",
+  goal: "为今天创建一条明确、可执行的学习目标。",
   complete: "你的基础偏好已经保存，可以进入每日工作台。",
 };
 
