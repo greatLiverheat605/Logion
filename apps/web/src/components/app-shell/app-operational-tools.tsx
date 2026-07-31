@@ -27,6 +27,7 @@ import { createPortal } from "react-dom";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
+import { operationalEventName } from "@/components/app-shell/app-operational-events";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
@@ -270,6 +271,23 @@ export function AppOperationalTools() {
   const captureButtonRef = useRef<HTMLButtonElement>(null);
   const focusButtonRef = useRef<HTMLButtonElement>(null);
   const unlocked = vaultPhase === "unlocked";
+
+  const openOverlay = useCallback((nextOverlay: OperationalOverlay) => {
+    if (nextOverlay === "focus") setClockNow(Date.now());
+    setFeedback(null);
+    setOverlay(nextOverlay);
+  }, []);
+
+  useEffect(() => {
+    const openCapture = () => openOverlay("capture");
+    const openFocus = () => openOverlay("focus");
+    window.addEventListener(operationalEventName("capture"), openCapture);
+    window.addEventListener(operationalEventName("focus"), openFocus);
+    return () => {
+      window.removeEventListener(operationalEventName("capture"), openCapture);
+      window.removeEventListener(operationalEventName("focus"), openFocus);
+    };
+  }, [openOverlay]);
 
   const loadContext = useCallback(async () => {
     setFeedback({ message: "正在读取工作区与设备…", tone: "loading" });
@@ -674,12 +692,6 @@ export function AppOperationalTools() {
   function closeOverlay() {
     setOverlay(null);
     setFeedback(null);
-  }
-
-  function openOverlay(nextOverlay: OperationalOverlay) {
-    if (nextOverlay === "focus") setClockNow(Date.now());
-    setFeedback(null);
-    setOverlay(nextOverlay);
   }
 
   const contextFields = (
