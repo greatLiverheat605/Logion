@@ -31,4 +31,4 @@
 - 不存在或不是 `"true"`：进入 `/onboarding`。
 - 设置服务暂时不可用：降级进入 `/app/today`，避免因偏好服务故障锁死已认证用户。
 
-完成 8 步引导后，前端通过现有 UserSetting PUT 写入 `onboarding_completed: "true"`。
+完成 7 步引导后，前端通过现有 UserSetting PUT 写入 `onboarding_completed: "true"`。

@@ -77,7 +77,7 @@ test.describe("persona system", () => {
     await expect(exam).toHaveAttribute("aria-pressed", "true");
     await continueButton.click();
     await expect(
-      page.getByRole("heading", { name: "设置首个学习目标" }),
+      page.getByRole("heading", { name: "创建或选择工作区" }),
     ).toBeVisible();
   });
 
