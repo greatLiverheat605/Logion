@@ -55,6 +55,15 @@ export function PersonaProvider({
     [customPersonas],
   );
 
+  const applySetting = useCallback((setting: PersonaSetting) => {
+    const candidates = [...BUILTIN_PERSONAS, ...setting.customPersonas];
+    setCustomPersonas(setting.customPersonas);
+    setActivePersonaState(
+      candidates.find((persona) => persona.id === setting.activePersonaId) ??
+        DEFAULT_PERSONA,
+    );
+  }, []);
+
   useEffect(() => {
     let active = true;
     void service
@@ -87,13 +96,13 @@ export function PersonaProvider({
         (candidate) => candidate.id === personaId,
       );
       if (!persona) return;
-      await service.save({
+      const saved = await service.save({
         activePersonaId: persona.id,
         customPersonas,
       });
-      setActivePersonaState(persona);
+      applySetting(saved);
     },
-    [allPersonas, customPersonas, service],
+    [allPersonas, applySetting, customPersonas, service],
   );
 
   const createCustomPersona = useCallback(
@@ -104,10 +113,9 @@ export function PersonaProvider({
         activePersonaId: activePersona?.id ?? DEFAULT_PERSONA.id,
         customPersonas: updated,
       };
-      await service.save(setting);
-      setCustomPersonas(updated);
+      applySetting(await service.save(setting));
     },
-    [activePersona?.id, customPersonas, service],
+    [activePersona?.id, applySetting, customPersonas, service],
   );
 
   const deleteCustomPersona = useCallback(
@@ -116,17 +124,16 @@ export function PersonaProvider({
         (persona) => persona.id !== personaId,
       );
       if (updated.length === customPersonas.length) return;
-      const deletingActive = activePersona?.id === personaId;
-      await service.save({
-        activePersonaId: deletingActive
-          ? DEFAULT_PERSONA.id
-          : (activePersona?.id ?? DEFAULT_PERSONA.id),
+      const saved = await service.save({
+        activePersonaId:
+          activePersona?.id === personaId
+            ? DEFAULT_PERSONA.id
+            : (activePersona?.id ?? DEFAULT_PERSONA.id),
         customPersonas: updated,
       });
-      setCustomPersonas(updated);
-      if (deletingActive) setActivePersonaState(DEFAULT_PERSONA);
+      applySetting(saved);
     },
-    [activePersona?.id, customPersonas, service],
+    [activePersona?.id, applySetting, customPersonas, service],
   );
 
   const isRouteVisible = useCallback(

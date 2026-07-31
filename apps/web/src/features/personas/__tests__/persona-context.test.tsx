@@ -75,7 +75,9 @@ function Consumer() {
 function renderProvider(initial: PersonaSetting | null) {
   const service = {
     load: vi.fn().mockResolvedValue(initial),
-    save: vi.fn().mockResolvedValue(undefined),
+    save: vi
+      .fn<(setting: PersonaSetting) => Promise<PersonaSetting>>()
+      .mockImplementation((setting) => Promise.resolve(setting)),
   };
   render(
     <PersonaProvider service={service}>
