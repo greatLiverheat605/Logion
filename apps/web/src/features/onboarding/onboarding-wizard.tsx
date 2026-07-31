@@ -4,7 +4,11 @@ import { useState } from "react";
 
 import { userSettingService } from "@/features/settings/user-setting-service";
 
+import { PassphraseStep } from "./steps/passphrase-step";
 import { PersonaSelectionStep } from "./steps/persona-selection-step";
+import { SpaceSetupStep } from "./steps/space-setup-step";
+import { TodayGoalStep } from "./steps/today-goal-step";
+import { WorkspaceSetupStep } from "./steps/workspace-setup-step";
 
 const STEPS = [
   { id: "persona", label: "画像", title: "选择你的学习场景", required: true },
@@ -45,6 +49,8 @@ const STEP_DESCRIPTIONS: Readonly<
 
 export function OnboardingWizard() {
   const [currentStep, setCurrentStep] = useState(0);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [spaceId, setSpaceId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
   const step = STEPS[currentStep] ?? STEPS[0];
@@ -87,6 +93,56 @@ export function OnboardingWizard() {
 
       {step.id === "persona" ? (
         <PersonaSelectionStep onNext={next} />
+      ) : step.id === "workspace" ? (
+        <WorkspaceSetupStep
+          onNext={(selectedWorkspaceId) => {
+            setWorkspaceId(selectedWorkspaceId);
+            setSpaceId(null);
+            next();
+          }}
+        />
+      ) : step.id === "space" && workspaceId !== null ? (
+        <SpaceSetupStep
+          workspaceId={workspaceId}
+          onNext={(selectedSpaceId) => {
+            setSpaceId(selectedSpaceId);
+            next();
+          }}
+        />
+      ) : step.id === "passphrase" ? (
+        <PassphraseStep onNext={next} />
+      ) : step.id === "goal" && workspaceId !== null && spaceId !== null ? (
+        <TodayGoalStep
+          onNext={next}
+          spaceId={spaceId}
+          workspaceId={workspaceId}
+        />
+      ) : step.id === "space" || step.id === "goal" ? (
+        <section
+          className="onboarding-step"
+          aria-labelledby="onboarding-context-error"
+        >
+          <header>
+            <p className="eyebrow">REQUIRED CONTEXT</p>
+            <h1 id="onboarding-context-error">需要重新选择工作区</h1>
+            <p>
+              当前引导上下文不完整。请返回工作区步骤重新选择，必选步骤不会被跳过。
+            </p>
+          </header>
+          <div className="onboarding-actions">
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => {
+                setWorkspaceId(null);
+                setSpaceId(null);
+                setCurrentStep(1);
+              }}
+            >
+              返回工作区步骤
+            </button>
+          </div>
+        </section>
       ) : (
         <section
           aria-labelledby={`onboarding-${step.id}`}
@@ -99,35 +155,32 @@ export function OnboardingWizard() {
             <h1 id={`onboarding-${step.id}`}>{step.title}</h1>
             <p>{STEP_DESCRIPTIONS[step.id]}</p>
           </header>
-          <div className="onboarding-preview" aria-hidden="true">
-            <span>{currentStep + 1}</span>
-            <p>{step.label}</p>
-          </div>
+          {step.id === "template" ? (
+            <div className="onboarding-preview">
+              <span aria-hidden="true">5</span>
+              <p>模板安装会在模板库中完成，本步骤不会创建占位数据。</p>
+            </div>
+          ) : null}
           {error ? (
             <p className="field-error" role="alert">
               入门状态未能保存，请重试。
             </p>
           ) : null}
           <div className="onboarding-actions">
-            {!step.required ? (
+            {step.id === "template" ? (
               <button className="secondary-button" type="button" onClick={next}>
-                跳过
+                稍后在模板页选择
               </button>
-            ) : null}
-            <button
-              className="primary-action"
-              disabled={pending}
-              type="button"
-              onClick={() =>
-                step.id === "complete" ? void complete() : next()
-              }
-            >
-              {pending
-                ? "正在完成…"
-                : step.id === "complete"
-                  ? "进入 Logion"
-                  : "继续"}
-            </button>
+            ) : (
+              <button
+                className="primary-action"
+                disabled={pending}
+                type="button"
+                onClick={() => void complete()}
+              >
+                {pending ? "正在完成…" : "进入 Logion"}
+              </button>
+            )}
           </div>
         </section>
       )}
