@@ -28,7 +28,8 @@
 密码、MFA 与 Passkey 登录成功后统一读取 `onboarding_completed`：
 
 - 值为 `"true"`：进入 `/app/today`。
-- 不存在或不是 `"true"`：进入 `/onboarding`。
-- 设置服务暂时不可用：降级进入 `/app/today`，避免因偏好服务故障锁死已认证用户。
+- 不存在或不是 `"true"`：进入 `/onboarding`（存量账号的缺失回填见三态策略）。
+- 设置读取失败时重试一次；仍失败则显示阻塞错误和重试按钮，不得降级进入应用。
+- `/app/*` 在认证后继续执行同一检查，未完成引导时跳转 `/onboarding`。
 
 完成 7 步引导后，前端通过现有 UserSetting PUT 写入 `onboarding_completed: "true"`。
