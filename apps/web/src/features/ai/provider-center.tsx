@@ -368,6 +368,7 @@ export function ProviderCenter() {
   return (
     <section
       className="settings-page"
+      id="ai-provider-center"
       aria-labelledby="provider-center-heading"
     >
       <ProductHero
@@ -625,6 +626,7 @@ export function ProviderCenter() {
         )}
       </ProductPanel>
       <ProductDisclosure
+        id="ai-budget-center"
         summary="AI Token 使用上限"
         description="限制每月可调用的 Token 数量，避免意外占用过多本机资源"
       >
@@ -649,6 +651,7 @@ export function ProviderCenter() {
         </form>
       </ProductDisclosure>
       <ProductPanel
+        id="ai-route-center"
         title="任务路由"
         description="按顺序使用已勾选模型，首个为主选，其余为降级候选。"
         aside={<ProductTag tone="info">{routes.length} 条</ProductTag>}

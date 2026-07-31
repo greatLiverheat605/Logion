@@ -143,4 +143,48 @@ test.describe("prototype productization", () => {
       page.getByLabel("我已明确选择并核对上述发送来源与内容范围"),
     ).toBeVisible();
   });
+
+  test("system workbenches expose real diagnostics and explicit integration boundaries", async ({
+    page,
+  }) => {
+    await page.goto("/app/ai");
+    const aiNavigation = page.getByRole("navigation", {
+      name: "AI 路由中心分区",
+    });
+    await expect(
+      aiNavigation.getByRole("link", { name: "运行与草稿" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "预检发送范围与预算" }),
+    ).toBeVisible();
+
+    await page.goto("/app/sync");
+    await expect(
+      page.getByRole("heading", { name: "真实同步拓扑与设备" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("同步队列诊断")).toBeVisible();
+
+    await page.goto("/app/security");
+    const securityNavigation = page.getByRole("navigation", {
+      name: "安全与数据主权",
+    });
+    await expect(
+      securityNavigation.getByRole("link", { name: "审计时间线" }),
+    ).toHaveAttribute("href", "/app/audit");
+
+    await page.goto("/app/settings");
+    await expect(
+      page.getByRole("heading", { name: "自动化与集成边界" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("当前版本没有通用连接器或自动化规则 CRUD", {
+        exact: false,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "打开通知中心" }).click();
+    await expect(
+      page.getByRole("dialog", { name: /通知中心|未读通知/ }),
+    ).toBeVisible();
+  });
 });

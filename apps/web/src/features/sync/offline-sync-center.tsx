@@ -15,6 +15,7 @@ import {
   type LocalConflict,
   type LogionOfflineDatabase,
   type SyncTransport,
+  type WorkspaceSyncState,
 } from "@logion/offline";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
@@ -29,12 +30,14 @@ import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import { ApiAttachmentUploadTransport } from "./attachment-upload-transport";
+import { summarizeSyncQueue, type SyncQueueSummary } from "./sync-diagnostics";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
 type ConnectionState = "offline" | "online";
 
 const CLEAR_DEVICE_CONFIRMATION = "CLEAR THIS DEVICE";
+const EMPTY_QUEUE_SUMMARY = summarizeSyncQueue([]);
 
 interface ConflictView {
   conflict: LocalConflict;
@@ -126,12 +129,16 @@ export function OfflineSyncCenter() {
   } = useVaultSession();
   const [connection, setConnection] = useState<ConnectionState>("offline");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在读取同步上下文…");
   const [conflicts, setConflicts] = useState<ConflictView[]>([]);
   const [attachments, setAttachments] = useState<AttachmentQueueEntry[]>([]);
+  const [queueSummary, setQueueSummary] =
+    useState<SyncQueueSummary>(EMPTY_QUEUE_SUMMARY);
+  const [syncState, setSyncState] = useState<WorkspaceSyncState | null>(null);
   const [mergeConflictId, setMergeConflictId] = useState<string | null>(null);
   const [mergeDraft, setMergeDraft] = useState("");
   const [clearConfirmation, setClearConfirmation] = useState("");
@@ -146,6 +153,7 @@ export function OfflineSyncCenter() {
       ]);
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(workspaceResult.workspaces);
+      setDevices(deviceResult.devices);
       setWorkspaceId((current) =>
         workspaceResult.workspaces.some((item) => item.id === current)
           ? current
@@ -237,9 +245,11 @@ export function OfflineSyncCenter() {
     localVault = vault.current,
   ): Promise<void> {
     if (db === null || localVault === null || !workspaceId) return;
-    const [rows, queued] = await Promise.all([
+    const [rows, queued, outbox, currentSyncState] = await Promise.all([
       new ConflictRepository(db, localVault).listOpen(workspaceId),
       db.attachmentQueue.where("workspace_id").equals(workspaceId).toArray(),
+      db.outbox.where("workspace_id").equals(workspaceId).toArray(),
+      db.syncState.get(workspaceId),
     ]);
     const views = await Promise.all(
       rows.map(async (conflict) => ({
@@ -258,6 +268,8 @@ export function OfflineSyncCenter() {
             left.attachment_id.localeCompare(right.attachment_id),
         ),
     );
+    setQueueSummary(summarizeSyncQueue(outbox));
+    setSyncState(currentSyncState ?? null);
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -295,6 +307,8 @@ export function OfflineSyncCenter() {
     lockVault();
     setConflicts([]);
     setAttachments([]);
+    setQueueSummary(EMPTY_QUEUE_SUMMARY);
+    setSyncState(null);
     setMergeConflictId(null);
     setMergeDraft("");
     setStatus("本地资料已锁定。");
@@ -308,6 +322,8 @@ export function OfflineSyncCenter() {
       await clearLocalData();
       setConflicts([]);
       setAttachments([]);
+      setQueueSummary(EMPTY_QUEUE_SUMMARY);
+      setSyncState(null);
       setMergeConflictId(null);
       setMergeDraft("");
       setClearConfirmation("");
@@ -468,6 +484,12 @@ export function OfflineSyncCenter() {
           tone={conflicts.length ? "bad" : "good"}
         />
         <ProductMetric
+          label="同步队列"
+          value={queueSummary.total}
+          detail={`${queueSummary.pending} 待推送 · ${queueSummary.blocked + queueSummary.isolated} 需诊断`}
+          tone={queueSummary.blocked || queueSummary.isolated ? "warn" : "info"}
+        />
+        <ProductMetric
           label="附件队列"
           value={attachments.length}
           detail="上传后校验哈希"
@@ -492,6 +514,83 @@ export function OfflineSyncCenter() {
             立即同步
           </button>
         ) : null}
+      </article>
+
+      <article className="settings-card sync-wide-card sync-topology-card">
+        <div className="sync-card-heading">
+          <div>
+            <p className="eyebrow">Sync topology</p>
+            <h2>真实同步拓扑与设备</h2>
+          </div>
+          <ProductTag tone={connection === "online" ? "good" : "warn"}>
+            {connection === "online" ? "服务器可连接" : "服务器不可连接"}
+          </ProductTag>
+        </div>
+        <div className="sync-topology-live" aria-label="当前同步拓扑">
+          <div>
+            <strong>本地加密仓库</strong>
+            <small>{unlocked ? "当前已解锁" : "当前已锁定"}</small>
+          </div>
+          <span aria-hidden="true">⇄</span>
+          <div>
+            <strong>Logion sync-v1</strong>
+            <small>
+              {syncState?.last_sync_at
+                ? `上次同步 ${new Date(syncState.last_sync_at).toLocaleString()}`
+                : "尚无成功同步记录"}
+            </small>
+          </div>
+          <span aria-hidden="true">⇄</span>
+          <div>
+            <strong>{devices.length} 台已登记设备</strong>
+            <small>
+              {devices.filter((device) => device.revoked_at === null).length}{" "}
+              台未撤销
+            </small>
+          </div>
+        </div>
+        {devices.length ? (
+          <ul className="sync-device-list" aria-label="已登记设备">
+            {devices.map((device) => (
+              <li key={device.id}>
+                <span>
+                  <strong>{device.name}</strong>
+                  <small>
+                    {device.platform} · 最近活动{" "}
+                    {new Date(device.last_seen_at).toLocaleString()}
+                  </small>
+                </span>
+                <ProductTag
+                  tone={
+                    device.revoked_at
+                      ? "bad"
+                      : device.current
+                        ? "good"
+                        : "default"
+                  }
+                >
+                  {device.revoked_at
+                    ? "已撤销"
+                    : device.current
+                      ? "当前设备"
+                      : "已授权"}
+                </ProductTag>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ProductEmptyState
+            title="没有可展示的设备"
+            description="设备接口未返回登记记录，当前无法建立同步拓扑。"
+          />
+        )}
+        <div className="sync-queue-diagnostics" aria-label="同步队列诊断">
+          <span>待推送 {queueSummary.pending}</span>
+          <span>传输中 {queueSummary.in_flight}</span>
+          <span>冲突 {queueSummary.conflict}</span>
+          <span>阻塞 {queueSummary.blocked}</span>
+          <span>隔离 {queueSummary.isolated}</span>
+        </div>
       </article>
 
       <article className="settings-card">

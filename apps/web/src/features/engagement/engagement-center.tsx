@@ -26,6 +26,12 @@ import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
+import {
+  announceNotificationWorkspace,
+  NOTIFICATION_CATEGORIES,
+  visibleNotifications as filterVisibleNotifications,
+} from "./notification-center-model";
+
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type ServerSearchResult = components["schemas"]["SearchResult"];
 type Notification = components["schemas"]["NotificationResponse"];
@@ -35,15 +41,6 @@ type DisplayResult = Pick<
   ServerSearchResult,
   "object_id" | "object_type" | "snippet" | "title" | "updated_at"
 > & { permission_source: string };
-
-const CATEGORIES = [
-  "learning",
-  "collaboration",
-  "sync",
-  "security",
-  "ai",
-  "system",
-] as const;
 
 function errorText(error: unknown) {
   if (error instanceof LogionApiError)
@@ -125,11 +122,7 @@ export function EngagementCenter() {
         ]);
       setNotifications(
         Array.isArray(notificationResult.notifications)
-          ? notificationResult.notifications.filter((notification) =>
-              CATEGORIES.includes(
-                notification.category as (typeof CATEGORIES)[number],
-              ),
-            )
+          ? filterVisibleNotifications(notificationResult.notifications)
           : [],
       );
       setPreference(preferenceResult);
@@ -252,6 +245,7 @@ export function EngagementCenter() {
         },
       );
       await loadData(workspaceId);
+      announceNotificationWorkspace(workspaceId);
       setStatus("通知偏好已保存；安全通知始终保留。");
     } catch (error) {
       setStatus(errorText(error));
@@ -266,6 +260,7 @@ export function EngagementCenter() {
         { method: "POST", csrf: true, body: JSON.stringify({ read: true }) },
       );
       await loadData(workspaceId);
+      announceNotificationWorkspace(workspaceId);
     } catch (error) {
       setStatus(errorText(error));
     }
@@ -382,7 +377,11 @@ export function EngagementCenter() {
         <select
           id="engagement-workspace"
           value={workspaceId}
-          onChange={(event) => setWorkspaceId(event.target.value)}
+          onChange={(event) => {
+            const selected = event.target.value;
+            setWorkspaceId(selected);
+            announceNotificationWorkspace(selected);
+          }}
         >
           {workspaces.map((workspace) => (
             <option key={workspace.id} value={workspace.id}>
@@ -451,7 +450,7 @@ export function EngagementCenter() {
         >
           <fieldset>
             <legend>类别</legend>
-            {CATEGORIES.map((category) => (
+            {NOTIFICATION_CATEGORIES.map((category) => (
               <label key={category}>
                 <input
                   name="categories"

@@ -1,8 +1,16 @@
 "use client";
 
+import type { components } from "@logion/contracts";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
@@ -20,11 +28,18 @@ import { AppOperationalTools } from "@/components/app-shell/app-operational-tool
 import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { LogoutButton } from "@/features/auth/logout-button";
 import { useSession } from "@/features/auth/session-provider";
+import {
+  NOTIFICATION_CENTER_UPDATED_EVENT,
+  notificationSummary,
+} from "@/features/engagement/notification-center-model";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { mobileNavigationForPersona } from "@/features/personas/mobile-persona-navigation";
 import { usePersona } from "@/features/personas/persona-context";
+import { browserApiClient } from "@/lib/api/client";
 
 type Overlay = "command" | "mobile-more" | "notifications";
+type Workspace = components["schemas"]["WorkspaceResponse"];
+type Notification = components["schemas"]["NotificationResponse"];
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
@@ -39,6 +54,21 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const [online, setOnline] = useState(true);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [query, setQuery] = useState("");
+  const [notificationState, setNotificationState] = useState<{
+    latest: Notification[];
+    status: "error" | "loading" | "ready";
+    total: number;
+    unread: number;
+    workspaceId: string;
+    workspaceName: string;
+  }>({
+    latest: [],
+    status: "loading",
+    total: 0,
+    unread: 0,
+    workspaceId: "",
+    workspaceName: "",
+  });
   const commandButtonRef = useRef<HTMLButtonElement>(null);
 
   const visibleNavGroups = useMemo(
@@ -81,6 +111,54 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       : "学习者";
   const accountInitial = accountLabel.slice(0, 1).toLocaleUpperCase("zh-CN");
 
+  const loadNotificationSummary = useCallback(
+    async (preferredWorkspaceId = "") => {
+      if (session.status !== "authenticated") return;
+      setNotificationState((current) => ({ ...current, status: "loading" }));
+      try {
+        const workspaceResult = await browserApiClient.request<{
+          workspaces: Workspace[];
+        }>("/api/v1/workspaces");
+        const workspace =
+          workspaceResult.workspaces.find(
+            (item) => item.id === preferredWorkspaceId,
+          ) ?? workspaceResult.workspaces[0];
+        if (!workspace) {
+          setNotificationState({
+            latest: [],
+            status: "ready",
+            total: 0,
+            unread: 0,
+            workspaceId: "",
+            workspaceName: "",
+          });
+          return;
+        }
+        const result = await browserApiClient.request<{
+          notifications: Notification[];
+        }>(`/api/v1/workspaces/${workspace.id}/notifications`);
+        const summary = notificationSummary(
+          Array.isArray(result.notifications) ? result.notifications : [],
+        );
+        setNotificationState({
+          ...summary,
+          status: "ready",
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+        });
+      } catch {
+        setNotificationState((current) => ({
+          ...current,
+          latest: [],
+          status: "error",
+          total: 0,
+          unread: 0,
+        }));
+      }
+    },
+    [session.status],
+  );
+
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     update();
@@ -91,6 +169,21 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  useEffect(() => {
+    if (session.status === "authenticated")
+      queueMicrotask(() => void loadNotificationSummary());
+    const refresh = (event: Event) => {
+      const workspaceId =
+        event instanceof CustomEvent && typeof event.detail === "string"
+          ? event.detail
+          : "";
+      void loadNotificationSummary(workspaceId);
+    };
+    window.addEventListener(NOTIFICATION_CENTER_UPDATED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(NOTIFICATION_CENTER_UPDATED_EVENT, refresh);
+  }, [loadNotificationSummary, session.status]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -237,11 +330,21 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             <AppOperationalTools />
             <button
               aria-label="打开通知中心"
-              className="app-icon-button"
+              className="app-icon-button app-notification-button"
               type="button"
-              onClick={() => setOverlay("notifications")}
+              onClick={() => {
+                setOverlay("notifications");
+                void loadNotificationSummary(notificationState.workspaceId);
+              }}
             >
               <AppIcon name="bell" />
+              {notificationState.unread ? (
+                <span aria-hidden="true" className="app-notification-count">
+                  {notificationState.unread > 99
+                    ? "99+"
+                    : notificationState.unread}
+                </span>
+              ) : null}
             </button>
           </div>
         </header>
@@ -377,10 +480,37 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       {overlay === "notifications" ? (
         <AppModal
           eyebrow="NOTIFICATION CENTER"
-          title="通知中心"
+          title={
+            notificationState.status === "ready"
+              ? `${notificationState.unread} 条未读通知`
+              : "通知中心"
+          }
           onClose={() => setOverlay(null)}
         >
-          <p className="muted">通知内容由现有通知中心实时加载。</p>
+          <p className="muted">
+            {notificationState.status === "loading"
+              ? "正在读取真实通知中心…"
+              : notificationState.status === "error"
+                ? "通知暂时无法读取，请进入通知中心重试。"
+                : notificationState.workspaceName
+                  ? `${notificationState.workspaceName} · ${notificationState.total} 条通知`
+                  : "当前没有可读取通知的工作区。"}
+          </p>
+          {notificationState.latest.length ? (
+            <ul className="app-notification-summary">
+              {notificationState.latest.map((notification) => (
+                <li key={notification.id}>
+                  <strong>{notification.title}</strong>
+                  <small>
+                    {notification.category} · {notification.summary}
+                  </small>
+                  {notification.read_at === null ? (
+                    <span className="product-tag tone-warn">未读</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <Link
             className="app-primary-link"
             href="/app/search"
