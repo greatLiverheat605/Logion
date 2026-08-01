@@ -262,10 +262,11 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 下一补丁版本优先解决：
 
-1. worker 公平调度、真实 readiness 和任务积压指标；
-2. 每 worker 独立的认证 E2E 夹具，消除绿色跳过与共享会话竞争；
-3. Today/Review/Sync 等巨型模块拆分和统一 Vault 刷新 Hook；
-4. 核心工作台离线冷启动、视觉回归和实体设备门禁。
+1. 每 worker 独立的认证 E2E 夹具，消除绿色跳过与共享会话竞争；
+2. Today/Review/Sync 等巨型模块拆分和统一 Vault 刷新 Hook；
+3. 核心工作台离线冷启动、视觉回归和实体设备门禁。
+
+Worker 公平调度、真实 readiness、独立心跳和聚合任务积压指标已进入 v0.1.1。
 
 之后再进入学习洞察、论文研读、个人移动端候选和 Connector/Automation v2。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 

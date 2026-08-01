@@ -24,3 +24,14 @@ dump、附件和恢复版本元数据放入经认证加密的单一 bundle；同
 环境保持预发布状态。
 
 本机没有 Docker 时不得声称 Compose 已运行通过；由 CI 的 `docker compose config` 和具备 Docker 的 staging 执行 smoke 与恢复测试。
+
+## Worker 健康检查
+
+Compose 使用 Worker readiness，而不是固定成功的进程探针。排障时可执行：
+
+```bash
+docker exec logion-worker-1 python -m logion_worker.health
+docker exec logion-worker-1 python -m logion_worker.health --live
+```
+
+readiness 会检查主循环心跳、最近成功轮询、按队列连续失败、PostgreSQL、Redis，以及 Email、Export、AI、Deletion 四类队列的聚合积压。返回 `not_ready` 时先根据 `checks`、`last_queue` 和 `last_error_code` 定位依赖或任务类型；不要为了恢复绿色状态降低失败阈值或删除业务任务。

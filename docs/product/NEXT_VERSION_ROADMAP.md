@@ -24,6 +24,8 @@ Logion 当前最稀缺的不是功能数量，而是“可信运行、低认知�
 
 目标：后台任务失败必须可见，任何一类队列都不能被长期饿死。
 
+> 实施进度：已完成独立 liveness/readiness、按队列连续失败阈值、PostgreSQL/Redis 探测、聚合积压指标、独立心跳和 Email/Export/AI/Deletion 轮转调度；下一项为认证 E2E 夹具。
+
 - 把 liveness 与 readiness 分开；readiness 纳入数据库/Redis、连续失败和最近成功轮询。
 - 调度改为轮转或配额公平：Email、Portability、AI、Deletion 每轮都有可预测机会。
 - 增加安全指标：每类 queued/running/failed、最老任务年龄、租约超时、重试次数。
