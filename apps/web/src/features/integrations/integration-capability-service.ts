@@ -1,5 +1,5 @@
 import type { ApiClient } from "@/lib/api/client";
-import { browserApiClient } from "@/lib/api/client";
+import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import type {
   CalendarFeed,
@@ -14,6 +14,22 @@ function listFrom<T>(value: unknown, key: string): T[] {
   if (typeof value !== "object" || value === null) return [];
   const list = (value as Record<string, unknown>)[key];
   return Array.isArray(list) ? (list as T[]) : [];
+}
+
+function calendarTokenFrom(value: unknown): { token: string } {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).token === "string" &&
+    String((value as Record<string, unknown>).token).length > 0
+  ) {
+    return { token: String((value as Record<string, unknown>).token) };
+  }
+  throw new LogionApiError({
+    code: "WEB_API_RESPONSE_INVALID",
+    message: "The calendar feed response is invalid.",
+    status: 0,
+  });
 }
 
 export class IntegrationCapabilityService {
@@ -35,17 +51,19 @@ export class IntegrationCapabilityService {
     );
   }
 
-  createCalendarFeed(
+  async createCalendarFeed(
     workspaceId: string,
     input: { id: string; name: string },
   ): Promise<{ token: string }> {
-    return this.api.request(
-      `/api/v1/workspaces/${workspaceId}/calendar-feeds`,
-      {
-        body: JSON.stringify(input),
-        csrf: true,
-        method: "POST",
-      },
+    return calendarTokenFrom(
+      await this.api.request<unknown>(
+        `/api/v1/workspaces/${workspaceId}/calendar-feeds`,
+        {
+          body: JSON.stringify(input),
+          csrf: true,
+          method: "POST",
+        },
+      ),
     );
   }
 

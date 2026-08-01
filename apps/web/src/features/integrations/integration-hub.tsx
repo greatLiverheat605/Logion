@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { secureRandomUuid } from "@logion/offline";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   ProductEmptyState,
@@ -27,7 +28,15 @@ import {
 type HubPhase = "empty" | "error" | "loading" | "needs-context" | "ready";
 type HubService = Pick<
   IntegrationCapabilityService,
-  "listCalendarFeeds" | "listWorkspaces" | "loadPortability"
+  | "listCalendarFeeds"
+  | "listWorkspaces"
+  | "loadPortability"
+  | "cancelExport"
+  | "commitImport"
+  | "createCalendarFeed"
+  | "createExport"
+  | "previewImport"
+  | "revokeCalendarFeed"
 >;
 
 const EMPTY_DATA: IntegrationCapabilityData = {
@@ -60,6 +69,10 @@ export function IntegrationHub({
   );
   const [contextReload, setContextReload] = useState(0);
   const [dataReload, setDataReload] = useState(0);
+  const [calendarToken, setCalendarToken] = useState("");
+  const [targetSpaceId, setTargetSpaceId] = useState("");
+  const [actionStatus, setActionStatus] =
+    useState("选择工作区后可管理当前已有能力。");
 
   useEffect(() => {
     let active = true;
@@ -99,6 +112,11 @@ export function IntegrationHub({
       .then(([feeds, portability]) => {
         if (!active) return;
         setData({ feeds, ...portability });
+        setTargetSpaceId((current) =>
+          portability.privateSpaces.some((space) => space.id === current)
+            ? current
+            : (portability.privateSpaces[0]?.id ?? ""),
+        );
         setDataPhase("ready");
       })
       .catch((reason: unknown) => {
@@ -148,7 +166,124 @@ export function IntegrationHub({
     setData(EMPTY_DATA);
     setDataPhase("loading");
     setError(null);
+    setCalendarToken("");
+    setTargetSpaceId("");
     setWorkspaceId(nextWorkspaceId);
+  }
+
+  function refreshData() {
+    setData(EMPTY_DATA);
+    setDataPhase("loading");
+    setDataReload((value) => value + 1);
+  }
+
+  function reportActionError(reason: unknown) {
+    const next = integrationCapabilityErrorState(reason);
+    setError(next);
+    setActionStatus(
+      next.kind === "recent-auth-required"
+        ? "需要重新登录后才能创建数据导出。"
+        : `操作未完成（${next.code}，请求编号：${next.requestId}）。`,
+    );
+  }
+
+  async function createFeed(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId) return;
+    try {
+      const result = await service.createCalendarFeed(workspaceId, {
+        id: secureRandomUuid(),
+        name: String(new FormData(event.currentTarget).get("name") ?? ""),
+      });
+      setCalendarToken(result.token);
+      event.currentTarget.reset();
+      setError(null);
+      setActionStatus("日历订阅已创建；请立即保存一次性 URL。");
+      refreshData();
+    } catch (reason) {
+      reportActionError(reason);
+    }
+  }
+
+  async function revokeFeed(feedId: string, version: number) {
+    if (!workspaceId) return;
+    try {
+      await service.revokeCalendarFeed(workspaceId, feedId, version);
+      setError(null);
+      setActionStatus("日历订阅已撤销，旧 URL 已立即失效。");
+      refreshData();
+    } catch (reason) {
+      reportActionError(reason);
+    }
+  }
+
+  async function createExport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId) return;
+    const confirmation = String(
+      new FormData(event.currentTarget).get("confirmation") ?? "",
+    );
+    try {
+      await service.createExport(workspaceId, {
+        confirmation,
+        id: secureRandomUuid(),
+      });
+      event.currentTarget.reset();
+      setError(null);
+      setActionStatus("导出任务已进入后台队列。");
+      refreshData();
+    } catch (reason) {
+      reportActionError(reason);
+    }
+  }
+
+  async function cancelExport(exportId: string, version: number) {
+    if (!workspaceId) return;
+    try {
+      await service.cancelExport(workspaceId, exportId, version);
+      setError(null);
+      setActionStatus("导出任务已取消。");
+      refreshData();
+    } catch (reason) {
+      reportActionError(reason);
+    }
+  }
+
+  async function previewImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId) return;
+    const form = new FormData(event.currentTarget);
+    try {
+      await service.previewImport(workspaceId, {
+        content: String(form.get("content") ?? ""),
+        id: secureRandomUuid(),
+        source_filename: String(form.get("source_filename") ?? "import.md"),
+        source_format: String(
+          form.get("source_format") ?? "markdown",
+        ) as IntegrationCapabilityData["imports"][number]["source_format"],
+      });
+      event.currentTarget.reset();
+      setError(null);
+      setActionStatus("导入内容已安全解析；确认计数和警告后再提交。");
+      refreshData();
+    } catch (reason) {
+      reportActionError(reason);
+    }
+  }
+
+  async function commitImport(importId: string, version: number) {
+    if (!workspaceId || !targetSpaceId) return;
+    try {
+      await service.commitImport(workspaceId, importId, {
+        expected_version: version,
+        target_space_id: targetSpaceId,
+      });
+      setError(null);
+      setActionStatus("导入已提交到自己的 Private Space，并使用新的对象 ID。");
+      refreshData();
+    } catch (reason) {
+      reportActionError(reason);
+    }
   }
 
   return (
@@ -170,6 +305,9 @@ export function IntegrationHub({
                 请求编号：{error.requestId}
               </p>
             ) : null}
+            <p className="product-page-status" aria-live="polite">
+              {actionStatus}
+            </p>
           </>
         }
         actions={
@@ -282,9 +420,46 @@ export function IntegrationHub({
                 {summary.calendar.active} 个有效，{summary.calendar.revoked}{" "}
                 个已撤销。 新 Token 只会在创建响应中显示一次。
               </p>
-              <Link className="product-action-link" href="/app/search">
-                管理日历订阅
-              </Link>
+              <form className="planning-form" onSubmit={createFeed}>
+                <label>
+                  订阅名称
+                  <input name="name" maxLength={120} required />
+                </label>
+                <button>创建日历订阅</button>
+              </form>
+              {calendarToken ? (
+                <div role="status">
+                  <strong>一次性 URL</strong>
+                  <a
+                    className="text-link"
+                    href={`/api/v1/calendars/${calendarToken}.ics`}
+                    rel="noreferrer"
+                  >
+                    /api/v1/calendars/{calendarToken}.ics
+                  </a>
+                  <button type="button" onClick={() => setCalendarToken("")}>
+                    关闭一次性 URL
+                  </button>
+                </div>
+              ) : null}
+              <ul className="item-list">
+                {data.feeds.map((feed) => (
+                  <li key={feed.id}>
+                    <span>
+                      <strong>{feed.name}</strong>
+                      <small>{feed.status}</small>
+                    </span>
+                    {feed.status === "active" ? (
+                      <button
+                        type="button"
+                        onClick={() => void revokeFeed(feed.id, feed.version)}
+                      >
+                        撤销
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             </ProductPanel>
             <ProductPanel
               aside={<ProductTag tone="warn">先预览</ProductTag>}
@@ -295,9 +470,69 @@ export function IntegrationHub({
                 {summary.imports.previewed} 个待确认，{summary.imports.imported}{" "}
                 个已提交； 只允许写入自己的 Private Space。
               </p>
-              <Link className="product-action-link" href="/app/data">
-                预览导入内容
-              </Link>
+              <form className="planning-form" onSubmit={previewImport}>
+                <label>
+                  格式
+                  <select name="source_format" defaultValue="markdown">
+                    <option value="logion_json">Logion JSON</option>
+                    <option value="markdown">Markdown</option>
+                    <option value="csv">CSV</option>
+                    <option value="bibtex">BibTeX</option>
+                  </select>
+                </label>
+                <label>
+                  文件名
+                  <input
+                    name="source_filename"
+                    defaultValue="import.md"
+                    maxLength={255}
+                    required
+                  />
+                </label>
+                <label>
+                  内容（最大 1 MiB）
+                  <textarea name="content" maxLength={1_048_576} required />
+                </label>
+                <button>生成导入预览</button>
+              </form>
+              <label htmlFor="integration-target-space">
+                写入自己的 Private Space
+              </label>
+              <select
+                id="integration-target-space"
+                value={targetSpaceId}
+                onChange={(event) => setTargetSpaceId(event.target.value)}
+              >
+                {data.privateSpaces.map((space) => (
+                  <option key={space.id} value={space.id}>
+                    {space.name}
+                  </option>
+                ))}
+              </select>
+              <ul className="item-list">
+                {data.imports.map((item) => (
+                  <li key={item.id}>
+                    <span>
+                      <strong>
+                        {item.source_filename} · {item.status}
+                      </strong>
+                      <small>{JSON.stringify(item.counts)}</small>
+                      {item.warnings.map((warning) => (
+                        <span key={warning}>{warning}</span>
+                      ))}
+                    </span>
+                    {item.status === "previewed" ? (
+                      <button
+                        type="button"
+                        disabled={!targetSpaceId}
+                        onClick={() => void commitImport(item.id, item.version)}
+                      >
+                        确认 IMPORT
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             </ProductPanel>
             <ProductPanel
               aside={<ProductTag tone="good">可校验</ProductTag>}
@@ -309,9 +544,45 @@ export function IntegrationHub({
                 {summary.exports.succeeded} 个成功，{summary.exports.failed}{" "}
                 个失败。
               </p>
-              <Link className="product-action-link" href="/app/data">
-                管理导出任务
-              </Link>
+              <form className="planning-form" onSubmit={createExport}>
+                <label>
+                  输入 EXPORT 确认创建
+                  <input name="confirmation" pattern="EXPORT" required />
+                </label>
+                <button>创建加密导出</button>
+              </form>
+              <ul className="item-list">
+                {data.exports.map((item) => (
+                  <li key={item.id}>
+                    <span>
+                      <strong>{item.status}</strong>
+                      <small>
+                        {item.artifact_bytes ?? 0} bytes · 到期时间{" "}
+                        {item.expires_at}
+                      </small>
+                      {item.artifact_sha256 ? (
+                        <code>{item.artifact_sha256}</code>
+                      ) : null}
+                    </span>
+                    {item.status === "succeeded" ? (
+                      <a
+                        className="text-link"
+                        href={`/api/v1/workspaces/${workspaceId}/data-exports/${item.id}/download`}
+                      >
+                        下载
+                      </a>
+                    ) : null}
+                    {item.status === "queued" || item.status === "running" ? (
+                      <button
+                        type="button"
+                        onClick={() => void cancelExport(item.id, item.version)}
+                      >
+                        取消
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             </ProductPanel>
             <ProductPanel
               aside={<ProductTag>审计边界</ProductTag>}

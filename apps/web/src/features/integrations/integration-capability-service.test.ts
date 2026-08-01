@@ -65,6 +65,19 @@ describe("IntegrationCapabilityService", () => {
     );
   });
 
+  it("rejects a Calendar response without the one-time token", async () => {
+    const service = new IntegrationCapabilityService(
+      clientWith(() => Promise.resolve({ token: "" })),
+    );
+
+    await expect(
+      service.createCalendarFeed("workspace-1", {
+        id: "feed-1",
+        name: "My calendar",
+      }),
+    ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
+  });
+
   it("reuses export and import endpoints without changing their contracts", async () => {
     const api = clientWith(() => Promise.resolve({}));
     const service = new IntegrationCapabilityService(api);
