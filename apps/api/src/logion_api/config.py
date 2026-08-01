@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     healthcheck_dependencies: bool = False
+    worker_health_state_path: str = Field(
+        default="/tmp/logion-worker-health.json",  # noqa: S108 - dedicated container tmpfs
+        min_length=1,
+        max_length=4096,
+    )
+    worker_health_stale_after_seconds: int = Field(default=15, ge=5, le=300)
+    worker_health_failure_threshold: int = Field(default=3, ge=1, le=100)
+    worker_health_dependency_timeout_seconds: int = Field(default=3, ge=1, le=15)
     secret_key: SecretStr = SecretStr("development-only-secret-key-change-me")
     cookie_secure: bool = False
     cookie_domain: str | None = None
