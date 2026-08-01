@@ -1,7 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
-const email = process.env.LOGION_E2E_EMAIL;
-const password = process.env.LOGION_E2E_PASSWORD;
+import { expect, test } from "./fixtures";
 
 async function openAiDraftForm(page: Page) {
   await page
@@ -11,87 +10,7 @@ async function openAiDraftForm(page: Page) {
     .click();
 }
 
-async function signIn(page: Page) {
-  await page.goto("/auth/login");
-  await page.getByLabel("邮箱").fill(email ?? "");
-  await page.getByLabel("密码").fill(password ?? "");
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
-  if (page.url().endsWith("/onboarding")) {
-    await expect(
-      page.getByRole("heading", { name: "选择你的学习场景" }),
-    ).toBeVisible();
-    await page.evaluate(async () => {
-      const csrf = document.cookie
-        .split(";")
-        .map((part) => part.trim())
-        .find((part) => part.startsWith("logion_csrf="))
-        ?.slice("logion_csrf=".length);
-      if (!csrf) throw new Error("Missing CSRF cookie");
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const current = (await fetch("/api/v1/users/me/settings", {
-          credentials: "same-origin",
-        }).then((response) => response.json())) as {
-          settings: Array<{ key: string; value: string; version: number }>;
-        };
-        const byKey = new Map(current.settings.map((item) => [item.key, item]));
-        const onboarding = byKey.get("onboarding_completed");
-        const updates = [
-          ...(!byKey.has("persona")
-            ? [
-                {
-                  key: "persona",
-                  value: '{"activePersonaId":"self","customPersonas":[]}',
-                  version: 0,
-                },
-              ]
-            : []),
-          ...(onboarding?.value !== "true"
-            ? [
-                {
-                  key: "onboarding_completed",
-                  value: "true",
-                  version: onboarding?.version ?? 0,
-                },
-              ]
-            : []),
-        ];
-        if (updates.length === 0) return;
-        const saved = await fetch("/api/v1/users/me/settings", {
-          body: JSON.stringify({ settings: updates }),
-          credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-Token": csrf,
-          },
-          method: "PUT",
-        });
-        if (saved.ok) return;
-        if (saved.status !== 409) {
-          throw new Error(`Setting seed failed: ${saved.status}`);
-        }
-      }
-      throw new Error("Setting seed did not converge");
-    });
-    await page.goto("/app/today");
-  }
-  await expect(page.locator(".app-shell-frame")).toBeVisible();
-}
-
 test.describe("prototype productization", () => {
-  test.skip(
-    !email || !password,
-    "Set LOGION_E2E_EMAIL and LOGION_E2E_PASSWORD for authenticated workbench checks.",
-  );
-
-  test.beforeEach(async ({ browserName, isMobile, page }) => {
-    test.skip(
-      browserName !== "chromium" || isMobile,
-      "Runs once against the shared authenticated fixture.",
-    );
-    await signIn(page);
-  });
-
   test("learning workbenches distinguish a locked Vault from empty data", async ({
     page,
   }) => {
@@ -188,10 +107,10 @@ test.describe("prototype productization", () => {
 
     await page.goto("/app/settings");
     await expect(
-      page.getByRole("heading", { name: "自动化与集成边界" }),
+      page.getByRole("heading", { name: "互操作与自动化边界" }),
     ).toBeVisible();
     await expect(
-      page.getByText("当前版本没有通用连接器或自动化规则 CRUD", {
+      page.getByText("通用连接器与自动化规则仍未开放", {
         exact: false,
       }),
     ).toBeVisible();

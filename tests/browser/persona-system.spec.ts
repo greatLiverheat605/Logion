@@ -1,100 +1,42 @@
-import { expect, test, type Page } from "@playwright/test";
+import { randomBytes, randomUUID } from "node:crypto";
 
-const email = process.env.LOGION_E2E_EMAIL;
-const password = process.env.LOGION_E2E_PASSWORD;
+import { test as baseTest } from "@playwright/test";
 
-async function signIn(page: Page) {
-  await page.goto("/auth/login");
-  await page.getByLabel("邮箱").fill(email ?? "");
-  await page.getByLabel("密码").fill(password ?? "");
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
-  await page.evaluate(async () => {
-    const csrf = document.cookie
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("logion_csrf="))
-      ?.slice("logion_csrf=".length);
-    if (!csrf) throw new Error("Missing CSRF cookie");
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const current = (await fetch("/api/v1/users/me/settings?key=persona", {
-        credentials: "same-origin",
-      }).then((response) => response.json())) as {
-        settings: Array<{ key: string; version: number }>;
-      };
-      if (current.settings.length > 0) return;
-      const saved = await fetch("/api/v1/users/me/settings", {
-        body: JSON.stringify({
-          settings: [
-            {
-              key: "persona",
-              value: '{"activePersonaId":"self","customPersonas":[]}',
-              version: 0,
-            },
-          ],
-        }),
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-        method: "PUT",
-      });
-      if (saved.ok) return;
-      if (saved.status !== 409)
-        throw new Error(`Persona seed failed: ${saved.status}`);
-    }
-    throw new Error("Persona seed did not converge");
-  });
-}
+import { expect, test } from "./fixtures";
 
-test("a newly registered account is forced into onboarding on first login", async ({
-  browserName,
-  isMobile,
-  page,
-}) => {
-  test.skip(
-    browserName !== "chromium" || isMobile,
-    "Runs once against the registration service.",
-  );
-  await page.goto("/auth/login");
-  const email = `persona-onboarding-${crypto.randomUUID()}@example.com`;
-  const password = "a-strong-password-123";
-  const registered = await page.request.post("/api/v1/auth/register", {
-    data: {
-      device_name: "Persona onboarding guard",
-      email,
-      password,
-    },
-    headers: { Origin: new URL(page.url()).origin },
-  });
-  expect(registered.status(), await registered.text()).toBe(201);
+baseTest(
+  "a newly registered account is forced into onboarding on first login",
+  async ({ page }) => {
+    await page.goto("/auth/login");
+    const email = `persona-onboarding-${randomUUID()}@example.com`;
+    const password = `${randomBytes(24).toString("base64url")}Aa1!`;
+    const registered = await page.request.post("/api/v1/auth/register", {
+      data: {
+        device_name: "Persona onboarding guard",
+        email,
+        password,
+      },
+      headers: { Origin: new URL(page.url()).origin },
+    });
+    expect(registered.status(), await registered.text()).toBe(201);
 
-  await page.context().clearCookies();
-  await page.goto("/auth/login");
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(password);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
+    await page.context().clearCookies();
+    await page.goto("/auth/login");
+    await page.getByLabel("邮箱").fill(email);
+    await page.getByLabel("密码").fill(password);
+    await page.getByRole("button", { name: "登录", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/onboarding$/);
-  await expect(
-    page.getByRole("heading", { name: "选择你的学习场景" }),
-  ).toBeVisible();
-  await page.goto("/app/today");
-  await expect(page).toHaveURL(/\/onboarding$/);
-});
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(
+      page.getByRole("heading", { name: "选择你的学习场景" }),
+    ).toBeVisible();
+    await page.goto("/app/today");
+    await expect(page).toHaveURL(/\/onboarding$/);
+  },
+);
 
 test.describe("persona system", () => {
   test.describe.configure({ mode: "serial" });
-  test.skip(
-    !email || !password,
-    "Set the authenticated browser fixture credentials.",
-  );
-
-  test.beforeEach(async ({ browserName, isMobile, page }) => {
-    test.skip(
-      browserName !== "chromium" || isMobile,
-      "Runs once against the shared fixture.",
-    );
-    await signIn(page);
-  });
 
   test("onboarding starts with a required persona selection", async ({
     page,
@@ -120,8 +62,10 @@ test.describe("persona system", () => {
   test("sidebar shows only routes visible to the active persona", async ({
     page,
   }) => {
-    await page.goto("/app/today");
-    const navigation = page.getByRole("navigation", { name: "主导航" });
+    await page.goto("/app/settings");
+    await page.getByRole("button", { name: /^切换到：考，/ }).click();
+    await expect(page.getByText("已切换到「考」画像。")).toBeVisible();
+    const navigation = page.getByRole("complementary", { name: "主导航" });
     await expect(navigation.getByRole("link", { name: "考试" })).toBeVisible();
     await expect(navigation.getByRole("link", { name: "复习" })).toBeVisible();
     await expect(navigation.getByRole("link", { name: "审计" })).toHaveCount(0);
@@ -131,7 +75,8 @@ test.describe("persona system", () => {
   test("settings switch updates the sidebar immediately", async ({ page }) => {
     await page.goto("/app/settings");
     await page.getByRole("button", { name: /^切换到：导，/ }).click();
-    const navigation = page.getByRole("navigation", { name: "主导航" });
+    await expect(page.getByText("已切换到「导」画像。")).toBeVisible();
+    const navigation = page.getByRole("complementary", { name: "主导航" });
     await expect(navigation.getByRole("link", { name: "审计" })).toBeVisible();
     await expect(navigation.getByRole("link", { name: "空间" })).toBeVisible();
     await expect(navigation.getByRole("link", { name: "考试" })).toHaveCount(0);
@@ -147,6 +92,7 @@ test.describe("persona system", () => {
   test("today heading follows all four built-in personas even while the Vault is locked", async ({
     page,
   }) => {
+    test.setTimeout(120_000);
     const expectations = [
       ["考", "用真实日期、复习与成绩安排备考"],
       ["学", "让目标、项目与成果形成连续进展"],
@@ -159,6 +105,9 @@ test.describe("persona system", () => {
       await page
         .getByRole("button", { name: new RegExp(`^切换到：${persona}，`) })
         .click();
+      await expect(
+        page.getByText(`已切换到「${persona}」画像。`),
+      ).toBeVisible();
       await page.goto("/app/today");
       await expect(page.getByRole("heading", { name: heading })).toBeVisible();
       await expect(
@@ -196,6 +145,7 @@ test.describe("persona system", () => {
     const navigation = page.getByRole("navigation", { name: "移动端导航" });
 
     await page.getByRole("button", { name: /^切换到：考，/ }).click();
+    await expect(page.getByText("已切换到「考」画像。")).toBeVisible();
     await expect(navigation.getByRole("link")).toHaveText([
       "今日",
       "备考",
@@ -205,6 +155,7 @@ test.describe("persona system", () => {
     await expect(navigation.locator('a[href="/app/research"]')).toHaveCount(0);
 
     await page.getByRole("button", { name: /^切换到：导，/ }).click();
+    await expect(page.getByText("已切换到「导」画像。")).toBeVisible();
     await expect(navigation.getByRole("link")).toHaveText([
       "今日",
       "计划",

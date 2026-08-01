@@ -1,8 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
-
-const email = process.env.LOGION_E2E_EMAIL;
-const password = process.env.LOGION_E2E_PASSWORD;
+import { expect, test } from "./fixtures";
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const authenticatedRoutes = [
   "/app/today",
@@ -37,86 +34,11 @@ const responsiveViewports = [
   { height: 640, label: "320x640", width: 320 },
 ] as const;
 
-async function completeOnboardingIfNeeded(page: Page) {
-  if (!page.url().endsWith("/onboarding")) return;
-  await expect(
-    page.getByRole("heading", { name: "选择你的学习场景" }),
-  ).toBeVisible();
-  await page.evaluate(async () => {
-    const csrf = document.cookie
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("logion_csrf="))
-      ?.slice("logion_csrf=".length);
-    if (!csrf) throw new Error("Missing CSRF cookie");
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const current = (await fetch("/api/v1/users/me/settings", {
-        credentials: "same-origin",
-      }).then((response) => response.json())) as {
-        settings: Array<{ key: string; value: string; version: number }>;
-      };
-      const byKey = new Map(
-        current.settings.map((setting) => [setting.key, setting]),
-      );
-      const updates = [];
-      if (!byKey.has("persona")) {
-        updates.push({
-          key: "persona",
-          value: '{"activePersonaId":"self","customPersonas":[]}',
-          version: 0,
-        });
-      }
-      const onboarding = byKey.get("onboarding_completed");
-      if (onboarding?.value !== "true") {
-        updates.push({
-          key: "onboarding_completed",
-          value: "true",
-          version: onboarding?.version ?? 0,
-        });
-      }
-      if (updates.length === 0) return;
-      const saved = await fetch("/api/v1/users/me/settings", {
-        body: JSON.stringify({ settings: updates }),
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-        method: "PUT",
-      });
-      if (saved.ok) return;
-      if (saved.status !== 409)
-        throw new Error(`Setting seed failed: ${saved.status}`);
-    }
-    throw new Error("Setting seed did not converge");
-  });
-  await page.goto("/app/today");
-}
-
-async function signIn(page: Page) {
-  await page.goto("/auth/login");
-  const submitButton = page.getByRole("button", {
-    name: "登录",
-    exact: true,
-  });
-  await expect(submitButton).toBeEnabled();
-  await page.getByLabel("邮箱").fill(email ?? "");
-  await page.getByLabel("密码").fill(password ?? "");
-  await submitButton.click();
-  await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
-  await completeOnboardingIfNeeded(page);
-  await expect(page).toHaveURL(/\/app(?:\/today)?$/);
-  await expect(page.locator(".app-shell-frame")).toBeVisible();
-}
-
 test.describe("authenticated shell", () => {
-  test.skip(
-    !email || !password,
-    "Set LOGION_E2E_EMAIL and LOGION_E2E_PASSWORD to audit signed-in routes.",
-  );
-
   test("workbenches have no WCAG violations or horizontal overflow", async ({
     page,
   }) => {
     test.setTimeout(120_000);
-    await signIn(page);
 
     for (const route of authenticatedRoutes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
@@ -140,7 +62,6 @@ test.describe("authenticated shell", () => {
     page,
   }) => {
     test.setTimeout(300_000);
-    await signIn(page);
 
     for (const viewport of responsiveViewports) {
       await page.setViewportSize(viewport);
@@ -162,7 +83,6 @@ test.describe("authenticated shell", () => {
   test("theme preference persists across document navigation", async ({
     page,
   }) => {
-    await signIn(page);
     await page.goto("/app/today");
 
     const root = page.locator("html");
@@ -183,7 +103,6 @@ test.describe("authenticated shell", () => {
     page,
   }) => {
     test.setTimeout(180_000);
-    await signIn(page);
 
     for (const theme of ["light", "dark"] as const) {
       await page.evaluate((nextTheme) => {
@@ -217,7 +136,6 @@ test.describe("authenticated shell", () => {
   test("command palette traps and restores keyboard focus", async ({
     page,
   }) => {
-    await signIn(page);
     await page.goto("/app/today");
 
     const commandButton = page.getByRole("button", {
@@ -253,7 +171,6 @@ test.describe("authenticated shell", () => {
   test("global keyboard shortcuts and Escape restore their trigger focus", async ({
     page,
   }) => {
-    await signIn(page);
     await page.goto("/app/today");
 
     const commandButton = page.getByRole("button", {
@@ -289,7 +206,6 @@ test.describe("authenticated shell", () => {
   }) => {
     test.setTimeout(180_000);
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await signIn(page);
 
     for (const route of authenticatedRoutes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
@@ -312,7 +228,6 @@ test.describe("authenticated shell", () => {
   });
 
   test("command palette opens the real capture workflow", async ({ page }) => {
-    await signIn(page);
     await page.goto("/app/today");
 
     await page.getByRole("button", { name: /搜索、导航或执行命令/ }).click();
@@ -330,8 +245,6 @@ test.describe("authenticated shell", () => {
   test("operational tools expose real Vault gates and restore focus", async ({
     page,
   }) => {
-    await signIn(page);
-
     const vaultButton = page.getByRole("button", {
       name: "本地资料已锁定",
       exact: true,
@@ -371,7 +284,6 @@ test.describe("authenticated shell", () => {
   });
 
   test("device data clearing is explicit and scoped", async ({ page }) => {
-    await signIn(page);
     await page.goto("/app/sync");
 
     await expect(
