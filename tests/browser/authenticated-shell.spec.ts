@@ -20,6 +20,7 @@ const authenticatedRoutes = [
   "/app/security",
   "/app/sync",
   "/app/data",
+  "/app/integrations",
   "/app/ai",
   "/app/spaces",
   "/app/settings",

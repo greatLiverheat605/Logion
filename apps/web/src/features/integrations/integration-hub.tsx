@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { secureRandomUuid } from "@logion/offline";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ProductEmptyState,
@@ -73,6 +73,8 @@ export function IntegrationHub({
   const [targetSpaceId, setTargetSpaceId] = useState("");
   const [actionStatus, setActionStatus] =
     useState("选择工作区后可管理当前已有能力。");
+  const calendarNameRef = useRef<HTMLInputElement>(null);
+  const calendarTokenRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -129,6 +131,12 @@ export function IntegrationHub({
       active = false;
     };
   }, [contextPhase, dataReload, service, workspaceId]);
+
+  useEffect(() => {
+    if (calendarToken && dataPhase === "ready") {
+      calendarTokenRef.current?.focus();
+    }
+  }, [calendarToken, dataPhase]);
 
   const phase: HubPhase =
     contextPhase === "loading"
@@ -190,13 +198,14 @@ export function IntegrationHub({
   async function createFeed(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspaceId) return;
+    const form = event.currentTarget;
     try {
       const result = await service.createCalendarFeed(workspaceId, {
         id: secureRandomUuid(),
-        name: String(new FormData(event.currentTarget).get("name") ?? ""),
+        name: String(new FormData(form).get("name") ?? ""),
       });
       setCalendarToken(result.token);
-      event.currentTarget.reset();
+      form.reset();
       setError(null);
       setActionStatus("日历订阅已创建；请立即保存一次性 URL。");
       refreshData();
@@ -220,15 +229,14 @@ export function IntegrationHub({
   async function createExport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspaceId) return;
-    const confirmation = String(
-      new FormData(event.currentTarget).get("confirmation") ?? "",
-    );
+    const form = event.currentTarget;
+    const confirmation = String(new FormData(form).get("confirmation") ?? "");
     try {
       await service.createExport(workspaceId, {
         confirmation,
         id: secureRandomUuid(),
       });
-      event.currentTarget.reset();
+      form.reset();
       setError(null);
       setActionStatus("导出任务已进入后台队列。");
       refreshData();
@@ -252,7 +260,8 @@ export function IntegrationHub({
   async function previewImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspaceId) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await service.previewImport(workspaceId, {
         content: String(form.get("content") ?? ""),
@@ -262,7 +271,7 @@ export function IntegrationHub({
           form.get("source_format") ?? "markdown",
         ) as IntegrationCapabilityData["imports"][number]["source_format"],
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setError(null);
       setActionStatus("导入内容已安全解析；确认计数和警告后再提交。");
       refreshData();
@@ -284,6 +293,24 @@ export function IntegrationHub({
     } catch (reason) {
       reportActionError(reason);
     }
+  }
+
+  async function copyCalendarUrl() {
+    if (!calendarToken) return;
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/api/v1/calendars/${calendarToken}.ics`,
+      );
+      setActionStatus("一次性 Calendar URL 已复制到剪贴板。");
+    } catch {
+      setActionStatus("复制失败；请手动选择并保存一次性 URL。");
+    }
+  }
+
+  function closeCalendarUrl() {
+    setCalendarToken("");
+    setActionStatus("一次性 URL 已从页面关闭；未保存时请撤销并重新创建。");
+    queueMicrotask(() => calendarNameRef.current?.focus());
   }
 
   return (
@@ -410,7 +437,7 @@ export function IntegrationHub({
             />
           </div>
 
-          <div className="product-dashboard-grid product-dashboard-grid-wide">
+          <div className="integration-capability-grid product-dashboard-grid product-dashboard-grid-wide">
             <ProductPanel
               aside={<ProductTag tone="info">只读 ICS</ProductTag>}
               description="Feed 只包含必要标题与时间；撤销后旧地址立即失效。"
@@ -423,12 +450,23 @@ export function IntegrationHub({
               <form className="planning-form" onSubmit={createFeed}>
                 <label>
                   订阅名称
-                  <input name="name" maxLength={120} required />
+                  <input
+                    name="name"
+                    maxLength={120}
+                    ref={calendarNameRef}
+                    required
+                  />
                 </label>
                 <button>创建日历订阅</button>
               </form>
               {calendarToken ? (
-                <div role="status">
+                <div
+                  className="integration-token"
+                  data-testid="calendar-token-notice"
+                  ref={calendarTokenRef}
+                  role="status"
+                  tabIndex={-1}
+                >
                   <strong>一次性 URL</strong>
                   <a
                     className="text-link"
@@ -437,9 +475,14 @@ export function IntegrationHub({
                   >
                     /api/v1/calendars/{calendarToken}.ics
                   </a>
-                  <button type="button" onClick={() => setCalendarToken("")}>
-                    关闭一次性 URL
-                  </button>
+                  <div className="app-actions">
+                    <button type="button" onClick={copyCalendarUrl}>
+                      复制一次性 URL
+                    </button>
+                    <button type="button" onClick={closeCalendarUrl}>
+                      关闭一次性 URL
+                    </button>
+                  </div>
                 </div>
               ) : null}
               <ul className="item-list">
@@ -606,7 +649,7 @@ export function IntegrationHub({
         description="以下能力需要独立的凭据存储、授权、审计与后台调度设计；本页不会伪造连接状态。"
         title="通用连接器与自动化"
       >
-        <div className="product-card-grid">
+        <div className="integration-unsupported-grid product-card-grid">
           <article className="product-compact-card">
             <h3>第三方账号连接</h3>
             <p>Zotero 账号同步与 OAuth 尚未开放。</p>

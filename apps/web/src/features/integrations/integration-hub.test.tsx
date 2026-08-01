@@ -173,6 +173,11 @@ describe("IntegrationHub", () => {
   });
 
   it("creates an ephemeral Calendar URL and revokes an active feed", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     const service = serviceWith({
       feeds: [
         {
@@ -200,9 +205,23 @@ describe("IntegrationHub", () => {
       "workspace-1",
       expect.objectContaining({ name: "研究安排" }),
     );
+    const tokenNotice = screen.getByTestId("calendar-token-notice");
+    await waitFor(() => expect(document.activeElement).toBe(tokenNotice));
+
+    fireEvent.click(screen.getByRole("button", { name: "复制一次性 URL" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/calendars/one-time-token.ics"),
+    );
+    expect(
+      await screen.findByText("一次性 Calendar URL 已复制到剪贴板。"),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "关闭一次性 URL" }));
     expect(screen.queryByRole("link", { name: /one-time-token/ })).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText("订阅名称")),
+    );
 
     fireEvent.click(await screen.findByRole("button", { name: "撤销" }));
     expect(service.revokeCalendarFeed).toHaveBeenCalledWith(
