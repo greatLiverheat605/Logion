@@ -229,10 +229,19 @@ pnpm ci:fast
 浏览器测试：
 
 ```bash
-LOGION_E2E_BASE_URL=http://127.0.0.1:8080 pnpm test:browser
+LOGION_E2E_BASE_URL=http://127.0.0.1:3000 pnpm test:browser
 ```
 
-认证工作台完整检查需要显式设置 `LOGION_E2E_EMAIL` 与 `LOGION_E2E_PASSWORD`；没有凭据的套件会按说明跳过。互操作真实流程只会在显式凭据环境或非 CI 的本机回环 8080 栈运行，不会自动注册远程账号。
+该命令只运行公共页面、PWA、响应式和可访问性项目，不访问 API。认证真实栈必须使用隔离的 8080 Compose 环境；先为该测试栈设置 `LOGION_REGISTRATION_MODE=open`、`LOGION_LEGACY_REGISTRATION_ENABLED=true`，并把测试注册及登录限额设置为足够的隔离值（连续运行建议 100），再执行：
+
+```bash
+LOGION_E2E_BASE_URL=http://127.0.0.1:8080 \
+LOGION_E2E_PROVISION_ACCOUNTS=true \
+LOGION_E2E_REQUIRE_AUTHENTICATED=true \
+pnpm test:browser
+```
+
+认证项目为每个 worker 创建隔离账号和会话，临时状态只保存在 `test-results/.auth` 并在结束时删除；远程地址绝不会自动注册账号。若确需检查远程测试环境，必须显式提供 `LOGION_E2E_EMAIL` 与 `LOGION_E2E_PASSWORD`，并自行确认账号与限流策略仅用于测试。
 
 契约变更：
 
@@ -262,11 +271,11 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 下一补丁版本优先解决：
 
-1. 每 worker 独立的认证 E2E 夹具，消除绿色跳过与共享会话竞争；
-2. Today/Review/Sync 等巨型模块拆分和统一 Vault 刷新 Hook；
-3. 核心工作台离线冷启动、视觉回归和实体设备门禁。
+1. Today/Review/Sync 等巨型模块拆分和统一 Vault 刷新 Hook；
+2. Today、Records、Review 的离线冷启动和页面级离线能力说明；
+3. 核心视觉回归、实体设备门禁与 20 次认证矩阵稳定性观察。
 
-Worker 公平调度、真实 readiness、独立心跳和聚合任务积压指标已进入 v0.1.1。
+Worker 公平调度、真实 readiness、独立心跳、聚合积压指标和每 worker 隔离的认证 E2E 门禁已经进入 v0.1.1。本轮实际结果为 `pnpm ci:fast` 全绿、真实栈认证 27/27 通过、完整浏览器矩阵 91 通过/6 个 PWA 预期跳过；长期稳定性仍以 CI 连续观察为准。
 
 之后再进入学习洞察、论文研读、个人移动端候选和 Connector/Automation v2。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 

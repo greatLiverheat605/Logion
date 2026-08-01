@@ -2,137 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-
-const configuredEmail = process.env.LOGION_E2E_EMAIL;
-const configuredPassword = process.env.LOGION_E2E_PASSWORD;
-const e2eBaseUrl = new URL(
-  process.env.LOGION_E2E_BASE_URL ?? "http://127.0.0.1:8080",
-);
-const isLocalRealStack =
-  !process.env.CI &&
-  ["127.0.0.1", "localhost"].includes(e2eBaseUrl.hostname) &&
-  e2eBaseUrl.port === "8080";
-const canRunRealFlows =
-  Boolean(configuredEmail && configuredPassword) || isLocalRealStack;
-const email = configuredEmail ?? "integration-hub-browser@example.com";
-const password = configuredPassword ?? "integration-hub-browser-E2e-123!";
-let sharedContext: BrowserContext;
-let sharedPage: Page;
-
-async function updateSettings(page: Page, activePersonaId = "self") {
-  await page.evaluate(async (personaId) => {
-    const csrf = document.cookie
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith("logion_csrf="))
-      ?.slice("logion_csrf=".length);
-    if (!csrf) throw new Error("Missing CSRF cookie");
-
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const current = (await fetch("/api/v1/users/me/settings", {
-        credentials: "same-origin",
-      }).then((response) => response.json())) as {
-        settings: Array<{ key: string; value: string; version: number }>;
-      };
-      const byKey = new Map(
-        current.settings.map((setting) => [setting.key, setting]),
-      );
-      const persona = byKey.get("persona");
-      const onboarding = byKey.get("onboarding_completed");
-      const updates = [];
-      const personaValue = JSON.stringify({
-        activePersonaId: personaId,
-        customPersonas: [],
-      });
-      if (persona?.value !== personaValue) {
-        updates.push({
-          key: "persona",
-          value: personaValue,
-          version: persona?.version ?? 0,
-        });
-      }
-      if (onboarding?.value !== "true") {
-        updates.push({
-          key: "onboarding_completed",
-          value: "true",
-          version: onboarding?.version ?? 0,
-        });
-      }
-      if (updates.length === 0) return;
-      const saved = await fetch("/api/v1/users/me/settings", {
-        body: JSON.stringify({ settings: updates }),
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-        method: "PUT",
-      });
-      if (saved.ok) return;
-      if (saved.status === 401) {
-        await new Promise((resolve) => window.setTimeout(resolve, 250));
-        continue;
-      }
-      if (saved.status !== 409) {
-        throw new Error(`Setting update failed: ${saved.status}`);
-      }
-    }
-    throw new Error("Setting update did not converge");
-  }, activePersonaId);
-}
-
-async function signIn(page: Page) {
-  await page.goto("/auth/login");
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(password);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page).toHaveURL(/\/(?:app(?:\/today)?|onboarding)$/);
-  if (page.url().endsWith("/onboarding")) {
-    await expect(
-      page.getByRole("heading", { name: "选择你的学习场景" }),
-    ).toBeVisible();
-  } else {
-    await expect(page.locator(".app-shell-frame")).toBeVisible();
-  }
-  await updateSettings(page);
-  await page.goto("/app/integrations");
-  await expect(
-    page.getByRole("heading", {
-      name: "把已有数据能力连接起来，而不扩大权限边界",
-    }),
-  ).toBeVisible();
-}
+import { expect, test } from "./fixtures";
 
 test.describe("interoperability hub real flows", () => {
   test.describe.configure({ mode: "serial" });
-  test.skip(
-    ({ browserName, isMobile }) =>
-      !canRunRealFlows || browserName !== "chromium" || isMobile,
-    "Requires explicit credentials in CI or a local 8080 real stack.",
-  );
 
-  test.beforeAll(async ({ browser, browserName, isMobile, request }) => {
-    if (!canRunRealFlows || browserName !== "chromium" || isMobile) return;
-    if (!configuredEmail || !configuredPassword) {
-      const registered = await request.post("/api/v1/auth/register", {
-        data: {
-          device_name: "Interoperability hub browser acceptance",
-          email,
-          password,
-        },
-        headers: { Origin: "http://127.0.0.1:8080" },
-      });
-      expect([201, 409], await registered.text()).toContain(
-        registered.status(),
-      );
-    }
-    sharedContext = await browser.newContext({ serviceWorkers: "block" });
-    sharedPage = await sharedContext.newPage();
-    await signIn(sharedPage);
-  });
-
-  test.afterAll(async () => sharedContext?.close());
-
-  test("keeps discovery persona-aware while allowing direct access", async () => {
-    const page = sharedPage;
+  test("keeps discovery persona-aware while allowing direct access", async ({
+    page,
+  }) => {
     await page.goto("/app/settings");
     await expect(
       page.getByRole("link", { name: "打开互操作中心" }),
@@ -168,9 +45,10 @@ test.describe("interoperability hub real flows", () => {
     }
   });
 
-  test("creates, copies, closes and revokes a one-time Calendar URL", async () => {
-    const context = sharedContext;
-    const page = sharedPage;
+  test("creates, copies, closes and revokes a one-time Calendar URL", async ({
+    page,
+  }) => {
+    const context = page.context();
     await page.goto("/app/integrations");
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const name = `浏览器日历 ${randomUUID().slice(0, 8)}`;
@@ -204,8 +82,9 @@ test.describe("interoperability hub real flows", () => {
     expect((await page.request.get(oneTimeUrl ?? "")).status()).toBe(404);
   });
 
-  test("previews Markdown and commits only to the owned Private Space", async () => {
-    const page = sharedPage;
+  test("previews Markdown and commits only to the owned Private Space", async ({
+    page,
+  }) => {
     await page.goto("/app/integrations");
     const marker = `import-${randomUUID()}`;
     await page.getByLabel("格式").selectOption("markdown");
@@ -221,8 +100,9 @@ test.describe("interoperability hub real flows", () => {
     await expect(row.getByText("imported", { exact: false })).toBeVisible();
   });
 
-  test("surfaces the recent-auth gate, then downloads and verifies an export", async () => {
-    const page = sharedPage;
+  test("surfaces the recent-auth gate, then downloads and verifies an export", async ({
+    page,
+  }) => {
     await page.goto("/app/integrations");
     let rejectOnce = true;
     const exportCollection = "**/api/v1/workspaces/*/data-exports";
@@ -329,8 +209,9 @@ test.describe("interoperability hub real flows", () => {
     expect(archive.manifest.excluded).toContain("credentials");
   });
 
-  test("renders missing-context, API-error and unsupported boundaries honestly", async () => {
-    const page = sharedPage;
+  test("renders missing-context, API-error and unsupported boundaries honestly", async ({
+    page,
+  }) => {
     await page.route("**/api/v1/workspaces", (route) =>
       route.fulfill({
         contentType: "application/json",

@@ -1,15 +1,25 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.LOGION_E2E_BASE_URL ?? "http://127.0.0.1:8080";
+import {
+  configuredCredentials,
+  e2eBaseUrl,
+  shouldRunAuthenticated,
+} from "./tests/browser/e2e-environment";
+
+const publicTests = /(?:public-accessibility|pwa-offline)\.spec\.ts/;
+const authenticatedTests =
+  /(?:authenticated-accessibility|authenticated-shell|persona-system|prototype-productization|integration-hub)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests/browser",
+  globalSetup: "./tests/browser/global-setup.ts",
+  globalTeardown: "./tests/browser/global-teardown.ts",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  workers: configuredCredentials !== null ? 1 : process.env.CI ? 2 : 4,
   timeout: 30_000,
-  expect: { timeout: 8_000 },
+  expect: { timeout: 20_000 },
   outputDir: "reports/browser/artifacts",
   reporter: [
     ["line"],
@@ -17,7 +27,7 @@ export default defineConfig({
     ["html", { outputFolder: "reports/browser/html", open: "never" }],
   ],
   use: {
-    baseURL,
+    baseURL: e2eBaseUrl.origin,
     locale: "zh-CN",
     timezoneId: "Asia/Shanghai",
     trace: "retain-on-failure",
@@ -25,10 +35,40 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    { name: "mobile-chrome", use: { ...devices["Pixel 7"] } },
-    { name: "mobile-safari", use: { ...devices["iPhone 15"] } },
+    {
+      name: "public-chromium",
+      testMatch: publicTests,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "public-firefox",
+      testMatch: publicTests,
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      name: "public-webkit",
+      testMatch: publicTests,
+      use: { ...devices["Desktop Safari"] },
+    },
+    {
+      name: "public-mobile-chrome",
+      testMatch: publicTests,
+      use: { ...devices["Pixel 7"] },
+    },
+    {
+      name: "public-mobile-safari",
+      testMatch: publicTests,
+      use: { ...devices["iPhone 15"] },
+    },
+    ...(shouldRunAuthenticated
+      ? [
+          {
+            name: "authenticated-chromium",
+            fullyParallel: false,
+            testMatch: authenticatedTests,
+            use: { ...devices["Desktop Chrome"] },
+          },
+        ]
+      : []),
   ],
 });

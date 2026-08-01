@@ -151,6 +151,10 @@ jobs:
           POSTGRES_PASSWORD: phase0-release
           LOGION_VERSION: ${{ inputs.version }}
           LOGION_SECRET_KEY: ${{ inputs.source_sha }}
+          LOGION_REGISTRATION_MODE: open
+          LOGION_REGISTRATION_LIMIT_PER_HOUR: 100
+          LOGION_LOGIN_IP_LIMIT_PER_FIVE_MINUTES: 100
+          LOGION_LOGIN_ACCOUNT_LIMIT_PER_FIVE_MINUTES: 100
           LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
           LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
@@ -197,6 +201,8 @@ jobs:
       - name: Browser, PWA and automated WCAG gate
         env:
           LOGION_E2E_BASE_URL: http://127.0.0.1:8080
+          LOGION_E2E_PROVISION_ACCOUNTS: "true"
+          LOGION_E2E_REQUIRE_AUTHENTICATED: "true"
         run: pnpm test:browser
       - name: Rehearse 5, 25 and 100 percent rollout policy
         env:

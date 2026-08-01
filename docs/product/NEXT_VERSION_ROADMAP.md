@@ -24,7 +24,7 @@ Logion 当前最稀缺的不是功能数量，而是“可信运行、低认知�
 
 目标：后台任务失败必须可见，任何一类队列都不能被长期饿死。
 
-> 实施进度：已完成独立 liveness/readiness、按队列连续失败阈值、PostgreSQL/Redis 探测、聚合积压指标、独立心跳和 Email/Export/AI/Deletion 轮转调度；下一项为认证 E2E 夹具。
+> 实施进度：已完成独立 liveness/readiness、按队列连续失败阈值、PostgreSQL/Redis 探测、聚合积压指标、独立心跳和 Email/Export/AI/Deletion 轮转调度。故障注入已验证连续 3 次失败会使 readiness 失败，依赖恢复后无需重启即可恢复。
 
 - 把 liveness 与 readiness 分开；readiness 纳入数据库/Redis、连续失败和最近成功轮询。
 - 调度改为轮转或配额公平：Email、Portability、AI、Deletion 每轮都有可预测机会。
@@ -42,15 +42,17 @@ Logion 当前最稀缺的不是功能数量，而是“可信运行、低认知�
 
 目标：浏览器测试的绿色结果明确表示认证工作台真的执行过。
 
+> 实施进度：夹具与 Release/Nightly 强制门禁已完成。2026-08-01 实测认证项目 27/27 通过，完整矩阵 91 通过、6 个 PWA 预期跳过；3000 公共项目 64 通过、6 个 PWA 预期跳过且未启用认证项目。连续 20 次观察仍是发布前稳定性任务，尚未据一次验收提前宣告完成。
+
 - Global setup 在隔离 PostgreSQL/Redis 中为每个 worker 创建独立用户和 Workspace。
 - 生成按 worker 隔离的 Playwright `storageState`，禁止共享刷新会话并发登录。
 - 把 public-web、authenticated-real-stack、mobile-layout 三类 project 分开。
 - 完整门禁 workflow 若认证套件被跳过则失败；报告分别列出 passed/failed/skipped 原因。
-- 测试 Redis 使用独立 DB 或前缀，teardown 只清理测试命名空间。
+- Release/Nightly 使用一次性 Compose 数据与提高后的测试注册上限；本地重复运行仍应使用隔离测试栈，后续再补 Redis 独立 DB/前缀，禁止清空共享命名空间。
 
 成功指标：
 
-- PR/Release 中 12 主路由和关键二级路由的认证检查 100% 执行；
+- Release/Nightly 中 12 主路由和关键二级路由的认证检查 100% 执行；PR 的 3000 公共项目不访问 API；
 - 连续重跑 20 次无会话竞争或限流夹具失败；
 - 本地 3000 纯前端测试不会误访问远程 API，远程环境无显式凭据时禁止自动注册。
 
@@ -150,7 +152,7 @@ Logion 当前最稀缺的不是功能数量，而是“可信运行、低认知�
 - 每次外部读取/写入都显示来源、范围和最近结果；
 - 连接器失败不能阻塞本地学习闭环。
 
-进入条件：v0.1.1 worker 与 E2E P0 全部关闭；凭据/自动化 ADR 和威胁模型批准；数据迁移与回滚方案完成。
+进入条件：v0.1.1 worker 与 E2E P0 实现已关闭并完成稳定性观察；凭据/自动化 ADR 和威胁模型批准；数据迁移与回滚方案完成。
 
 ## 版本统一门禁
 
