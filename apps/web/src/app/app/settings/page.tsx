@@ -5,6 +5,7 @@ import {
   ProductPanel,
   ProductTag,
 } from "@/components/product/product-ui";
+import { IntegrationHubEntry } from "@/features/integrations/integration-hub-entry";
 
 import { PersonaSettings } from "./persona-settings";
 
@@ -19,8 +20,8 @@ export default function SettingsPage() {
       />
       <PersonaSettings />
       <ProductPanel
-        title="自动化与集成边界"
-        description="当前版本没有通用连接器或自动化规则 CRUD；此处不会提供可保存但不生效的配置。"
+        title="互操作与自动化边界"
+        description="互操作中心聚合现有真实能力；通用连接器与自动化规则仍未开放。"
         aside={<ProductTag tone="warn">暂未开放</ProductTag>}
       >
         <p>
@@ -30,6 +31,7 @@ export default function SettingsPage() {
           Provider、日历订阅和数据导入导出是各自独立的现有能力，不代表通用集成已经实现。
         </p>
         <div className="app-actions">
+          <IntegrationHubEntry />
           <Link className="app-secondary-link" href="/app/data">
             使用开放格式导入导出
           </Link>
