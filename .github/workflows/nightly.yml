@@ -55,6 +55,7 @@ jobs:
       - name: Compose smoke
         env:
           LOGION_SECRET_KEY: ${{ github.sha }}
+          LOGION_ALLOWED_ORIGINS: '["http://localhost:3000","http://127.0.0.1:8080"]'
           LOGION_REGISTRATION_MODE: open
           LOGION_REGISTRATION_LIMIT_PER_HOUR: 100
           LOGION_LOGIN_IP_LIMIT_PER_FIVE_MINUTES: 100
