@@ -171,10 +171,12 @@ jobs:
           LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: |
+          docker compose up --no-build --wait --timeout 180 postgres redis
+          docker compose run --no-deps --rm api \
+            alembic -c apps/api/alembic.ini upgrade head
           docker compose up --no-build --wait --timeout 180 web api worker reverse-proxy
           curl --fail --silent http://localhost:8080/healthz
           curl --fail --silent http://localhost:8080/health
-          docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
           fixture_email="performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com"
           fixture_password="$(openssl rand -hex 24)"
           echo "::add-mask::${fixture_password}"

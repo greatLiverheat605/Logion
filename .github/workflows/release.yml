@@ -165,8 +165,10 @@ jobs:
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: |
           docker compose pull web api worker backup
+          docker compose up --no-build --wait --timeout 180 postgres redis
+          docker compose run --no-deps --rm api \
+            alembic -c apps/api/alembic.ini upgrade head
           docker compose up --no-build --wait --timeout 180
-          docker compose exec -T api alembic -c apps/api/alembic.ini upgrade head
           expected_head="$(jq -r '.compatibility.migration_head' candidate-evidence/candidate/candidate-manifest.json)"
           actual_head="$(docker compose exec -T postgres psql -U logion -d logion -Atc 'SELECT version_num FROM alembic_version')"
           if ! grep -Eq '^[0-9A-Za-z_]+$' <<<"$expected_head"; then
