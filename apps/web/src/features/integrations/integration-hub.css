@@ -1,0 +1,49 @@
+.integration-capability-grid > .product-panel {
+  min-width: 0;
+  height: 100%;
+}
+
+.integration-capability-grid .planning-form,
+.integration-capability-grid .item-list {
+  min-width: 0;
+}
+
+.integration-token {
+  display: grid;
+  min-width: 0;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  margin-top: 0.8rem;
+  background: var(--bg-selected);
+}
+
+.integration-token:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.integration-token > a,
+.integration-capability-grid code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.integration-unsupported-grid > .product-compact-card {
+  height: 100%;
+}
+
+@media (max-width: 680px) {
+  .integration-capability-grid .planning-form,
+  .integration-token .app-actions {
+    align-items: stretch;
+  }
+
+  .integration-token .app-actions,
+  .integration-token .app-actions > button {
+    width: 100%;
+  }
+}

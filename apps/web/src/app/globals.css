@@ -7,6 +7,7 @@
 @import "../features/execution/evidence-trace.css";
 @import "../features/ai/ai-governance.css";
 @import "../features/sync/sync-system.css";
+@import "../features/integrations/integration-hub.css";
 
 :root,
 :root[data-theme="light"] {
