@@ -74,6 +74,9 @@ test("a newly registered account is forced into onboarding on first login", asyn
   await page.getByRole("button", { name: "登录", exact: true }).click();
 
   await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(
+    page.getByRole("heading", { name: "选择你的学习场景" }),
+  ).toBeVisible();
   await page.goto("/app/today");
   await expect(page).toHaveURL(/\/onboarding$/);
 });

@@ -6,6 +6,15 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const configuredEmail = process.env.LOGION_E2E_EMAIL;
 const configuredPassword = process.env.LOGION_E2E_PASSWORD;
+const e2eBaseUrl = new URL(
+  process.env.LOGION_E2E_BASE_URL ?? "http://127.0.0.1:8080",
+);
+const isLocalRealStack =
+  !process.env.CI &&
+  ["127.0.0.1", "localhost"].includes(e2eBaseUrl.hostname) &&
+  e2eBaseUrl.port === "8080";
+const canRunRealFlows =
+  Boolean(configuredEmail && configuredPassword) || isLocalRealStack;
 const email = configuredEmail ?? "integration-hub-browser@example.com";
 const password = configuredPassword ?? "integration-hub-browser-E2e-123!";
 let sharedContext: BrowserContext;
@@ -95,12 +104,13 @@ async function signIn(page: Page) {
 test.describe("interoperability hub real flows", () => {
   test.describe.configure({ mode: "serial" });
   test.skip(
-    ({ browserName, isMobile }) => browserName !== "chromium" || isMobile,
-    "Runs once against the real API, worker, PostgreSQL and Redis stack.",
+    ({ browserName, isMobile }) =>
+      !canRunRealFlows || browserName !== "chromium" || isMobile,
+    "Requires explicit credentials in CI or a local 8080 real stack.",
   );
 
   test.beforeAll(async ({ browser, browserName, isMobile, request }) => {
-    if (browserName !== "chromium" || isMobile) return;
+    if (!canRunRealFlows || browserName !== "chromium" || isMobile) return;
     if (!configuredEmail || !configuredPassword) {
       const registered = await request.post("/api/v1/auth/register", {
         data: {
@@ -114,7 +124,7 @@ test.describe("interoperability hub real flows", () => {
         registered.status(),
       );
     }
-    sharedContext = await browser.newContext();
+    sharedContext = await browser.newContext({ serviceWorkers: "block" });
     sharedPage = await sharedContext.newPage();
     await signIn(sharedPage);
   });
