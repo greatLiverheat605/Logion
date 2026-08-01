@@ -74,11 +74,12 @@ describe("prototype productization manifest", () => {
     }
   });
 
-  it("keeps integrations deferred until a real audited contract exists", () => {
+  it("maps integrations to a secondary route without changing primary routes", () => {
     expect(PROTOTYPE_VIEW_TARGETS.integrations).toEqual({
       primaryRoute: "/app/settings",
-      reason: "No general connector or automation-rule CRUD exists in OpenAPI.",
-      status: "deferred",
+      secondaryRoute: "/app/integrations",
+      status: "existing",
     });
+    expect(SECONDARY_PRODUCT_ROUTES).toContain("/app/integrations");
   });
 });

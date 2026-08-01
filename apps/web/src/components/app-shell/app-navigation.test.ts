@@ -33,11 +33,9 @@ describe("application navigation manifest", () => {
     expect(NAV_ITEMS.map((item) => item.href)).toEqual(ALL_ROUTES);
   });
 
-  it("groups command results without exposing deferred integrations", () => {
+  it("groups command results and exposes integrations as a secondary route", () => {
     expect(COMMAND_GROUPS).toEqual(["学习", "研究", "系统", "创建"]);
-    expect(COMMAND_ITEMS.some((item) => item.id === "integrations")).toBe(
-      false,
-    );
+    expect(COMMAND_ITEMS.some((item) => item.id === "integrations")).toBe(true);
 
     const secondaryHrefs = COMMAND_ITEMS.flatMap((item) =>
       item.kind === "route" && !ALL_ROUTES.includes(item.href as never)
@@ -56,6 +54,7 @@ describe("application navigation manifest", () => {
     expect(examIds).not.toContain("research");
     expect(examIds).not.toContain("collaboration");
     expect(examIds).not.toContain("ai");
+    expect(examIds).not.toContain("integrations");
     expect(examIds).toContain("sync");
     expect(examIds).toContain("security");
 
@@ -63,6 +62,14 @@ describe("application navigation manifest", () => {
     expect(researchIds).toContain("research");
     expect(researchIds).toContain("collaboration");
     expect(researchIds).toContain("ai");
+    expect(researchIds).toContain("integrations");
+
+    expect(visibleCommands("self").map((item) => item.id)).toContain(
+      "integrations",
+    );
+    expect(visibleCommands("mentor").map((item) => item.id)).toContain(
+      "integrations",
+    );
   });
 
   it("searches labels, descriptions and keywords", () => {

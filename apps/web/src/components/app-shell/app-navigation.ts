@@ -3,6 +3,7 @@ import {
   type BuiltinPersonaId,
   type PersonaDefinition,
 } from "@/features/personas/persona-definitions";
+import { INTEGRATION_ENTRY_PERSONAS } from "@/features/integrations/integration-navigation";
 
 export interface NavItem {
   href: string;
@@ -68,6 +69,7 @@ interface CommandItemBase {
 
 export interface CommandRouteItem extends CommandItemBase {
   allowedBuiltinPersonas?: readonly BuiltinPersonaId[];
+  builtinPersonasOnly?: boolean;
   gateRoute: string;
   href: string;
   kind: "route";
@@ -183,7 +185,7 @@ export const COMMAND_ITEMS: readonly AppCommandItem[] = [
     label: "打开证据与审计",
   },
   {
-    allowedBuiltinPersonas: ["self", "research", "mentor"],
+    allowedBuiltinPersonas: INTEGRATION_ENTRY_PERSONAS,
     description: "管理可审查草稿、模型和任务路由",
     gateRoute: "/app/settings",
     group: "系统",
@@ -226,6 +228,19 @@ export const COMMAND_ITEMS: readonly AppCommandItem[] = [
     keywords: ["数据", "导出", "导入", "删除"],
     kind: "route",
     label: "打开数据主权中心",
+  },
+  {
+    allowedBuiltinPersonas: ["self", "research", "mentor"],
+    builtinPersonasOnly: true,
+    description: "汇总只读日历与开放格式迁移能力",
+    gateRoute: "/app/settings",
+    group: "系统",
+    href: "/app/integrations",
+    icon: "refresh",
+    id: "integrations",
+    keywords: ["互操作", "集成", "日历", "导入", "导出"],
+    kind: "route",
+    label: "打开互操作中心",
   },
   {
     description: "搜索内容并处理真实通知与日历",
@@ -278,6 +293,7 @@ export function isCommandItemVisible(
 ): boolean {
   if (item.kind === "action") return true;
   if (!isRouteVisible(item.gateRoute)) return false;
+  if (item.builtinPersonasOnly && !persona?.isBuiltin) return false;
   if (
     persona?.isBuiltin &&
     item.allowedBuiltinPersonas &&

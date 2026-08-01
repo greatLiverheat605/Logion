@@ -32,6 +32,7 @@ export const SECONDARY_PRODUCT_ROUTES = [
   "/app/data",
   "/app/search",
   "/app/workspaces",
+  "/app/integrations",
 ] as const;
 
 export type SecondaryProductRoute = (typeof SECONDARY_PRODUCT_ROUTES)[number];
@@ -57,8 +58,8 @@ export type PrototypeViewTarget =
  *
  * The persona contract continues to expose twelve primary routes. Prototype
  * views that already have a dedicated workbench use an existing secondary
- * route; unsupported integrations remain explicit instead of simulating a
- * successful workflow in the browser.
+ * route. The integrations route aggregates existing audited capabilities and
+ * keeps unsupported connectors explicit instead of simulating success.
  */
 export const PROTOTYPE_VIEW_TARGETS: Readonly<
   Record<PrototypeViewId, PrototypeViewTarget>
@@ -105,8 +106,8 @@ export const PROTOTYPE_VIEW_TARGETS: Readonly<
   },
   integrations: {
     primaryRoute: "/app/settings",
-    reason: "No general connector or automation-rule CRUD exists in OpenAPI.",
-    status: "deferred",
+    secondaryRoute: "/app/integrations",
+    status: "existing",
   },
   sync: {
     primaryRoute: "/app/settings",
