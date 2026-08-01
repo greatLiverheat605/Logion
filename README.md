@@ -3,102 +3,142 @@
 [![Main candidate](https://github.com/greatLiverheat605/Logion/actions/workflows/main.yml/badge.svg)](https://github.com/greatLiverheat605/Logion/actions/workflows/main.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Logion 是一个面向长期学习与研究的离线优先工作系统。它把目标、计划、任务、学习会话、笔记、资料、证据、复习、考试、自学、研究和小规模协作连接成可追溯的闭环。
+**离线优先、证据驱动的学习与研究操作系统。**
 
-项目定位是个人及最多 10 人的小规模自托管使用。Logion 保留多用户 Workspace、邀请、角色权限和审计能力，但不包含计费、套餐、公开注册、公共营销站或 SaaS 运营后台。
+Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前版本处于封闭预发布准备阶段，尚未作为公开稳定生产版本发布。仓库已包含阿里云事务邮件
-> 适配器；部署者仍须在目标环境完成真实投递、域名/TLS、Windows 异机加密备份、告警、实体手机和
-> 24 小时观察验证。
+> 当前状态：`0.1.0` 封闭发布候选。核心产品与安全边界已实现；公开生产部署仍需完成域名/TLS、真实邮件、异机加密备份、告警、实体设备和观察期验收。
 
-## 目录
+## 为什么是 Logion
 
-- [主要能力](#主要能力)
-- [系统架构](#系统架构)
-- [快速开始](#快速开始)
-- [注册策略](#注册策略)
-- [本地开发](#本地开发)
-- [测试与质量](#测试与质量)
-- [安全与数据边界](#安全与数据边界)
-- [项目文档](#项目文档)
-- [参与贡献](#参与贡献)
-- [已知限制](#已知限制)
-- [许可证](#许可证)
-
-## 主要能力
-
-### 学习与研究工作流
-
-- 目标、版本化计划、阶段、任务和学习会话管理
-- Markdown 笔记、链接资料、PDF 元数据、页码索引和附件
-- 证据提交、人工验收、掌握度确认、复习排程、测验和错题记录
-- 可配置的备考、自学、研究、导师与小组协作入口
-- 模板导入、只读分享快照、搜索、通知和日历订阅
-
-### 离线与同步
-
-- 浏览器 IndexedDB 本地存储和加密 Vault
-- Outbox 驱动的离线编辑与恢复
-- `sync-v1` 幂等 Push/Pull、断点 Bootstrap 和设备隔离
-- Markdown 笔记的 Yjs 增量合并
-- 对权限、删除、层级和验收等高风险冲突进行显式处理
-
-### 身份与协作
-
-- Cookie 会话、CSRF/Origin 校验和速率限制
-- TOTP、恢复码和 Passkey（WebAuthn）
-- 受邀或关闭的注册策略，以及仅用于初始化的 Owner 邮箱
-- Workspace、私有/共享 Space、角色权限、邀请和审计日志
-
-### 数据与自动化
-
-- 独立可读的数据导入导出和可恢复账户删除
-- 可配置的 OpenAI-compatible AI Provider
-- Provider 凭据服务端加密、模型发现、任务路由和持久草稿
-- 加密备份、恢复验证、SBOM、依赖扫描和发布门禁
-
-AI 是可选增强层。生成结果不能直接修改正式记录、掌握度、验收状态或权限；需要用户确认后才能进入正式数据。
-
-## 系统架构
+许多学习工具只解决“记录了什么”，Logion 关注完整的可验证过程：
 
 ```text
-Browser / PWA / verified mobile shell
-      │
-      ▼
-Reverse proxy ── Web (Next.js)
-      │
-      ├────────── API (FastAPI) ── PostgreSQL
-      │                    │
-      │                    └────── Redis
-      │
-      └────────── Worker / encrypted backup
+目标与计划 → 今日行动 → 实际投入 → 成果证据 → 人工验收
+     ↑                                           ↓
+     └──── 复习 / 错因 / 研究证据 / 周期审查 ────┘
 ```
 
-仓库采用 monorepo：
+- 完成计时不等于完成任务；提交证据不等于验收通过。
+- 掌握度、研究结论和共享结果都需要用户明确确认。
+- 私有内容默认留在个人空间；共享与外部发送必须显式选择范围。
+- AI 只是可选草稿层，不能绕过正式记录、权限或审计。
+
+## 四类用户画像
+
+画像只优化导航，不改变 Workspace Role 或 Space 权限。用户也可创建 `custom-<uuid>` 自定义画像。
+
+| 画像  | 场景       | 优先工作流                                 |
+| ----- | ---------- | ------------------------------------------ |
+| 📝 考 | 应试学习   | 考试、大纲、模考、复习、错因和成绩趋势     |
+| 📚 学 | 自主学习   | 每日目标、学习路线、项目、记录、规划和模板 |
+| 🔬 研 | 学术研究   | 研究问题、声明—证据、论文记录、实验和复查  |
+| 👥 导 | 导师与小组 | 空间、成员、Rubric、共享审阅、反馈和审计   |
+
+新账号首次登录进入恒定 7 步引导：选择画像、确认工作区、确认空间、设置本机 Vault 口令、可选模板、创建今日目标、开始使用。
+
+## 已实现能力
+
+### 学习执行与知识闭环
+
+- 目标、版本化计划、阶段、依赖、任务和学习会话
+- 今日驾驶舱、下一行动、快速捕获、真实投入与阻塞
+- Markdown 笔记、安全预览、链接资料、PDF 元数据和附件
+- 成果证据、人工验收、知识点、先修关系、掌握度和复习计划
+- 主动回忆题、信心/结果记录、错因模式和周期学习审查
+
+### 备考、自学、研究与协作
+
+- 考试倒计时、科目权重、大纲覆盖、模考、成绩和薄弱项
+- 快速收件箱、学习路线、项目、里程碑和成果记录
+- 研究问题、声明、支持/反证/不确定证据、实验运行和论文记录
+- Workspace、Private/Shared Space、邀请、角色、Rubric、反馈和不可变审阅快照
+
+### 离线、同步与数据主权
+
+- IndexedDB、端侧加密 Vault、加密 Outbox 和附件队列
+- `sync-v1` 幂等 Push/Pull、断点 Bootstrap、epoch 重建和显式冲突处理
+- 预览后导入、加密导出、SHA-256、manifest 和可恢复账户删除
+- PostgreSQL/附件加密备份、验证、异机保存与恢复演练
+
+### AI 与互操作
+
+- OpenAI-compatible Provider、服务端加密凭据、模型发现、路由和预算
+- 持久 AI 运行、发送前预检、取消、重试和草稿批准/拒绝
+- 互操作中心：Calendar Feed、Markdown/CSV/BibTeX/Logion JSON 导入、可校验导出
+- Calendar Token 只显示一次；撤销后旧 ICS 地址立即失效
+
+第三方账号连接、Webhook、MCP/API Token 和自动化规则不在 v1；它们需要独立的凭据、授权、调度、审计与撤销设计。
+
+## 产品界面
+
+- 12 条画像主路由保持稳定；低频能力使用二级工作台和命令面板。
+- Desktop 使用应用侧边栏；移动端按画像显示 4 个主要入口加“更多”。
+- 每个页面区分 loading、empty、error、权限、离线和真实就绪状态，不用演示数据伪造成功。
+- 支持浅色/深色主题、键盘焦点、reduced-motion 和 320 CSS px 起的响应式布局。
+
+完整功能清单见[项目功能全景](docs/product/PROJECT_FUNCTION_MAP.md)，实际操作见[用户指南](docs/user-guide.md)。
+
+## 架构
+
+```mermaid
+flowchart TD
+    Client["Browser / PWA / thin mobile shell"]
+    Web["Next.js + React"]
+    Offline["IndexedDB + encrypted Vault + Outbox"]
+    Proxy["Nginx reverse proxy :8080"]
+    API["FastAPI API"]
+    DB[(PostgreSQL)]
+    Redis[(Redis)]
+    Worker["Worker: email / export / AI / deletion"]
+    Backup["Encrypted backup / restore"]
+
+    Client --> Web
+    Web <--> Offline
+    Web --> Proxy
+    Proxy --> API
+    API --> DB
+    API --> Redis
+    Worker --> DB
+    Worker --> Redis
+    Backup --> DB
+```
+
+仓库是 pnpm + uv monorepo：
 
 ```text
-apps/web       Next.js Web/PWA 与离线客户端
-apps/mobile    Android TWA 与 iOS WKWebView 薄壳；鸿蒙生成边界
-apps/api       FastAPI API、认证、同步与 Alembic 迁移
-apps/worker    后台任务和维护作业
-packages/      OpenAPI/同步契约、离线库和共享配置
-examples/      可选的公开示例数据
-infra/         Compose、反向代理、备份恢复和部署说明
-docs/          ADR、安全模型、离线存储和同步规范
-tests/         跨模块、容量、供应链与发布验证
+apps/web       Next.js Web/PWA、画像化应用壳与离线客户端
+apps/api       FastAPI、认证、权限、领域 API、同步与 Alembic
+apps/worker    邮件、数据迁移、AI 与账户删除后台任务
+apps/mobile    Android TWA、iOS WKWebView 与鸿蒙薄壳边界
+packages/      OpenAPI/sync-v1 契约、离线库和共享配置
+infra/         Nginx、Compose、备份恢复与部署手册
+docs/          ADR、威胁模型、用户指南、产品与同步文档
+tests/         浏览器、容量、供应链、恢复与发布门禁
 ```
 
-服务端始终重新判定 Workspace 和 Space 权限，不信任客户端传入的授权结果。
+当前契约包含 126 条 API 路径和 151 个操作。服务端对每个 Workspace/Space 操作重新授权，不信任客户端画像、路由或同步负载中的权限判断。
+
+## 安全与隐私边界
+
+- Cookie 会话配合可信 Origin、CSRF、刷新令牌复用检测和分层速率限制。
+- 支持 Passkey、TOTP、一次性恢复码、设备会话撤销和安全审计。
+- TOTP、邮件、AI Provider、导出和备份使用相互独立的版本化密钥。
+- 凭据、Cookie、Token、恢复材料、私人正文和 AI 输入/输出不进入普通日志或审计元数据。
+- Markdown 以 React 文本节点安全呈现；外链、附件和 Provider 请求具有协议、大小与 SSRF 边界。
+- 设备撤销能阻止新的服务端访问，但不能远程擦除设备已经保存的长期离线数据。
+
+安全问题请通过 GitHub Security 的私密报告入口提交，详见[安全政策](SECURITY.md)。不要在公开 Issue 中粘贴漏洞、Token、真实邮箱或个人学习数据。
 
 ## 快速开始
 
 ### 环境要求
 
 - Git
-- Docker Engine 与 Docker Compose v2
-- 至少 4 GB 可用内存用于本地构建和完整服务启动
+- Docker Engine + Docker Compose v2
+- 至少 4 GB 可用内存
 
-### 1. 获取代码与配置
+### 1. 获取代码与本地配置
 
 ```bash
 git clone https://github.com/greatLiverheat605/Logion.git
@@ -108,7 +148,7 @@ mkdir -p secrets
 node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64url'))" > secrets/backup.key
 ```
 
-PowerShell 可使用：
+PowerShell：
 
 ```powershell
 Copy-Item .env.example .env
@@ -117,47 +157,31 @@ node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64
   Set-Content -NoNewline -Encoding ascii secrets/backup.key
 ```
 
-`.env.example` 中的密钥和密码只用于本地示例。任何长期运行环境都必须生成独立值，并确保 `.env` 与 `secrets/` 不进入版本控制。
+`.env.example` 的密码和开发密钥只能用于本机示例。长期环境必须生成独立值，并确保 `.env` 与 `secrets/` 不进入 Git。
 
-### 2. 选择本地访问地址
+### 2. 配置本地 Origin
 
-Compose 通过 `http://localhost:8080` 提供统一入口。请在 `.env` 中设置：
+Compose 统一入口是 `http://localhost:8080`。将 `.env` 中相关 Origin 调整为：
 
 ```dotenv
 LOGION_ALLOWED_ORIGINS=["http://localhost:8080"]
 LOGION_WEBAUTHN_ORIGINS=["http://localhost:8080"]
 ```
 
-### 3. 启动服务
+### 3. 启动
 
 ```bash
 docker compose config
 docker compose up --build
 ```
 
-服务就绪后访问：
+启动后访问：
 
-- Web：`http://localhost:8080`
-- 组合健康检查：`http://localhost:8080/healthz`
-- Web 健康检查：`http://localhost:8080/health`
+- 应用：<http://localhost:8080>
+- 组合健康检查：<http://localhost:8080/healthz>
+- Web 健康检查：<http://localhost:8080/health>
 
-### 4. 创建本地测试账户
-
-默认配置使用 `invite`，适合封闭部署。首次本地体验可二选一：
-
-1. 在 `.env` 设置 `LOGION_BOOTSTRAP_OWNER_EMAIL=owner@example.com`，并接入邮件投递后通过注册页面完成验证。
-2. 仅在本机开发环境临时设置 `LOGION_REGISTRATION_MODE=open`，重启 API 后使用开发注册接口创建账户。
-
-本地开发注册示例：
-
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Origin: http://localhost:8080" \
-  -H "Content-Type: application/json" \
-  --data '{"email":"owner@example.com","password":"replace-with-a-local-password","device_name":"Local browser"}'
-```
-
-`open` 模式不得用于生产环境；生产配置会拒绝启动。
+默认 `LOGION_REGISTRATION_MODE=invite`，适合封闭自托管。首次本地体验可配置 `LOGION_BOOTSTRAP_OWNER_EMAIL` 并接入邮件，或仅在本机临时设置 `LOGION_REGISTRATION_MODE=open`。生产配置会拒绝 open 模式和开发密钥。
 
 停止服务：
 
@@ -165,38 +189,18 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 docker compose down
 ```
 
-如需同时删除本地数据库、附件和缓存卷，请先确认数据不再需要，再执行 `docker compose down --volumes`。
-
-## 注册策略
-
-`LOGION_REGISTRATION_MODE` 支持三种模式：
-
-| 模式     | 行为                                                    | 适用范围               |
-| -------- | ------------------------------------------------------- | ---------------------- |
-| `open`   | 允许本地/测试环境自行注册                               | 仅开发和自动化测试     |
-| `invite` | 仅有效邀请或引导 Owner 邮箱可注册；其他邮箱得到统一响应 | 默认自托管模式         |
-| `closed` | 关闭普通自助注册；引导 Owner 邮箱仍可初始化             | 已完成初始化的封闭部署 |
-
-`LOGION_BOOTSTRAP_OWNER_EMAIL` 用于建立首个 Owner。完成初始化后应清空该值，并通过 Workspace 邀请管理后续成员。
+`docker compose down --volumes` 会删除本地数据库、Redis 和附件卷；只应在确认数据不再需要时执行。
 
 ## 本地开发
 
-### 工具链
-
-- Node.js `>=24.14.0`
-- pnpm `>=11.9.0`
-- Python `>=3.12,<3.13`
-- [uv](https://docs.astral.sh/uv/)
-- Docker Compose（集成测试和完整服务需要）
-
-### 安装依赖
+工具链：Node.js `>=24.14`、pnpm `>=11.9`、Python `3.12`、[uv](https://docs.astral.sh/uv/) 和 Docker Compose。
 
 ```bash
 pnpm install --frozen-lockfile
 uv sync --all-packages --group dev --frozen
 ```
 
-### 启动开发服务
+分别启动 Web、API 和 worker：
 
 ```bash
 pnpm dev:web
@@ -204,97 +208,79 @@ pnpm dev:api
 pnpm dev:worker
 ```
 
-这些命令通常在三个终端中运行。API 与 Worker 需要可访问的 PostgreSQL 和 Redis；连接地址通过 `.env` 配置。Web 默认位于 `http://localhost:3000`，API 默认位于 `http://localhost:8000`。
-
-数据库迁移：
+API/worker 需要 PostgreSQL 与 Redis。数据库迁移命令：
 
 ```bash
 uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
 ```
 
+更多规范见[贡献指南](CONTRIBUTING.md)。
+
 ## 测试与质量
 
-提交前至少运行：
+提交前的快速门禁：
 
 ```bash
 pnpm ci:fast
 ```
 
-该命令覆盖格式、Lint、类型检查、Python/TypeScript 单元测试、生产构建和契约一致性。
+它覆盖格式、Lint、类型、单元测试、生产构建和 OpenAPI/sync-v1 契约一致性。
 
-浏览器测试需要一个已启动的 Web 服务：
+浏览器测试：
 
 ```bash
-LOGION_E2E_BASE_URL=http://127.0.0.1:3000 pnpm test:browser
+LOGION_E2E_BASE_URL=http://127.0.0.1:8080 pnpm test:browser
 ```
 
-Windows PowerShell：
+认证工作台完整检查需要显式设置 `LOGION_E2E_EMAIL` 与 `LOGION_E2E_PASSWORD`；没有凭据的套件会按说明跳过。互操作真实流程只会在显式凭据环境或非 CI 的本机回环 8080 栈运行，不会自动注册远程账号。
 
-```powershell
-$env:LOGION_E2E_BASE_URL = "http://127.0.0.1:3000"
-pnpm test:browser
-```
-
-完整 CI 还会执行 PostgreSQL/Redis 集成测试、迁移往返、跨租户负向测试、镜像构建、许可证与密钥扫描、浏览器可访问性、备份恢复和候选产物验证。
-
-OpenAPI 或同步契约发生有意变更时：
+契约变更：
 
 ```bash
 pnpm contracts:generate
 pnpm contracts:check
 ```
 
-## 安全与数据边界
-
-- Cookie 认证配合可信 Origin、CSRF、防重放和速率限制。
-- TOTP、邮件、AI Provider、导出和备份使用相互独立的版本化密钥。
-- 凭据、Cookie、令牌、笔记正文、研究正文和 AI 提示词/响应不得进入日志或审计元数据。
-- 受保护的离线正文通过本地 Vault 引用，不以明文写入同步 Outbox。
-- 用户输入的 Markdown 以安全文本边界呈现；外链和 Provider 网络访问受 SSRF 约束。
-- 设备撤销会停止新的服务端访问，但不能远程擦除长期离线设备已有的数据。
-
-请勿在公开 Issue 中提交漏洞、访问令牌、日志中的个人数据或可利用细节。安全问题请遵循 [安全政策](SECURITY.md)。
+PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、依赖与密钥扫描、浏览器可访问性、候选镜像/SBOM、备份恢复和旧客户端兼容。
 
 ## 项目文档
 
-- [已完成功能与系统操作手册](docs/user-guide.md)
-- [0.1.0 发布候选冻结记录](docs/release/0.1.0-rc-freeze.md)
-- [0.1.0-rc2 预发布准备记录](docs/release/0.1.0-rc2-prerelease.md)
-- [产品与技术路线图](docs/roadmap.md)
-- [移动端架构、状态与真机入口](docs/mobile/README.md)
+- [项目功能全景](docs/product/PROJECT_FUNCTION_MAP.md)
+- [用户指南](docs/user-guide.md)
+- [下一版本产品与技术路线](docs/product/NEXT_VERSION_ROADMAP.md)
+- [全仓代码审查与问题台账](docs/reviews/PROJECT_CODE_REVIEW_2026-08-01.md)
+- [互操作中心 v1](docs/features/interoperability-hub.md)
+- [用户画像系统](docs/features/persona-system.md)
 - [架构决策记录](docs/adr/README.md)
 - [安全设计与威胁模型](docs/security/)
-- [离线存储规范](docs/offline/)
-- [同步协议说明](docs/sync/)
-- [可观测性约定](docs/operations/observability-contract.md)
-- [基础设施与部署](infra/README.md)
-- [阿里云邮件推送与预发布验收](infra/runbooks/aliyun-directmail-prerelease.md)
-- [Windows 异机加密备份](infra/runbooks/windows-off-host-backup.md)
-- [贡献指南](CONTRIBUTING.md)
+- [离线存储与同步](docs/offline/)、[sync-v1 文档](docs/sync/)
+- [移动端状态与架构](docs/mobile/README.md)
+- [基础设施与运行手册](infra/README.md)
 - [变更日志](CHANGELOG.md)
 
-涉及权限、数据寿命、同步、加密或部署边界的变更，应同步更新对应 ADR 或安全文档。
+## 近期方向
 
-## 参与贡献
+下一补丁版本优先解决：
 
-欢迎提交可复现的缺陷报告、文档改进和范围清晰的 Pull Request。开始前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+1. worker 公平调度、真实 readiness 和任务积压指标；
+2. 每 worker 独立的认证 E2E 夹具，消除绿色跳过与共享会话竞争；
+3. Today/Review/Sync 等巨型模块拆分和统一 Vault 刷新 Hook；
+4. 核心工作台离线冷启动、视觉回归和实体设备门禁。
 
-项目坚持以下边界：
+之后再进入学习洞察、论文研读、个人移动端候选和 Connector/Automation v2。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 
-- 面向个人和最多 10 人的小规模自托管协作
-- 不引入计费、定价、套餐、公开营销或 SaaS 运营功能
-- 权限、同步和数据契约变更必须有测试和设计依据
-- AI 输出保持草稿性质，不能绕过人工确认和权限检查
+## 明确范围与限制
 
-## 已知限制
+Logion 不包含计费、套餐、entitlement、公共营销站或 SaaS 运营后台。当前还存在以下部署/产品限制：
 
-- 阿里云邮件适配器只发送邮箱验证、密码找回和安全通知；Workspace 邀请 Token 仍需通过可信
-  渠道交付。
-- 域名、TLS、ECS RAM 角色、发信域名、云端密钥管理和 Windows 异机加密备份由部署者配置并验收。
-- 物理 iOS/Safari、人工屏幕阅读器和真实低配服务器容量仍需在目标环境验证。
-- 移动安装包尚未作为稳定版发布；Android、iOS 和 HarmonyOS 必须分别完成签名与实体机门禁。
+- 邮件域名、TLS、ECS RAM 角色、异机加密备份和告警由部署者配置与验收；
+- 受保护工作台尚不能全部离线冷启动；清理站点数据可能丢失未同步本地记录；
+- 移动安装包仍需签名、实体 iPhone/Android/HarmonyOS 和弱网验收；
+- 第三方账号、Webhook、MCP/API Token 和自动化规则延期到独立 v2 架构任务；
 - Compose 是参考自托管拓扑，不代表对任意云平台的生产承诺。
 
-## 许可证
+## 贡献与许可证
 
-Logion 采用 [MIT License](LICENSE)。第三方依赖和公开示例可能使用各自许可证，使用时请保留对应声明。
+欢迎范围清晰、可复现并尊重数据边界的缺陷修复、可访问性、性能、离线/同步、安全和文档改进。请先阅读[贡献指南](CONTRIBUTING.md)与[行为准则](CODE_OF_CONDUCT.md)。
+
+Logion 使用 [MIT License](LICENSE)。第三方依赖和公开示例可能有各自许可证，使用时请保留相应声明。
