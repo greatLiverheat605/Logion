@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "observationId": "observation-ui-fixture",
+  "taskId": "task-ui",
+  "completionEventId": "event-ui-completed",
+  "handoff": "handoffs/task-ui.json",
+  "handoffSha256": "89638a1c4ac9da9f05ecc71081337f8ac21728fe1db97bf5d98545ad00863f87",
+  "acceptanceCheckId": "criterion-ui-fixture",
+  "name": "Coordinator fixture validation",
+  "status": "passed",
+  "command": "pnpm agent:state:validate -- .agents/coordination/fixtures/minimal-run",
+  "exitCode": 0,
+  "observed": "Synthetic coordinator observation: the minimal Run validates with every required handoff evidence field.",
+  "reason": null,
+  "observedAt": "2026-08-03T00:07:00Z",
+  "observerRoleId": "codex"
+}

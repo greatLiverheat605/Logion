@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "roles": [
+    {
+      "id": "codex",
+      "client": "Codex",
+      "modelId": "gpt-5.6-sol",
+      "host": "windows-primary",
+      "dispatch": "coordinator",
+      "access": "coordinator-writer",
+      "defaultScope": [
+        "architecture",
+        "core implementation",
+        "sensitive backend work",
+        "review",
+        "integration",
+        "commit",
+        "push"
+      ],
+      "prohibitions": [
+        "overwrite unexplained user changes",
+        "waive failed acceptance gates"
+      ],
+      "evidenceSources": ["client-status", "runtime-attestation"]
+    },
+    {
+      "id": "zcode",
+      "client": "ZCode",
+      "modelId": "glm-5.2",
+      "host": "windows-secondary-worktree",
+      "dispatch": "manual-git-handoff",
+      "access": "bounded-writer",
+      "defaultScope": ["bounded modular implementation"],
+      "prohibitions": [
+        "claim Orca worker telemetry",
+        "merge",
+        "push",
+        "read secrets",
+        "modify overlapping paths"
+      ],
+      "evidenceSources": ["client-status", "manual-verification"]
+    },
+    {
+      "id": "kimi",
+      "client": "Claude Code",
+      "modelId": "kimi-k3",
+      "host": "macos-secondary",
+      "dispatch": "orca-supervised",
+      "access": "bounded-writer",
+      "defaultScope": [
+        "UI concepts",
+        "frontend components",
+        "styling",
+        "bounded frontend implementation"
+      ],
+      "prohibitions": [
+        "change backend authentication",
+        "change migrations",
+        "change contracts",
+        "merge",
+        "push"
+      ],
+      "evidenceSources": [
+        "client-status",
+        "provider-model-list",
+        "runtime-attestation"
+      ]
+    },
+    {
+      "id": "deepseek",
+      "client": "OpenCode",
+      "modelId": "opencode-go/deepseek-v4-flash",
+      "host": "macos-secondary",
+      "dispatch": "orca-supervised",
+      "access": "read-only",
+      "defaultScope": [
+        "independent diff review",
+        "security review",
+        "contract review",
+        "regression review"
+      ],
+      "prohibitions": [
+        "edit files",
+        "destructive shell",
+        "external directory access",
+        "commit",
+        "merge",
+        "push"
+      ],
+      "evidenceSources": [
+        "client-status",
+        "provider-model-list",
+        "runtime-attestation"
+      ]
+    }
+  ]
+}

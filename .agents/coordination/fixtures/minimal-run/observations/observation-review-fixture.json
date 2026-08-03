@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "observationId": "observation-review-fixture",
+  "taskId": "task-review",
+  "completionEventId": "event-review-completed",
+  "handoff": "handoffs/task-review.json",
+  "handoffSha256": "17115fb87beeea6405b7082ed66b827af98c435d5e464245a7f2d19e9b133301",
+  "acceptanceCheckId": "criterion-review-fixture",
+  "name": "Coordinator review-fixture validation",
+  "status": "passed",
+  "command": "pnpm agent:state:validate -- .agents/coordination/fixtures/minimal-run",
+  "exitCode": 0,
+  "observed": "Synthetic coordinator observation: the minimal Run validates and the read-only handoff reports no changed files.",
+  "reason": null,
+  "observedAt": "2026-08-03T00:12:30Z",
+  "observerRoleId": "codex"
+}

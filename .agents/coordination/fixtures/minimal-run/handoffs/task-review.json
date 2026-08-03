@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "handoffId": "handoff-review",
+  "taskId": "task-review",
+  "outcome": "succeeded",
+  "baseCommit": "ebf93ee192598430393f93e9313665c36446f84e",
+  "workingBranch": "codex/fixture-deepseek-review",
+  "changedFiles": [],
+  "commandsActuallyRun": ["git diff --check"],
+  "checks": [
+    {
+      "id": "worker-check-review",
+      "name": "Worker read-only diff check",
+      "status": "passed",
+      "command": "git diff --check",
+      "observed": "Synthetic worker report: the read-only review produced no changed files and no whitespace errors.",
+      "evidenceRoleId": "deepseek",
+      "acceptanceCheckId": null
+    }
+  ],
+  "unrunChecks": [
+    {
+      "name": "Product test suite",
+      "reason": "This is a synthetic schema fixture, not a product change."
+    }
+  ],
+  "knownRisks": [
+    "Synthetic fixture results are not product acceptance evidence."
+  ],
+  "workingTreeStatus": "Synthetic fixture state; no live worktree claim.",
+  "suggestedNextAction": "Validate the fixture with the agent-state checker."
+}

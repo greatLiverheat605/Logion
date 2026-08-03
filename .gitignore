@@ -59,6 +59,11 @@ apps/mobile/harmony/local.properties
 /docs/OWNERSHIP.md
 /docs/phase-reviews/
 
+# Local multi-agent coordination state
+/.agents/coordination/current-run.json
+/.agents/coordination/runs/*
+!/.agents/coordination/runs/.gitkeep
+
 # IDE and OS
 .idea/
 .vscode/
