@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 import {
+  authenticatedWorkerCount,
   configuredCredentials,
   e2eBaseUrl,
   shouldRunAuthenticated,
@@ -65,6 +66,7 @@ export default defineConfig({
           {
             name: "authenticated-chromium",
             fullyParallel: false,
+            workers: authenticatedWorkerCount,
             testMatch: authenticatedTests,
             use: { ...devices["Desktop Chrome"] },
           },
