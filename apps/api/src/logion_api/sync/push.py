@@ -1,6 +1,6 @@
 import base64
 import hashlib
-from typing import Any, Literal, cast
+from typing import Any, Literal, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import rfc8785
@@ -128,6 +128,19 @@ def operation_fingerprint(operation: object) -> str:
     return canonical_hash(operation)
 
 
+class SyncOperationHandler(Protocol):
+    async def __call__(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult: ...
+
+
 class SyncPushService:
     def __init__(
         self,
@@ -154,6 +167,108 @@ class SyncPushService:
         self._self_study = self_study
         self._research = research
         self._collaboration = collaboration
+        self._handlers = self._build_handler_registry()
+
+    def _build_handler_registry(
+        self,
+    ) -> dict[str, dict[tuple[str, str], SyncOperationHandler]]:
+        """Register sync-v1 operations by domain family.
+
+        Keeping the registration table separate from the envelope/ledger logic makes the
+        supported operation surface explicit while leaving each existing domain adapter
+        responsible for validation, authorization, and persistence semantics.
+        """
+
+        registry: dict[str, dict[tuple[str, str], SyncOperationHandler]] = {
+            "workspace": {},
+            "planning": {},
+            "execution": {},
+            "content": {},
+            "evidence": {},
+            "memory": {},
+            "exams": {},
+            "self_study": {},
+            "research": {},
+            "collaboration": {},
+        }
+
+        def register(
+            family: str,
+            entity_types: tuple[str, ...],
+            operation_type: str,
+            handler: SyncOperationHandler,
+        ) -> None:
+            family_handlers = registry[family]
+            for entity_type in entity_types:
+                family_handlers[(entity_type, operation_type)] = handler
+
+        register("workspace", ("space",), "create", self._create_space)
+        register("planning", ("learning_goal",), "create", self._create_goal)
+        register("execution", ("task",), "create", self._create_task)
+        register("execution", ("task",), "update", self._transition_task)
+        register("execution", ("study_session",), "create", self._start_session)
+        register("execution", ("study_session",), "update", self._finish_session)
+        register("content", ("note",), "create", self._create_note)
+        register("content", ("note",), "update", self._update_note)
+        register(
+            "content",
+            ("note_document_update",),
+            "update",
+            self._apply_note_document_update,
+        )
+        register("content", ("resource",), "create", self._create_resource)
+        register("content", ("resource",), "update", self._update_resource)
+        register("evidence", ("evidence",), "create", self._create_evidence)
+        register("evidence", ("verification",), "update", self._update_verification)
+        register("memory", ("topic",), "create", self._create_topic)
+        register("memory", ("topic_dependency",), "create", self._create_topic_dependency)
+        register("memory", ("mastery",), "create", self._confirm_mastery)
+        register("memory", ("mastery",), "update", self._confirm_mastery)
+        register("memory", ("quiz_item",), "create", self._create_quiz_item)
+        register("memory", ("quiz_attempt",), "create", self._create_quiz_attempt)
+        register("memory", ("error_pattern",), "update", self._resolve_error_pattern)
+        register("memory", ("audit_review",), "create", self._create_audit_review)
+        register("memory", ("audit_review",), "update", self._complete_audit_review)
+        register("memory", ("review_finding",), "create", self._create_review_finding)
+        register("memory", ("review_finding",), "update", self._resolve_review_finding)
+        register("exams", ("exam",), "create", self._create_exam)
+        register("exams", ("exam_subject",), "create", self._create_exam_subject)
+        register("exams", ("syllabus_node",), "create", self._create_syllabus_node)
+        register("exams", ("mock_exam",), "create", self._create_mock_exam)
+        register("exams", ("score_record",), "create", self._create_score_record)
+        register(
+            "self_study",
+            ("learning_track", "study_project", "inbox_item", "deliverable"),
+            "create",
+            self._create_self_study,
+        )
+        register(
+            "research",
+            (
+                "paper_record",
+                "research_claim",
+                "research_question",
+                "experiment_run",
+                "metric_record",
+                "research_feedback",
+            ),
+            "create",
+            self._create_research,
+        )
+        register(
+            "collaboration",
+            ("rubric", "group_review", "group_feedback", "report_snapshot"),
+            "create",
+            self._create_collaboration,
+        )
+        return registry
+
+    def _handler_for(self, entity_type: str, operation_type: str) -> SyncOperationHandler | None:
+        for family_handlers in self._handlers.values():
+            handler = family_handlers.get((entity_type, operation_type))
+            if handler is not None:
+                return handler
+        return None
 
     async def push(
         self,
@@ -253,149 +368,31 @@ class SyncPushService:
                 resolution_record.remote_version,
                 operation.payload,
             )
-        if operation.entity_type == "learning_goal" and operation.operation_type == "create":
-            return await self._create_goal(
-                db, context, request, operation, identity, request_id=request_id
+        handler = self._handler_for(operation.entity_type, operation.operation_type)
+        if handler is not None:
+            return await handler(
+                db,
+                context,
+                request,
+                operation,
+                identity,
+                request_id=request_id,
             )
-        if operation.entity_type == "task" and operation.operation_type == "create":
-            return await self._create_task(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "task" and operation.operation_type == "update":
-            return await self._transition_task(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "study_session" and operation.operation_type == "create":
-            return await self._start_session(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "study_session" and operation.operation_type == "update":
-            return await self._finish_session(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "note" and operation.operation_type == "create":
-            return await self._create_note(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "note" and operation.operation_type == "update":
-            return await self._update_note(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "note_document_update" and operation.operation_type == "update":
-            return await self._apply_note_document_update(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "resource" and operation.operation_type == "create":
-            return await self._create_resource(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "resource" and operation.operation_type == "update":
-            return await self._update_resource(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "evidence" and operation.operation_type == "create":
-            return await self._create_evidence(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "verification" and operation.operation_type == "update":
-            return await self._update_verification(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "topic" and operation.operation_type == "create":
-            return await self._create_topic(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "topic_dependency" and operation.operation_type == "create":
-            return await self._create_topic_dependency(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "mastery" and operation.operation_type in {
-            "create",
-            "update",
-        }:
-            return await self._confirm_mastery(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "quiz_item" and operation.operation_type == "create":
-            return await self._create_quiz_item(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "quiz_attempt" and operation.operation_type == "create":
-            return await self._create_quiz_attempt(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "error_pattern" and operation.operation_type == "update":
-            return await self._resolve_error_pattern(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "audit_review" and operation.operation_type == "create":
-            return await self._create_audit_review(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "audit_review" and operation.operation_type == "update":
-            return await self._complete_audit_review(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "review_finding" and operation.operation_type == "create":
-            return await self._create_review_finding(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "review_finding" and operation.operation_type == "update":
-            return await self._resolve_review_finding(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "exam" and operation.operation_type == "create":
-            return await self._create_exam(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "exam_subject" and operation.operation_type == "create":
-            return await self._create_exam_subject(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "syllabus_node" and operation.operation_type == "create":
-            return await self._create_syllabus_node(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "mock_exam" and operation.operation_type == "create":
-            return await self._create_mock_exam(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type == "score_record" and operation.operation_type == "create":
-            return await self._create_score_record(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if (
-            operation.entity_type
-            in {"learning_track", "study_project", "inbox_item", "deliverable"}
-            and operation.operation_type == "create"
-        ):
-            return await self._create_self_study(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if (
-            operation.entity_type
-            in {
-                "paper_record",
-                "research_claim",
-                "research_question",
-                "experiment_run",
-                "metric_record",
-                "research_feedback",
-            }
-            and operation.operation_type == "create"
-        ):
-            return await self._create_research(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if (
-            operation.entity_type in {"rubric", "group_review", "group_feedback", "report_snapshot"}
-            and operation.operation_type == "create"
-        ):
-            return await self._create_collaboration(
-                db, context, request, operation, identity, request_id=request_id
-            )
-        if operation.entity_type != "space" or operation.operation_type != "create":
-            return self._rejected(operation.operation_id, "SYNC_OPERATION_UNSUPPORTED")
+        return self._rejected(operation.operation_id, "SYNC_OPERATION_UNSUPPORTED")
+
+    async def _create_space(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
         if operation.base_version != 0 or set(operation.payload) != {"name", "visibility"}:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         name = operation.payload.get("name")
@@ -433,8 +430,6 @@ class SyncPushService:
                     ),
                 )
         except Exception as exc:
-            from logion_api.errors import APIError
-
             if isinstance(exc, APIError):
                 return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
             if isinstance(exc, SyncLedgerError):
