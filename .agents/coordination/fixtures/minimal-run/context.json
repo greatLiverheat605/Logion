@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "runId": "run-minimal",
+  "mode": "fixture",
+  "objective": "Exercise recoverable task replay, handoff evidence, and the local graph index.",
+  "authority": {
+    "singleWriterRoleId": "codex",
+    "systemOfRecord": "windows-local-ledger"
+  },
+  "base": {
+    "repository": "Logion",
+    "commit": "ebf93ee192598430393f93e9313665c36446f84e",
+    "branch": "main"
+  },
+  "actors": [
+    {
+      "roleId": "codex",
+      "status": "ready",
+      "modelEvidence": {
+        "source": "runtime-attestation",
+        "modelId": "gpt-5.6-sol",
+        "observedAt": "2026-08-03T00:00:00Z"
+      }
+    },
+    {
+      "roleId": "kimi",
+      "status": "ready",
+      "modelEvidence": {
+        "source": "client-status",
+        "modelId": "kimi-k3",
+        "observedAt": "2026-08-03T00:00:00Z"
+      }
+    },
+    {
+      "roleId": "deepseek",
+      "status": "ready",
+      "modelEvidence": {
+        "source": "client-status",
+        "modelId": "opencode-go/deepseek-v4-flash",
+        "observedAt": "2026-08-03T00:00:00Z"
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "invariant-single-writer",
+      "summary": "Only the Windows coordinator writes coordination state."
+    },
+    {
+      "id": "invariant-no-secrets",
+      "summary": "No credential or private host data enters the ledger."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-local-graph",
+      "status": "accepted",
+      "summary": "Use a local JSON graph before considering a graph database.",
+      "rationale": "The first version needs durable references and replay, not another service."
+    }
+  ],
+  "openQuestions": [],
+  "artifactRefs": ["decision-local-graph", "task-ui", "task-review"],
+  "expectedFinalState": {
+    "task-ui": "accepted",
+    "task-review": "accepted"
+  }
+}

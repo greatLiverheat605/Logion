@@ -1,0 +1,4 @@
+interface:
+  display_name: "Logion Orca Coordinator"
+  short_description: "Coordinate Logion agents across Windows and macOS"
+  default_prompt: "Use $logion-orca-coordinator to split this Logion change into isolated workers, supervise delivery, and apply merge gates."

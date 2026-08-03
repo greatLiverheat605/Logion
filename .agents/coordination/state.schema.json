@@ -1,0 +1,907 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://logion.local/schemas/agent-state-v1.json",
+  "title": "Logion agent coordination state",
+  "description": "Tracked contract for local context, append-only task events, graph indexes, Worker handoff receipts, and coordinator observations.",
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[a-z]+-[a-z0-9][a-z0-9-]*$"
+    },
+    "roleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "rfc3339DateTime": {
+      "description": "Strict RFC 3339 timestamp with an explicit Z designator or numeric UTC offset.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          { "pattern": "^(?:[A-Za-z]:|[\\\\/])" },
+          { "pattern": "(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)" },
+          { "pattern": "(?:^|[\\\\/])\\.(?:[\\\\/]|$)" },
+          { "pattern": "[\\\\/]{2}" },
+          { "pattern": "(?:^|[\\\\/])[^\\\\/]*[ .](?:[\\\\/]|$)" },
+          { "pattern": ":" },
+          {
+            "pattern": "(?:^|[\\\\/])(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³]|[Cc][Ll][Oo][Cc][Kk][$]|[Cc][Oo][Nn][Ii][Nn][$]|[Cc][Oo][Nn][Oo][Uu][Tt][$])(?:[.][^\\\\/]*)?(?:[\\\\/]|$)"
+          }
+        ]
+      }
+    },
+    "modelEvidence": {
+      "type": "object",
+      "required": ["source", "modelId", "observedAt"],
+      "properties": {
+        "source": {
+          "enum": [
+            "client-status",
+            "manual-verification",
+            "provider-model-list",
+            "runtime-attestation"
+          ]
+        },
+        "modelId": { "$ref": "#/$defs/nonEmptyString" },
+        "observedAt": { "$ref": "#/$defs/rfc3339DateTime" }
+      },
+      "additionalProperties": false
+    },
+    "role": {
+      "type": "object",
+      "required": [
+        "id",
+        "client",
+        "modelId",
+        "host",
+        "dispatch",
+        "access",
+        "defaultScope",
+        "prohibitions",
+        "evidenceSources"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/roleId" },
+        "client": { "$ref": "#/$defs/nonEmptyString" },
+        "modelId": { "$ref": "#/$defs/nonEmptyString" },
+        "host": { "$ref": "#/$defs/nonEmptyString" },
+        "dispatch": { "$ref": "#/$defs/nonEmptyString" },
+        "access": {
+          "enum": ["coordinator-writer", "bounded-writer", "read-only"]
+        },
+        "defaultScope": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "prohibitions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "evidenceSources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "client-status",
+              "manual-verification",
+              "provider-model-list",
+              "runtime-attestation"
+            ]
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "rolesDocument": {
+      "type": "object",
+      "required": ["schemaVersion", "roles"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/role" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pointer": {
+      "type": "object",
+      "required": ["schemaVersion", "runId", "path"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "runId": { "$ref": "#/$defs/stableId" },
+        "path": { "$ref": "#/$defs/relativePath" }
+      },
+      "additionalProperties": false
+    },
+    "actor": {
+      "type": "object",
+      "required": ["roleId", "status"],
+      "properties": {
+        "roleId": { "$ref": "#/$defs/roleId" },
+        "status": { "enum": ["pending", "ready", "unavailable"] },
+        "modelEvidence": { "$ref": "#/$defs/modelEvidence" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "ready" } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["modelEvidence"],
+            "properties": {
+              "modelEvidence": { "$ref": "#/$defs/modelEvidence" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "invariant": {
+      "type": "object",
+      "required": ["id", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "required": ["id", "status", "summary", "rationale"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "status": { "enum": ["accepted", "superseded"] },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "rationale": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "openQuestion": {
+      "type": "object",
+      "required": ["id", "status", "question"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "status": { "enum": ["open", "resolved"] },
+        "question": { "$ref": "#/$defs/nonEmptyString" },
+        "resolution": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "contextExternalRefs": {
+      "type": "object",
+      "properties": {
+        "orcaRunId": {
+          "type": "string",
+          "pattern": "^run_[a-f0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "runId",
+        "mode",
+        "objective",
+        "authority",
+        "base",
+        "actors",
+        "invariants",
+        "decisions",
+        "openQuestions",
+        "artifactRefs",
+        "expectedFinalState"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "runId": { "$ref": "#/$defs/stableId" },
+        "mode": { "enum": ["active", "fixture", "closed"] },
+        "objective": { "$ref": "#/$defs/nonEmptyString" },
+        "authority": {
+          "type": "object",
+          "required": ["singleWriterRoleId", "systemOfRecord"],
+          "properties": {
+            "singleWriterRoleId": { "const": "codex" },
+            "systemOfRecord": { "const": "windows-local-ledger" }
+          },
+          "additionalProperties": false
+        },
+        "base": {
+          "type": "object",
+          "required": ["repository", "commit", "branch"],
+          "properties": {
+            "repository": { "$ref": "#/$defs/nonEmptyString" },
+            "commit": { "$ref": "#/$defs/commit" },
+            "branch": { "$ref": "#/$defs/nonEmptyString" }
+          },
+          "additionalProperties": false
+        },
+        "actors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/actor" }
+        },
+        "invariants": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/invariant" }
+        },
+        "decisions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/decision" }
+        },
+        "openQuestions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/openQuestion" }
+        },
+        "externalRefs": { "$ref": "#/$defs/contextExternalRefs" },
+        "artifactRefs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        },
+        "expectedFinalState": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/stableId" },
+          "additionalProperties": {
+            "enum": [
+              "pending",
+              "assigned",
+              "started",
+              "blocked",
+              "failed",
+              "completed",
+              "accepted",
+              "rejected"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "taskCreatedData": {
+      "type": "object",
+      "required": [
+        "title",
+        "ownerRoleId",
+        "access",
+        "worktree",
+        "branch",
+        "allowedPaths",
+        "dependencies",
+        "acceptanceChecks"
+      ],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "ownerRoleId": { "$ref": "#/$defs/roleId" },
+        "access": { "enum": ["read", "write"] },
+        "worktree": { "$ref": "#/$defs/stableId" },
+        "branch": { "$ref": "#/$defs/nonEmptyString" },
+        "allowedPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/relativePath" },
+          "uniqueItems": true
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        },
+        "acceptanceChecks": {
+          "description": "Check IDs that must exactly match task.accepted.data.basis and carry passed Codex evidence.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        },
+        "orcaTaskId": {
+          "type": "string",
+          "pattern": "^task_[a-f0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "taskAssignedData": {
+      "type": "object",
+      "required": ["assigneeRoleId"],
+      "properties": {
+        "assigneeRoleId": { "$ref": "#/$defs/roleId" },
+        "orcaDispatchId": {
+          "type": "string",
+          "pattern": "^ctx_[a-f0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "emptyEventData": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "reasonEventData": {
+      "type": "object",
+      "properties": {
+        "reason": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "taskCompletedData": {
+      "type": "object",
+      "required": ["handoff"],
+      "properties": {
+        "handoff": { "$ref": "#/$defs/relativePath" }
+      },
+      "additionalProperties": false
+    },
+    "taskRetriedData": {
+      "type": "object",
+      "required": ["retryOfEventId", "assigneeRoleId"],
+      "properties": {
+        "retryOfEventId": { "$ref": "#/$defs/stableId" },
+        "assigneeRoleId": { "$ref": "#/$defs/roleId" },
+        "orcaDispatchId": {
+          "type": "string",
+          "pattern": "^ctx_[a-f0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "taskAcceptedData": {
+      "type": "object",
+      "required": ["basis", "observations", "observationDigests"],
+      "properties": {
+        "basis": {
+          "description": "Exact declared acceptance check IDs; semantic validation requires passed Codex-owned evidence.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        },
+        "observations": {
+          "description": "Coordinator-authored observation IDs that bind the accepted checks to the final handoff digest.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        },
+        "observationDigests": {
+          "description": "Append-only binding from every selected observation ID to the SHA-256 of its exact JSON bytes.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/stableId" },
+          "additionalProperties": { "$ref": "#/$defs/sha256" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "taskRejectedData": {
+      "type": "object",
+      "properties": {
+        "basis": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stableId" },
+          "uniqueItems": true
+        },
+        "reason": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "taskEvent": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "runId",
+        "taskId",
+        "type",
+        "at",
+        "baseCommit",
+        "actorRoleId",
+        "data"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "eventId": { "$ref": "#/$defs/stableId" },
+        "runId": { "$ref": "#/$defs/stableId" },
+        "taskId": { "$ref": "#/$defs/stableId" },
+        "type": {
+          "enum": [
+            "task.created",
+            "task.assigned",
+            "task.started",
+            "task.blocked",
+            "task.resumed",
+            "task.completed",
+            "task.failed",
+            "task.retried",
+            "task.accepted",
+            "task.rejected"
+          ]
+        },
+        "at": { "$ref": "#/$defs/rfc3339DateTime" },
+        "baseCommit": { "$ref": "#/$defs/commit" },
+        "actorRoleId": { "$ref": "#/$defs/roleId" },
+        "data": { "type": "object" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "task.created" },
+            "actorRoleId": { "const": "codex" },
+            "data": { "$ref": "#/$defs/taskCreatedData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.assigned" },
+            "actorRoleId": { "const": "codex" },
+            "data": { "$ref": "#/$defs/taskAssignedData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.started" },
+            "data": { "$ref": "#/$defs/emptyEventData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.blocked" },
+            "data": { "$ref": "#/$defs/reasonEventData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.resumed" },
+            "data": { "$ref": "#/$defs/reasonEventData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.completed" },
+            "data": { "$ref": "#/$defs/taskCompletedData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.failed" },
+            "data": { "$ref": "#/$defs/reasonEventData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.retried" },
+            "actorRoleId": { "const": "codex" },
+            "data": { "$ref": "#/$defs/taskRetriedData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.accepted" },
+            "actorRoleId": { "const": "codex" },
+            "data": { "$ref": "#/$defs/taskAcceptedData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task.rejected" },
+            "actorRoleId": { "const": "codex" },
+            "data": { "$ref": "#/$defs/taskRejectedData" }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "emptyGraphData": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "decisionGraphData": {
+      "type": "object",
+      "properties": {
+        "status": { "enum": ["accepted", "superseded"] }
+      },
+      "additionalProperties": false
+    },
+    "questionGraphData": {
+      "type": "object",
+      "properties": {
+        "status": { "enum": ["open", "resolved"] }
+      },
+      "additionalProperties": false
+    },
+    "taskGraphData": {
+      "type": "object",
+      "properties": {
+        "orcaTaskId": {
+          "type": "string",
+          "pattern": "^task_[a-f0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileGraphData": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" }
+      },
+      "additionalProperties": false
+    },
+    "commitGraphData": {
+      "type": "object",
+      "required": ["commit"],
+      "properties": {
+        "commit": { "$ref": "#/$defs/commit" }
+      },
+      "additionalProperties": false
+    },
+    "checkGraphData": {
+      "type": "object",
+      "required": [
+        "status",
+        "observed",
+        "command",
+        "evidenceRoleId",
+        "acceptanceCheckId",
+        "observationPath",
+        "completionEventId",
+        "handoffSha256"
+      ],
+      "properties": {
+        "status": { "enum": ["passed", "failed", "not_run"] },
+        "observed": { "$ref": "#/$defs/nonEmptyString" },
+        "command": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "evidenceRoleId": { "const": "codex" },
+        "acceptanceCheckId": {
+          "anyOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }]
+        },
+        "observationPath": { "$ref": "#/$defs/relativePath" },
+        "completionEventId": { "$ref": "#/$defs/stableId" },
+        "handoffSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": false
+    },
+    "handoffGraphData": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" }
+      },
+      "additionalProperties": false
+    },
+    "modelGraphData": {
+      "type": "object",
+      "required": ["roleId", "modelId"],
+      "properties": {
+        "roleId": { "$ref": "#/$defs/roleId" },
+        "modelId": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "graphNode": {
+      "type": "object",
+      "required": ["id", "type", "label", "data"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "type": {
+          "enum": [
+            "run",
+            "requirement",
+            "invariant",
+            "decision",
+            "question",
+            "task",
+            "file",
+            "commit",
+            "check",
+            "handoff",
+            "model"
+          ]
+        },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "data": { "type": "object" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "enum": ["run", "requirement", "invariant"] },
+            "data": { "$ref": "#/$defs/emptyGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "decision" },
+            "data": { "$ref": "#/$defs/decisionGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "question" },
+            "data": { "$ref": "#/$defs/questionGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "task" },
+            "data": { "$ref": "#/$defs/taskGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "file" },
+            "data": { "$ref": "#/$defs/fileGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "commit" },
+            "data": { "$ref": "#/$defs/commitGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "check" },
+            "data": { "$ref": "#/$defs/checkGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "handoff" },
+            "data": { "$ref": "#/$defs/handoffGraphData" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "model" },
+            "data": { "$ref": "#/$defs/modelGraphData" }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "graphEdge": {
+      "type": "object",
+      "required": ["id", "from", "to", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "from": { "$ref": "#/$defs/stableId" },
+        "to": { "$ref": "#/$defs/stableId" },
+        "type": {
+          "enum": [
+            "includes",
+            "constrains",
+            "authorizes",
+            "implements",
+            "touches",
+            "produces",
+            "verified-by",
+            "reported-by",
+            "depends-on",
+            "decided-by",
+            "uses-model"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "graph": {
+      "type": "object",
+      "required": ["schemaVersion", "runId", "nodes", "edges"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "runId": { "$ref": "#/$defs/stableId" },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/graphNode" }
+        },
+        "edges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/graphEdge" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "receiptCheck": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "status",
+        "command",
+        "observed",
+        "evidenceRoleId",
+        "acceptanceCheckId"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "status": {
+          "description": "A Worker check is present only when it actually ran; unrun work belongs in handoff.unrunChecks.",
+          "enum": ["passed", "failed"]
+        },
+        "command": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "observed": { "$ref": "#/$defs/nonEmptyString" },
+        "reason": { "$ref": "#/$defs/nonEmptyString" },
+        "evidenceRoleId": {
+          "description": "Worker role that directly reported this attempt-scoped result.",
+          "$ref": "#/$defs/roleId"
+        },
+        "acceptanceCheckId": {
+          "description": "Worker receipts cannot authorize coordinator acceptance criteria.",
+          "type": "null"
+        }
+      },
+      "additionalProperties": false
+    },
+    "unrunCheck": {
+      "type": "object",
+      "required": ["name", "reason"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "reason": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "handoffExternalRefs": {
+      "type": "object",
+      "properties": {
+        "orcaTaskId": {
+          "type": "string",
+          "pattern": "^task_[a-f0-9]+$"
+        },
+        "orcaDispatchId": {
+          "type": "string",
+          "pattern": "^ctx_[a-f0-9]+$"
+        },
+        "orcaMessageId": {
+          "type": "string",
+          "pattern": "^msg_[a-f0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "handoff": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "handoffId",
+        "taskId",
+        "outcome",
+        "baseCommit",
+        "workingBranch",
+        "changedFiles",
+        "commandsActuallyRun",
+        "checks",
+        "unrunChecks",
+        "knownRisks",
+        "workingTreeStatus",
+        "suggestedNextAction"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "handoffId": { "$ref": "#/$defs/stableId" },
+        "taskId": { "$ref": "#/$defs/stableId" },
+        "outcome": { "enum": ["succeeded", "partial", "blocked", "failed"] },
+        "baseCommit": { "$ref": "#/$defs/commit" },
+        "workingBranch": { "$ref": "#/$defs/nonEmptyString" },
+        "changedFiles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/relativePath" },
+          "uniqueItems": true
+        },
+        "commandsActuallyRun": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/receiptCheck" },
+          "uniqueItems": true
+        },
+        "unrunChecks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/unrunCheck" },
+          "uniqueItems": true
+        },
+        "knownRisks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "workingTreeStatus": { "$ref": "#/$defs/nonEmptyString" },
+        "suggestedNextAction": { "$ref": "#/$defs/nonEmptyString" },
+        "externalRefs": { "$ref": "#/$defs/handoffExternalRefs" }
+      },
+      "additionalProperties": false
+    },
+    "coordinatorObservation": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "observationId",
+        "taskId",
+        "completionEventId",
+        "handoff",
+        "handoffSha256",
+        "acceptanceCheckId",
+        "name",
+        "status",
+        "command",
+        "exitCode",
+        "observed",
+        "reason",
+        "observedAt",
+        "observerRoleId"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "observationId": { "$ref": "#/$defs/stableId" },
+        "taskId": { "$ref": "#/$defs/stableId" },
+        "completionEventId": { "$ref": "#/$defs/stableId" },
+        "handoff": { "$ref": "#/$defs/relativePath" },
+        "handoffSha256": { "$ref": "#/$defs/sha256" },
+        "acceptanceCheckId": {
+          "anyOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }]
+        },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "enum": ["passed", "failed", "not_run"] },
+        "command": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "exitCode": { "type": ["integer", "null"] },
+        "observed": { "$ref": "#/$defs/nonEmptyString" },
+        "reason": {
+          "anyOf": [{ "$ref": "#/$defs/nonEmptyString" }, { "type": "null" }]
+        },
+        "observedAt": { "$ref": "#/$defs/rfc3339DateTime" },
+        "observerRoleId": { "const": "codex" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "not_run" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "reason": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

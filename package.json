@@ -28,13 +28,18 @@
     "build": "pnpm -r --if-present build",
     "test:browser": "playwright test",
     "guard:context": "node scripts/check-dynamic-context.mjs",
+    "agent:state:init": "node scripts/agent-state.mjs init",
+    "agent:state:validate": "node scripts/agent-state.mjs validate",
+    "agent:state:test": "node --test scripts/agent-state.test.mjs",
+    "agent:state:check": "pnpm agent:state:validate -- .agents/coordination/fixtures/minimal-run && pnpm agent:state:test",
     "contracts:generate": "uv run --package logion-api python -m logion_api.openapi_export packages/contracts/openapi/openapi.json && pnpm --filter @logion/contracts generate:types && pnpm --filter @logion/contracts generate:sync",
     "contracts:check": "pnpm contracts:generate && node scripts/check-clean-contracts.mjs",
-    "ci:fast": "pnpm guard:context && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm contracts:check"
+    "ci:fast": "pnpm guard:context && pnpm agent:state:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm contracts:check"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.61.1",
+    "ajv": "8.20.0",
     "openapi-typescript": "7.13.0",
     "prettier": "3.8.5",
     "typescript": "5.9.3"
