@@ -6,15 +6,15 @@
 
 ## 1. 不可变基线
 
-| 项目 | 值 |
-| --- | --- |
-| 仓库 | `Logion` |
-| 基线提交 | `e11d78b3d1a96c40263fa4284695a19b55f22f7c` |
-| 集成分支 | `codex/v011-coordination` |
-| 基线远端分支 | `origin/codex/multi-agent-coordination` |
-| Orca Run | `run_68d8b9d2895b` |
-| 本地状态 Run | `run-v011-closeout` |
-| 唯一协调账本写入者 | Windows Codex |
+| 项目               | 值                                         |
+| ------------------ | ------------------------------------------ |
+| 仓库               | `Logion`                                   |
+| 基线提交           | `e11d78b3d1a96c40263fa4284695a19b55f22f7c` |
+| 集成分支           | `codex/v011-coordination`                  |
+| 基线远端分支       | `origin/codex/multi-agent-coordination`    |
+| Orca Run           | `run_68d8b9d2895b`                         |
+| 本地状态 Run       | `run-v011-closeout`                        |
+| 唯一协调账本写入者 | Windows Codex                              |
 
 所有写入任务必须从该提交开始；不得以 `origin/main` 的 `0.1.0-rc4` 代替本轮基线，也不得把手工 ZCode 交接描述为 Orca 自动监督。
 
@@ -51,12 +51,12 @@
 
 ## 3. 任务分配与当前状态
 
-| 任务 | Owner | 允许写入 | 验收状态 |
-| --- | --- | --- | --- |
-| Core UI information architecture closeout | Kimi K3 / Claude Code | `apps/web/src/**`、直接 UI 测试 | Orca Dispatch 已建立；客户端曾停在启动确认，未产生可接纳改动 |
-| Worker reliability and authenticated E2E stability audit | Windows Codex | `apps/worker/**`、`tests/browser/**`、必要 workflow | 协调者执行中；Worker 定向测试以 workspace 方式 11/11 通过 |
-| Read-only v0.1.1 baseline review | DeepSeek V4 Flash / OpenCode | 只读 | 初次启动遇到 OpenCode 插件错误，尚无有效 review receipt |
-| Sync entity-family handler split | ZCode / GLM-5.2 | `apps/api/src/logion_api/sync/push.py` 与直接测试 | 独立 Windows worktree 已建立，等待手工打开 ZCode |
+| 任务                                                     | Owner                        | 允许写入                                            | 验收状态                                                     |
+| -------------------------------------------------------- | ---------------------------- | --------------------------------------------------- | ------------------------------------------------------------ |
+| Core UI information architecture closeout                | Kimi K3 / Claude Code        | `apps/web/src/**`、直接 UI 测试                     | Orca Dispatch 已建立；客户端曾停在启动确认，未产生可接纳改动 |
+| Worker reliability and authenticated E2E stability audit | Windows Codex                | `apps/worker/**`、`tests/browser/**`、必要 workflow | 协调者执行中；Worker 定向测试以 workspace 方式 11/11 通过    |
+| Read-only v0.1.1 baseline review                         | DeepSeek V4 Flash / OpenCode | 只读                                                | 初次启动遇到 OpenCode 插件错误，尚无有效 review receipt      |
+| Sync entity-family handler split                         | ZCode / GLM-5.2              | `apps/api/src/logion_api/sync/push.py` 与直接测试   | 独立 Windows worktree 已建立，等待手工打开 ZCode             |
 
 外部 worker 不得修改 `.agents/coordination/**`、合并、推送、迁移、认证、契约或密钥。DeepSeek 只读任务即使报告完成，也不能授权 Codex 代替它修改文件。
 
