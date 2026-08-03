@@ -20,6 +20,7 @@ export const shouldRunAuthenticated =
   canProvisionAccounts || configuredCredentials !== null;
 export const requiresAuthenticatedGate =
   process.env.LOGION_E2E_REQUIRE_AUTHENTICATED === "true";
+export const authenticatedWorkerCount = 1;
 export const authenticationStateDirectory = resolve("test-results", ".auth");
 export const authenticationManifestPath = resolve(
   authenticationStateDirectory,
