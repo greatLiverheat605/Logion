@@ -1,10 +1,10 @@
 # V20-03：权限与 API 设计（已批准）
 
-- 状态：设计已批准（用户于 2026-08-05 明确确认）；V20-04 合同实施仍须单独授权
+- 状态：设计已批准（用户于 2026-08-05 明确确认）；V20-04 于 2026-08-06 获授权、完成并通过 Codex 验收
 - 依赖：ADR-0029 / V20-M0（已观察到于 2026-08-05 接受）
 - 范围：`SourceExcerpt`、`KnowledgeCitation`、AI Draft 接受和有界图读取的增量、Feature Flag
   控制、online-only API
-- 明确排除：路由、Schema、迁移、OpenAPI 生成、认证/会话变更、`Space` 语义变更、sync-v1
+- V20-03 原设计阶段明确排除：路由、Schema、迁移、OpenAPI 生成、认证/会话变更、`Space` 语义变更、sync-v1
   变更、Provider 工作和 GLM 派发
 
 本提案保持 ADR-0004 不变：所有查询都从已认证的 `workspace_id + space_id` 边界开始。Private
@@ -13,6 +13,10 @@ Space 正文访问权。Shared 访问继续由有效 Workspace membership 和命
 
 审批记录：用户于 2026-08-05 批准本文权限矩阵、API 边界与推荐方案。该批准冻结合同设计基线，
 不授权生成 OpenAPI、实现 Route、修改认证/会话、commit 或 push。
+
+后续授权与实施记录：用户于 2026-08-06 指示按计划继续，并授权必要的 GitHub 提交。Windows Codex
+据此完成 V20-04 合同门；该授权不延伸到 V20-08 ORM/Repository、生产启用、共享写入、删除、附件、
+本地 Worker、认证/会话或 sync-v1 变更。
 
 ## 1. Feature 与能力门禁
 
@@ -340,3 +344,24 @@ Locator Text、Filename、Target Title、Filter 和 Cursor。
 
 批准本文档只表示：在另行授权时，可以进入 V20-04 Contract 设计/生成；它不授权 Migration、Route/
 Schema 实现、生产启用，也不授权改变冻结的 Auth、Space、AI Gateway 或 sync-v1 边界。
+
+## 10. V20-04 实施与验收结果
+
+V20-04 后续独立授权已经执行，结果保持本文批准的停止线：
+
+- 新增 9 个 OpenAPI Path Item、11 个 Operation 和 26 个 Component Schema；没有删除或修改任何
+  既有 Path 或 Schema。生成的 TypeScript 客户端快照可重现，`pnpm contracts:check` 通过。
+- `shared_knowledge.read/write/accept` 作为休眠 Permission 加入服务端与合同矩阵；主能力、Shared
+  Write 和 Deletion 三个 Flag 默认均为 `false`，危险组合在配置加载时失败关闭。
+- Route 只建立现有 Session、trusted-Origin/CSRF 和主 Flag 前置边界；V20-08 服务尚不存在，因此
+  所有 Operation 在任何配置下继续返回 `KNOWLEDGE_FEATURE_DISABLED`，不会查询或写入知识数据。
+- 新增纯策略权限矩阵、统一不透明 404、HMAC-SHA256 范围绑定游标、当前/前一 Key 轮换、强不透明
+  ETag、双桶隐私哈希限流策略和 150 Node/400 Edge/Depth 2/1 MiB 硬上限合同。
+- 124 个聚焦测试与 264 个 API 非集成测试通过；Ruff、严格 Mypy、合同包 12 个测试/类型检查、
+  整仓 lint/typecheck/build、生成检查与 added-line secret scan 通过。
+- sync-v1 的 operation schema、wire schema、checksum vectors、生成 TypeScript 与两个 Validator 制品
+  共六项 SHA-256 与实施前逐字节一致；新实体未进入 sync-v1。
+
+因此 V20-04 只被接受为 **default-off 合同门**。启用主 Flag 前，V20-08 仍须实现从活动 Membership
+和 `(workspace_id, space_id)` 开始的 scoped Repository、对象两端授权、行锁内复核、数据库超时、
+响应字节边界、真实速率/并发治理及相应 PostgreSQL 负测。
