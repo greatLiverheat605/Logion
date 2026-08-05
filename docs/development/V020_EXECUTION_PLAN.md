@@ -1,8 +1,9 @@
 # v0.2.0 执行计划：自适应知识空间架构基础
 
-> 状态：设计待审（ADR-0029 Proposed）；不得据此直接上线。
-> 基线：`173eb5bd8bb082977eca4e64616cba43617eba48`。
-> 本计划保持文档-only；迁移、OpenAPI、产品代码、同步和 Provider 配置均需后续独立批准。
+> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明已完成；V20-04 OpenAPI 合同及产品实现仍须单独授权。
+> 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
+> 仅 V20-02 migration/tests 门已打开并完成；OpenAPI、ORM/产品代码、同步和 Provider 配置仍需后续独立批准。
+> 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
 
 ## 1. 不可变边界
 
@@ -39,34 +40,44 @@ V20-00 design approval
 
 ## 3. 任务包、所有权与门禁
 
-| ID     | Owner / 状态                                  | 单一写入范围                                                    | 输出与进入条件                                                                                                                             | 完成证据                                                                          |
-| ------ | --------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| V20-00 | Windows Codex / 当前                          | `docs/adr/0029-*`、本威胁模型、本计划                           | 对 ADR、开放决策、威胁和拆分边界评审；需要产品/安全明确接受 ADR 状态变化                                                                   | 评审记录；所有开放决策有 owner/后续 gate，不伪装实现事实                          |
-| V20-01 | Windows Codex / 待批准                        | API models + 新 migration，仅在新任务授权后                     | DDL 设计 typed citation 四类 FK、恰好一个目标、scope、版本、hash、索引、删除策略；先决定 Source 身份                                       | migration review、DDL diff、约束清单、upgrade/downgrade 计划                      |
-| V20-02 | Windows Codex / 待 V20-01                     | migration/tests 独占                                            | 隔离 PostgreSQL upgrade/downgrade/upgrade；种子与生产规模估算；孤儿/跨范围数据检查                                                         | 实际命令、通过结果、前后 schema/行数、备份恢复点                                  |
-| V20-03 | Windows Codex / 待批准                        | API domain/routes/schemas/tests 独占                            | 决定命名 permissions、ETag/version、错误码、分页、接受事务；不得改变 auth/Space semantics                                                  | 权限矩阵、事务序列、负测设计、安全复核                                            |
-| V20-04 | Windows Codex / 待 V20-03                     | `packages/contracts/**`、生成快照及直接测试                     | 仅加法 OpenAPI；生成后审查客户端/快照；证明 sync-v1 无 diff                                                                                | `pnpm contracts:generate`、快照 diff、`pnpm contracts:check` 及 sync golden diff  |
-| V20-05 | Kimi K3 / 可在设计批准后派发                  | 独立 Mac worktree 内限定 UX 原型/直接 UI 测试；不触碰共享数据层 | 两款同信息架构原型：1440/390、明暗、Today/Review/Records 中的图谱投影、接受/编辑/拒绝、空/错/加载/online-only、列表/树替代；不新增一级导航 | 可交互原型、截图/录屏、键盘/移动状态清单、无后端假设清单                          |
-| V20-06 | 产品 owner + Windows Codex / 待 V20-05        | 无并行实现写入                                                  | 人工选择 UX 方向；冻结信息架构和状态语义，数据/权限/合同仍由 Codex 控制                                                                    | 明确选择与修改项；未选择则停止 UI 实现                                            |
-| V20-07 | Windows Codex + 安全/隐私 owner / 待评审      | threat/retention 文档；生产策略需另授权                         | 决定共享贡献、审计、备份、本地缓存、Provider 保留；确认附件残余风险和 Beta 停止线                                                          | 签核的保留矩阵、数据流/删除清单、残余风险接受                                     |
-| V20-08 | Windows Codex / 待 01–07 必要门禁             | 核心 API/domain/repository/tests；一 writer                     | 实现 SourceExcerpt/citation、授权、版本、删除闭包、bounded read；能力默认关闭                                                              | 目标 pytest/Ruff/mypy、DB 约束与跨租户测试、代码审查                              |
-| V20-09 | Windows Codex / 待 V20-08                     | AI Gateway adapter/domain apply/tests 独占                      | 新任务类型、数据最小化预览、schema、stale 检查、接受原子事务、幂等/未知外呼状态                                                            | 故障注入、并发/重放、预算账本、未经接受正式写入为 0                               |
-| V20-10 | UI 可由已批准 Kimi scope 实现；服务端由 Codex | 前后端路径不重叠；共享合同由 Codex                              | 1–2 跳、150/400 默认、服务端硬限、浏览器布局、移动列表/树、安全呈现、词法黄金集                                                            | 查询/DoS 测试、Recall@10、axe/键盘/390px、存储型 XSS 浏览器测试                   |
-| V20-11 | Windows Codex / 默认禁用                      | attachment migration/worker security，需单独任务                | Resource 绑定仍走安全上传；本地租约/检查点须独立设计；BitLocker 或等价证明前不启用                                                         | attachment 负测；磁盘加密/ACL/恢复/残留清理证据；核心流程在 worker offline 时通过 |
-| V20-12 | Windows Codex / 集成树                        | 测试与必要修复                                                  | 运行下节矩阵；先 bounded 后 repository gates；基础设施缺失记为 unrun，不算通过                                                             | 原始命令、退出码、结果计数、失败现场和 unrun 原因                                 |
-| V20-13 | DeepSeek V4 Flash / 只读、待 V20-12           | 无写权限                                                        | 独立审查完整 diff：租户逃逸、约束、stale acceptance、重放/计费、XSS、DoS、sync-v1、删除/回滚；不得修文件                                   | 结构化 findings（severity/path/evidence/fix）；零文件变更、无 merge/push          |
-| V20-14 | Windows Codex / 待修完 findings               | staging/隔离恢复环境                                            | 演练每个 checkpoint；首个正式写入后只禁用+前向修复；验证备份恢复与引用闭包                                                                 | upgrade/downgrade/upgrade、恢复、feature-off、孤儿扫描的观测结果                  |
-| V20-15 | Windows Codex / 最后                          | 集成 worktree；ledger 仅 Codex                                  | 复核所有 handoff/diff/secret/path；运行最终 gates；只有授权后 commit/merge/push                                                            | acceptance manifest、commit SHA（若授权）、未运行项、残余风险、清理清单           |
+| ID     | Owner / 状态                                 | 单一写入范围                                                    | 输出与进入条件                                                                                                          | 完成证据                                                                          |
+| ------ | -------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| V20-00 | Windows Codex / 已批准                       | `docs/adr/0029-*`、本威胁模型、本计划                           | 已冻结复用 `Resource`、显式 typed citation、唯一 `TopicDependency`、online-only/additive/default-off 与共享写入关闭边界 | ADR-0029 Accepted；Orca M0 `task_5f8745a5770e` complete                           |
+| V20-01 | Windows Codex / 设计已批准                   | 只读 schema/migration 设计；实现须另授权                        | 已统一不可变 excerpt/citation、四类 typed FK、scope、32 KiB/512-byte/显式 locator、索引和关闭策略                       | `V020_SCHEMA_MIGRATION_DESIGN.md`；用户于 2026-08-05 批准                         |
+| V20-02 | Windows Codex / 隔离证明已完成               | migration/tests 独占                                            | 已完成 PostgreSQL 往返、31 个拒绝/回滚断言、孤儿/非空降级停止、备份恢复和 10k/表规模估算；能力保持关闭                  | `V020_MIGRATION_PROOF.md`；无 commit/push；ORM/autogenerate 留待 V20-08           |
+| V20-03 | Windows Codex / 设计已批准                   | 只读 permission/API 设计；合同实现须另授权                      | 已统一 accept 职责分离、不可变资源 API、ETag/version、错误码、bounded query、HMAC key rotation                          | `V020_PERMISSION_API_DESIGN.md`；用户于 2026-08-05 批准；V20-04 未授权            |
+| V20-04 | Windows Codex / 待单独授权                   | `packages/contracts/**`、生成快照及直接测试                     | 仅加法 OpenAPI；生成后审查客户端/快照；证明 sync-v1 无 diff                                                             | `pnpm contracts:generate`、快照 diff、`pnpm contracts:check` 及 sync golden diff  |
+| V20-05 | Kimi K3 / 第一版原型已完成                   | 独立 Mac worktree 内限定 UX 原型/直接 UI 测试；不触碰共享数据层 | 已交付复用 Logion 外壳的单一整体动态知识空间原型；Kimi 本轮任务结束，不承接后续前端迭代                                 | 原型代码与浏览器 QA；保留 4 项已知修正，不视为正式产品实现                        |
+| V20-06 | 产品 owner + Windows Codex / 第一版已批准    | 无并行实现写入                                                  | 第一版按 Kimi 原型方向施工；后续前端 owner 仍由用户另行指定，数据/权限/合同继续由 Codex 控制                            | 用户明确批准第一版方向；修正项进入独立前端任务                                    |
+| V20-07 | Windows Codex + 安全/隐私 owner / 设计已批准 | threat/retention 文档；生产策略需另授权                         | 已冻结私有/共享、审计、备份、Provider、附件、本地 Worker 的推荐保留矩阵与停止线；所有敏感能力保持关闭                   | `V020_RETENTION_THREAT_SIGNOFF.md`；用户于 2026-08-05 批准；生产合规门另行执行    |
+| V20-08 | Windows Codex / 待 01–07 必要门禁            | 核心 API/domain/repository/tests；一 writer                     | 实现 SourceExcerpt/citation、授权、版本、删除闭包、bounded read；能力默认关闭                                           | 目标 pytest/Ruff/mypy、DB 约束与跨租户测试、代码审查                              |
+| V20-09 | Windows Codex / 待 V20-08                    | AI Gateway adapter/domain apply/tests 独占                      | 新任务类型、数据最小化预览、schema、stale 检查、接受原子事务、幂等/未知外呼状态                                         | 故障注入、并发/重放、预算账本、未经接受正式写入为 0                               |
+| V20-10 | 前端 owner 待用户另行指定；服务端由 Codex    | 前后端路径不重叠；共享合同由 Codex                              | 1–2 跳、150/400 默认、服务端硬限、浏览器布局、移动列表/树、安全呈现、词法黄金集                                         | 查询/DoS 测试、Recall@10、axe/键盘/390px、存储型 XSS 浏览器测试                   |
+| V20-11 | Windows Codex / 默认禁用                     | attachment migration/worker security，需单独任务                | Resource 绑定仍走安全上传；本地租约/检查点须独立设计；BitLocker 或等价证明前不启用                                      | attachment 负测；磁盘加密/ACL/恢复/残留清理证据；核心流程在 worker offline 时通过 |
+| V20-12 | Windows Codex / 集成树                       | 测试与必要修复                                                  | 运行下节矩阵；先 bounded 后 repository gates；基础设施缺失记为 unrun，不算通过                                          | 原始命令、退出码、结果计数、失败现场和 unrun 原因                                 |
+| V20-13 | DeepSeek V4 Flash / 只读、待 V20-12          | 无写权限                                                        | 独立审查完整 diff：租户逃逸、约束、stale acceptance、重放/计费、XSS、DoS、sync-v1、删除/回滚；不得修文件                | 结构化 findings（severity/path/evidence/fix）；零文件变更、无 merge/push          |
+| V20-14 | Windows Codex / 待修完 findings              | staging/隔离恢复环境                                            | 演练每个 checkpoint；首个正式写入后只禁用+前向修复；验证备份恢复与引用闭包                                              | upgrade/downgrade/upgrade、恢复、feature-off、孤儿扫描的观测结果                  |
+| V20-15 | Windows Codex / 最后                         | 集成 worktree；ledger 仅 Codex                                  | 复核所有 handoff/diff/secret/path；运行最终 gates；只有授权后 commit/merge/push                                         | acceptance manifest、commit SHA（若授权）、未运行项、残余风险、清理清单           |
 
 ### ZCode 状态
 
-ZCode/GLM-5.2 为手工桌面客户端，当前状态是 **manual/pending**：本计划不宣称已 dispatch、启动或交付。若后续分派，只能给独立 Windows worktree 中非敏感、模块化且不与 Codex/Kimi 重叠的实现（例如批准后的纯 schema DTO 或局部测试夹具）；必须由操作者手动 Open Workspace，以 Git handoff 返回，不能被记录为 Orca worker telemetry，也不得处理 auth、迁移批准、合同所有权、Provider、秘密、merge 或 push。
+ZCode/GLM-5.2 为手工桌面客户端。它已在独立 Windows worktree 基于协调基线交付纯 Python
+bounded graph kernel 候选。第三次交接完成了唯一边方向保留、同向重复保留、反向歧义规范化、
+冲突优先级和文档/格式收口；Windows Codex 独立观察到 42 个目标 pytest、Ruff lint/format、
+mypy、未跟踪文件空白检查、范围/秘密扫描以及四组关键运行时复现全部通过。因此该产物状态为
+**纯图内核模块候选验收通过**，仍是 3 个未跟踪文件、无 commit、无 push。它不含授权、Space
+scope、数据库生产者、安全游标、响应字节、超时、速率或配额治理，所以不计为 V20-08/V20-10
+正式实现，也不得直接挂入 API。ZCode 继续不得处理 auth、迁移批准、合同所有权、Provider、
+秘密、merge 或 push。
 
 ## 4. 迁移、OpenAPI 与回滚关口
 
 1. **M0 设计冻结**：ADR-0029 接受或以新决策替代；Source 身份、target DDL、permission、保留和 API 版本表达明确。未完成停止。
+   当前状态：**已通过**。Source 复用 `Resource`；target 类型、online-only/additive/default-off、sync-v1 不变与共享写入关闭均已冻结；V20-01/03/07 设计于 2026-08-05 获用户批准。
 2. **M1 迁移前**：生产式备份/恢复演练、基线行数和孤儿检查；迁移只加法且可 downgrade。任何数据修复需独立审查。
 3. **M2 schema-only**：部署表/约束/索引但能力关闭；实际 upgrade/downgrade/upgrade 通过，锁时长/磁盘预算可接受。
+   当前状态：**隔离证明通过，生产门未通过**。临时 PostgreSQL 的备份恢复、往返、行数、孤儿停止、
+   非空降级门和合成规模已验证；真实生产恢复点、行数、锁竞争和磁盘预算仍须在生产变更审批后重做。
 4. **C1 OpenAPI**：运行 generate/check 并人工审查；只允许批准的加法。auth、Space permission、sync-v1 或非预期生成差异立即停止。
 5. **R1 read-only**：先上线授权读取和 bounded query；观察错误率、P95、内存、跨租户缓存和截断行为。
 6. **W1 write/acceptance**：在 staging 启用写入和接受；故障注入证明正式知识/citation/receipt/audit 原子性与幂等。
@@ -93,7 +104,9 @@ ZCode/GLM-5.2 为手工桌面客户端，当前状态是 **manual/pending**：�
 
 跨机器正式派发还有一层协作门禁：只有在用户授权 Windows Codex 发布共同基线、目标 Mac 已验证可检出同一完整 SHA 后，Mac 任务才能从 `pending` 进入 `assigned`。Kimi 和 DeepSeek 必须复用已经验证过的固定启动器终端，并在分派前记录与角色表一致的模型证据；Kimi 不恢复导致客户端失败的 Claude hooks，DeepSeek 不接受会回退到其他 Provider 的裸 `opencode` 启动，且继续使用只读权限和逐次批准。任一条件不满足时保留任务包但不建立正式 Dispatch。
 
-Kimi 只负责已冻结信息架构下的 UX 概念或明确限定的前端呈现：AI 虚线/正式实线、来源详情、接受/编辑/拒绝、online-only、移动列表/树、可访问性与响应式。Kimi 不定义共享数据模型、permission、迁移、OpenAPI、AI Provider/路由、保留或一级导航，也不 merge/push。
+Kimi 只负责当前第一版整体审批原型及其原型代码：AI 虚线/正式实线、来源详情、接受/编辑/拒绝、online-only、移动列表/树、可访问性与响应式。本次原型交接后，Kimi 不再作为后续正式前端实现或版本迭代的默认 owner；后续模型由用户另行指定。Kimi 不定义共享数据模型、permission、迁移、OpenAPI、AI Provider/路由、保留或一级导航，也不 merge/push。
+
+ZCode/GLM 默认由用户在桌面客户端中手工粘贴 Windows Codex 提供的完整任务包并启动执行；Windows Codex 只负责任务设计、Git 范围与独立验收。除非用户另外明确授权桌面控制，不由协调员远程操作 ZCode 图形界面。
 
 DeepSeek 只执行最终候选 diff 的只读安全/合同/回归审查。它不得编辑、启动破坏性命令、访问外部目录、提交、合并或推送；finding 必须由 Windows Codex 复现、修复和验证，worker claim 不自动成为 accepted evidence。
 
