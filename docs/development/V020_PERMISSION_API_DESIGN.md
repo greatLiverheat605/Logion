@@ -357,7 +357,7 @@ V20-04 后续独立授权已经执行，结果保持本文批准的停止线：
   所有 Operation 在任何配置下继续返回 `KNOWLEDGE_FEATURE_DISABLED`，不会查询或写入知识数据。
 - 新增纯策略权限矩阵、统一不透明 404、HMAC-SHA256 范围绑定游标、当前/前一 Key 轮换、强不透明
   ETag、双桶隐私哈希限流策略和 150 Node/400 Edge/Depth 2/1 MiB 硬上限合同。
-- 124 个聚焦测试与 264 个 API 非集成测试通过；Ruff、严格 Mypy、合同包 12 个测试/类型检查、
+- 133 个聚焦测试与 264 个 API 非集成测试通过；Ruff、严格 Mypy、合同包 12 个测试/类型检查、
   整仓 lint/typecheck/build、生成检查与 added-line secret scan 通过。
 - sync-v1 的 operation schema、wire schema、checksum vectors、生成 TypeScript 与两个 Validator 制品
   共六项 SHA-256 与实施前逐字节一致；新实体未进入 sync-v1。
