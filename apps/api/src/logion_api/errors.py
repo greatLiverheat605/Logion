@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException, Request, status
@@ -26,6 +27,7 @@ class APIError(Exception):
         details: dict[str, Any] | None = None,
         retryable: bool = False,
         clear_auth_cookies: bool = False,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -34,6 +36,7 @@ class APIError(Exception):
         self.details = details or {}
         self.retryable = retryable
         self.clear_auth_cookies = clear_auth_cookies
+        self.headers = dict(headers or {})
 
 
 def _request_id(request: Request) -> str:
@@ -48,7 +51,11 @@ async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
         retryable=exc.retryable,
         request_id=_request_id(request),
     )
-    response = JSONResponse(status_code=exc.status_code, content=payload.model_dump())
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content=payload.model_dump(),
+        headers=exc.headers,
+    )
     if exc.clear_auth_cookies:
         settings = get_settings()
         response.headers["Cache-Control"] = "no-store"

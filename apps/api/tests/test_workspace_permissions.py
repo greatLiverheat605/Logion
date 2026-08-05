@@ -69,6 +69,12 @@ def test_named_permission_matrix_matches_privacy_baseline() -> None:
     assert not role_has_permission(WorkspaceRole.REVIEWER, Permission.EVIDENCE_SUBMIT)
     assert role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_CONTENT_READ)
     assert not role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_PLAN_WRITE)
+    assert role_has_permission(WorkspaceRole.CONTRIBUTOR, Permission.SHARED_KNOWLEDGE_WRITE)
+    assert not role_has_permission(WorkspaceRole.CONTRIBUTOR, Permission.SHARED_KNOWLEDGE_ACCEPT)
+    assert role_has_permission(WorkspaceRole.REVIEWER, Permission.SHARED_KNOWLEDGE_ACCEPT)
+    assert not role_has_permission(WorkspaceRole.REVIEWER, Permission.SHARED_KNOWLEDGE_WRITE)
+    assert role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_KNOWLEDGE_READ)
+    assert not role_has_permission(WorkspaceRole.VIEWER, Permission.SHARED_KNOWLEDGE_ACCEPT)
     assert all(role_has_permission(role, Permission.SPACE_CREATE_PRIVATE) for role in WorkspaceRole)
 
 
@@ -120,8 +126,8 @@ def test_non_managers_cannot_change_memberships(actor_role: WorkspaceRole) -> No
     )
 
 
-def test_permission_contract_v4_matches_server_registry_exactly() -> None:
-    assert PERMISSION_CONTRACT["schema_version"] == 4
+def test_permission_contract_v5_matches_server_registry_exactly() -> None:
+    assert PERMISSION_CONTRACT["schema_version"] == 5
     assert PERMISSION_CONTRACT["roles"] == [role.value for role in WorkspaceRole]
     assert PERMISSION_CONTRACT["legacy_role_aliases"] == {"member": "contributor"}
     assert PERMISSION_CONTRACT["permissions"] == [permission.value for permission in Permission]
