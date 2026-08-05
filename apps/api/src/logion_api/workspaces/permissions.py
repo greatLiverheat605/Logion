@@ -43,6 +43,9 @@ class Permission(StrEnum):
     SPACE_DELETE_SHARED = "space.delete_shared"
     SHARED_CONTENT_READ = "shared_content.read"
     SHARED_PLAN_WRITE = "shared_plan.write"
+    SHARED_KNOWLEDGE_READ = "shared_knowledge.read"
+    SHARED_KNOWLEDGE_WRITE = "shared_knowledge.write"
+    SHARED_KNOWLEDGE_ACCEPT = "shared_knowledge.accept"
     EVIDENCE_SUBMIT = "evidence.submit"
     REVIEW_WRITE = "review.write"
     AI_CONFIGURE = "ai.configure"
@@ -61,6 +64,9 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.SPACE_DELETE_SHARED,
             Permission.SHARED_CONTENT_READ,
             Permission.SHARED_PLAN_WRITE,
+            Permission.SHARED_KNOWLEDGE_READ,
+            Permission.SHARED_KNOWLEDGE_WRITE,
+            Permission.SHARED_KNOWLEDGE_ACCEPT,
             Permission.EVIDENCE_SUBMIT,
             Permission.REVIEW_WRITE,
             Permission.AI_CONFIGURE,
@@ -75,6 +81,9 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.SPACE_CREATE_SHARED,
             Permission.SHARED_CONTENT_READ,
             Permission.SHARED_PLAN_WRITE,
+            Permission.SHARED_KNOWLEDGE_READ,
+            Permission.SHARED_KNOWLEDGE_WRITE,
+            Permission.SHARED_KNOWLEDGE_ACCEPT,
             Permission.EVIDENCE_SUBMIT,
             Permission.REVIEW_WRITE,
             Permission.AI_USE,
@@ -86,6 +95,8 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.WORKSPACE_READ,
             Permission.SPACE_CREATE_PRIVATE,
             Permission.SHARED_CONTENT_READ,
+            Permission.SHARED_KNOWLEDGE_READ,
+            Permission.SHARED_KNOWLEDGE_WRITE,
             Permission.EVIDENCE_SUBMIT,
             Permission.AI_USE,
         }
@@ -95,6 +106,8 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.WORKSPACE_READ,
             Permission.SPACE_CREATE_PRIVATE,
             Permission.SHARED_CONTENT_READ,
+            Permission.SHARED_KNOWLEDGE_READ,
+            Permission.SHARED_KNOWLEDGE_ACCEPT,
             Permission.REVIEW_WRITE,
             Permission.AI_USE,
         }
@@ -104,6 +117,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.WORKSPACE_READ,
             Permission.SPACE_CREATE_PRIVATE,
             Permission.SHARED_CONTENT_READ,
+            Permission.SHARED_KNOWLEDGE_READ,
         }
     ),
 }

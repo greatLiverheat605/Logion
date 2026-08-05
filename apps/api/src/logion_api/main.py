@@ -34,6 +34,7 @@ from logion_api.identity.passkey_routes import router as passkey_router
 from logion_api.identity.routes import router as identity_router
 from logion_api.identity.totp_routes import router as totp_router
 from logion_api.identity.verification_routes import router as verification_router
+from logion_api.knowledge_space.routes import router as knowledge_space_router
 from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
 from logion_api.planning.routes import router as planning_router
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     application.include_router(portability_router)
     application.include_router(portability_import_router)
     application.include_router(account_deletion_router)
+    application.include_router(knowledge_space_router)
     return application
 
 

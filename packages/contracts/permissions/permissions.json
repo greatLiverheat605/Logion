@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "roles": ["owner", "admin", "editor", "contributor", "reviewer", "viewer"],
   "legacy_role_aliases": {
     "member": "contributor"
@@ -13,6 +13,9 @@
     "space.delete_shared",
     "shared_content.read",
     "shared_plan.write",
+    "shared_knowledge.read",
+    "shared_knowledge.write",
+    "shared_knowledge.accept",
     "evidence.submit",
     "review.write",
     "ai.configure",
@@ -29,6 +32,9 @@
       "space.delete_shared",
       "shared_content.read",
       "shared_plan.write",
+      "shared_knowledge.read",
+      "shared_knowledge.write",
+      "shared_knowledge.accept",
       "evidence.submit",
       "review.write",
       "ai.configure",
@@ -43,6 +49,9 @@
       "space.delete_shared",
       "shared_content.read",
       "shared_plan.write",
+      "shared_knowledge.read",
+      "shared_knowledge.write",
+      "shared_knowledge.accept",
       "evidence.submit",
       "review.write",
       "ai.configure",
@@ -55,6 +64,9 @@
       "space.create_shared",
       "shared_content.read",
       "shared_plan.write",
+      "shared_knowledge.read",
+      "shared_knowledge.write",
+      "shared_knowledge.accept",
       "evidence.submit",
       "review.write",
       "ai.use",
@@ -64,6 +76,8 @@
       "workspace.read",
       "space.create_private",
       "shared_content.read",
+      "shared_knowledge.read",
+      "shared_knowledge.write",
       "evidence.submit",
       "ai.use"
     ],
@@ -71,9 +85,16 @@
       "workspace.read",
       "space.create_private",
       "shared_content.read",
+      "shared_knowledge.read",
+      "shared_knowledge.accept",
       "review.write",
       "ai.use"
     ],
-    "viewer": ["workspace.read", "space.create_private", "shared_content.read"]
+    "viewer": [
+      "workspace.read",
+      "space.create_private",
+      "shared_content.read",
+      "shared_knowledge.read"
+    ]
   }
 }

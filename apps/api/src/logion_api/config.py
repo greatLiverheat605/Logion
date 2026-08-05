@@ -128,6 +128,14 @@ class Settings(BaseSettings):
     account_deletion_grace_days: int = Field(default=14, ge=1, le=30)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    knowledge_space_api_enabled: bool = False
+    knowledge_space_shared_writes_enabled: bool = False
+    knowledge_space_deletion_enabled: bool = False
+    knowledge_cursor_active_key_id: str | None = Field(default=None, max_length=64)
+    knowledge_cursor_previous_key_id: str | None = Field(default=None, max_length=64)
+    knowledge_cursor_keys: dict[str, SecretStr] = Field(default_factory=dict)
+    knowledge_cursor_ttl_seconds: int = Field(default=900, ge=60, le=900)
+    knowledge_cursor_clock_skew_seconds: int = Field(default=300, ge=0, le=300)
     totp_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,
@@ -234,6 +242,40 @@ class Settings(BaseSettings):
         secret = self.secret_key.get_secret_value()
         if len(secret) < 32:
             raise ValueError("LOGION_SECRET_KEY must contain at least 32 characters")
+        if self.knowledge_space_shared_writes_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_SHARED_WRITES_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_deletion_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError("LOGION_KNOWLEDGE_SPACE_DELETION_ENABLED requires the main API flag")
+        if self.knowledge_space_api_enabled:
+            active_cursor_key_id = self.knowledge_cursor_active_key_id
+            if not active_cursor_key_id or active_cursor_key_id not in self.knowledge_cursor_keys:
+                raise ValueError(
+                    "LOGION_KNOWLEDGE_CURSOR_ACTIVE_KEY_ID must select a configured key"
+                )
+        if (
+            self.knowledge_cursor_previous_key_id is not None
+            and self.knowledge_cursor_previous_key_id == self.knowledge_cursor_active_key_id
+        ):
+            raise ValueError("The active and previous knowledge cursor key IDs must differ")
+        if (
+            self.knowledge_cursor_previous_key_id is not None
+            and self.knowledge_cursor_previous_key_id not in self.knowledge_cursor_keys
+        ):
+            raise ValueError("LOGION_KNOWLEDGE_CURSOR_PREVIOUS_KEY_ID must select a configured key")
+        for key_id, cursor_key in self.knowledge_cursor_keys.items():
+            if not 1 <= len(key_id) <= 64 or any(
+                character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+                for character in key_id
+            ):
+                raise ValueError(
+                    "LOGION_KNOWLEDGE_CURSOR_KEYS key IDs must use 1-64 safe characters"
+                )
+            if len(cursor_key.get_secret_value().encode("utf-8")) < 32:
+                raise ValueError(
+                    f"LOGION_KNOWLEDGE_CURSOR_KEYS key {key_id} must contain at least 32 bytes"
+                )
         if self.totp_active_encryption_key_id not in self.totp_encryption_keys:
             raise ValueError("LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID must select a configured key")
         for key_id, encoded_key in self.totp_encryption_keys.items():

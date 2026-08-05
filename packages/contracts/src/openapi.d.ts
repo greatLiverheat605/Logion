@@ -1486,6 +1486,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/drafts/{draft_id}/acceptances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Knowledge Draft */
+        post: operations["knowledge_draft_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Knowledge Graph */
+        get: operations["knowledge_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/knowledge-citations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Knowledge Citations */
+        get: operations["knowledge_citation_list"];
+        put?: never;
+        /** Create Knowledge Citation */
+        post: operations["knowledge_citation_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/knowledge-citations/{citation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Knowledge Citation */
+        get: operations["knowledge_citation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/knowledge-citations/{citation_id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Knowledge Citation */
+        post: operations["knowledge_citation_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/knowledge-citations/{citation_id}/replacements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace Knowledge Citation */
+        post: operations["knowledge_citation_replace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/source-excerpts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Source Excerpts */
+        get: operations["knowledge_source_excerpt_list"];
+        put?: never;
+        /** Create Source Excerpt */
+        post: operations["knowledge_source_excerpt_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/source-excerpts/{excerpt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Source Excerpt */
+        get: operations["knowledge_source_excerpt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/source-excerpts/{excerpt_id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Source Excerpt */
+        post: operations["knowledge_source_excerpt_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/mock-exams": {
         parameters: {
             query?: never;
@@ -3337,6 +3492,22 @@ export interface components {
             /** Tombstone */
             tombstone: boolean;
         };
+        /**
+         * CitationRelationship
+         * @enum {string}
+         */
+        CitationRelationship: "source" | "definition" | "support" | "contradiction" | "example" | "derivation";
+        /** CitationTarget */
+        CitationTarget: {
+            /** Note Id */
+            note_id?: string | null;
+            /** Quiz Item Id */
+            quiz_item_id?: string | null;
+            /** Research Claim Id */
+            research_claim_id?: string | null;
+            /** Topic Id */
+            topic_id?: string | null;
+        };
         /** ClaimCreate */
         ClaimCreate: {
             /**
@@ -3956,6 +4127,25 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** ExcerptExpectation */
+        ExcerptExpectation: {
+            /**
+             * Excerpt Id
+             * Format: uuid
+             */
+            excerpt_id: string;
+            /** Expected Excerpt Sha256 */
+            expected_excerpt_sha256: string;
+            /** Expected Source Version Key */
+            expected_source_version_key: string;
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** ExpectedVersionRequest */
+        ExpectedVersionRequest: {
+            /** Expected Version */
+            expected_version: number;
+        };
         /** ExportCancel */
         ExportCancel: {
             /** Expected Version */
@@ -4174,6 +4364,21 @@ export interface components {
              */
             workspace_id: string;
         };
+        /**
+         * GraphDirection
+         * @enum {string}
+         */
+        GraphDirection: "out" | "in" | "both";
+        /**
+         * GraphEdgeType
+         * @enum {string}
+         */
+        GraphEdgeType: "topic_dependency" | "source" | "definition" | "support" | "contradiction" | "example" | "derivation";
+        /**
+         * GraphTruncationReason
+         * @enum {string}
+         */
+        GraphTruncationReason: "node_limit" | "edge_limit" | "row_limit" | "byte_limit" | "time_limit";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -4387,6 +4592,233 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** KnowledgeCitationCreateRequest */
+        KnowledgeCitationCreateRequest: {
+            /**
+             * Excerpt Id
+             * Format: uuid
+             */
+            excerpt_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Relation Note */
+            relation_note?: string | null;
+            relationship: components["schemas"]["CitationRelationship"];
+            target: components["schemas"]["CitationTarget"];
+        };
+        /** KnowledgeCitationPageResponse */
+        KnowledgeCitationPageResponse: {
+            /** Citations */
+            citations: components["schemas"]["KnowledgeCitationResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** KnowledgeCitationReplacementRequest */
+        KnowledgeCitationReplacementRequest: {
+            /**
+             * Excerpt Id
+             * Format: uuid
+             */
+            excerpt_id: string;
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Relation Note */
+            relation_note?: string | null;
+            relationship: components["schemas"]["CitationRelationship"];
+            target: components["schemas"]["CitationTarget"];
+        };
+        /** KnowledgeCitationResponse */
+        KnowledgeCitationResponse: {
+            /** Accepted Draft Id */
+            accepted_draft_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Excerpt Id
+             * Format: uuid
+             */
+            excerpt_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Relation Note */
+            relation_note?: string | null;
+            relationship: components["schemas"]["CitationRelationship"];
+            /**
+             * Space Id
+             * Format: uuid
+             */
+            space_id: string;
+            status: components["schemas"]["KnowledgeLifecycleStatus"];
+            target: components["schemas"]["CitationTarget"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** KnowledgeDraftAcceptanceReceipt */
+        KnowledgeDraftAcceptanceReceipt: {
+            /**
+             * Accepted At
+             * Format: date-time
+             */
+            accepted_at: string;
+            /** Created Object Ids */
+            created_object_ids: string[];
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            /**
+             * Idempotency Key
+             * Format: uuid
+             */
+            idempotency_key: string;
+            /**
+             * Receipt Id
+             * Format: uuid
+             */
+            receipt_id: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "applied";
+        };
+        /** KnowledgeDraftAcceptanceRequest */
+        KnowledgeDraftAcceptanceRequest: {
+            /** Accepted Candidate Ids */
+            accepted_candidate_ids: string[];
+            /** Accepted Edits */
+            accepted_edits?: {
+                [key: string]: string;
+            } | null;
+            /** Excerpt Expectations */
+            excerpt_expectations: components["schemas"]["ExcerptExpectation"][];
+            /** Expected Draft Version */
+            expected_draft_version: number;
+            /**
+             * Idempotency Key
+             * Format: uuid
+             */
+            idempotency_key: string;
+            /** Payload Sha256 */
+            payload_sha256: string;
+            /** Target Expectations */
+            target_expectations: components["schemas"]["VersionExpectation"][];
+        };
+        /** KnowledgeGraphEdge */
+        KnowledgeGraphEdge: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            source: components["schemas"]["KnowledgeGraphRoot"];
+            /**
+             * State
+             * @default accepted
+             * @constant
+             */
+            state: "accepted";
+            target: components["schemas"]["KnowledgeGraphRoot"];
+            type: components["schemas"]["GraphEdgeType"];
+        };
+        /** KnowledgeGraphLimits */
+        KnowledgeGraphLimits: {
+            /**
+             * Bytes
+             * @default 1048576
+             */
+            bytes: number;
+            /**
+             * Edges
+             * @default 400
+             */
+            edges: number;
+            /**
+             * Nodes
+             * @default 150
+             */
+            nodes: number;
+        };
+        /** KnowledgeGraphNode */
+        KnowledgeGraphNode: {
+            excerpt_preview?: components["schemas"]["SourceExcerptPreview"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            type: components["schemas"]["KnowledgeTargetType"];
+            /** Version */
+            version: number;
+        };
+        /** KnowledgeGraphResponse */
+        KnowledgeGraphResponse: {
+            /** Depth */
+            depth: number;
+            /** Edges */
+            edges: components["schemas"]["KnowledgeGraphEdge"][];
+            limits: components["schemas"]["KnowledgeGraphLimits"];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Nodes */
+            nodes: components["schemas"]["KnowledgeGraphNode"][];
+            root: components["schemas"]["KnowledgeGraphRoot"];
+            /** Truncated */
+            truncated: boolean;
+            /** Truncation Reasons */
+            truncation_reasons: components["schemas"]["GraphTruncationReason"][];
+        };
+        /** KnowledgeGraphRoot */
+        KnowledgeGraphRoot: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            type: components["schemas"]["KnowledgeTargetType"];
+        };
+        /**
+         * KnowledgeLifecycleStatus
+         * @enum {string}
+         */
+        KnowledgeLifecycleStatus: "active" | "superseded" | "deleted";
+        /**
+         * KnowledgeTargetType
+         * @enum {string}
+         */
+        KnowledgeTargetType: "topic" | "quiz_item" | "research_claim" | "note";
         /** LoginRequest */
         LoginRequest: {
             /** Device Name */
@@ -5981,6 +6413,136 @@ export interface components {
             /** Expected Version */
             expected_version: number;
         };
+        /** SourceExcerptCreateRequest */
+        SourceExcerptCreateRequest: {
+            /** Excerpt Text */
+            excerpt_text: string;
+            /**
+             * Hash Algorithm
+             * @default sha256
+             * @constant
+             */
+            hash_algorithm: "sha256";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            locator: components["schemas"]["SourceLocator"];
+            /**
+             * Normalization Version
+             * @default utf8-nfc-lf-v1
+             * @constant
+             */
+            normalization_version: "utf8-nfc-lf-v1";
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /** Resource Sha256 */
+            resource_sha256?: string | null;
+            /** Source Version Key */
+            source_version_key: string;
+            /** Source Version Sha256 */
+            source_version_sha256: string;
+        };
+        /** SourceExcerptPageResponse */
+        SourceExcerptPageResponse: {
+            /** Excerpts */
+            excerpts: components["schemas"]["SourceExcerptResponse"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** SourceExcerptPreview */
+        SourceExcerptPreview: {
+            /**
+             * Excerpt Id
+             * Format: uuid
+             */
+            excerpt_id: string;
+            /** Stale */
+            stale: boolean;
+            /** Text */
+            text: string;
+        };
+        /** SourceExcerptResponse */
+        SourceExcerptResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /** Excerpt Sha256 */
+            excerpt_sha256: string;
+            /** Excerpt Text */
+            excerpt_text: string;
+            /**
+             * Hash Algorithm
+             * @constant
+             */
+            hash_algorithm: "sha256";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            locator: components["schemas"]["SourceLocator"];
+            /**
+             * Normalization Version
+             * @constant
+             */
+            normalization_version: "utf8-nfc-lf-v1";
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /** Resource Sha256 */
+            resource_sha256: string | null;
+            /** Source Version Key */
+            source_version_key: string;
+            /** Source Version Sha256 */
+            source_version_sha256: string;
+            /**
+             * Space Id
+             * Format: uuid
+             */
+            space_id: string;
+            /** Stale */
+            stale: boolean;
+            status: components["schemas"]["KnowledgeLifecycleStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+        };
+        /** SourceLocator */
+        SourceLocator: {
+            /** Character End */
+            character_end?: number | null;
+            /** Character Start */
+            character_start?: number | null;
+            /** Page End */
+            page_end?: number | null;
+            /** Page Start */
+            page_start?: number | null;
+            /** Section */
+            section?: string | null;
+        };
         /** SpaceCreateRequest */
         SpaceCreateRequest: {
             /** Name */
@@ -6847,6 +7409,17 @@ export interface components {
             verification_id: string;
             /** Version */
             version: number;
+        };
+        /** VersionExpectation */
+        VersionExpectation: {
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            target_type: components["schemas"]["KnowledgeTargetType"];
         };
         /** WebAuthnAuthenticatorSelection */
         WebAuthnAuthenticatorSelection: {
@@ -14695,6 +15268,1386 @@ export interface operations {
             /** @description Service Unavailable */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_draft_accept: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: string | null;
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeDraftAcceptanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDraftAcceptanceReceipt"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_graph_get: {
+        parameters: {
+            query: {
+                root_type: components["schemas"]["KnowledgeTargetType"];
+                root_id: string;
+                depth?: number;
+                direction?: components["schemas"]["GraphDirection"];
+                edge_types?: components["schemas"]["GraphEdgeType"][] | null;
+                include_excerpt_preview?: boolean;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeGraphResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_citation_list: {
+        parameters: {
+            query?: {
+                page_size?: number;
+                cursor?: string | null;
+                excerpt_id?: string | null;
+                topic_id?: string | null;
+                quiz_item_id?: string | null;
+                research_claim_id?: string | null;
+                note_id?: string | null;
+                relationship?: components["schemas"]["CitationRelationship"] | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCitationPageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_citation_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeCitationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCitationResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_citation_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                citation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCitationResponse"];
+                };
+            };
+            /** @description Not modified after current authorization was revalidated. */
+            304: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_citation_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: string | null;
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                citation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCitationResponse"];
+                };
+            };
+            /** @description Not modified after current authorization was revalidated. */
+            304: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_citation_replace: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: string | null;
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                citation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeCitationReplacementRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCitationResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_source_excerpt_list: {
+        parameters: {
+            query?: {
+                page_size?: number;
+                cursor?: string | null;
+                resource_id?: string | null;
+                stale?: boolean | null;
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceExcerptPageResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_source_excerpt_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceExcerptCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceExcerptResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_source_excerpt_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                excerpt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceExcerptResponse"];
+                };
+            };
+            /** @description Not modified after current authorization was revalidated. */
+            304: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_source_excerpt_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "if-match"?: string | null;
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                excerpt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Strong opaque entity validator. Clients must not parse it. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceExcerptResponse"];
+                };
+            };
+            /** @description Not modified after current authorization was revalidated. */
+            304: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
+                    /** @description Seconds before the caller should retry. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    /** @description Knowledge responses are private and must not be stored. */
+                    "Cache-Control"?: "private, no-store";
                     [name: string]: unknown;
                 };
                 content: {
