@@ -1,6 +1,6 @@
 # v0.2.0 执行计划：自适应知识空间架构基础
 
-> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现与 V20-09 AI acceptance 均已完成并由 Codex 验收；V20-10 尚未开始。
+> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现与 V20-09 AI acceptance 均已完成并由 Codex 验收；V20-10 服务端 bounded graph/search/rendering 正在 Codex 验收，前端仍等待用户指定 owner。
 > 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
 > V20-02 migration/tests 与 V20-04 default-off 合同门已完成；ORM/产品服务、生产启用、同步扩展和 Provider 配置仍受后续门禁约束。
 > 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
@@ -52,7 +52,7 @@ V20-00 design approval
 | V20-07 | Windows Codex + 安全/隐私 owner / 设计已批准 | threat/retention 文档；生产策略需另授权                                              | 已冻结私有/共享、审计、备份、Provider、附件、本地 Worker 的推荐保留矩阵与停止线；所有敏感能力保持关闭                   | `V020_RETENTION_THREAT_SIGNOFF.md`；用户于 2026-08-05 批准；生产合规门另行执行                            |
 | V20-08 | Windows Codex / 已完成并推送                 | 核心 API/domain/repository/tests；一 writer                                          | SourceExcerpt/citation、授权、版本、删除闭包、bounded read；能力默认关闭                                                | 目标 pytest/Ruff/mypy、DB 约束与跨租户测试、代码审查；提交 `bacc747`                                      |
 | V20-09 | Windows Codex / 已完成并推送                 | AI Gateway adapter/domain apply/tests 独占                                           | 候选/收据 migration、规范 hash、stale 检查、接受原子事务、幂等/并发；Acceptance 默认关闭                                | Acceptance 集成/重放/stale、候选清单、Ruff/Mypy、`alembic check`、`pnpm ci:fast`                          |
-| V20-10 | 前端 owner 待用户另行指定；服务端由 Codex    | 前后端路径不重叠；共享合同由 Codex                                                   | 1–2 跳、150/400 默认、服务端硬限、浏览器布局、移动列表/树、安全呈现、词法黄金集                                         | 查询/DoS 测试、Recall@10、axe/键盘/390px、存储型 XSS 浏览器测试                                           |
+| V20-10 | 前端 owner 待用户另行指定；服务端由 Codex（进行中） | 前后端路径不重叠；共享合同由 Codex                                              | 1–2 跳、150/400 默认、服务端硬限、浏览器布局、移动列表/树、安全呈现、词法黄金集                                         | 查询/DoS 测试、Recall@10、axe/键盘/390px、存储型 XSS 浏览器测试                                           |
 | V20-11 | Windows Codex / 默认禁用                     | attachment migration/worker security，需单独任务                                     | Resource 绑定仍走安全上传；本地租约/检查点须独立设计；BitLocker 或等价证明前不启用                                      | attachment 负测；磁盘加密/ACL/恢复/残留清理证据；核心流程在 worker offline 时通过                         |
 | V20-12 | Windows Codex / 集成树                       | 测试与必要修复                                                                       | 运行下节矩阵；先 bounded 后 repository gates；基础设施缺失记为 unrun，不算通过                                          | 原始命令、退出码、结果计数、失败现场和 unrun 原因                                                         |
 | V20-13 | DeepSeek V4 Flash / 只读、待 V20-12          | 无写权限                                                                             | 独立审查完整 diff：租户逃逸、约束、stale acceptance、重放/计费、XSS、DoS、sync-v1、删除/回滚；不得修文件                | 结构化 findings（severity/path/evidence/fix）；零文件变更、无 merge/push                                  |
@@ -150,8 +150,14 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 2. `task-v020-model-registration`：现有 `Space`/`Resource`/`Note`/`Topic`/`QuizItem`/`PaperRecord`/`AIOutputDraft` 的父级 scope ORM 登记及候选发布清单迁移头兼容性更新。
 3. `task-v020-graph-kernel`：bounded graph kernel 回归测试的独立路径归属与 42 项测试验收。
 
-三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。本轮证据已通过：契约 23、图内核 42、迁移 3、核心集成 2、候选清单 7、整仓 Python 376，以及 Ruff/Mypy/前端/合同/`pnpm ci:fast`。
+三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。V20-08 基线证据保持不变；本轮 V20-10 新增契约 27、图内核 42、核心集成 2，且全量 `pnpm test`、前端 lint/typecheck/test/build、Ruff/Mypy 均通过。
 
 下一顺序固定为：V20-10 graph/search/rendering 服务端 bounded path 与测试 →（用户指定前端 owner 后）限定浏览器呈现 → V20-11 prerequisites → V20-12 集成门 → DeepSeek 只读终审 → 回滚演练 → 最终发布。Shared Write、删除、附件、本地 worker、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。
+
+## V20-10 实施断点（2026-08-06）
+
+本轮已补充跨 Space/用户 ResearchClaim 隔离、控制字符/通配符、搜索与图 Cursor 非法位置/过滤器复用负测，并通过全量 Python 与前端门禁；合同生成物将在提交后于干净提交重跑 `pnpm contracts:check`。
+
+Codex 已开始服务端部分：增加 Space-scoped bounded lexical search、HMAC 绑定的搜索 Cursor，并让 Graph route 校验并使用签名快照边界；OpenAPI/TypeScript 仅产生加法合同。图续页在 BFS frontier 能被安全封装前保持 `next_cursor = null`，不以不安全 token 伪造全局分页。前端布局、移动呈现与浏览器门禁等待用户指定 owner；V20-10 仍处于实现/验收中，不能标记完成。
 
 本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push：`e4dc335b922ea15ce976299c000b9bc061588306`。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。

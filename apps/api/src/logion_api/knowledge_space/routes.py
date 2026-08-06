@@ -36,6 +36,8 @@ from logion_api.knowledge_space.schemas import (
     KnowledgeDraftAcceptanceReceipt,
     KnowledgeDraftAcceptanceRequest,
     KnowledgeGraphResponse,
+    KnowledgeSearchPageResponse,
+    KnowledgeSearchRequest,
     KnowledgeTargetType,
     SourceExcerptCreateRequest,
     SourceExcerptPageResponse,
@@ -412,6 +414,33 @@ async def accept_knowledge_draft(
     return receipt
 
 
+@router.post(
+    "/search",
+    response_model=KnowledgeSearchPageResponse,
+    operation_id="knowledge_search",
+    responses=ERRORS,
+)
+async def search_knowledge(
+    workspace_id: UUID,
+    space_id: UUID,
+    payload: KnowledgeSearchRequest,
+    boundary: ReadBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
+    cursor: CursorQuery = None,
+) -> KnowledgeSearchPageResponse:
+    response.headers["Cache-Control"] = "private, no-store"
+    return await service.search_knowledge(
+        db,
+        boundary,
+        workspace_id,
+        space_id,
+        payload=payload,
+        cursor=cursor,
+    )
+
+
 @router.get(
     "/graph",
     response_model=KnowledgeGraphResponse,
@@ -445,4 +474,5 @@ async def get_knowledge_graph(
         direction=direction,
         edge_types=edge_types,
         include_excerpt_preview=include_excerpt_preview,
+        cursor=cursor,
     )

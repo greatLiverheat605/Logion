@@ -24,6 +24,8 @@ GRAPH_MAX_NODES = 150
 GRAPH_MAX_EDGES = 400
 GRAPH_MAX_BYTES = 1024 * 1024
 CURSOR_MAX_LENGTH = 1024
+SEARCH_MAX_QUERY_SCALARS = 100
+SEARCH_MAX_RESULTS = 50
 
 Sha256Hex = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Cursor = Annotated[str, StringConstraints(min_length=1, max_length=CURSOR_MAX_LENGTH)]
@@ -401,3 +403,61 @@ class KnowledgeGraphResponse(StrictModel):
         if len({edge.id for edge in self.edges}) != len(self.edges):
             raise ValueError("graph edges must be unique by ID")
         return self
+
+
+def default_search_target_types() -> list[KnowledgeTargetType]:
+    return [
+        KnowledgeTargetType.TOPIC,
+        KnowledgeTargetType.QUIZ_ITEM,
+        KnowledgeTargetType.RESEARCH_CLAIM,
+        KnowledgeTargetType.NOTE,
+    ]
+
+
+class KnowledgeSearchRequest(StrictModel):
+    """Bounded lexical search over visible knowledge targets in one Space."""
+
+    query: str = Field(min_length=2, max_length=SEARCH_MAX_QUERY_SCALARS)
+    target_types: list[KnowledgeTargetType] = Field(
+        default_factory=default_search_target_types,
+        min_length=1,
+        max_length=4,
+    )
+    limit: int = Field(default=25, ge=1, le=SEARCH_MAX_RESULTS)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 2:
+            raise ValueError("query must contain at least two non-whitespace characters")
+        return _validate_plain_text(
+            normalized,
+            field_name="query",
+            max_scalars=SEARCH_MAX_QUERY_SCALARS,
+            max_bytes=SEARCH_MAX_QUERY_SCALARS * 4,
+        )
+
+    @field_validator("target_types")
+    @classmethod
+    def target_types_are_unique(
+        cls,
+        value: list[KnowledgeTargetType],
+    ) -> list[KnowledgeTargetType]:
+        if len(set(value)) != len(value):
+            raise ValueError("target_types must be unique")
+        return value
+
+
+class KnowledgeSearchResult(StrictModel):
+    target_type: KnowledgeTargetType
+    id: UUID
+    label: str = Field(min_length=1, max_length=500)
+    snippet: str = Field(min_length=1, max_length=500)
+    version: int = Field(ge=1)
+    updated_at: datetime
+
+
+class KnowledgeSearchPageResponse(StrictModel):
+    results: list[KnowledgeSearchResult] = Field(max_length=SEARCH_MAX_RESULTS)
+    next_cursor: Cursor | None = None

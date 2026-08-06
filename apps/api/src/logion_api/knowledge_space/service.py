@@ -11,6 +11,7 @@ import rfc8785
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 from uuid6 import uuid7
 
 from logion_api.ai_gateway.models import AIOutputDraft, AIOutputDraftCandidate, AIRun
@@ -49,6 +50,7 @@ from logion_api.knowledge_space.limits import (
     LIST_CANDIDATE_ROWS,
     LIST_MAX_BYTES,
     LIST_STATEMENT_TIMEOUT_SECONDS,
+    SEARCH_CANDIDATE_ROWS,
     KnowledgeRatePolicy,
     RateLimiterProtocol,
     enforce_dual_rate_limit,
@@ -61,6 +63,7 @@ from logion_api.knowledge_space.models import (
 from logion_api.knowledge_space.preconditions import make_strong_etag, validate_write_precondition
 from logion_api.knowledge_space.schemas import (
     GRAPH_MAX_BYTES,
+    GRAPH_MAX_DEPTH,
     GRAPH_MAX_EDGES,
     GRAPH_MAX_NODES,
     CitationRelationship,
@@ -79,6 +82,9 @@ from logion_api.knowledge_space.schemas import (
     KnowledgeGraphResponse,
     KnowledgeGraphRoot,
     KnowledgeLifecycleStatus,
+    KnowledgeSearchPageResponse,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResult,
     KnowledgeTargetType,
     SourceExcerptCreateRequest,
     SourceExcerptPageResponse,
@@ -120,6 +126,30 @@ class GraphNodeRecord:
             label=self.label[:500],
             version=self.version,
             excerpt_preview=self.preview,
+        )
+
+
+@dataclass(frozen=True)
+class SearchCandidate:
+    target_type: KnowledgeTargetType
+    id: UUID
+    label: str
+    searchable_text: str
+    version: int
+    updated_at: datetime
+    score: int
+
+    def response(self) -> KnowledgeSearchResult:
+        snippet = self.searchable_text.strip() or self.label
+        if len(snippet) > 500:
+            snippet = f"{snippet[:497].rstrip()}..."
+        return KnowledgeSearchResult(
+            target_type=self.target_type,
+            id=self.id,
+            label=self.label[:500],
+            snippet=snippet,
+            version=self.version,
+            updated_at=self.updated_at,
         )
 
 
@@ -891,6 +921,269 @@ class KnowledgeService:
             next_cursor=next_cursor,
         )
 
+    async def search_knowledge(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        *,
+        payload: KnowledgeSearchRequest,
+        cursor: str | None,
+    ) -> KnowledgeSearchPageResponse:
+        """Run a bounded, Space-scoped lexical search over formal targets.
+
+        Search intentionally stays on PostgreSQL's bounded text predicates. Each
+        target family contributes at most ``SEARCH_CANDIDATE_ROWS`` rows, the
+        current membership is re-authorized before every query, and the cursor
+        is HMAC-bound to the query, target filters, and Space. No excerpts or
+        private research claims from another user can enter the candidate set.
+        """
+
+        await self._authorize_scope(
+            db,
+            context,
+            workspace_id,
+            space_id,
+            KnowledgeAction.READ,
+        )
+        await self._enforce_rate(context, workspace_id, "knowledge-search", ITEM_READ_RATE)
+
+        normalized_query = unicodedata.normalize("NFC", payload.query).strip()
+        tokens = tuple(dict.fromkeys(normalized_query.casefold().split()))
+        if not tokens:
+            raise self._filter_invalid()
+        filters: dict[str, object] = {
+            "query": normalized_query,
+            "target_types": [target.value for target in payload.target_types],
+            "limit": payload.limit,
+        }
+        scope = self._cursor_scope(context, workspace_id, space_id, "knowledge-search")
+        cutoff_at, cursor_position = self._search_cursor_window(
+            cursor,
+            scope=scope,
+            filters=filters,
+        )
+
+        candidates: list[SearchCandidate] = []
+        row_limited = False
+        for target_type in payload.target_types:
+            rows, limited = await self._search_target_rows(
+                db,
+                context,
+                workspace_id,
+                space_id,
+                target_type,
+                tokens,
+                cutoff_at,
+            )
+            row_limited = row_limited or limited
+            candidates.extend(self._search_candidate(target_type, row, tokens) for row in rows)
+
+        candidates.sort(key=self._search_sort_key)
+        if cursor_position is not None:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if self._search_sort_key(candidate) > cursor_position
+            ]
+        visible = candidates[: payload.limit]
+        while (
+            visible
+            and len(
+                KnowledgeSearchPageResponse(
+                    results=[candidate.response() for candidate in visible],
+                    next_cursor=None,
+                )
+                .model_dump_json()
+                .encode("utf-8")
+            )
+            > LIST_MAX_BYTES
+        ):
+            visible.pop()
+
+        has_more = row_limited or len(candidates) > len(visible)
+        next_cursor = None
+        if has_more and visible:
+            last = visible[-1]
+            next_cursor = self._cursor_codec().encode(
+                scope=scope,
+                filters=filters,
+                position={
+                    "score": last.score,
+                    "updated_at": last.updated_at.isoformat(),
+                    "id": str(last.id),
+                    "target_type": last.target_type.value,
+                },
+                cutoff_at=cutoff_at,
+            )
+        return KnowledgeSearchPageResponse(
+            results=[candidate.response() for candidate in visible],
+            next_cursor=next_cursor,
+        )
+
+    async def _search_target_rows(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        target_type: KnowledgeTargetType,
+        tokens: tuple[str, ...],
+        cutoff_at: datetime,
+    ) -> tuple[list[Any], bool]:
+        pattern_conditions: list[Any]
+        model: type[Any]
+        text_columns: tuple[Any, ...]
+        if target_type is KnowledgeTargetType.TOPIC:
+            model = Topic
+            text_columns = (Topic.title, Topic.description)
+            conditions: list[Any] = [
+                Topic.workspace_id == workspace_id,
+                Topic.space_id == space_id,
+                Topic.deleted_at.is_(None),
+                Topic.created_at <= cutoff_at,
+                Topic.updated_at <= cutoff_at,
+            ]
+        elif target_type is KnowledgeTargetType.QUIZ_ITEM:
+            model = QuizItem
+            text_columns = (QuizItem.prompt, QuizItem.answer_key, QuizItem.explanation)
+            conditions = [
+                QuizItem.workspace_id == workspace_id,
+                QuizItem.space_id == space_id,
+                QuizItem.deleted_at.is_(None),
+                QuizItem.created_at <= cutoff_at,
+                QuizItem.updated_at <= cutoff_at,
+            ]
+        elif target_type is KnowledgeTargetType.RESEARCH_CLAIM:
+            model = ResearchClaim
+            text_columns = (ResearchClaim.statement,)
+            conditions = [
+                ResearchClaim.workspace_id == workspace_id,
+                ResearchClaim.space_id == space_id,
+                ResearchClaim.user_id == context.user.id,
+                ResearchClaim.deleted_at.is_(None),
+                ResearchClaim.created_at <= cutoff_at,
+                ResearchClaim.updated_at <= cutoff_at,
+            ]
+        else:
+            model = Note
+            text_columns = (Note.title, Note.markdown_body)
+            conditions = [
+                Note.workspace_id == workspace_id,
+                Note.space_id == space_id,
+                Note.deleted_at.is_(None),
+                Note.created_at <= cutoff_at,
+                Note.updated_at <= cutoff_at,
+            ]
+
+        pattern_conditions = [
+            column.ilike(f"%{self._escape_like(token)}%", escape="\\")
+            for token in tokens
+            for column in text_columns
+        ]
+        conditions.append(or_(*pattern_conditions))
+        try:
+            result = await asyncio.wait_for(
+                db.scalars(
+                    select(model)
+                    .options(load_only(*text_columns, model.id, model.version, model.updated_at))
+                    .where(*conditions)
+                    .order_by(model.updated_at.desc(), model.id.desc())
+                    .limit(SEARCH_CANDIDATE_ROWS + 1)
+                ),
+                timeout=LIST_STATEMENT_TIMEOUT_SECONDS,
+            )
+        except TimeoutError as exc:
+            raise query_timeout_error() from exc
+        rows = list(result.all())
+        limited = len(rows) > SEARCH_CANDIDATE_ROWS
+        return rows[:SEARCH_CANDIDATE_ROWS], limited
+
+    @staticmethod
+    def _search_candidate(
+        target_type: KnowledgeTargetType,
+        row: Any,
+        tokens: tuple[str, ...],
+    ) -> SearchCandidate:
+        if target_type is KnowledgeTargetType.TOPIC:
+            label = row.title
+            searchable_text = f"{row.title} {row.description}".strip()
+            title_text = row.title
+        elif target_type is KnowledgeTargetType.QUIZ_ITEM:
+            label = row.prompt
+            searchable_text = f"{row.prompt} {row.answer_key} {row.explanation}".strip()
+            title_text = row.prompt
+        elif target_type is KnowledgeTargetType.RESEARCH_CLAIM:
+            label = row.statement[:500]
+            searchable_text = row.statement
+            title_text = row.statement
+        else:
+            label = row.title
+            searchable_text = f"{row.title} {row.markdown_body}".strip()
+            title_text = row.title
+        folded_label = title_text.casefold()
+        folded_body = searchable_text.casefold()
+        score = sum(folded_label.count(token) * 3 + folded_body.count(token) for token in tokens)
+        phrase = " ".join(tokens)
+        if phrase and phrase in folded_label:
+            score += 6
+        return SearchCandidate(
+            target_type=target_type,
+            id=row.id,
+            label=label,
+            searchable_text=searchable_text,
+            version=row.version,
+            updated_at=row.updated_at,
+            score=score,
+        )
+
+    @staticmethod
+    def _search_sort_key(candidate: SearchCandidate) -> tuple[int, float, str, str]:
+        return (
+            -candidate.score,
+            -candidate.updated_at.timestamp(),
+            str(candidate.id),
+            candidate.target_type.value,
+        )
+
+    def _search_cursor_window(
+        self,
+        cursor: str | None,
+        *,
+        scope: KnowledgeCursorScope,
+        filters: dict[str, object],
+    ) -> tuple[datetime, tuple[int, float, str, str] | None]:
+        if cursor is None:
+            return datetime.now(UTC), None
+        decoded = self._cursor_codec().decode(cursor, scope=scope, filters=filters)
+        try:
+            score = decoded.position["score"]
+            updated_at = decoded.position["updated_at"]
+            identifier = decoded.position["id"]
+            target_type = decoded.position["target_type"]
+            if (
+                isinstance(score, bool)
+                or not isinstance(score, int)
+                or not isinstance(updated_at, str)
+                or not isinstance(identifier, str)
+                or not isinstance(target_type, str)
+            ):
+                raise ValueError("invalid search cursor position")
+            parsed_time = datetime.fromisoformat(updated_at)
+            if parsed_time.tzinfo is None:
+                raise ValueError("missing cursor timezone")
+            UUID(identifier)
+            KnowledgeTargetType(target_type)
+            return decoded.cutoff_at, (
+                -score,
+                -parsed_time.astimezone(UTC).timestamp(),
+                identifier,
+                target_type,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise KnowledgeCursorCodec.invalid_cursor() from exc
+
     async def get_graph(
         self,
         db: AsyncSession,
@@ -904,6 +1197,7 @@ class KnowledgeService:
         direction: GraphDirection,
         edge_types: list[GraphEdgeType] | None,
         include_excerpt_preview: bool,
+        cursor: str | None,
     ) -> KnowledgeGraphResponse:
         await self._authorize_scope(
             db,
@@ -913,8 +1207,31 @@ class KnowledgeService:
             KnowledgeAction.READ,
         )
         await self._enforce_rate(context, workspace_id, "graph-read", GRAPH_READ_RATE)
+        graph_filters: dict[str, object] = {
+            "root_type": root_type.value,
+            "root_id": str(root_id),
+            "depth": depth,
+            "direction": direction.value,
+            "edge_types": sorted(edge_type.value for edge_type in (edge_types or [])),
+            "include_excerpt_preview": include_excerpt_preview,
+        }
+        graph_cutoff = datetime.now(UTC)
+        if cursor is not None:
+            decoded = self._cursor_codec().decode(
+                cursor,
+                scope=self._cursor_scope(context, workspace_id, space_id, "graph"),
+                filters=graph_filters,
+            )
+            graph_cutoff = decoded.cutoff_at
+            self._validate_graph_cursor_position(decoded)
         root_target = await self._load_target_by_id(
-            db, root_type, root_id, workspace_id, space_id, caller_user_id=context.user.id
+            db,
+            root_type,
+            root_id,
+            workspace_id,
+            space_id,
+            caller_user_id=context.user.id,
+            cutoff_at=graph_cutoff,
         )
         if root_target is None:
             raise resource_not_found_error()
@@ -940,6 +1257,7 @@ class KnowledgeService:
                 root_record,
                 depth,
                 direction,
+                graph_cutoff,
             )
             if row_limited:
                 self._append_reason(truncation, GraphTruncationReason.ROW_LIMIT)
@@ -971,7 +1289,13 @@ class KnowledgeService:
                 self._append_reason(truncation, GraphTruncationReason.EDGE_LIMIT)
 
         if include_excerpt_preview:
-            records = await self._attach_previews(db, workspace_id, space_id, records)
+            records = await self._attach_previews(
+                db,
+                workspace_id,
+                space_id,
+                records,
+                cutoff_at=graph_cutoff,
+            )
         ordered_records = [records[(root_type, root_id)]] + sorted(
             (record for key, record in records.items() if key != (root_type, root_id)),
             key=lambda record: (record.type.value, str(record.id)),
@@ -1009,6 +1333,7 @@ class KnowledgeService:
         root_record: GraphNodeRecord,
         depth: int,
         direction: GraphDirection,
+        cutoff_at: datetime,
     ) -> tuple[dict[str, GraphNodeRecord], list[GraphEdge], bool, bool]:
         """Collect only scoped, visible TopicDependency candidates for the kernel.
 
@@ -1038,6 +1363,7 @@ class KnowledgeService:
                 TopicDependency.workspace_id == workspace_id,
                 TopicDependency.space_id == space_id,
                 TopicDependency.deleted_at.is_(None),
+                TopicDependency.created_at <= cutoff_at,
             ]
             if direction is GraphDirection.OUT:
                 edge_conditions.append(TopicDependency.prerequisite_topic_id.in_(frontier))
@@ -1086,6 +1412,8 @@ class KnowledgeService:
                             Topic.workspace_id == workspace_id,
                             Topic.space_id == space_id,
                             Topic.deleted_at.is_(None),
+                            Topic.created_at <= cutoff_at,
+                            Topic.updated_at <= cutoff_at,
                         )
                     ),
                     timeout=remaining,
@@ -1231,6 +1559,7 @@ class KnowledgeService:
         *,
         caller_user_id: UUID | None = None,
         for_update: bool = False,
+        cutoff_at: datetime | None = None,
     ) -> Any | None:
         model = self._target_model(target_type)
         conditions: list[Any] = [
@@ -1239,6 +1568,13 @@ class KnowledgeService:
             model.space_id == space_id,
             model.deleted_at.is_(None),
         ]
+        if cutoff_at is not None:
+            conditions.extend(
+                (
+                    model.created_at <= cutoff_at,
+                    model.updated_at <= cutoff_at,
+                )
+            )
         if target_type is KnowledgeTargetType.RESEARCH_CLAIM and caller_user_id is not None:
             conditions.append(model.user_id == caller_user_id)
         statement = select(model).where(*conditions)
@@ -1273,6 +1609,8 @@ class KnowledgeService:
         workspace_id: UUID,
         space_id: UUID,
         records: dict[tuple[KnowledgeTargetType, UUID], GraphNodeRecord],
+        *,
+        cutoff_at: datetime | None = None,
     ) -> dict[tuple[KnowledgeTargetType, UUID], GraphNodeRecord]:
         updated = dict(records)
         for target_type in KnowledgeTargetType:
@@ -1280,6 +1618,23 @@ class KnowledgeService:
             if not ids:
                 continue
             target_column = self._citation_column(target_type)
+            preview_conditions: list[Any] = [
+                KnowledgeCitation.workspace_id == workspace_id,
+                KnowledgeCitation.space_id == space_id,
+                KnowledgeCitation.status == "active",
+                KnowledgeCitation.deleted_at.is_(None),
+                target_column.in_(ids),
+                SourceExcerpt.status.in_(("active", "stale")),
+                SourceExcerpt.deleted_at.is_(None),
+            ]
+            if cutoff_at is not None:
+                preview_conditions.extend(
+                    (
+                        KnowledgeCitation.created_at <= cutoff_at,
+                        SourceExcerpt.created_at <= cutoff_at,
+                        SourceExcerpt.updated_at <= cutoff_at,
+                    )
+                )
             rows = (
                 await db.execute(
                     select(KnowledgeCitation, SourceExcerpt)
@@ -1291,15 +1646,7 @@ class KnowledgeService:
                             SourceExcerpt.space_id == KnowledgeCitation.space_id,
                         ),
                     )
-                    .where(
-                        KnowledgeCitation.workspace_id == workspace_id,
-                        KnowledgeCitation.space_id == space_id,
-                        KnowledgeCitation.status == "active",
-                        KnowledgeCitation.deleted_at.is_(None),
-                        target_column.in_(ids),
-                        SourceExcerpt.status.in_(("active", "stale")),
-                        SourceExcerpt.deleted_at.is_(None),
-                    )
+                    .where(*preview_conditions)
                     .order_by(KnowledgeCitation.created_at.desc(), KnowledgeCitation.id.asc())
                     .limit(GRAPH_MAX_NODES * 4)
                 )
@@ -1418,6 +1765,42 @@ class KnowledgeService:
         except (KeyError, TypeError, ValueError) as exc:
             raise KnowledgeCursorCodec.invalid_cursor() from exc
 
+    @staticmethod
+    def _validate_graph_cursor_position(decoded: DecodedKnowledgeCursor) -> None:
+        """Validate the documented BFS keyset position without exposing it.
+
+        The current graph reader uses the cursor as a signed snapshot boundary.
+        It deliberately does not mint a continuation token until the complete
+        BFS frontier can be encoded within the 1 KiB cursor envelope. Accepting
+        and validating the position now prevents silently ignoring a caller's
+        cursor and keeps replayed reads on one snapshot.
+        """
+
+        position = decoded.position
+        if set(position) == {"created_at", "id"}:
+            KnowledgeService._cursor_position(decoded)
+            return
+        if set(position) != {"hop", "edge_type", "edge_id", "node_id"}:
+            raise KnowledgeCursorCodec.invalid_cursor()
+        hop = position["hop"]
+        edge_type = position["edge_type"]
+        edge_id = position["edge_id"]
+        node_id = position["node_id"]
+        if isinstance(hop, bool) or not isinstance(hop, int) or hop < 0 or hop > GRAPH_MAX_DEPTH:
+            raise KnowledgeCursorCodec.invalid_cursor()
+        if (
+            not isinstance(edge_type, str)
+            or not isinstance(edge_id, str)
+            or not isinstance(node_id, str)
+        ):
+            raise KnowledgeCursorCodec.invalid_cursor()
+        try:
+            GraphEdgeType(edge_type)
+            UUID(edge_id)
+            UUID(node_id)
+        except ValueError as exc:
+            raise KnowledgeCursorCodec.invalid_cursor() from exc
+
     def _etag(self, entity_kind: str, entity_id: UUID, version: int) -> str:
         return make_strong_etag(
             key=self._settings.secret_key.get_secret_value().encode("utf-8"),
@@ -1429,6 +1812,10 @@ class KnowledgeService:
     @staticmethod
     def _normalize_excerpt(value: str) -> str:
         return unicodedata.normalize("NFC", value.replace("\r\n", "\n").replace("\r", "\n"))
+
+    @staticmethod
+    def _escape_like(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     @staticmethod
     def _excerpt_response(excerpt: SourceExcerpt) -> SourceExcerptResponse:

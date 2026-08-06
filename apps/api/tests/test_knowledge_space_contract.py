@@ -12,6 +12,7 @@ from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
 from logion_api.knowledge_space.authorization import KnowledgeAction, authorize_space_policy
 from logion_api.knowledge_space.cursors import (
+    DecodedKnowledgeCursor,
     KnowledgeCursorCodec,
     KnowledgeCursorScope,
 )
@@ -39,10 +40,14 @@ from logion_api.knowledge_space.schemas import (
     KnowledgeGraphNode,
     KnowledgeGraphResponse,
     KnowledgeGraphRoot,
+    KnowledgeSearchPageResponse,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResult,
     KnowledgeTargetType,
     SourceExcerptCreateRequest,
     SourceLocator,
 )
+from logion_api.knowledge_space.service import KnowledgeService
 from logion_api.main import app
 from logion_api.workspaces.permissions import SpaceVisibility, WorkspaceRole
 from pydantic import SecretStr, ValidationError
@@ -188,6 +193,128 @@ def test_graph_contract_enforces_hard_caps_and_truncation_shape() -> None:
             truncation_reasons=[GraphTruncationReason.NODE_LIMIT],
             limits=KnowledgeGraphLimits(),
         )
+
+
+def test_knowledge_search_contract_is_strict_and_bounded() -> None:
+    request = KnowledgeSearchRequest.model_validate(
+        {"query": "  spaced topic  ", "target_types": ["topic"], "limit": 5}
+    )
+    assert request.query == "spaced topic"
+    assert request.limit == 5
+    with pytest.raises(ValidationError, match="non-whitespace"):
+        KnowledgeSearchRequest(query="  ")
+    with pytest.raises(ValidationError, match="target_types must be unique"):
+        KnowledgeSearchRequest(target_types=[KnowledgeTargetType.TOPIC] * 2)
+
+    result = KnowledgeSearchResult(
+        target_type=KnowledgeTargetType.TOPIC,
+        id=uuid4(),
+        label="Topic",
+        snippet="A bounded snippet",
+        version=1,
+        updated_at=NOW,
+    )
+    page = KnowledgeSearchPageResponse(results=[result], next_cursor="opaque")
+    assert page.results[0].label == "Topic"
+
+
+def test_knowledge_search_rejects_controls_and_escapes_like_wildcards() -> None:
+    with pytest.raises(ValidationError, match="control character"):
+        KnowledgeSearchRequest(query="topic\x00name")
+    with pytest.raises(ValidationError, match="at most 100"):
+        KnowledgeSearchRequest(query="a" * 101)
+
+    assert KnowledgeService._escape_like("50%_done\\") == "50\\%\\_done\\\\"
+
+
+def test_search_cursor_position_is_bound_to_search_filters_and_shape() -> None:
+    scope = _cursor_scope()
+    issued_at = datetime.now(UTC).replace(microsecond=0)
+    cutoff_at = issued_at
+    updated_at = issued_at.replace(second=max(0, issued_at.second - 1))
+    filters: dict[str, object] = {
+        "query": "topic",
+        "target_types": ["topic"],
+        "limit": 25,
+    }
+    identifier = uuid4()
+    codec = _cursor_codec()
+    cursor = codec.encode(
+        scope=scope,
+        filters=filters,
+        position={
+            "score": 8,
+            "updated_at": updated_at.isoformat(),
+            "id": str(identifier),
+            "target_type": "topic",
+        },
+        cutoff_at=cutoff_at,
+        now=issued_at,
+    )
+    service = KnowledgeService(
+        Settings(
+            knowledge_cursor_active_key_id="current",
+            knowledge_cursor_keys={"current": SecretStr(TEST_KEY_CURRENT.decode())},
+        ),
+        IdentitySecurity("test-only-security-key-material-32-bytes"),
+    )
+    cutoff, position = service._search_cursor_window(
+        cursor,
+        scope=scope,
+        filters=filters,
+    )
+    assert cutoff == cutoff_at
+    assert position == (-8, -updated_at.timestamp(), str(identifier), "topic")
+
+    with pytest.raises(APIError) as wrong_filter:
+        service._search_cursor_window(
+            cursor,
+            scope=scope,
+            filters={**filters, "limit": 10},
+        )
+    assert wrong_filter.value.code == "KNOWLEDGE_CURSOR_INVALID"
+
+    malformed = codec.encode(
+        scope=scope,
+        filters=filters,
+        position={
+            "score": 1,
+            "updated_at": "not-a-time",
+            "id": str(identifier),
+            "target_type": "topic",
+        },
+        cutoff_at=cutoff_at,
+        now=issued_at,
+    )
+    with pytest.raises(APIError) as invalid_position:
+        service._search_cursor_window(malformed, scope=scope, filters=filters)
+    assert invalid_position.value.code == "KNOWLEDGE_CURSOR_INVALID"
+
+
+def test_graph_cursor_position_validation_is_fail_closed() -> None:
+    valid = DecodedKnowledgeCursor(
+        cutoff_at=NOW,
+        position={
+            "hop": 1,
+            "edge_type": "topic_dependency",
+            "edge_id": str(uuid4()),
+            "node_id": str(uuid4()),
+        },
+    )
+    KnowledgeService._validate_graph_cursor_position(valid)
+
+    invalid = DecodedKnowledgeCursor(
+        cutoff_at=NOW,
+        position={
+            "hop": 3,
+            "edge_type": "topic_dependency",
+            "edge_id": str(uuid4()),
+            "node_id": str(uuid4()),
+        },
+    )
+    with pytest.raises(APIError) as raised:
+        KnowledgeService._validate_graph_cursor_position(invalid)
+    assert raised.value.code == "KNOWLEDGE_CURSOR_INVALID"
 
 
 def test_cursor_roundtrip_is_bound_to_scope_filters_and_cutoff() -> None:
@@ -442,6 +569,7 @@ def test_openapi_contract_is_additive_bounded_and_strict() -> None:
         "knowledge_citation_replace",
         "knowledge_citation_delete",
         "knowledge_draft_accept",
+        "knowledge_search",
         "knowledge_graph_get",
     }
     operations = {
