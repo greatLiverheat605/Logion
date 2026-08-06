@@ -149,3 +149,5 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。本轮证据已通过：契约 23、图内核 42、迁移 3、核心集成 2、候选清单 7、整仓 Python 376，以及 Ruff/Mypy/前端/合同/`pnpm ci:fast`。
 
 下一顺序固定为：最终 diff/secret/path review → 提交 `codex/v020-integration` → 推送 GitHub → 记录 commit/push 与未运行项 → 再进入 V20-09/V20-10/V20-12。Shared Write、删除、附件、本地 worker、AI Draft acceptance、生产启用和前端后续 owner 仍不得提前开启；DeepSeek 仅在 V20-12 后做只读终审。
+
+本轮已完成 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`，远端分支为 `origin/codex/v020-integration`。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。

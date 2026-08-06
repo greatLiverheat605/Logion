@@ -100,3 +100,7 @@ V20-08 bounded knowledge-space core 已由 Windows Codex 在 `codex/v020-integra
 安全和发布状态保持不变：`LOGION_KNOWLEDGE_SPACE_API_ENABLED`、cursor keys 仍默认关闭/未写入仓库；Shared Write、Deletion、Attachment、Local Worker、AI Draft acceptance、Provider 和 sync-v1 均未启用或修改。图正式关系当前仅为 `TopicDependency`，Citation 图节点延后 V20-10。生产容量、备份恢复演练、DeepSeek 只读终审、浏览器 UX 验收仍是后续门禁，不能把本轮验收表述为整个 v0.2.0 完成。
 
 长期记录：当前 Run 指针必须保持 `.agents/coordination/current-run.json -> run-v020-core`；事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-core/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。
+
+## V20-08 提交结果
+
+已提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`（`feat: implement bounded knowledge-space core`）到 `origin/codex/v020-integration`。本提交只包含上述 21 个授权代码、测试和文档路径；生产启用和后续前端/DeepSeek 门禁仍未完成。
