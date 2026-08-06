@@ -303,6 +303,16 @@ class KnowledgeDraftAcceptanceRequest(StrictModel):
             )
         return value
 
+    @model_validator(mode="after")
+    def expectations_are_unique(self) -> "KnowledgeDraftAcceptanceRequest":
+        target_keys = [(item.target_type, item.target_id) for item in self.target_expectations]
+        if len(target_keys) != len(set(target_keys)):
+            raise ValueError("target_expectations must be unique")
+        excerpt_keys = [item.excerpt_id for item in self.excerpt_expectations]
+        if len(excerpt_keys) != len(set(excerpt_keys)):
+            raise ValueError("excerpt_expectations must be unique")
+        return self
+
 
 class KnowledgeDraftAcceptanceReceipt(StrictModel):
     receipt_id: UUID

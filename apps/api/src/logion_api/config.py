@@ -130,6 +130,7 @@ class Settings(BaseSettings):
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     knowledge_space_api_enabled: bool = False
     knowledge_space_shared_writes_enabled: bool = False
+    knowledge_space_ai_acceptance_enabled: bool = False
     knowledge_space_deletion_enabled: bool = False
     knowledge_cursor_active_key_id: str | None = Field(default=None, max_length=64)
     knowledge_cursor_previous_key_id: str | None = Field(default=None, max_length=64)
@@ -248,6 +249,10 @@ class Settings(BaseSettings):
             )
         if self.knowledge_space_deletion_enabled and not self.knowledge_space_api_enabled:
             raise ValueError("LOGION_KNOWLEDGE_SPACE_DELETION_ENABLED requires the main API flag")
+        if self.knowledge_space_ai_acceptance_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_AI_ACCEPTANCE_ENABLED requires the main API flag"
+            )
         if self.knowledge_space_api_enabled:
             active_cursor_key_id = self.knowledge_cursor_active_key_id
             if not active_cursor_key_id or active_cursor_key_id not in self.knowledge_cursor_keys:
