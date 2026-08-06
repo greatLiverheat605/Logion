@@ -44,7 +44,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-07 保留/隐私签核              | 设计与推荐矩阵已批准         | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭           | 生产启用前完成独立合规证据与 Owner 门禁                           |
 | V20-08 bounded core               | 已完成并推送                 | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
 | V20-09 AI acceptance              | 已完成并推送                 | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
-| V20-10 graph/search/rendering     | 待开始                       | 前端 owner 仍待用户指定；服务端由 Codex 负责                                                                                 | V20-09 完成；先服务端 bounded graph/search/rendering 设计与测试   |
+| V20-10 graph/search/rendering     | 服务端实现/验收中；前端 owner 待用户指定 | 服务端词法搜索、图 Cursor 快照边界、合同与隔离/负测已由 Codex 实施；浏览器布局仍未授权 | 先完成服务端全量门禁，再等待前端 owner |
 | V20-12～15 集成、终审、回滚、发布 | 待开始                       | 无候选集成树                                                                                                                 | V20-10/11 完成并通过目标门禁                                      |
 | DeepSeek 最终审查                 | 已打通、未派发正式终审       | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                   | 等 V20-12 完整候选 diff                                           |
 
@@ -122,3 +122,15 @@ V20-09 已完成第一版后端闭环实现并通过 Codex 验收，能力仍保
 本轮新增证据：Acceptance 集成 1 passed（并发同 key、同 key 重放、不同 payload 冲突、stale 全回滚），规范 hash 单测 1 passed；候选清单 7 passed；Ruff check/format、Mypy、`git diff --check`、`alembic check` 与整仓 `pnpm ci:fast` 全部通过。此前隔离 PostgreSQL 已完成 `0036 -> 0037` upgrade 往返验证。V20-09 已通过 Codex 验收，但不能把本轮表述为整个 v0.2.0 完成。
 
 V20-08 提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 提交并推送：`e4dc335b922ea15ce976299c000b9bc061588306`（`feat: close AI knowledge acceptance loop`）。生产启用、V20-10、V20-11 与后续 DeepSeek 门禁仍未完成。
+
+## V20-10 后端增量断点（2026-08-06）
+
+本轮已进入 V20-10，但尚未宣称整项完成：
+
+- 已补齐知识空间词法搜索合同与实现：`POST /knowledge/search`，按 Space/当前用户授权，支持 Topic、QuizItem、当前用户 ResearchClaim、Note 四类目标；每类候选行、结果数、字节数、查询时间和 HMAC Cursor 均有界。
+- 已修复图 route 对 `cursor` 的丢弃：请求现在会校验签名、范围、过滤器和 BFS keyset 位置，并使用签名快照时间边界读取候选图。当前不发放无法证明安全的图续页 Cursor，`next_cursor` 保持可为空，避免伪造“还有全局数量”的语义。
+- OpenAPI/TypeScript 合同已按加法方式生成，未新增 sync-v1、Vault、Outbox 或前端文件；前端 owner 仍等待用户指定。
+- 已观察：知识空间契约 27 passed、图内核 42 passed；开启测试专用知识空间 flag、Origin、独立测试 Redis 与 Cursor key 后，核心集成 2 passed，并覆盖跨 Space Topic 与共享 Space 内 ResearchClaim 当前用户隔离。全量 `pnpm test` 通过（381 passed, 62 deselected），前端 lint/typecheck/test/build、Python Ruff/Mypy 亦通过；合同检查需在提交生成物后于干净提交上重跑。
+- 另修复了 Cursor Base64URL 非规范编码可绕过篡改负测的问题；解码现在要求规范编码，统一 fail-closed。
+
+设计细节见 [`V020_GRAPH_SEARCH_RENDERING_DESIGN.md`](./V020_GRAPH_SEARCH_RENDERING_DESIGN.md)。当前已补充跨 Space/用户 ResearchClaim 隔离、控制字符/通配符、搜索与图 Cursor 非法位置/过滤器复用负测，并通过全量 Python 与前端门禁；下一步是提交合同生成物后在干净提交上重跑 `pnpm contracts:check`，完成最终 diff/secret/path review 后提交并推送。浏览器布局与移动呈现要等用户指定前端 owner 后另行授权。

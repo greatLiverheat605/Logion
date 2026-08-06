@@ -47,7 +47,11 @@ def _base64url_encode(value: bytes) -> str:
 
 def _base64url_decode(value: str) -> bytes:
     padding = "=" * (-len(value) % 4)
-    return base64.b64decode(value + padding, altchars=b"-_", validate=True)
+    decoded = base64.b64decode(value + padding, altchars=b"-_", validate=True)
+    canonical = base64.urlsafe_b64encode(decoded).decode("ascii").rstrip("=")
+    if canonical != value:
+        raise binascii.Error("non-canonical base64url")
+    return decoded
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
