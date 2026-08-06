@@ -156,8 +156,8 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 
 ## V20-10 实施断点（2026-08-06）
 
-本轮已补充跨 Space/用户 ResearchClaim 隔离、控制字符/通配符、搜索与图 Cursor 非法位置/过滤器复用负测，并通过全量 Python 与前端门禁；合同生成物将在提交后于干净提交重跑 `pnpm contracts:check`。
+本轮已补充跨 Space/用户 ResearchClaim 隔离、控制字符/通配符、搜索与图 Cursor 非法位置/过滤器复用负测，并通过全量 Python 与前端门禁；提交后 `pnpm contracts:check` 与 `pnpm ci:fast` 均通过。
 
-Codex 已开始服务端部分：增加 Space-scoped bounded lexical search、HMAC 绑定的搜索 Cursor，并让 Graph route 校验并使用签名快照边界；OpenAPI/TypeScript 仅产生加法合同。图续页在 BFS frontier 能被安全封装前保持 `next_cursor = null`，不以不安全 token 伪造全局分页。前端布局、移动呈现与浏览器门禁等待用户指定 owner；V20-10 仍处于实现/验收中，不能标记完成。
+Codex 已完成服务端增量：增加 Space-scoped bounded lexical search、HMAC 绑定的搜索 Cursor，并让 Graph route 校验并使用签名快照边界；OpenAPI/TypeScript 仅产生加法合同。图续页在 BFS frontier 能被安全封装前保持 `next_cursor = null`，不以不安全 token 伪造全局分页。前端布局、移动呈现与浏览器门禁等待用户指定 owner；V20-10 整项仍未完成，不能标记版本完成。
 
-本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push：`e4dc335b922ea15ce976299c000b9bc061588306`。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。
+本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push：`e4dc335b922ea15ce976299c000b9bc061588306`；V20-10 服务端增量 commit/push：`bfb4d35`（状态文档更新：`dfaaf5a`）。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。

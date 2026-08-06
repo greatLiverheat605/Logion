@@ -31,22 +31,22 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 
 ## 阶段状态
 
-| 范围                              | 状态                                     | 已有证据                                                                                                                     | 下一门禁                                                          |
-| --------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| 多 Agent 协调闭环                 | 已完成基础能力                           | `AGENTS.md`、协调 Skill/contract、状态 Schema/校验器、可验证 Runs；`codex/v011-coordination` 已推送                          | 持续按本 SOP 更新账本和快照                                       |
-| V20-00 / M0 架构基础              | 已批准                                   | ADR-0029 Accepted；Orca `task_5f8745a5770e` complete；五项推荐边界已冻结                                                     | 执行 V20-01/03/07 设计门，不扩大为实现授权                        |
-| 旧 Kimi A/B 原型                  | 技术验收通过、产品方向已否决             | 9 个限定原型文件；23/23 Vitest、lint、typecheck、build 通过；A/B 评审包完整                                                  | 仅保留历史证据，不进入施工                                        |
-| 整体动态知识空间原型              | 第一版已完成                             | Kimi 原型代码与真实浏览器 QA；Kimi 本轮任务结束                                                                              | 4 项修正等待用户指定下一位前端模型                                |
-| V20-06 UI 冻结                    | 第一版方向已批准                         | 用户批准按 Kimi 第一版原型规划推进                                                                                           | 前端 owner 确定后执行限定修正；不影响后端设计门                   |
-| GLM bounded graph kernel          | 纯图内核模块候选验收通过                 | 42 个 pytest、Ruff lint/format、mypy、空白/范围/秘密检查及四组关键运行时复现均由 Codex 独立通过                              | 保持未提交候选；正式接入须等待设计门及授权、scope、游标和资源治理 |
-| V20-01/02 schema 与迁移           | V20-02 隔离证明已完成                    | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`            | ORM 登记和 `alembic check` 收口留给 V20-08                        |
-| V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收                      | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135` | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
-| V20-07 保留/隐私签核              | 设计与推荐矩阵已批准                     | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭           | 生产启用前完成独立合规证据与 Owner 门禁                           |
-| V20-08 bounded core               | 已完成并推送                             | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
-| V20-09 AI acceptance              | 已完成并推送                             | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
-| V20-10 graph/search/rendering     | 服务端实现/验收中；前端 owner 待用户指定 | 服务端词法搜索、图 Cursor 快照边界、合同与隔离/负测已由 Codex 实施；浏览器布局仍未授权                                       | 先完成服务端全量门禁，再等待前端 owner                            |
-| V20-12～15 集成、终审、回滚、发布 | 待开始                                   | 无候选集成树                                                                                                                 | V20-10/11 完成并通过目标门禁                                      |
-| DeepSeek 最终审查                 | 已打通、未派发正式终审                   | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                   | 等 V20-12 完整候选 diff                                           |
+| 范围                              | 状态                                          | 已有证据                                                                                                                     | 下一门禁                                                          |
+| --------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 多 Agent 协调闭环                 | 已完成基础能力                                | `AGENTS.md`、协调 Skill/contract、状态 Schema/校验器、可验证 Runs；`codex/v011-coordination` 已推送                          | 持续按本 SOP 更新账本和快照                                       |
+| V20-00 / M0 架构基础              | 已批准                                        | ADR-0029 Accepted；Orca `task_5f8745a5770e` complete；五项推荐边界已冻结                                                     | 执行 V20-01/03/07 设计门，不扩大为实现授权                        |
+| 旧 Kimi A/B 原型                  | 技术验收通过、产品方向已否决                  | 9 个限定原型文件；23/23 Vitest、lint、typecheck、build 通过；A/B 评审包完整                                                  | 仅保留历史证据，不进入施工                                        |
+| 整体动态知识空间原型              | 第一版已完成                                  | Kimi 原型代码与真实浏览器 QA；Kimi 本轮任务结束                                                                              | 4 项修正等待用户指定下一位前端模型                                |
+| V20-06 UI 冻结                    | 第一版方向已批准                              | 用户批准按 Kimi 第一版原型规划推进                                                                                           | 前端 owner 确定后执行限定修正；不影响后端设计门                   |
+| GLM bounded graph kernel          | 纯图内核模块候选验收通过                      | 42 个 pytest、Ruff lint/format、mypy、空白/范围/秘密检查及四组关键运行时复现均由 Codex 独立通过                              | 保持未提交候选；正式接入须等待设计门及授权、scope、游标和资源治理 |
+| V20-01/02 schema 与迁移           | V20-02 隔离证明已完成                         | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`            | ORM 登记和 `alembic check` 收口留给 V20-08                        |
+| V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收                           | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135` | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
+| V20-07 保留/隐私签核              | 设计与推荐矩阵已批准                          | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭           | 生产启用前完成独立合规证据与 Owner 门禁                           |
+| V20-08 bounded core               | 已完成并推送                                  | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
+| V20-09 AI acceptance              | 已完成并推送                                  | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
+| V20-10 graph/search/rendering     | 服务端增量已验收并推送；前端 owner 待用户指定 | 服务端词法搜索、图 Cursor 快照边界、合同与隔离/负测及全量门禁均有证据；浏览器布局仍未授权                                    | 等待前端 owner，再进入浏览器/移动呈现门禁                         |
+| V20-12～15 集成、终审、回滚、发布 | 待开始                                        | 无候选集成树                                                                                                                 | V20-10/11 完成并通过目标门禁                                      |
+| DeepSeek 最终审查                 | 已打通、未派发正式终审                        | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                   | 等 V20-12 完整候选 diff                                           |
 
 ## 当前等待点
 
@@ -130,7 +130,7 @@ V20-08 提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 提
 - 已补齐知识空间词法搜索合同与实现：`POST /knowledge/search`，按 Space/当前用户授权，支持 Topic、QuizItem、当前用户 ResearchClaim、Note 四类目标；每类候选行、结果数、字节数、查询时间和 HMAC Cursor 均有界。
 - 已修复图 route 对 `cursor` 的丢弃：请求现在会校验签名、范围、过滤器和 BFS keyset 位置，并使用签名快照时间边界读取候选图。当前不发放无法证明安全的图续页 Cursor，`next_cursor` 保持可为空，避免伪造“还有全局数量”的语义。
 - OpenAPI/TypeScript 合同已按加法方式生成，未新增 sync-v1、Vault、Outbox 或前端文件；前端 owner 仍等待用户指定。
-- 已观察：知识空间契约 27 passed、图内核 42 passed；开启测试专用知识空间 flag、Origin、独立测试 Redis 与 Cursor key 后，核心集成 2 passed，并覆盖跨 Space Topic 与共享 Space 内 ResearchClaim 当前用户隔离。全量 `pnpm test` 通过（381 passed, 62 deselected），前端 lint/typecheck/test/build、Python Ruff/Mypy 亦通过；合同检查需在提交生成物后于干净提交上重跑。
+- 已观察：知识空间契约 27 passed、图内核 42 passed；开启测试专用知识空间 flag、Origin、独立测试 Redis 与 Cursor key 后，核心集成 2 passed，并覆盖跨 Space Topic 与共享 Space 内 ResearchClaim 当前用户隔离。全量 `pnpm test` 通过（381 passed, 62 deselected），前端 lint/typecheck/test/build、Python Ruff/Mypy 亦通过；提交后 `pnpm contracts:check` 与 `pnpm ci:fast` 均通过。
 - 另修复了 Cursor Base64URL 非规范编码可绕过篡改负测的问题；解码现在要求规范编码，统一 fail-closed。
 
-设计细节见 [`V020_GRAPH_SEARCH_RENDERING_DESIGN.md`](./V020_GRAPH_SEARCH_RENDERING_DESIGN.md)。当前已补充跨 Space/用户 ResearchClaim 隔离、控制字符/通配符、搜索与图 Cursor 非法位置/过滤器复用负测，并通过全量 Python 与前端门禁；下一步是提交合同生成物后在干净提交上重跑 `pnpm contracts:check`，完成最终 diff/secret/path review 后提交并推送。浏览器布局与移动呈现要等用户指定前端 owner 后另行授权。
+设计细节见 [`V020_GRAPH_SEARCH_RENDERING_DESIGN.md`](./V020_GRAPH_SEARCH_RENDERING_DESIGN.md)。当前已补充跨 Space/用户 ResearchClaim 隔离、控制字符/通配符、搜索与图 Cursor 非法位置/过滤器复用负测，并通过全量 Python 与前端门禁；服务端增量已提交并推送，提交为 `bfb4d35`（代码）与 `dfaaf5a`（状态文档）。浏览器布局与移动呈现要等用户指定前端 owner 后另行授权。
