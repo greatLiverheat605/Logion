@@ -28,17 +28,21 @@ import {
 } from "@/components/product/product-ui";
 import {
   deriveProductWorkbenchState,
+  type ProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
-import { KnowledgeGraphView } from "./knowledge-graph-view";
 import {
-  buildKnowledgeGraph,
   buildSevenDayReviewLoad,
 } from "./review-workbench-model";
+import {
+  ReviewKnowledgeSpaceGraph,
+  type ReviewKnowledgeSpaceGraphTopic,
+} from "./review-knowledge-space";
+import type { KnowledgeSpaceGraphState } from "@/features/knowledge-space-prototype/knowledge-space-graph";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -51,19 +55,19 @@ type MasteryLevel =
   | "proficient"
   | "mastered";
 
-interface TopicPayload extends JsonObject {
+export interface TopicPayload extends JsonObject {
   space_id: string;
   title: string;
   description: string;
 }
 
-interface DependencyPayload extends JsonObject {
+export interface DependencyPayload extends JsonObject {
   space_id: string;
   prerequisite_topic_id: string;
   dependent_topic_id: string;
 }
 
-interface MasteryPayload extends JsonObject {
+export interface MasteryPayload extends JsonObject {
   space_id: string;
   topic_id: string;
   suggested_level: MasteryLevel;
@@ -73,7 +77,7 @@ interface MasteryPayload extends JsonObject {
   confirmed_at: string | null;
 }
 
-interface SchedulePayload extends JsonObject {
+export interface SchedulePayload extends JsonObject {
   space_id: string;
   topic_id: string;
   status: "scheduled" | "due" | "in_progress" | "completed" | "skipped";
@@ -127,7 +131,7 @@ interface ReviewFindingPayload extends JsonObject {
   status: "open" | "resolved";
 }
 
-interface LocalView<T extends JsonObject> {
+export interface LocalView<T extends JsonObject> {
   entity: LocalEntity;
   payload: T;
 }
@@ -988,21 +992,58 @@ export function ReviewCenter() {
       allVisibleRecords.some((item) => item.entity.sync_status !== "clean"),
     unlocked,
   });
-  const knowledgeGraph = buildKnowledgeGraph(
-    visibleTopics.map((topic) => ({
-      description: topic.payload.description,
-      id: topic.entity.entity_id,
-      title: topic.payload.title,
-    })),
-    visibleDependencies.map((dependency) => dependency.payload),
-  );
-  const masteryByTopicId = new Map(
-    visibleMastery.flatMap((item) =>
-      item.payload.confirmed_level
-        ? [[item.payload.topic_id, item.payload.confirmed_level] as const]
-        : [],
+  const masteryRecordByTopicId = new Map(
+    visibleMastery.map(
+      (item) => [item.payload.topic_id, item.payload] as const,
     ),
   );
+
+  const knowledgeTopics: ReviewKnowledgeSpaceGraphTopic[] = visibleTopics.map(
+    (topic) => {
+      const mastery = masteryRecordByTopicId.get(topic.entity.entity_id);
+      const schedule = visibleSchedules.find(
+        (item) => item.payload.topic_id === topic.entity.entity_id,
+      );
+      return {
+        id: topic.entity.entity_id,
+        title: topic.payload.title,
+        description: topic.payload.description,
+        confirmedLevel: mastery?.confirmed_level ?? null,
+        suggestedLevel: mastery?.suggested_level ?? null,
+        nextReviewAt: schedule?.payload.next_review_at ?? null,
+        due:
+          schedule !== undefined &&
+          (schedule.payload.status === "due" ||
+            new Date(schedule.payload.next_review_at).getTime() <=
+              referenceTime),
+      };
+    },
+  );
+  const knowledgeDependencies = visibleDependencies.map((dependency) => ({
+    prerequisiteId: dependency.payload.prerequisite_topic_id,
+    dependentId: dependency.payload.dependent_topic_id,
+  }));
+
+  const toKnowledgeSpaceState = (
+    reviewState: ProductWorkbenchState,
+  ): KnowledgeSpaceGraphState => {
+    switch (reviewState) {
+      case "ready":
+        return "ready";
+      case "empty":
+        return "empty";
+      case "locked":
+        return "locked";
+      case "error":
+        return "error";
+      case "loading":
+        return "loading";
+      case "needs-context":
+        return "locked";
+      case "offline-stale":
+        return "ready";
+    }
+  };
 
   return (
     <main id="main-content" className="settings-page today-page">
@@ -1344,9 +1385,11 @@ export function ReviewCenter() {
         }
       >
         {knowledgeView === "graph" ? (
-          <KnowledgeGraphView
-            masteryByTopicId={masteryByTopicId}
-            nodes={knowledgeGraph}
+          <ReviewKnowledgeSpaceGraph
+            topics={knowledgeTopics}
+            dependencies={knowledgeDependencies}
+            state={toKnowledgeSpaceState(reviewState)}
+            onRetry={() => void loadContext()}
           />
         ) : (
           <div className="task-grid">
