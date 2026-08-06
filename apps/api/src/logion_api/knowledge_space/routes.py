@@ -1,20 +1,23 @@
 from typing import Annotated, Any, Never
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 
 from logion_api.errors import ErrorResponse
 from logion_api.identity.dependencies import (
     AuthContextDependency,
+    DatabaseSession,
     IdentityServiceDependency,
     SettingsDependency,
     require_trusted_origin,
 )
 from logion_api.identity.service import AuthContext
+from logion_api.knowledge_space.dependencies import KnowledgeServiceDependency
 from logion_api.knowledge_space.errors import (
     deletion_disabled_error,
     knowledge_feature_disabled_error,
 )
+from logion_api.knowledge_space.preconditions import if_none_match_matches
 from logion_api.knowledge_space.schemas import (
     GRAPH_MAX_DEPTH,
     LIST_DEFAULT_PAGE_SIZE,
@@ -148,8 +151,15 @@ async def create_source_excerpt(
     space_id: UUID,
     payload: SourceExcerptCreateRequest,
     boundary: MutationBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
 ) -> SourceExcerptResponse:
-    _contract_not_wired()
+    item, etag = await service.create_source_excerpt(db, boundary, workspace_id, space_id, payload)
+    await db.commit()
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["ETag"] = etag
+    return item
 
 
 @router.get(
@@ -163,9 +173,20 @@ async def get_source_excerpt(
     space_id: UUID,
     excerpt_id: UUID,
     boundary: ReadBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
     if_none_match: IfNoneMatch = None,
-) -> SourceExcerptResponse:
-    _contract_not_wired()
+) -> Any:
+    item, etag = await service.get_source_excerpt(db, boundary, workspace_id, space_id, excerpt_id)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["ETag"] = etag
+    if if_none_match_matches(if_none_match, etag):
+        return Response(
+            status_code=status.HTTP_304_NOT_MODIFIED,
+            headers={"Cache-Control": "private, no-store", "ETag": etag},
+        )
+    return item
 
 
 @router.get(
@@ -178,13 +199,27 @@ async def list_source_excerpts(
     workspace_id: UUID,
     space_id: UUID,
     boundary: ReadBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
     page_size: PageSize = LIST_DEFAULT_PAGE_SIZE,
     cursor: CursorQuery = None,
     resource_id: UUID | None = None,
     stale: bool | None = None,
     status_filter: Annotated[str | None, Query(alias="status", max_length=32)] = None,
 ) -> SourceExcerptPageResponse:
-    _contract_not_wired()
+    response.headers["Cache-Control"] = "private, no-store"
+    return await service.list_source_excerpts(
+        db,
+        boundary,
+        workspace_id,
+        space_id,
+        page_size=page_size,
+        cursor=cursor,
+        resource_id=resource_id,
+        stale=stale,
+        status_filter=status_filter,
+    )
 
 
 @router.post(
@@ -216,8 +251,17 @@ async def create_knowledge_citation(
     space_id: UUID,
     payload: KnowledgeCitationCreateRequest,
     boundary: MutationBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
 ) -> KnowledgeCitationResponse:
-    _contract_not_wired()
+    item, etag = await service.create_knowledge_citation(
+        db, boundary, workspace_id, space_id, payload
+    )
+    await db.commit()
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["ETag"] = etag
+    return item
 
 
 @router.get(
@@ -231,9 +275,22 @@ async def get_knowledge_citation(
     space_id: UUID,
     citation_id: UUID,
     boundary: ReadBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
     if_none_match: IfNoneMatch = None,
-) -> KnowledgeCitationResponse:
-    _contract_not_wired()
+) -> Any:
+    item, etag = await service.get_knowledge_citation(
+        db, boundary, workspace_id, space_id, citation_id
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["ETag"] = etag
+    if if_none_match_matches(if_none_match, etag):
+        return Response(
+            status_code=status.HTTP_304_NOT_MODIFIED,
+            headers={"Cache-Control": "private, no-store", "ETag": etag},
+        )
+    return item
 
 
 @router.get(
@@ -246,6 +303,9 @@ async def list_knowledge_citations(
     workspace_id: UUID,
     space_id: UUID,
     boundary: ReadBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
     page_size: PageSize = LIST_DEFAULT_PAGE_SIZE,
     cursor: CursorQuery = None,
     excerpt_id: UUID | None = None,
@@ -255,7 +315,21 @@ async def list_knowledge_citations(
     note_id: UUID | None = None,
     relationship: CitationRelationship | None = None,
 ) -> KnowledgeCitationPageResponse:
-    _contract_not_wired()
+    response.headers["Cache-Control"] = "private, no-store"
+    return await service.list_knowledge_citations(
+        db,
+        boundary,
+        workspace_id,
+        space_id,
+        page_size=page_size,
+        cursor=cursor,
+        excerpt_id=excerpt_id,
+        topic_id=topic_id,
+        quiz_item_id=quiz_item_id,
+        research_claim_id=research_claim_id,
+        note_id=note_id,
+        relationship=relationship,
+    )
 
 
 @router.post(
@@ -322,10 +396,25 @@ async def get_knowledge_graph(
     root_type: KnowledgeTargetType,
     root_id: UUID,
     boundary: ReadBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
+    response: Response,
     depth: Depth = 1,
     direction: GraphDirection = GraphDirection.BOTH,
     edge_types: Annotated[list[GraphEdgeType] | None, Query(max_length=7)] = None,
     include_excerpt_preview: bool = False,
     cursor: CursorQuery = None,
 ) -> KnowledgeGraphResponse:
-    _contract_not_wired()
+    response.headers["Cache-Control"] = "private, no-store"
+    return await service.get_graph(
+        db,
+        boundary,
+        workspace_id,
+        space_id,
+        root_type=root_type,
+        root_id=root_id,
+        depth=depth,
+        direction=direction,
+        edge_types=edge_types,
+        include_excerpt_preview=include_excerpt_preview,
+    )

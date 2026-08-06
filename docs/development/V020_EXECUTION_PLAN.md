@@ -137,3 +137,15 @@ DeepSeek 只执行最终候选 diff 的只读安全/合同/回归审查。它不
 - 本地 Worker 未证明 BitLocker/等价加密、短期租约和残留清理；
 - UI 要求新增一级导航、移动端无等价审核路径，或把 Draft/accepted 错示为已应用；
 - required gate 失败或环境不可用却无法安全隔离。停止后保留现场、记录 unrun/风险并交由 Windows Codex/owner 决策。
+
+## V20-08 当前执行覆盖（2026-08-06）
+
+V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex 已在集成 worktree 完成并接受三个串行任务：
+
+1. `task-v020-core`：知识空间 ORM（本包）、scoped service/repository、只读 bounded routes、ETag/HMAC cursor、行锁、速率/字节/候选行/时间限制、TopicDependency 图查询、负测与集成测试。
+2. `task-v020-model-registration`：现有 `Space`/`Resource`/`Note`/`Topic`/`QuizItem`/`PaperRecord`/`AIOutputDraft` 的父级 scope ORM 登记及候选发布清单迁移头兼容性更新。
+3. `task-v020-graph-kernel`：bounded graph kernel 回归测试的独立路径归属与 42 项测试验收。
+
+三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。本轮证据已通过：契约 23、图内核 42、迁移 3、核心集成 2、候选清单 7、整仓 Python 376，以及 Ruff/Mypy/前端/合同/`pnpm ci:fast`。
+
+下一顺序固定为：最终 diff/secret/path review → 提交 `codex/v020-integration` → 推送 GitHub → 记录 commit/push 与未运行项 → 再进入 V20-09/V20-10/V20-12。Shared Write、删除、附件、本地 worker、AI Draft acceptance、生产启用和前端后续 owner 仍不得提前开启；DeepSeek 仅在 V20-12 后做只读终审。

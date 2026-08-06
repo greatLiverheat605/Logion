@@ -15,7 +15,7 @@ from logion_api.knowledge_space.cursors import (
     KnowledgeCursorCodec,
     KnowledgeCursorScope,
 )
-from logion_api.knowledge_space.errors import resource_not_found_error
+from logion_api.knowledge_space.errors import query_timeout_error, resource_not_found_error
 from logion_api.knowledge_space.limits import (
     DRAFT_ACCEPT_RATE,
     GRAPH_READ_RATE,
@@ -106,6 +106,17 @@ def test_knowledge_flags_default_closed_and_reject_unsafe_combinations() -> None
     assert enabled.knowledge_space_api_enabled is True
     assert enabled.knowledge_space_shared_writes_enabled is False
     assert enabled.knowledge_space_deletion_enabled is False
+
+
+def test_knowledge_query_timeout_is_retryable_and_private() -> None:
+    error = query_timeout_error()
+
+    assert (error.status_code, error.code, error.retryable) == (
+        503,
+        "KNOWLEDGE_QUERY_TIMEOUT",
+        True,
+    )
+    assert error.headers == {"Cache-Control": "private, no-store"}
 
 
 def test_source_excerpt_contract_enforces_locator_text_bytes_and_controls() -> None:

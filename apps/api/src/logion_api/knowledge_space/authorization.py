@@ -32,7 +32,7 @@ def authorize_space_policy(
     role: WorkspaceRole,
     visibility: SpaceVisibility,
     caller_user_id: UUID,
-    owner_user_id: UUID,
+    owner_user_id: UUID | None,
     action: KnowledgeAction,
     shared_writes_enabled: bool,
 ) -> None:

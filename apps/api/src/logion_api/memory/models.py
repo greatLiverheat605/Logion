@@ -35,6 +35,12 @@ MASTERY_LEVEL_SQL = ",".join(f"'{level}'" for level in MASTERY_LEVELS)
 class Topic(Base):
     __tablename__ = "topics"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_topic_space_scope",
+            ondelete="CASCADE",
+        ),
         UniqueConstraint("id", "workspace_id", "space_id", name="uq_topic_scope"),
         Index("ix_topics_workspace_space_updated", "workspace_id", "space_id", "updated_at"),
     )
@@ -220,11 +226,18 @@ class QuizItem(Base):
             name="fk_quiz_item_topic_scope",
             ondelete="CASCADE",
         ),
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_quiz_item_space_scope",
+            ondelete="CASCADE",
+        ),
         CheckConstraint(
             "evaluation_mode IN ('exact_match','self_assessed')",
             name="ck_quiz_item_evaluation_mode",
         ),
         UniqueConstraint("id", "workspace_id", name="uq_quiz_item_workspace"),
+        UniqueConstraint("id", "workspace_id", "space_id", name="uq_quiz_item_scope"),
         Index("ix_quiz_items_topic_updated", "workspace_id", "topic_id", "updated_at"),
     )
 

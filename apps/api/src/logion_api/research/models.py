@@ -36,6 +36,12 @@ class PersonalResearch:
 class PaperRecord(PersonalResearch, Base):
     __tablename__ = "paper_records"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_paper_record_space_scope",
+            ondelete="CASCADE",
+        ),
         UniqueConstraint("id", "workspace_id", name="uq_paper_record_workspace"),
         UniqueConstraint("id", "workspace_id", "space_id", "user_id", name="uq_paper_record_scope"),
         Index("ix_paper_record_user", "workspace_id", "user_id", "updated_at"),
