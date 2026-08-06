@@ -46,3 +46,13 @@ def deletion_disabled_error() -> APIError:
         status_code=403,
         headers=PRIVATE_NO_STORE,
     )
+
+
+def query_timeout_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_QUERY_TIMEOUT",
+        message="The knowledge query could not produce a bounded response in time.",
+        status_code=503,
+        headers=PRIVATE_NO_STORE,
+        retryable=True,
+    )

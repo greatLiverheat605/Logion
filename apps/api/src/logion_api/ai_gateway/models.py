@@ -365,6 +365,7 @@ class AIOutputDraft(Base):
     __tablename__ = "ai_output_drafts"
     __table_args__ = (
         CheckConstraint("status IN ('pending','accepted','rejected')", name="ck_ai_draft_status"),
+        UniqueConstraint("id", "workspace_id", name="uq_ai_output_draft_workspace"),
         Index("ix_ai_draft_workspace_created", "workspace_id", "created_at"),
     )
 

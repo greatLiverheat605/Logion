@@ -90,3 +90,13 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 - 当前本地 Run：`.agents/coordination/runs/run-v020-integration`（活动指针已建立并通过校验）
 
 状态变化后必须更新本文件并向当前 Run 追加事件；不得只在聊天中记录。
+
+## V20-08 最新断点（2026-08-06，覆盖前述旧快照）
+
+V20-08 bounded knowledge-space core 已由 Windows Codex 在 `codex/v020-integration` 完成并通过本地验收；V20-08 的三个 Codex 任务（核心服务、父级 scope ORM/兼容性登记、图内核回归测试）均已写入 `run-v020-core` 并接受。实现包括 SourceExcerpt/Citation ORM、Workspace/Space 授权、Private owner 隔离、Shared 写入默认关闭、ResearchClaim 当前用户约束、行锁复核、ETag、HMAC cursor、列表/图查询限额、TopicDependency 有界图读取和查询超时错误。
+
+本轮实际证据：知识空间契约 23 passed、图内核 42 passed、迁移集成 3 passed、核心 API 集成 2 passed、候选清单 7 passed；整仓 Python 376 passed（61 integration tests 按默认门禁隔离），Ruff、Mypy、前端 lint/typecheck/test/build、contracts 与 `pnpm ci:fast` 全部通过。隔离 PostgreSQL 已完成 `upgrade head` 与 `alembic check`；临时容器仅用于验证，不代表生产迁移/备份恢复批准。
+
+安全和发布状态保持不变：`LOGION_KNOWLEDGE_SPACE_API_ENABLED`、cursor keys 仍默认关闭/未写入仓库；Shared Write、Deletion、Attachment、Local Worker、AI Draft acceptance、Provider 和 sync-v1 均未启用或修改。图正式关系当前仅为 `TopicDependency`，Citation 图节点延后 V20-10。生产容量、备份恢复演练、DeepSeek 只读终审、浏览器 UX 验收仍是后续门禁，不能把本轮验收表述为整个 v0.2.0 完成。
+
+长期记录：当前 Run 指针必须保持 `.agents/coordination/current-run.json -> run-v020-core`；事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-core/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。

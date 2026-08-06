@@ -92,6 +92,7 @@ class Space(Base):
             "visibility = 'shared' OR owner_user_id IS NOT NULL",
             name="ck_spaces_private_owner",
         ),
+        UniqueConstraint("id", "workspace_id", name="uq_space_workspace"),
         Index("ix_spaces_workspace_visibility", "workspace_id", "visibility", "status"),
     )
 

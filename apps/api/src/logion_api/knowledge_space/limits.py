@@ -4,6 +4,12 @@ from typing import Protocol
 from logion_api.errors import APIError
 from logion_api.identity.security import IdentitySecurity
 
+LIST_MAX_BYTES = 512 * 1024
+LIST_CANDIDATE_ROWS = 101
+GRAPH_CANDIDATE_ROWS = 600
+LIST_STATEMENT_TIMEOUT_SECONDS = 0.5
+GRAPH_STATEMENT_TIMEOUT_SECONDS = 0.75
+
 
 @dataclass(frozen=True)
 class KnowledgeRatePolicy:
