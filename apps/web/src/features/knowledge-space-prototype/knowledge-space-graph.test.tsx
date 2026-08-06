@@ -175,12 +175,23 @@ describe("KnowledgeSpaceGraph", () => {
     expect(container.querySelector(".ks-trace-zone")).toBeNull();
   });
 
-  it("computes layout when nodes lack coordinates", () => {
+  it("computes distinct layout positions when nodes lack coordinates", () => {
     const dataWithoutCoords: KsData = {
       ...TEST_DATA,
-      nodes: TEST_DATA.nodes.map((node) => ({ ...node, x: 0, y: 0 })),
+      nodes: TEST_DATA.nodes.map((node) => {
+        const withoutCoords = { ...node };
+        delete withoutCoords.x;
+        delete withoutCoords.y;
+        return withoutCoords;
+      }),
     };
     renderGraph({ data: dataWithoutCoords });
     expect(document.querySelectorAll("[data-node-id]").length).toBe(2);
+    const nodeBodies = document.querySelectorAll(".ks-gnode-body");
+    expect(
+      `${nodeBodies[0]?.getAttribute("x")}:${nodeBodies[0]?.getAttribute("y")}`,
+    ).not.toBe(
+      `${nodeBodies[1]?.getAttribute("x")}:${nodeBodies[1]?.getAttribute("y")}`,
+    );
   });
 });

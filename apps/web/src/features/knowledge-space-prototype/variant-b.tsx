@@ -85,7 +85,10 @@ function EvidenceCardB({
           <span>{Math.round(item.confidence * 100)}%</span>
         </div>
         {item.status === "suggested" && (
-          <span className="ks-badge ks-badge--suggested" style={{ fontSize: 10 }}>
+          <span
+            className="ks-badge ks-badge--suggested"
+            style={{ fontSize: 10 }}
+          >
             待决
           </span>
         )}
@@ -185,7 +188,11 @@ function EvidenceDetailB({
             {item.title}
           </h2>
         </div>
-        <button className="ks-btn ks-btn--icon" onClick={onClose} aria-label="关闭详情">
+        <button
+          className="ks-btn ks-btn--icon"
+          onClick={onClose}
+          aria-label="关闭详情"
+        >
           ✕
         </button>
       </div>
@@ -225,10 +232,16 @@ function EvidenceDetailB({
           <div className="ks-detail-panel__section">
             <h3 className="ks-detail-panel__section-title">置信度评分</h3>
             <div className="ks-confidence" style={{ gap: 8 }}>
-              <div className="ks-confidence__bar" style={{ width: "100%", height: 8 }}>
+              <div
+                className="ks-confidence__bar"
+                style={{ width: "100%", height: 8 }}
+              >
                 <div
                   className="ks-confidence__fill"
-                  style={{ width: `${Math.round(item.confidence * 100)}%`, height: 8 }}
+                  style={{
+                    width: `${Math.round(item.confidence * 100)}%`,
+                    height: 8,
+                  }}
                 />
               </div>
               <span style={{ fontWeight: 600, fontSize: 16 }}>
@@ -239,19 +252,52 @@ function EvidenceDetailB({
 
           <div className="ks-detail-panel__section">
             <h3 className="ks-detail-panel__section-title">时间线</h3>
-            <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+            <table
+              style={{
+                width: "100%",
+                fontSize: 13,
+                borderCollapse: "collapse",
+              }}
+            >
               <tbody>
                 <tr>
-                  <td style={{ padding: "4px 0", color: "var(--ks-text-tertiary)" }}>建议</td>
-                  <td style={{ padding: "4px 0" }}>{formatDate(item.suggestedAt)}</td>
+                  <td
+                    style={{
+                      padding: "4px 0",
+                      color: "var(--ks-text-tertiary)",
+                    }}
+                  >
+                    建议
+                  </td>
+                  <td style={{ padding: "4px 0" }}>
+                    {formatDate(item.suggestedAt)}
+                  </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: "4px 0", color: "var(--ks-text-tertiary)" }}>采纳</td>
-                  <td style={{ padding: "4px 0" }}>{formatDate(item.acceptedAt)}</td>
+                  <td
+                    style={{
+                      padding: "4px 0",
+                      color: "var(--ks-text-tertiary)",
+                    }}
+                  >
+                    采纳
+                  </td>
+                  <td style={{ padding: "4px 0" }}>
+                    {formatDate(item.acceptedAt)}
+                  </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: "4px 0", color: "var(--ks-text-tertiary)" }}>拒绝</td>
-                  <td style={{ padding: "4px 0" }}>{formatDate(item.rejectedAt)}</td>
+                  <td
+                    style={{
+                      padding: "4px 0",
+                      color: "var(--ks-text-tertiary)",
+                    }}
+                  >
+                    拒绝
+                  </td>
+                  <td style={{ padding: "4px 0" }}>
+                    {formatDate(item.rejectedAt)}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -260,7 +306,10 @@ function EvidenceDetailB({
           {item.status === "rejected" && item.rejectReason && (
             <div className="ks-detail-panel__section">
               <h3 className="ks-detail-panel__section-title">拒绝原因</h3>
-              <p className="ks-detail-panel__text" style={{ color: "var(--ks-danger)" }}>
+              <p
+                className="ks-detail-panel__text"
+                style={{ color: "var(--ks-danger)" }}
+              >
                 {item.rejectReason}
               </p>
             </div>
@@ -268,8 +317,13 @@ function EvidenceDetailB({
 
           {item.onlineOnly && (
             <div className="ks-detail-panel__section">
-              <span className="ks-badge ks-badge--pending_review">仅在线查看</span>
-              <p className="ks-detail-panel__text" style={{ marginTop: 4, fontSize: 12 }}>
+              <span className="ks-badge ks-badge--pending_review">
+                仅在线查看
+              </span>
+              <p
+                className="ks-detail-panel__text"
+                style={{ marginTop: 4, fontSize: 12 }}
+              >
                 此内容需要网络连接才能查看。
               </p>
             </div>
@@ -277,8 +331,13 @@ function EvidenceDetailB({
 
           {item.locked && (
             <div className="ks-detail-panel__section">
-              <span className="ks-badge ks-badge--rejected">已锁定 — 需要解密密钥</span>
-              <p className="ks-detail-panel__text" style={{ marginTop: 4, fontSize: 12 }}>
+              <span className="ks-badge ks-badge--rejected">
+                已锁定 — 需要解密密钥
+              </span>
+              <p
+                className="ks-detail-panel__text"
+                style={{ marginTop: 4, fontSize: 12 }}
+              >
                 此内容使用端到端加密保护。请提供解密密钥以查看。
               </p>
             </div>
@@ -286,7 +345,14 @@ function EvidenceDetailB({
         </div>
       </div>
 
-      <div className="ks-flex-row ks-gap-md" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--ks-border-light)" }}>
+      <div
+        className="ks-flex-row ks-gap-md"
+        style={{
+          marginTop: 16,
+          paddingTop: 16,
+          borderTop: "1px solid var(--ks-border-light)",
+        }}
+      >
         {item.status !== "accepted" && (
           <button className="ks-btn ks-btn--primary" onClick={onAccept}>
             采纳证据
@@ -323,14 +389,33 @@ function DetailedGraph({
   const w = 600;
   const h = 320;
   const layers = [
-    { label: "已采纳", items: accepted, color: "var(--ks-graph-node-accepted)", cy: 100 },
-    { label: "建议中", items: suggested, color: "var(--ks-graph-node-suggested)", cy: 200 },
-    { label: "已拒绝", items: rejected, color: "var(--ks-graph-node-rejected)", cy: 280 },
+    {
+      label: "已采纳",
+      items: accepted,
+      color: "var(--ks-graph-node-accepted)",
+      cy: 100,
+    },
+    {
+      label: "建议中",
+      items: suggested,
+      color: "var(--ks-graph-node-suggested)",
+      cy: 200,
+    },
+    {
+      label: "已拒绝",
+      items: rejected,
+      color: "var(--ks-graph-node-rejected)",
+      cy: 280,
+    },
   ];
 
   return (
     <div className="ks-graph-container" role="img" aria-label="详细知识图谱">
-      <svg viewBox={`0 0 ${w} ${h}`} className="ks-graph-svg" aria-hidden="true">
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="ks-graph-svg"
+        aria-hidden="true"
+      >
         {/* Vertical axis */}
         <line
           x1={40}
@@ -344,7 +429,10 @@ function DetailedGraph({
 
         {layers.map((layer, li) => {
           const cx = 120;
-          const spacing = Math.min(80, (w - 160) / Math.max(layer.items.length, 1));
+          const spacing = Math.min(
+            80,
+            (w - 160) / Math.max(layer.items.length, 1),
+          );
           return (
             <g key={layer.label}>
               {/* Layer label */}
@@ -433,7 +521,9 @@ function MobileTreeB({
   onSelect: (id: string) => void;
   selectedId: string | null;
 }) {
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({
     accepted: true,
     suggested: true,
     rejected: true,
@@ -449,9 +539,27 @@ function MobileTreeB({
   const rejected = items.filter((i) => i.status === "rejected");
 
   const sections = [
-    { key: "suggested", label: "待处理", count: suggested.length, badge: "ks-badge--suggested", data: suggested },
-    { key: "accepted", label: "已采纳", count: accepted.length, badge: "ks-badge--accepted", data: accepted },
-    { key: "rejected", label: "已拒绝", count: rejected.length, badge: "ks-badge--rejected", data: rejected },
+    {
+      key: "suggested",
+      label: "待处理",
+      count: suggested.length,
+      badge: "ks-badge--suggested",
+      data: suggested,
+    },
+    {
+      key: "accepted",
+      label: "已采纳",
+      count: accepted.length,
+      badge: "ks-badge--accepted",
+      data: accepted,
+    },
+    {
+      key: "rejected",
+      label: "已拒绝",
+      count: rejected.length,
+      badge: "ks-badge--rejected",
+      data: rejected,
+    },
   ];
 
   return (
@@ -459,7 +567,13 @@ function MobileTreeB({
       {sections
         .filter((s) => s.data.length > 0)
         .map((section) => (
-          <li key={section.key} className="ks-tree__item" role="treeitem" aria-expanded={expandedSections[section.key]} aria-selected={false}>
+          <li
+            key={section.key}
+            className="ks-tree__item"
+            role="treeitem"
+            aria-expanded={expandedSections[section.key]}
+            aria-selected={false}
+          >
             <button
               className="ks-tree__button"
               onClick={() => toggle(section.key)}
@@ -467,17 +581,31 @@ function MobileTreeB({
               <span aria-hidden="true">
                 {expandedSections[section.key] ? "▾" : "▸"}
               </span>
-              <span className={`ks-badge ${section.badge}`} style={{ fontSize: 10 }}>
+              <span
+                className={`ks-badge ${section.badge}`}
+                style={{ fontSize: 10 }}
+              >
                 {section.label}
               </span>
-              <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--ks-text-tertiary)" }}>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontSize: 12,
+                  color: "var(--ks-text-tertiary)",
+                }}
+              >
                 {section.count}
               </span>
             </button>
             {expandedSections[section.key] && (
               <ul className="ks-tree__children" role="group">
                 {section.data.map((item) => (
-                  <li key={item.id} className="ks-tree__leaf" role="treeitem" aria-selected={selectedId === item.id}>
+                  <li
+                    key={item.id}
+                    className="ks-tree__leaf"
+                    role="treeitem"
+                    aria-selected={selectedId === item.id}
+                  >
                     <button
                       className="ks-btn ks-btn--small"
                       style={{
@@ -492,7 +620,13 @@ function MobileTreeB({
                     >
                       <div>
                         <div>{item.title}</div>
-                        <div style={{ fontSize: 11, color: "var(--ks-text-tertiary)", marginTop: 2 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--ks-text-tertiary)",
+                            marginTop: 2,
+                          }}
+                        >
                           {item.source} · {Math.round(item.confidence * 100)}%
                         </div>
                       </div>
@@ -542,7 +676,13 @@ function RejectModal({
     >
       <div className="ks-modal" ref={ref} tabIndex={-1}>
         <h2 className="ks-modal__title">拒绝证据</h2>
-        <p style={{ fontSize: 14, color: "var(--ks-text-secondary)", marginBottom: 12 }}>
+        <p
+          style={{
+            fontSize: 14,
+            color: "var(--ks-text-secondary)",
+            marginBottom: 12,
+          }}
+        >
           {item.title}
         </p>
         <div>
@@ -612,7 +752,9 @@ function EditModalB({
         <h2 className="ks-modal__title">编辑证据</h2>
         <div className="ks-flex-col ks-gap-md">
           <div>
-            <label className="ks-label" htmlFor="edit-title-b">标题</label>
+            <label className="ks-label" htmlFor="edit-title-b">
+              标题
+            </label>
             <input
               id="edit-title-b"
               className="ks-input"
@@ -621,7 +763,9 @@ function EditModalB({
             />
           </div>
           <div>
-            <label className="ks-label" htmlFor="edit-summary-b">摘要</label>
+            <label className="ks-label" htmlFor="edit-summary-b">
+              摘要
+            </label>
             <textarea
               id="edit-summary-b"
               className="ks-textarea"
@@ -630,7 +774,9 @@ function EditModalB({
             />
           </div>
           <div>
-            <label className="ks-label" htmlFor="edit-tags-b">标签（逗号分隔）</label>
+            <label className="ks-label" htmlFor="edit-tags-b">
+              标签（逗号分隔）
+            </label>
             <input
               id="edit-tags-b"
               className="ks-input"
@@ -649,7 +795,10 @@ function EditModalB({
               onSave({
                 title,
                 summary,
-                tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+                tags: tags
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
               });
               onClose();
             }}
@@ -698,7 +847,9 @@ function EvidenceTimeline({ items }: { items: EvidenceItem[] }) {
             }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--ks-text)" }}>
+            <div
+              style={{ fontSize: 13, fontWeight: 500, color: "var(--ks-text)" }}
+            >
               {item.title}
             </div>
             <div
@@ -743,7 +894,11 @@ export function VariantB(state: MockState) {
   } = state;
 
   return (
-    <div className="prototype-container" role="region" aria-label="知识空间原型 B">
+    <div
+      className="prototype-container"
+      role="region"
+      aria-label="知识空间原型 B"
+    >
       {/* Toolbar */}
       <div className="ks-toolbar" role="toolbar" aria-label="命令中心工具栏">
         <div className="ks-toolbar__left">
@@ -795,19 +950,28 @@ export function VariantB(state: MockState) {
           <div className="ks-metric__label">证据总数</div>
         </div>
         <div className="ks-metric">
-          <div className="ks-metric__value" style={{ color: "var(--ks-success)" }}>
+          <div
+            className="ks-metric__value"
+            style={{ color: "var(--ks-success)" }}
+          >
             {data.progress.accepted}
           </div>
           <div className="ks-metric__label">已采纳</div>
         </div>
         <div className="ks-metric">
-          <div className="ks-metric__value" style={{ color: "var(--ks-warning)" }}>
+          <div
+            className="ks-metric__value"
+            style={{ color: "var(--ks-warning)" }}
+          >
             {data.progress.suggested}
           </div>
           <div className="ks-metric__label">待处理</div>
         </div>
         <div className="ks-metric">
-          <div className="ks-metric__value" style={{ color: "var(--ks-danger)" }}>
+          <div
+            className="ks-metric__value"
+            style={{ color: "var(--ks-danger)" }}
+          >
             {data.progress.rejected}
           </div>
           <div className="ks-metric__label">已拒绝</div>
@@ -815,9 +979,7 @@ export function VariantB(state: MockState) {
         <div className="ks-metric">
           <div className="ks-metric__value">
             {data.progress.total > 0
-              ? Math.round(
-                  (data.progress.accepted / data.progress.total) * 100,
-                )
+              ? Math.round((data.progress.accepted / data.progress.total) * 100)
               : 0}
             %
           </div>
@@ -866,7 +1028,9 @@ export function VariantB(state: MockState) {
       {/* Error state */}
       {error && !loading && (
         <div className="ks-state" role="alert">
-          <div className="ks-state__icon" aria-hidden="true">⚠</div>
+          <div className="ks-state__icon" aria-hidden="true">
+            ⚠
+          </div>
           <h2 className="ks-state__title">数据加载失败</h2>
           <p className="ks-state__description">{error}</p>
           <div className="ks-flex-row ks-gap-md">
@@ -876,10 +1040,7 @@ export function VariantB(state: MockState) {
             >
               重试
             </button>
-            <button
-              className="ks-btn"
-              onClick={() => state.simulateError()}
-            >
+            <button className="ks-btn" onClick={() => state.simulateError()}>
               模拟错误
             </button>
           </div>
@@ -889,7 +1050,9 @@ export function VariantB(state: MockState) {
       {/* Empty state */}
       {!loading && !error && items.length === 0 && (
         <div className="ks-state">
-          <div className="ks-state__icon" aria-hidden="true">📋</div>
+          <div className="ks-state__icon" aria-hidden="true">
+            📋
+          </div>
           <h2 className="ks-state__title">无数据</h2>
           <p className="ks-state__description">
             {projection === "today"
@@ -907,10 +1070,7 @@ export function VariantB(state: MockState) {
           {/* Desktop: detailed graph */}
           <div className="ks-desktop-only" style={{ marginBottom: 24 }}>
             <h2 className="ks-heading ks-heading--lg">证据图谱</h2>
-            <DetailedGraph
-              items={items}
-              onNodeClick={setSelectedItemId}
-            />
+            <DetailedGraph items={items} onNodeClick={setSelectedItemId} />
             <div className="ks-legend">
               <div className="ks-legend__item">
                 <span className="ks-legend__swatch ks-legend__swatch--accepted" />
@@ -953,7 +1113,11 @@ export function VariantB(state: MockState) {
                     ? "审查队列"
                     : "全部证据"}
               </h2>
-              <div className="ks-evidence-list" role="list" aria-label="证据列表">
+              <div
+                className="ks-evidence-list"
+                role="list"
+                aria-label="证据列表"
+              >
                 {items.map((item) => (
                   <div key={item.id} role="listitem">
                     <EvidenceCardB

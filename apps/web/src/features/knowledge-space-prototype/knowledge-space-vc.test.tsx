@@ -1,11 +1,6 @@
 /** @vitest-environment jsdom */
 
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KnowledgeSpaceVC } from "./knowledge-space-vc";
@@ -48,9 +43,9 @@ describe("review-state semantics", () => {
     renderVC();
 
     // Select a pending node via the mobile tree button
-    const topic3Btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("交错练习")
-    );
+    const topic3Btn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("交错练习"));
     expect(topic3Btn).toBeDefined();
     fireEvent.click(topic3Btn!);
 
@@ -63,9 +58,9 @@ describe("review-state semantics", () => {
     renderVC();
 
     // "间隔重复" has confirmState "confirmed"
-    const btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("间隔重复")
-    );
+    const btn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("间隔重复"));
     expect(btn).toBeDefined();
     fireEvent.click(btn!);
 
@@ -75,9 +70,9 @@ describe("review-state semantics", () => {
   it("clicking accept on a pending node resolves it to confirmed", () => {
     renderVC();
 
-    const btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("交错练习")
-    );
+    const btn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("交错练习"));
     fireEvent.click(btn!);
 
     const acceptBtn = screen.getByRole("button", { name: "采纳交错练习" });
@@ -91,9 +86,9 @@ describe("review-state semantics", () => {
   it("accepted node does not show 待验证 tag simultaneously", () => {
     renderVC();
 
-    const btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("交错练习")
-    );
+    const btn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("交错练习"));
     fireEvent.click(btn!);
     fireEvent.click(screen.getByRole("button", { name: "采纳交错练习" }));
 
@@ -112,9 +107,9 @@ describe("review-state semantics", () => {
   it("accept button is removed from DOM after accepting", () => {
     renderVC();
 
-    const btn = screen.getAllByRole("button").find(
-      (b) => b.textContent?.includes("交错练习")
-    );
+    const btn = screen
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("交错练习"));
     fireEvent.click(btn!);
 
     const acceptBtn = screen.getByRole("button", { name: "采纳交错练习" });
@@ -176,7 +171,9 @@ describe("desktop SVG accessible structure", () => {
   it("SVG graph nodes activate with Enter key", () => {
     renderVC();
 
-    const node = document.querySelector('[data-node-id="topic-3"]') as HTMLElement;
+    const node = document.querySelector(
+      '[data-node-id="topic-3"]',
+    ) as HTMLElement;
     expect(node).not.toBeNull();
     node.focus();
 
@@ -188,7 +185,9 @@ describe("desktop SVG accessible structure", () => {
   it("SVG graph nodes activate with Space key", () => {
     renderVC();
 
-    const node = document.querySelector('[data-node-id="topic-3"]') as HTMLElement;
+    const node = document.querySelector(
+      '[data-node-id="topic-3"]',
+    ) as HTMLElement;
     expect(node).not.toBeNull();
     node.focus();
 
@@ -200,7 +199,9 @@ describe("desktop SVG accessible structure", () => {
   it("ArrowRight selects the next node", () => {
     renderVC();
 
-    const firstNode = document.querySelector('[data-node-id="topic-1"]') as HTMLElement;
+    const firstNode = document.querySelector(
+      '[data-node-id="topic-1"]',
+    ) as HTMLElement;
     firstNode.focus();
 
     fireEvent.keyDown(firstNode, { key: "ArrowRight" });
@@ -215,7 +216,9 @@ describe("desktop SVG accessible structure", () => {
   it("Escape deselects the current node", () => {
     renderVC();
 
-    const node = document.querySelector('[data-node-id="topic-3"]') as HTMLElement;
+    const node = document.querySelector(
+      '[data-node-id="topic-3"]',
+    ) as HTMLElement;
     fireEvent.keyDown(node, { key: "Enter" });
     expect(screen.getByText("审批操作（本地模拟）")).toBeDefined();
 
@@ -241,7 +244,9 @@ describe("mobile grouped list", () => {
   it("mobile list uses section groups with aria-label", () => {
     renderVC();
 
-    const sections = document.querySelectorAll("nav.ks-mobile-tree section.ks-mobile-group");
+    const sections = document.querySelectorAll(
+      "nav.ks-mobile-tree section.ks-mobile-group",
+    );
     expect(sections.length).toBe(4);
 
     for (const s of sections) {
@@ -253,7 +258,9 @@ describe("mobile grouped list", () => {
   it("mobile buttons have aria-pressed for selection state", () => {
     renderVC();
 
-    const btns = document.querySelectorAll("nav.ks-mobile-tree button.ks-mobile-item");
+    const btns = document.querySelectorAll(
+      "nav.ks-mobile-tree button.ks-mobile-item",
+    );
     expect(btns.length).toBeGreaterThan(0);
 
     for (const btn of btns) {
@@ -271,7 +278,9 @@ describe("mobile grouped list", () => {
   it("mobile preserves all 15 nodes", () => {
     renderVC();
 
-    const btns = document.querySelectorAll("nav.ks-mobile-tree button.ks-mobile-item");
+    const btns = document.querySelectorAll(
+      "nav.ks-mobile-tree button.ks-mobile-item",
+    );
     expect(btns.length).toBe(15);
   });
 });
@@ -296,10 +305,10 @@ describe("projection tabs structure", () => {
 
     const tabs = document.querySelectorAll('[role="tab"]');
     const activeTabs = Array.from(tabs).filter(
-      (t) => t.getAttribute("aria-selected") === "true"
+      (t) => t.getAttribute("aria-selected") === "true",
     );
     const inactiveTabs = Array.from(tabs).filter(
-      (t) => t.getAttribute("aria-selected") === "false"
+      (t) => t.getAttribute("aria-selected") === "false",
     );
 
     expect(activeTabs.length).toBe(1);

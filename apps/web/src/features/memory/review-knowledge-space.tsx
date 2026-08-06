@@ -15,7 +15,12 @@ import {
   KnowledgeSpaceGraph,
   type KnowledgeSpaceGraphState,
 } from "@/features/knowledge-space-prototype/knowledge-space-graph";
-import type { ConfirmState, KsData, KsEdge, KsNode } from "@/features/knowledge-space-prototype/ks-mock-data";
+import type {
+  ConfirmState,
+  KsData,
+  KsEdge,
+  KsNode,
+} from "@/features/knowledge-space-prototype/ks-mock-data";
 
 import "@/features/knowledge-space-prototype/knowledge-space.css";
 
@@ -95,8 +100,6 @@ export function buildReviewKnowledgeSpaceData(
         topic.confirmedLevel,
         topic.suggestedLevel,
       ),
-      x: 0,
-      y: 0,
       tags,
     };
   });
@@ -140,10 +143,12 @@ export function ReviewKnowledgeSpaceGraph({
       title="知识空间"
       description={
         <span>
-          当前 Space 中知识点与先修依赖的关系图谱。节点位置由浏览器根据已有数据本地计算，不依赖服务端坐标。
+          当前 Space
+          中知识点与先修依赖的关系图谱。节点位置由浏览器根据已有数据本地计算，不依赖服务端坐标。
           {isTruncated ? (
             <span className="ks-page-subtitle">
-              已加载 {topics.length} 个知识点；后端返回了截断标记，未完整展示全部数据。
+              已加载 {topics.length}{" "}
+              个知识点；后端返回了截断标记，未完整展示全部数据。
             </span>
           ) : (
             <span className="ks-page-subtitle">

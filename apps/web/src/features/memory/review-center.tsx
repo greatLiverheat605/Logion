@@ -35,9 +35,7 @@ import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
-import {
-  buildSevenDayReviewLoad,
-} from "./review-workbench-model";
+import { buildSevenDayReviewLoad } from "./review-workbench-model";
 import {
   ReviewKnowledgeSpaceGraph,
   type ReviewKnowledgeSpaceGraphTopic,
@@ -997,25 +995,27 @@ export function ReviewCenter() {
       (item) => [item.payload.topic_id, item.payload] as const,
     ),
   );
+  const scheduleRecordByTopicId = new Map(
+    visibleSchedules.map(
+      (item) => [item.payload.topic_id, item.payload] as const,
+    ),
+  );
 
   const knowledgeTopics: ReviewKnowledgeSpaceGraphTopic[] = visibleTopics.map(
     (topic) => {
       const mastery = masteryRecordByTopicId.get(topic.entity.entity_id);
-      const schedule = visibleSchedules.find(
-        (item) => item.payload.topic_id === topic.entity.entity_id,
-      );
+      const schedule = scheduleRecordByTopicId.get(topic.entity.entity_id);
       return {
         id: topic.entity.entity_id,
         title: topic.payload.title,
         description: topic.payload.description,
         confirmedLevel: mastery?.confirmed_level ?? null,
         suggestedLevel: mastery?.suggested_level ?? null,
-        nextReviewAt: schedule?.payload.next_review_at ?? null,
+        nextReviewAt: schedule?.next_review_at ?? null,
         due:
           schedule !== undefined &&
-          (schedule.payload.status === "due" ||
-            new Date(schedule.payload.next_review_at).getTime() <=
-              referenceTime),
+          (schedule.status === "due" ||
+            new Date(schedule.next_review_at).getTime() <= referenceTime),
       };
     },
   );

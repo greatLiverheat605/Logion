@@ -114,8 +114,14 @@ describe("getConfirmLabel", () => {
 describe("getEdgeStyle", () => {
   it("returns correct style for each edge type", () => {
     expect(getEdgeStyle("supports")).toEqual({ dashed: false });
-    expect(getEdgeStyle("contradicts")).toEqual({ dashed: true, dasharray: "6 3" });
-    expect(getEdgeStyle("leads_to")).toEqual({ dashed: true, dasharray: "4 3" });
+    expect(getEdgeStyle("contradicts")).toEqual({
+      dashed: true,
+      dasharray: "6 3",
+    });
+    expect(getEdgeStyle("leads_to")).toEqual({
+      dashed: true,
+      dasharray: "4 3",
+    });
     expect(getEdgeStyle("derives_from")).toEqual({ dashed: false });
     expect(getEdgeStyle("evidence_for")).toEqual({ dashed: false });
   });

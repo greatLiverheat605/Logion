@@ -30,7 +30,8 @@
   --ks-radius-sm: 4px;
   --ks-radius-lg: 12px;
   --ks-transition: 200ms ease;
-  --ks-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ks-font:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --ks-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   --ks-graph-node-accepted: #34c759;
   --ks-graph-node-suggested: #ff9500;
@@ -123,10 +124,18 @@
   gap: 8px;
 }
 
-.ks-gap-sm { gap: 4px; }
-.ks-gap-md { gap: 12px; }
-.ks-gap-lg { gap: 16px; }
-.ks-gap-xl { gap: 24px; }
+.ks-gap-sm {
+  gap: 4px;
+}
+.ks-gap-md {
+  gap: 12px;
+}
+.ks-gap-lg {
+  gap: 16px;
+}
+.ks-gap-xl {
+  gap: 24px;
+}
 
 /* ---------- status badges ---------- */
 
@@ -181,7 +190,9 @@
   color: var(--ks-text-secondary);
   background: var(--ks-bg);
   border-right: 1px solid var(--ks-border);
-  transition: background var(--ks-transition), color var(--ks-transition);
+  transition:
+    background var(--ks-transition),
+    color var(--ks-transition);
   text-align: center;
 }
 
@@ -249,7 +260,9 @@
   border: 1px solid var(--ks-border-light);
   border-radius: var(--ks-radius);
   padding: 16px;
-  transition: box-shadow var(--ks-transition), border-color var(--ks-transition);
+  transition:
+    box-shadow var(--ks-transition),
+    border-color var(--ks-transition);
   cursor: pointer;
 }
 
@@ -356,7 +369,9 @@
   font-size: 12px;
   font-weight: 500;
   border-radius: var(--ks-radius-sm);
-  transition: background var(--ks-transition), color var(--ks-transition);
+  transition:
+    background var(--ks-transition),
+    color var(--ks-transition);
   border: 1px solid var(--ks-border);
   color: var(--ks-text-secondary);
   background: var(--ks-bg);
@@ -412,9 +427,15 @@
   transition: width var(--ks-transition);
 }
 
-.ks-progress__bar--accepted { background: var(--ks-success); }
-.ks-progress__bar--suggested { background: var(--ks-warning); }
-.ks-progress__bar--rejected { background: var(--ks-danger); }
+.ks-progress__bar--accepted {
+  background: var(--ks-success);
+}
+.ks-progress__bar--suggested {
+  background: var(--ks-warning);
+}
+.ks-progress__bar--rejected {
+  background: var(--ks-danger);
+}
 
 /* ---------- toolbar ---------- */
 
@@ -450,9 +471,15 @@
   border-radius: 50%;
 }
 
-.ks-status-dot--online { background: var(--ks-success); }
-.ks-status-dot--offline { background: var(--ks-danger); }
-.ks-status-dot--locked { background: var(--ks-warning); }
+.ks-status-dot--online {
+  background: var(--ks-success);
+}
+.ks-status-dot--offline {
+  background: var(--ks-danger);
+}
+.ks-status-dot--locked {
+  background: var(--ks-warning);
+}
 
 /* ---------- empty / loading / error states ---------- */
 
@@ -496,7 +523,9 @@
 }
 
 @keyframes ks-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ---------- reduced motion ---------- */
@@ -591,9 +620,15 @@
   border: 1px solid var(--ks-border);
 }
 
-.ks-legend__swatch--accepted { background: var(--ks-graph-node-accepted); }
-.ks-legend__swatch--suggested { background: var(--ks-graph-node-suggested); }
-.ks-legend__swatch--rejected { background: var(--ks-graph-node-rejected); }
+.ks-legend__swatch--accepted {
+  background: var(--ks-graph-node-accepted);
+}
+.ks-legend__swatch--suggested {
+  background: var(--ks-graph-node-suggested);
+}
+.ks-legend__swatch--rejected {
+  background: var(--ks-graph-node-rejected);
+}
 
 /* ---------- graph container ---------- */
 
