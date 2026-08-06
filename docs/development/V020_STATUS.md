@@ -73,8 +73,8 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
   生产迁移、生产合规证据和敏感能力启用仍分别受独立门禁约束。
 - V20-09 已登记 `0037_knowledge_acceptance` ORM；当前 `alembic check` 已通过。生产锁竞争、真实行数、
   生产恢复点与容量预算仍未验证，Acceptance 生产开关保持关闭。
-- V20-04 的 11 个 Operation 只发布合同并硬失败关闭；即使误设主 Flag，也不会进入数据库。V20-08
-  必须实现 scoped query、对象两端授权、锁内复核、响应字节/时间和分布式并发限制后才能讨论启用。
+- V20-04 的 11 个 Operation 只发布合同并硬失败关闭；V20-08 已实现 scoped query、对象两端授权、
+  锁内复核、响应字节/时间和并发限制。V20-09 Acceptance 仍独立 fail-closed，未进入生产启用讨论。
 - 整仓 `pnpm ci:fast` 已通过：协调状态、格式、lint、类型、377 个 Python 测试、前端测试/构建与合同检查
   均为绿色；默认门禁仍隔离 62 个 integration tests，V20-09 目标集成测试另行通过。
 - V20-01/V20-03 worker 的终端交接完整，但 Windows `Path`/`PATH` 与 Orca 本地连接问题阻止了
@@ -111,7 +111,7 @@ Local Worker、Provider 和 sync-v1 均未启用或修改。图正式关系当�
 
 ## V20-09 完成记录（2026-08-06）
 
-V20-09 已完成第一版后端闭环实现，仍处于默认关闭和 Codex 验收阶段：
+V20-09 已完成第一版后端闭环实现并通过 Codex 验收，能力仍保持默认关闭：
 
 - `AIOutputDraftCandidate` 保存 AI 生成的最小证据候选、目标类型/版本和 Excerpt hash/source-version 快照；候选必须先落在 Draft scope 内，不能由 Provider 直接写正式 Citation。
 - `KnowledgeAcceptanceReceipt` 以 `(workspace, accepted_by, idempotency_key)` 唯一约束保存只含 ID 与摘要 hash 的收据；相同 key+相同规范 payload 返回原收据，不同 payload 返回 `KNOWLEDGE_IDEMPOTENCY_CONFLICT`。
@@ -121,4 +121,4 @@ V20-09 已完成第一版后端闭环实现，仍处于默认关闭和 Codex 验
 
 本轮新增证据：Acceptance 集成 1 passed（并发同 key、同 key 重放、不同 payload 冲突、stale 全回滚），规范 hash 单测 1 passed；候选清单 7 passed；Ruff check/format、Mypy、`git diff --check`、`alembic check` 与整仓 `pnpm ci:fast` 全部通过。此前隔离 PostgreSQL 已完成 `0036 -> 0037` upgrade 往返验证。V20-09 已通过 Codex 验收，但不能把本轮表述为整个 v0.2.0 完成。
 
-V20-08 提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 提交并推送结果将在本次提交后写入状态快照。生产启用、V20-10、V20-11 与后续 DeepSeek 门禁仍未完成。
+V20-08 提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 提交并推送：`e4dc335b922ea15ce976299c000b9bc061588306`（`feat: close AI knowledge acceptance loop`）。生产启用、V20-10、V20-11 与后续 DeepSeek 门禁仍未完成。
