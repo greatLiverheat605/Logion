@@ -154,4 +154,4 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 
 下一顺序固定为：V20-10 graph/search/rendering 服务端 bounded path 与测试 →（用户指定前端 owner 后）限定浏览器呈现 → V20-11 prerequisites → V20-12 集成门 → DeepSeek 只读终审 → 回滚演练 → 最终发布。Shared Write、删除、附件、本地 worker、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。
 
-本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push SHA 将在提交后写入状态快照。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。
+本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push：`e4dc335b922ea15ce976299c000b9bc061588306`。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。
