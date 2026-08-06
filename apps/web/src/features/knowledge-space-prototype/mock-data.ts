@@ -4,7 +4,11 @@
    No API calls, no backend assumptions.
    ============================================================ */
 
-export type EvidenceStatus = "suggested" | "accepted" | "rejected" | "pending_review";
+export type EvidenceStatus =
+  | "suggested"
+  | "accepted"
+  | "rejected"
+  | "pending_review";
 
 export type ProjectionSlot = "today" | "review" | "records";
 
@@ -178,7 +182,8 @@ const sharedEvidence: EvidenceItem[] = [
     suggestedAt: daysAgo(20),
     acceptedAt: null,
     rejectedAt: daysAgo(15),
-    rejectReason: "Pre-print claims lack empirical support; methodology concerns.",
+    rejectReason:
+      "Pre-print claims lack empirical support; methodology concerns.",
     tags: ["cognitive-load", "instructional-design", "pre-print"],
     confidence: 0.45,
     onlineOnly: false,
@@ -406,19 +411,84 @@ const sharedGraph: KnowledgeGraph = {
     },
   ],
   edges: [
-    { source: "concept-1", target: "concept-2", label: "includes", status: "accepted" },
-    { source: "concept-1", target: "concept-3", label: "includes", status: "accepted" },
-    { source: "concept-1", target: "concept-4", label: "includes", status: "accepted" },
-    { source: "concept-2", target: "ev-001", label: "supports", status: "accepted" },
-    { source: "concept-2", target: "ev-002", label: "supports", status: "accepted" },
-    { source: "concept-2", target: "ev-011", label: "supports", status: "accepted" },
-    { source: "concept-3", target: "ev-003", label: "supports", status: "accepted" },
-    { source: "concept-3", target: "ev-007", label: "supports", status: "suggested" },
-    { source: "concept-4", target: "ev-004", label: "supports", status: "suggested" },
-    { source: "concept-4", target: "ev-006", label: "supports", status: "rejected" },
-    { source: "concept-4", target: "ev-009", label: "supports", status: "suggested" },
-    { source: "ev-001", target: "source-1", label: "published_in", status: "accepted" },
-    { source: "ev-001", target: "claim-1", label: "supports", status: "accepted" },
+    {
+      source: "concept-1",
+      target: "concept-2",
+      label: "includes",
+      status: "accepted",
+    },
+    {
+      source: "concept-1",
+      target: "concept-3",
+      label: "includes",
+      status: "accepted",
+    },
+    {
+      source: "concept-1",
+      target: "concept-4",
+      label: "includes",
+      status: "accepted",
+    },
+    {
+      source: "concept-2",
+      target: "ev-001",
+      label: "supports",
+      status: "accepted",
+    },
+    {
+      source: "concept-2",
+      target: "ev-002",
+      label: "supports",
+      status: "accepted",
+    },
+    {
+      source: "concept-2",
+      target: "ev-011",
+      label: "supports",
+      status: "accepted",
+    },
+    {
+      source: "concept-3",
+      target: "ev-003",
+      label: "supports",
+      status: "accepted",
+    },
+    {
+      source: "concept-3",
+      target: "ev-007",
+      label: "supports",
+      status: "suggested",
+    },
+    {
+      source: "concept-4",
+      target: "ev-004",
+      label: "supports",
+      status: "suggested",
+    },
+    {
+      source: "concept-4",
+      target: "ev-006",
+      label: "supports",
+      status: "rejected",
+    },
+    {
+      source: "concept-4",
+      target: "ev-009",
+      label: "supports",
+      status: "suggested",
+    },
+    {
+      source: "ev-001",
+      target: "source-1",
+      label: "published_in",
+      status: "accepted",
+    },
+    {
+      source: "ev-001",
+      target: "claim-1",
+      label: "supports",
+      status: "accepted",
+    },
   ],
 };
 
@@ -428,7 +498,8 @@ const sharedMessages: Message[] = [
   {
     id: "msg-1",
     role: "user",
-    content: "What does the research say about spaced repetition vs. massed practice?",
+    content:
+      "What does the research say about spaced repetition vs. massed practice?",
     timestamp: daysAgo(14),
   },
   {
@@ -476,23 +547,18 @@ function projectionEvidence(
     case "today":
       // Most recent items, focus on what needs action today
       return all.filter(
-        (e) =>
-          e.status === "suggested" ||
-          e.status === "pending_review",
+        (e) => e.status === "suggested" || e.status === "pending_review",
       );
     case "review":
       // Items pending review, plus recently accepted/rejected
       return all.filter(
-        (e) =>
-          e.status === "pending_review" ||
-          e.status === "suggested",
+        (e) => e.status === "pending_review" || e.status === "suggested",
       );
     case "records":
       // All items with full status visibility
       return [...all].sort(
         (a, b) =>
-          new Date(b.suggestedAt).getTime() -
-          new Date(a.suggestedAt).getTime(),
+          new Date(b.suggestedAt).getTime() - new Date(a.suggestedAt).getTime(),
       );
   }
 }

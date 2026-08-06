@@ -92,7 +92,11 @@ function ProjectionPanel({
 
   return (
     <div className="ks-projection" role="region" aria-label="知识空间投影视图">
-      <div className="ks-projection-tabs" role="tablist" aria-label="投影视图切换">
+      <div
+        className="ks-projection-tabs"
+        role="tablist"
+        aria-label="投影视图切换"
+      >
         {PROJECTION_TABS.map((tab, index) => (
           <button
             key={tab.id}
@@ -109,7 +113,11 @@ function ProjectionPanel({
             onClick={() => onTabChange(tab.id)}
             onKeyDown={(event) => handleTabKeyDown(event, index)}
           >
-            <AppIcon name={tab.icon as "calendar"} size={13} aria-hidden="true" />
+            <AppIcon
+              name={tab.icon as "calendar"}
+              size={13}
+              aria-hidden="true"
+            />
             {tab.label}
             <span className="ks-projection-tab-count">{tabCounts[tab.id]}</span>
           </button>

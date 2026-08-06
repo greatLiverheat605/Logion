@@ -368,7 +368,12 @@ function MobileTree({
 
   return (
     <ul className="ks-tree" role="tree" aria-label="知识条目树">
-      <li className="ks-tree__item" role="treeitem" aria-expanded={expanded} aria-selected={false}>
+      <li
+        className="ks-tree__item"
+        role="treeitem"
+        aria-expanded={expanded}
+        aria-selected={false}
+      >
         <button
           className="ks-tree__button"
           onClick={() => setExpanded(!expanded)}
@@ -383,12 +388,21 @@ function MobileTree({
           <>
             {pending.length > 0 && (
               <ul className="ks-tree__children" role="group">
-                <li className="ks-tree__leaf" role="treeitem" aria-selected={false}>
+                <li
+                  className="ks-tree__leaf"
+                  role="treeitem"
+                  aria-selected={false}
+                >
                   <span className="ks-badge ks-badge--suggested">待处理</span>
                   <span>{pending.length} 条建议</span>
                 </li>
                 {pending.map((item) => (
-                  <li key={item.id} className="ks-tree__leaf" role="treeitem" aria-selected={selectedId === item.id}>
+                  <li
+                    key={item.id}
+                    className="ks-tree__leaf"
+                    role="treeitem"
+                    aria-selected={selectedId === item.id}
+                  >
                     <button
                       className="ks-btn ks-btn--small"
                       style={{
@@ -408,12 +422,21 @@ function MobileTree({
             )}
             {accepted.length > 0 && (
               <ul className="ks-tree__children" role="group">
-                <li className="ks-tree__leaf" role="treeitem" aria-selected={false}>
+                <li
+                  className="ks-tree__leaf"
+                  role="treeitem"
+                  aria-selected={false}
+                >
                   <span className="ks-badge ks-badge--accepted">已采纳</span>
                   <span>{accepted.length} 条证据</span>
                 </li>
                 {accepted.map((item) => (
-                  <li key={item.id} className="ks-tree__leaf" role="treeitem" aria-selected={selectedId === item.id}>
+                  <li
+                    key={item.id}
+                    className="ks-tree__leaf"
+                    role="treeitem"
+                    aria-selected={selectedId === item.id}
+                  >
                     <button
                       className="ks-btn ks-btn--small"
                       style={{
@@ -433,12 +456,21 @@ function MobileTree({
             )}
             {rejected.length > 0 && (
               <ul className="ks-tree__children" role="group">
-                <li className="ks-tree__leaf" role="treeitem" aria-selected={false}>
+                <li
+                  className="ks-tree__leaf"
+                  role="treeitem"
+                  aria-selected={false}
+                >
                   <span className="ks-badge ks-badge--rejected">已拒绝</span>
                   <span>{rejected.length} 条</span>
                 </li>
                 {rejected.map((item) => (
-                  <li key={item.id} className="ks-tree__leaf" role="treeitem" aria-selected={selectedId === item.id}>
+                  <li
+                    key={item.id}
+                    className="ks-tree__leaf"
+                    role="treeitem"
+                    aria-selected={selectedId === item.id}
+                  >
                     <button
                       className="ks-btn ks-btn--small"
                       style={{
@@ -530,10 +562,7 @@ function DetailPanel({
       <div className="ks-detail-panel__section">
         <h3 className="ks-detail-panel__section-title">置信度</h3>
         <div className="ks-confidence">
-          <div
-            className="ks-confidence__bar"
-            style={{ width: 120, height: 6 }}
-          >
+          <div className="ks-confidence__bar" style={{ width: 120, height: 6 }}>
             <div
               className="ks-confidence__fill"
               style={{
@@ -560,7 +589,10 @@ function DetailPanel({
       {item.status === "rejected" && item.rejectReason && (
         <div className="ks-detail-panel__section">
           <h3 className="ks-detail-panel__section-title">拒绝原因</h3>
-          <p className="ks-detail-panel__text" style={{ color: "var(--ks-danger)" }}>
+          <p
+            className="ks-detail-panel__text"
+            style={{ color: "var(--ks-danger)" }}
+          >
             {item.rejectReason}
           </p>
         </div>
@@ -574,9 +606,7 @@ function DetailPanel({
 
       {item.locked && (
         <div className="ks-detail-panel__section">
-          <span className="ks-badge ks-badge--rejected">
-            已锁定 — 需要解密
-          </span>
+          <span className="ks-badge ks-badge--rejected">已锁定 — 需要解密</span>
         </div>
       )}
 
@@ -701,15 +731,15 @@ export function VariantA(state: MockState) {
   } = state;
 
   return (
-    <div className="prototype-container" role="region" aria-label="知识空间原型 A">
+    <div
+      className="prototype-container"
+      role="region"
+      aria-label="知识空间原型 A"
+    >
       {/* Toolbar */}
       <div className="ks-toolbar" role="toolbar" aria-label="工具栏">
         <div className="ks-toolbar__left">
-          <div
-            className="ks-tabs"
-            role="tablist"
-            aria-label="时间投影"
-          >
+          <div className="ks-tabs" role="tablist" aria-label="时间投影">
             {(["today", "review", "records"] as ProjectionSlot[]).map(
               (slot) => (
                 <button
@@ -757,19 +787,28 @@ export function VariantA(state: MockState) {
           <div className="ks-metric__label">总计</div>
         </div>
         <div className="ks-metric">
-          <div className="ks-metric__value" style={{ color: "var(--ks-success)" }}>
+          <div
+            className="ks-metric__value"
+            style={{ color: "var(--ks-success)" }}
+          >
             {data.progress.accepted}
           </div>
           <div className="ks-metric__label">已采纳</div>
         </div>
         <div className="ks-metric">
-          <div className="ks-metric__value" style={{ color: "var(--ks-warning)" }}>
+          <div
+            className="ks-metric__value"
+            style={{ color: "var(--ks-warning)" }}
+          >
             {data.progress.suggested}
           </div>
           <div className="ks-metric__label">待处理</div>
         </div>
         <div className="ks-metric">
-          <div className="ks-metric__value" style={{ color: "var(--ks-danger)" }}>
+          <div
+            className="ks-metric__value"
+            style={{ color: "var(--ks-danger)" }}
+          >
             {data.progress.rejected}
           </div>
           <div className="ks-metric__label">已拒绝</div>
@@ -817,7 +856,9 @@ export function VariantA(state: MockState) {
       {/* Error state */}
       {error && !loading && (
         <div className="ks-state" role="alert">
-          <div className="ks-state__icon" aria-hidden="true">!</div>
+          <div className="ks-state__icon" aria-hidden="true">
+            !
+          </div>
           <h2 className="ks-state__title">加载失败</h2>
           <p className="ks-state__description">{error}</p>
           <button
@@ -832,7 +873,9 @@ export function VariantA(state: MockState) {
       {/* Empty state */}
       {!loading && !error && items.length === 0 && (
         <div className="ks-state">
-          <div className="ks-state__icon" aria-hidden="true">○</div>
+          <div className="ks-state__icon" aria-hidden="true">
+            ○
+          </div>
           <h2 className="ks-state__title">暂无条目</h2>
           <p className="ks-state__description">
             {projection === "today"
@@ -880,7 +923,12 @@ export function VariantA(state: MockState) {
           </div>
 
           {/* Evidence list + detail (desktop) */}
-          <div className="ks-layout-a" role="tabpanel" id={`panel-a-${projection}`} aria-labelledby={`tab-a-${projection}`}>
+          <div
+            className="ks-layout-a"
+            role="tabpanel"
+            id={`panel-a-${projection}`}
+            aria-labelledby={`tab-a-${projection}`}
+          >
             <div>
               <h2 className="ks-heading">
                 {projection === "today"
@@ -922,9 +970,7 @@ export function VariantA(state: MockState) {
                 />
               ) : (
                 <div className="ks-state" style={{ padding: "48px 24px" }}>
-                  <p className="ks-state__description">
-                    选择一条证据查看详情
-                  </p>
+                  <p className="ks-state__description">选择一条证据查看详情</p>
                 </div>
               )}
             </div>

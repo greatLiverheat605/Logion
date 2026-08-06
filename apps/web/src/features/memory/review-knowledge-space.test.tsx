@@ -62,6 +62,8 @@ describe("buildReviewKnowledgeSpaceData", () => {
     expect(b?.confirmState).toBe("pending");
     const c = data.nodes.find((node) => node.id === "topic-c");
     expect(c?.confirmState).toBe("contested");
+    expect(data.nodes.every((node) => node.x === undefined)).toBe(true);
+    expect(data.nodes.every((node) => node.y === undefined)).toBe(true);
   });
 
   it("marks due topics and scheduled reviews", () => {
@@ -103,11 +105,7 @@ describe("ReviewKnowledgeSpaceGraph", () => {
 
   it("does not use mock data as production defaults", () => {
     render(
-      <ReviewKnowledgeSpaceGraph
-        topics={[]}
-        dependencies={[]}
-        state="empty"
-      />,
+      <ReviewKnowledgeSpaceGraph topics={[]} dependencies={[]} state="empty" />,
     );
     expect(screen.queryByText("间隔重复元分析 (2025)")).toBeNull();
     expect(screen.getByText("当前空间暂无节点")).toBeDefined();

@@ -131,7 +131,7 @@ function computeNodePositions(
 
   if (hasPositions) {
     return Object.fromEntries(
-      nodes.map((node) => [node.id, { x: node.x, y: node.y }]),
+      nodes.map((node) => [node.id, { x: node.x!, y: node.y! }]),
     );
   }
 
@@ -141,8 +141,7 @@ function computeNodePositions(
   const centerY = GRAPH_H / 2;
   return Object.fromEntries(
     nodes.map((node, index) => {
-      const angle =
-        (2 * Math.PI * index) / Math.max(1, count) - Math.PI / 2;
+      const angle = (2 * Math.PI * index) / Math.max(1, count) - Math.PI / 2;
       return [
         node.id,
         {
@@ -154,10 +153,7 @@ function computeNodePositions(
   );
 }
 
-function getNodeById(
-  data: KsData,
-  id: string | null,
-): KsNode | undefined {
+function getNodeById(data: KsData, id: string | null): KsNode | undefined {
   if (id === null) return undefined;
   return data.nodes.find((node) => node.id === id);
 }
@@ -236,11 +232,14 @@ function GraphView({
   const panStart = useRef({ x: 0, y: 0 });
   const dragNode = useRef<string | null>(null);
 
-  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>(() =>
-    computeNodePositions(data.nodes),
-  );
+  const [nodePositions, setNodePositions] = useState<
+    Record<string, { x: number; y: number }>
+  >(() => computeNodePositions(data.nodes));
 
-  const nodeOrder = useMemo(() => data.nodes.map((node) => node.id), [data.nodes]);
+  const nodeOrder = useMemo(
+    () => data.nodes.map((node) => node.id),
+    [data.nodes],
+  );
 
   const handleNodeKeyDown = useCallback(
     (event: React.KeyboardEvent, nodeId: string) => {
@@ -261,8 +260,7 @@ function GraphView({
         }
       } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
         event.preventDefault();
-        const prevIndex =
-          (index - 1 + nodeOrder.length) % nodeOrder.length;
+        const prevIndex = (index - 1 + nodeOrder.length) % nodeOrder.length;
         const prevId = nodeOrder[prevIndex];
         if (prevId) {
           onSelect(prevId);
@@ -570,8 +568,7 @@ function GraphView({
           const isSelected = selectedId === node.id;
           const isHovered = hoveredId === node.id;
           const isDim = dimmed.has(node.id) && !isSelected && !isHovered;
-          const isHigh =
-            highlighted.has(node.id) || isSelected || isHovered;
+          const isHigh = highlighted.has(node.id) || isSelected || isHovered;
           const review = reviews[node.id];
           const confirmState =
             confirmStateOverrides[node.id] ?? node.confirmState;
@@ -597,7 +594,10 @@ function GraphView({
                   cy={position.y}
                   r={20}
                   style={
-                    { "--ripple-start": "16px", "--ripple-end": "36px" } as React.CSSProperties
+                    {
+                      "--ripple-start": "16px",
+                      "--ripple-end": "36px",
+                    } as React.CSSProperties
                   }
                 />
               )}
@@ -632,9 +632,7 @@ function GraphView({
                 x={position.x}
                 y={position.y + (node.type === "evidence" ? 24 : 22)}
                 className="ks-gnode-label"
-                fill={
-                  isDim ? "var(--text-tertiary)" : "var(--text-secondary)"
-                }
+                fill={isDim ? "var(--text-tertiary)" : "var(--text-secondary)"}
                 fontWeight={isSelected ? 650 : 500}
               >
                 <title>{node.label}</title>
@@ -1126,7 +1124,11 @@ function ScenarioState({ scenario, onRetry, onUnlock }: ScenarioStateProps) {
 
   if (scenario === "loading") {
     return (
-      <div className="ks-state-panel" aria-busy="true" aria-label="知识空间加载中">
+      <div
+        className="ks-state-panel"
+        aria-busy="true"
+        aria-label="知识空间加载中"
+      >
         <div className="ks-skeleton ks-skeleton--bar ks-skeleton--32" />
         <div className="ks-skeleton-canvas">
           <div className="ks-skeleton ks-skeleton--node" />
@@ -1227,7 +1229,9 @@ export function KnowledgeSpaceGraph({
   const [searchQuery, setSearchQuery] = useState("");
 
   const [reviews, setReviews] = useState<Record<string, ReviewStatus>>({});
-  const [descOverrides, setDescOverrides] = useState<Record<string, string>>({});
+  const [descOverrides, setDescOverrides] = useState<Record<string, string>>(
+    {},
+  );
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const [confirmStateOverrides, setConfirmStateOverrides] = useState<
     Record<string, ConfirmState>
@@ -1467,7 +1471,9 @@ export function KnowledgeSpaceGraph({
                         onClick={() => handleViewMode("focus")}
                         disabled={!selectedId}
                         title={
-                          selectedId ? "聚焦所选节点的一跳邻居" : "先选择一个节点"
+                          selectedId
+                            ? "聚焦所选节点的一跳邻居"
+                            : "先选择一个节点"
                         }
                       >
                         聚焦
@@ -1479,9 +1485,7 @@ export function KnowledgeSpaceGraph({
                         onClick={() => handleViewMode("chain")}
                         disabled={!selectedId}
                         title={
-                          selectedId
-                            ? "显示所选节点的证据链"
-                            : "先选择一个节点"
+                          selectedId ? "显示所选节点的证据链" : "先选择一个节点"
                         }
                       >
                         证据链
