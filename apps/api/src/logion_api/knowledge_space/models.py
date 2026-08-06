@@ -15,6 +15,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid6 import uuid7
 
@@ -343,3 +344,70 @@ class KnowledgeCitation(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     close_reason: Mapped[str | None] = mapped_column(String(32))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class KnowledgeAcceptanceReceipt(Base):
+    """Durable result of one successful AI knowledge acceptance.
+
+    The unique scope is intentionally caller-bound: a reused key in another space
+    or by another user cannot replay a receipt.  Only identifiers and a payload
+    digest are retained; accepted text remains in the draft retention lifecycle.
+    """
+
+    __tablename__ = "knowledge_acceptance_receipts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["draft_id", "workspace_id"],
+            ["ai_output_drafts.id", "ai_output_drafts.workspace_id"],
+            name="fk_knowledge_acceptance_receipt_draft_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_knowledge_acceptance_receipt_space_scope",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["accepted_by"],
+            ["users.id"],
+            name="fk_knowledge_acceptance_receipt_actor",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("status = 'applied'", name="ck_knowledge_acceptance_receipt_status"),
+        CheckConstraint(
+            "payload_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_knowledge_acceptance_receipt_payload_hash",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(created_object_ids) = 'array'",
+            name="ck_knowledge_acceptance_receipt_object_ids",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "accepted_by",
+            "idempotency_key",
+            name="uq_knowledge_acceptance_receipt_idempotency",
+        ),
+        Index(
+            "ix_knowledge_acceptance_receipt_draft",
+            "workspace_id",
+            "space_id",
+            "draft_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    draft_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    accepted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="applied")
+    created_object_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )

@@ -56,3 +56,48 @@ def query_timeout_error() -> APIError:
         headers=PRIVATE_NO_STORE,
         retryable=True,
     )
+
+
+def acceptance_disabled_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_FEATURE_DISABLED",
+        message="AI knowledge acceptance is not available.",
+        status_code=404,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def acceptance_version_conflict_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_VERSION_CONFLICT",
+        message="The knowledge draft or one of its evidence endpoints changed.",
+        status_code=409,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def acceptance_idempotency_conflict_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_IDEMPOTENCY_CONFLICT",
+        message="The acceptance idempotency key was reused with a different payload.",
+        status_code=409,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def acceptance_state_conflict_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_STATE_CONFLICT",
+        message="The draft cannot be accepted in its current state.",
+        status_code=409,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def acceptance_precondition_invalid_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_PRECONDITION_INVALID",
+        message="The acceptance payload digest does not match the canonical request.",
+        status_code=400,
+        headers=PRIVATE_NO_STORE,
+    )

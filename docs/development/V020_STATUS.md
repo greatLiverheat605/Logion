@@ -1,12 +1,12 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-06（Asia/Shanghai）。
-> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明与 V20-04 加法合同门已通过**。
-> 正式实现状态：**V20-04 已由 Codex 验收并推送检查点；合同路由继续硬失败关闭，V20-08 核心实现尚未开始**。
-> 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`；集成工作树分支 `codex/v020-integration`。
+> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现与 V20-09 接受闭环均已通过 Codex 验收**。
+> 正式实现状态：**V20-08 与 V20-09 已提交并推送；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
+> 协调基线：`73680fd`；集成工作树分支 `codex/v020-integration`。
 
 > 恢复记录：用户于 2026-08-06 明确要求从 V20-02 断点继续。Codex 已重新复核现有差异、PostgreSQL
-> 往返/失败关闭和两项整仓遗留门禁，并补齐 handoff 与独立 observations；仍未提交或推送。
+> 往返/失败关闭和整仓遗留门禁，完成 V20-08/V20-09 实现、独立验收、提交与推送。
 
 > 后续记录：用户于 2026-08-06 授权按计划继续并在必要时提交 GitHub。Codex 完成 V20-04，建立
 > 默认关闭合同、休眠权限、严格 Schema、权限策略、HMAC 游标、ETag 与双桶限流原语；聚焦门禁、
@@ -26,7 +26,8 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 纯图内核仍只是无授权、无数据库、无游标和无服务端资源治理的候选，不计 V20-08/V20-10 完成。
 
 不要使用虚构百分比衡量当前进度。按门禁判断：**架构 M0、第一版 UX 方向以及 V20-01/03/07
-设计基线、V20-02 迁移证明与 V20-04 合同门已冻结；V20-08 正式数据路径、集成和发布门均未开启。**
+设计基线、V20-02 迁移证明、V20-04 合同门、V20-08 核心数据路径与 V20-09 接受闭环已冻结；V20-10
+图/搜索/呈现、V20-12 集成、V20-13 只读终审、V20-14 回滚和 V20-15 发布门尚未完成。**
 
 ## 阶段状态
 
@@ -41,22 +42,24 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-01/02 schema 与迁移           | V20-02 隔离证明已完成        | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`            | ORM 登记和 `alembic check` 收口留给 V20-08                        |
 | V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收          | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135` | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
 | V20-07 保留/隐私签核              | 设计与推荐矩阵已批准         | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭           | 生产启用前完成独立合规证据与 Owner 门禁                           |
-| V20-08～11 核心实现               | 未开始                       | GLM 候选不计正式实现                                                                                                         | V20-00～07 必要门禁全部满足                                       |
-| V20-12～15 集成、终审、回滚、发布 | 未开始                       | 无候选集成树                                                                                                                 | 核心实现完成并通过目标门禁                                        |
+| V20-08 bounded core               | 已完成并推送                 | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
+| V20-09 AI acceptance              | 已完成并推送                 | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
+| V20-10 graph/search/rendering     | 待开始                       | 前端 owner 仍待用户指定；服务端由 Codex 负责                                                                                 | V20-09 完成；先服务端 bounded graph/search/rendering 设计与测试   |
+| V20-12～15 集成、终审、回滚、发布 | 待开始                       | 无候选集成树                                                                                                                 | V20-10/11 完成并通过目标门禁                                      |
 | DeepSeek 最终审查                 | 已打通、未派发正式终审       | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                   | 等 V20-12 完整候选 diff                                           |
 
 ## 当前等待点
 
 当前执行顺序：
 
-1. 在基于 `08babeb…` 的隔离 Codex 集成工作树固化 M0，保持无 commit、无 push。
+1. 在 `codex/v020-integration` 基于 `73680fd` 继续由 Windows Codex 单一 writer 集成。
 2. V20-01 与 V20-03 已通过异常交付恢复结算；正常 `worker_done` 未送达，不伪造该消息。
 3. Windows Codex 已协调两份结果的冲突并完成 V20-07 retention/security 决策包。
-4. 用户于 2026-08-05 单独授权 V20-02；迁移证明已完成，能力仍关闭，候选未提交、未推送。
-5. V20-04 已完成并在本地 Run/Orca 双重结算；3 个可审查提交已推送 `codex/v020-integration`。
-6. 下一后端关口是 V20-08：登记 ORM、实现 scoped repository/service、行锁内重新授权并把合同 Route
-   从硬失败关闭接到只读 bounded path；Shared Write、Deletion、Attachment 与 Local Worker 仍关闭。
-7. 前端修正继续等待用户指定下一位前端模型；Kimi 不再复用，DeepSeek 仍等 V20-12 终审。
+4. 用户于 2026-08-05 单独授权 V20-02；迁移证明已完成，能力仍关闭。
+5. V20-04、V20-08 与 V20-09 已完成并推送 `codex/v020-integration`；提交前后均通过整仓门禁。
+6. 下一后端关口是 V20-10：graph/search/rendering 服务端 bounded path、查询/DoS 门禁与呈现契约；
+   Shared Write、Deletion、Attachment 与 Local Worker 仍关闭。
+7. 前端 owner 继续等待用户指定；未指定前不派发前端任务。DeepSeek 仍等 V20-12 完整候选 diff。
 
 ## 模型所有权决定
 
@@ -68,12 +71,12 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 
 - ADR-0029 与 V20-01/03/07 设计基线、V20-02 隔离迁移证明及 V20-04 合同门均已通过；ORM/服务、
   生产迁移、生产合规证据和敏感能力启用仍分别受独立门禁约束。
-- V20-02 未登记 ORM，因此 `alembic check` 如实报告 0036 与元数据的差异；在 V20-08 收口前该候选
-  不是可独立发布的候选。生产锁竞争、真实行数与恢复点也尚未验证。
+- V20-09 已登记 `0037_knowledge_acceptance` ORM；当前 `alembic check` 已通过。生产锁竞争、真实行数、
+  生产恢复点与容量预算仍未验证，Acceptance 生产开关保持关闭。
 - V20-04 的 11 个 Operation 只发布合同并硬失败关闭；即使误设主 Flag，也不会进入数据库。V20-08
   必须实现 scoped query、对象两端授权、锁内复核、响应字节/时间和分布式并发限制后才能讨论启用。
-- 整仓测试目前为 332 passed、1 failed；唯一红项是未改动的候选发布清单仍期待迁移头 0035。
-  整仓 Ruff format 还报告未改动的 `users/models.py` 一处格式差异；V20-04 限定文件格式门通过。
+- 整仓 `pnpm ci:fast` 已通过：协调状态、格式、lint、类型、377 个 Python 测试、前端测试/构建与合同检查
+  均为绿色；默认门禁仍隔离 62 个 integration tests，V20-09 目标集成测试另行通过。
 - V20-01/V20-03 worker 的终端交接完整，但 Windows `Path`/`PATH` 与 Orca 本地连接问题阻止了
   正常 `worker_done`；协调员已停止精确 Dispatch 并以显式恢复结果结算，未伪装正常交付通道。
 - 第一版 UX 方向已批准，但 4 项浏览器 QA 修正尚未施工，且后续前端 owner 未指定。
@@ -97,10 +100,25 @@ V20-08 bounded knowledge-space core 已由 Windows Codex 在 `codex/v020-integra
 
 本轮实际证据：知识空间契约 23 passed、图内核 42 passed、迁移集成 3 passed、核心 API 集成 2 passed、候选清单 7 passed；整仓 Python 376 passed（61 integration tests 按默认门禁隔离），Ruff、Mypy、前端 lint/typecheck/test/build、contracts 与 `pnpm ci:fast` 全部通过。隔离 PostgreSQL 已完成 `upgrade head` 与 `alembic check`；临时容器仅用于验证，不代表生产迁移/备份恢复批准。
 
-安全和发布状态保持不变：`LOGION_KNOWLEDGE_SPACE_API_ENABLED`、cursor keys 仍默认关闭/未写入仓库；Shared Write、Deletion、Attachment、Local Worker、AI Draft acceptance、Provider 和 sync-v1 均未启用或修改。图正式关系当前仅为 `TopicDependency`，Citation 图节点延后 V20-10。生产容量、备份恢复演练、DeepSeek 只读终审、浏览器 UX 验收仍是后续门禁，不能把本轮验收表述为整个 v0.2.0 完成。
+安全和发布状态保持不变：`LOGION_KNOWLEDGE_SPACE_API_ENABLED`、cursor keys 与
+`LOGION_KNOWLEDGE_SPACE_AI_ACCEPTANCE_ENABLED` 均默认关闭/未启用；Shared Write、Deletion、Attachment、
+Local Worker、Provider 和 sync-v1 均未启用或修改。图正式关系当前仅为 `TopicDependency`，Citation 图节点
+延后 V20-10。生产容量、备份恢复演练、DeepSeek 只读终审、浏览器 UX 验收仍是后续门禁，不能把本轮验收表述为整个 v0.2.0 完成。
 
 长期记录：当前 Run 指针必须保持 `.agents/coordination/current-run.json -> run-v020-core`；事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-core/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。
 
 ## V20-08 提交结果
 
-已提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`（`feat: implement bounded knowledge-space core`）到 `origin/codex/v020-integration`。本提交只包含上述 21 个授权代码、测试和文档路径；生产启用和后续前端/DeepSeek 门禁仍未完成。
+## V20-09 完成记录（2026-08-06）
+
+V20-09 已完成第一版后端闭环实现，仍处于默认关闭和 Codex 验收阶段：
+
+- `AIOutputDraftCandidate` 保存 AI 生成的最小证据候选、目标类型/版本和 Excerpt hash/source-version 快照；候选必须先落在 Draft scope 内，不能由 Provider 直接写正式 Citation。
+- `KnowledgeAcceptanceReceipt` 以 `(workspace, accepted_by, idempotency_key)` 唯一约束保存只含 ID 与摘要 hash 的收据；相同 key+相同规范 payload 返回原收据，不同 payload 返回 `KNOWLEDGE_IDEMPOTENCY_CONFLICT`。
+- Acceptance 在单一事务内重新授权并按确定顺序锁定 Space、Draft、Candidate、Excerpt 和 typed Target，所有版本/hash/status 检查完成后才创建正式 `KnowledgeCitation`、Receipt 和最小 Audit；任何 stale/冲突均保持正式写入为 0。
+- 规范 payload hash 使用 RFC 8785，候选/期望集合按 ID 排序后计算；可选 `If-Match` 与 `expected_draft_version` 同时校验。接受逻辑不导入 Provider，也不自动重试未知外呼状态。
+- 新增 `LOGION_KNOWLEDGE_SPACE_AI_ACCEPTANCE_ENABLED`，默认 `false`；即便主知识空间 flag 打开，Acceptance 路由仍 fail-closed，Shared Write、Deletion、Attachment、Local Worker、Provider 和 sync-v1 继续关闭。
+
+本轮新增证据：Acceptance 集成 1 passed（并发同 key、同 key 重放、不同 payload 冲突、stale 全回滚），规范 hash 单测 1 passed；候选清单 7 passed；Ruff check/format、Mypy、`git diff --check`、`alembic check` 与整仓 `pnpm ci:fast` 全部通过。此前隔离 PostgreSQL 已完成 `0036 -> 0037` upgrade 往返验证。V20-09 已通过 Codex 验收，但不能把本轮表述为整个 v0.2.0 完成。
+
+V20-08 提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 提交并推送结果将在本次提交后写入状态快照。生产启用、V20-10、V20-11 与后续 DeepSeek 门禁仍未完成。

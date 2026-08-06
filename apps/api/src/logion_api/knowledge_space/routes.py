@@ -9,11 +9,13 @@ from logion_api.identity.dependencies import (
     DatabaseSession,
     IdentityServiceDependency,
     SettingsDependency,
+    request_id,
     require_trusted_origin,
 )
 from logion_api.identity.service import AuthContext
 from logion_api.knowledge_space.dependencies import KnowledgeServiceDependency
 from logion_api.knowledge_space.errors import (
+    acceptance_disabled_error,
     deletion_disabled_error,
     knowledge_feature_disabled_error,
 )
@@ -119,6 +121,18 @@ async def require_mutation_boundary(
 
 
 MutationBoundary = Annotated[AuthContext, Depends(require_mutation_boundary)]
+
+
+async def require_acceptance_boundary(
+    context: MutationBoundary,
+    settings: SettingsDependency,
+) -> AuthContext:
+    if not settings.knowledge_space_ai_acceptance_enabled:
+        raise acceptance_disabled_error()
+    return context
+
+
+AcceptanceBoundary = Annotated[AuthContext, Depends(require_acceptance_boundary)]
 
 
 async def require_deletion_boundary(
@@ -378,10 +392,24 @@ async def accept_knowledge_draft(
     space_id: UUID,
     draft_id: UUID,
     payload: KnowledgeDraftAcceptanceRequest,
-    boundary: MutationBoundary,
+    request: Request,
+    boundary: AcceptanceBoundary,
+    db: DatabaseSession,
+    service: KnowledgeServiceDependency,
     if_match: IfMatch = None,
 ) -> KnowledgeDraftAcceptanceReceipt:
-    _contract_not_wired()
+    receipt = await service.accept_knowledge_draft(
+        db,
+        boundary,
+        workspace_id,
+        space_id,
+        draft_id,
+        payload,
+        request_id(request),
+        if_match,
+    )
+    await db.commit()
+    return receipt
 
 
 @router.get(

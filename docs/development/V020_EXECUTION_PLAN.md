@@ -1,6 +1,6 @@
 # v0.2.0 执行计划：自适应知识空间架构基础
 
-> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明和 V20-04 加法合同门均已完成并由 Codex 验收；V20-08 核心实现尚未开始。
+> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现与 V20-09 AI acceptance 均已完成并由 Codex 验收；V20-10 尚未开始。
 > 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
 > V20-02 migration/tests 与 V20-04 default-off 合同门已完成；ORM/产品服务、生产启用、同步扩展和 Provider 配置仍受后续门禁约束。
 > 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
@@ -50,8 +50,8 @@ V20-00 design approval
 | V20-05 | Kimi K3 / 第一版原型已完成                   | 独立 Mac worktree 内限定 UX 原型/直接 UI 测试；不触碰共享数据层                      | 已交付复用 Logion 外壳的单一整体动态知识空间原型；Kimi 本轮任务结束，不承接后续前端迭代                                 | 原型代码与浏览器 QA；保留 4 项已知修正，不视为正式产品实现                                                |
 | V20-06 | 产品 owner + Windows Codex / 第一版已批准    | 无并行实现写入                                                                       | 第一版按 Kimi 原型方向施工；后续前端 owner 仍由用户另行指定，数据/权限/合同继续由 Codex 控制                            | 用户明确批准第一版方向；修正项进入独立前端任务                                                            |
 | V20-07 | Windows Codex + 安全/隐私 owner / 设计已批准 | threat/retention 文档；生产策略需另授权                                              | 已冻结私有/共享、审计、备份、Provider、附件、本地 Worker 的推荐保留矩阵与停止线；所有敏感能力保持关闭                   | `V020_RETENTION_THREAT_SIGNOFF.md`；用户于 2026-08-05 批准；生产合规门另行执行                            |
-| V20-08 | Windows Codex / 待 01–07 必要门禁            | 核心 API/domain/repository/tests；一 writer                                          | 实现 SourceExcerpt/citation、授权、版本、删除闭包、bounded read；能力默认关闭                                           | 目标 pytest/Ruff/mypy、DB 约束与跨租户测试、代码审查                                                      |
-| V20-09 | Windows Codex / 待 V20-08                    | AI Gateway adapter/domain apply/tests 独占                                           | 新任务类型、数据最小化预览、schema、stale 检查、接受原子事务、幂等/未知外呼状态                                         | 故障注入、并发/重放、预算账本、未经接受正式写入为 0                                                       |
+| V20-08 | Windows Codex / 已完成并推送                 | 核心 API/domain/repository/tests；一 writer                                          | SourceExcerpt/citation、授权、版本、删除闭包、bounded read；能力默认关闭                                                | 目标 pytest/Ruff/mypy、DB 约束与跨租户测试、代码审查；提交 `bacc747`                                      |
+| V20-09 | Windows Codex / 已完成并推送                 | AI Gateway adapter/domain apply/tests 独占                                           | 候选/收据 migration、规范 hash、stale 检查、接受原子事务、幂等/并发；Acceptance 默认关闭                                | Acceptance 集成/重放/stale、候选清单、Ruff/Mypy、`alembic check`、`pnpm ci:fast`                          |
 | V20-10 | 前端 owner 待用户另行指定；服务端由 Codex    | 前后端路径不重叠；共享合同由 Codex                                                   | 1–2 跳、150/400 默认、服务端硬限、浏览器布局、移动列表/树、安全呈现、词法黄金集                                         | 查询/DoS 测试、Recall@10、axe/键盘/390px、存储型 XSS 浏览器测试                                           |
 | V20-11 | Windows Codex / 默认禁用                     | attachment migration/worker security，需单独任务                                     | Resource 绑定仍走安全上传；本地租约/检查点须独立设计；BitLocker 或等价证明前不启用                                      | attachment 负测；磁盘加密/ACL/恢复/残留清理证据；核心流程在 worker offline 时通过                         |
 | V20-12 | Windows Codex / 集成树                       | 测试与必要修复                                                                       | 运行下节矩阵；先 bounded 后 repository gates；基础设施缺失记为 unrun，不算通过                                          | 原始命令、退出码、结果计数、失败现场和 unrun 原因                                                         |
@@ -60,6 +60,10 @@ V20-00 design approval
 | V20-15 | Windows Codex / 最后                         | 集成 worktree；ledger 仅 Codex                                                       | 复核所有 handoff/diff/secret/path；运行最终 gates；只有授权后 commit/merge/push                                         | acceptance manifest、commit SHA（若授权）、未运行项、残余风险、清理清单                                   |
 
 ### ZCode 状态
+
+### V20-09 实现收口（2026-08-06）
+
+V20-09 已在 `codex/v020-integration` 增加候选/收据 migration 与 ORM、规范化幂等 hash、事务内接受服务及默认关闭的 Acceptance route。Acceptance 只消费预先落库的 `AIOutputDraftCandidate`，在同一事务内锁定并复核 Draft/Target/Excerpt，成功后写入 typed `KnowledgeCitation`、`KnowledgeAcceptanceReceipt` 和最小 Audit；它不调用 Provider，未知外呼状态不自动重放。目标测试覆盖并发同 key、同 key 重放、不同 payload 409、stale 409 和正式写入为 0。Codex 已完成整仓门禁、最终 diff/secret/path review，并提交推送；下一步进入 V20-10。
 
 ZCode/GLM-5.2 为手工桌面客户端。它已在独立 Windows worktree 基于协调基线交付纯 Python
 bounded graph kernel 候选。第三次交接完成了唯一边方向保留、同向重复保留、反向歧义规范化、
@@ -148,6 +152,6 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 
 三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。本轮证据已通过：契约 23、图内核 42、迁移 3、核心集成 2、候选清单 7、整仓 Python 376，以及 Ruff/Mypy/前端/合同/`pnpm ci:fast`。
 
-下一顺序固定为：最终 diff/secret/path review → 提交 `codex/v020-integration` → 推送 GitHub → 记录 commit/push 与未运行项 → 再进入 V20-09/V20-10/V20-12。Shared Write、删除、附件、本地 worker、AI Draft acceptance、生产启用和前端后续 owner 仍不得提前开启；DeepSeek 仅在 V20-12 后做只读终审。
+下一顺序固定为：V20-10 graph/search/rendering 服务端 bounded path 与测试 →（用户指定前端 owner 后）限定浏览器呈现 → V20-11 prerequisites → V20-12 集成门 → DeepSeek 只读终审 → 回滚演练 → 最终发布。Shared Write、删除、附件、本地 worker、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。
 
-本轮已完成 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`，远端分支为 `origin/codex/v020-integration`。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。
+本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push SHA 将在提交后写入状态快照。后续工作必须从该 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。

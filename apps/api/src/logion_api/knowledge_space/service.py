@@ -7,14 +7,17 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import rfc8785
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
+from logion_api.ai_gateway.models import AIOutputDraft, AIOutputDraftCandidate, AIRun
 from logion_api.config import Settings
 from logion_api.content.models import Note, Resource
 from logion_api.errors import APIError
+from logion_api.identity.audit import new_audit_event
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
 from logion_api.knowledge_space.authorization import KnowledgeAction, authorize_space_policy
@@ -23,13 +26,21 @@ from logion_api.knowledge_space.cursors import (
     KnowledgeCursorCodec,
     KnowledgeCursorScope,
 )
-from logion_api.knowledge_space.errors import query_timeout_error, resource_not_found_error
+from logion_api.knowledge_space.errors import (
+    acceptance_idempotency_conflict_error,
+    acceptance_precondition_invalid_error,
+    acceptance_state_conflict_error,
+    acceptance_version_conflict_error,
+    query_timeout_error,
+    resource_not_found_error,
+)
 from logion_api.knowledge_space.graph_limits import (
     GraphEdge,
     GraphNode,
     bounded_subgraph,
 )
 from logion_api.knowledge_space.limits import (
+    DRAFT_ACCEPT_RATE,
     GRAPH_CANDIDATE_ROWS,
     GRAPH_READ_RATE,
     GRAPH_STATEMENT_TIMEOUT_SECONDS,
@@ -42,8 +53,12 @@ from logion_api.knowledge_space.limits import (
     RateLimiterProtocol,
     enforce_dual_rate_limit,
 )
-from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
-from logion_api.knowledge_space.preconditions import make_strong_etag
+from logion_api.knowledge_space.models import (
+    KnowledgeAcceptanceReceipt,
+    KnowledgeCitation,
+    SourceExcerpt,
+)
+from logion_api.knowledge_space.preconditions import make_strong_etag, validate_write_precondition
 from logion_api.knowledge_space.schemas import (
     GRAPH_MAX_BYTES,
     GRAPH_MAX_EDGES,
@@ -56,6 +71,8 @@ from logion_api.knowledge_space.schemas import (
     KnowledgeCitationCreateRequest,
     KnowledgeCitationPageResponse,
     KnowledgeCitationResponse,
+    KnowledgeDraftAcceptanceReceipt,
+    KnowledgeDraftAcceptanceRequest,
     KnowledgeGraphEdge,
     KnowledgeGraphLimits,
     KnowledgeGraphNode,
@@ -447,6 +464,305 @@ class KnowledgeService:
             self._citation_response(citation),
             self._etag("knowledge-citation", citation.id, citation.version),
         )
+
+    async def accept_knowledge_draft(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        draft_id: UUID,
+        payload: KnowledgeDraftAcceptanceRequest,
+        request_id: str,
+        if_match: str | None = None,
+    ) -> KnowledgeDraftAcceptanceReceipt:
+        """Atomically apply selected, pre-staged AI citation candidates.
+
+        The caller owns the surrounding database transaction.  This method never
+        invokes a provider and every mutable row is re-authorized and locked before
+        the first formal knowledge row is staged.
+        """
+
+        await self._authorize_scope(
+            db,
+            context,
+            workspace_id,
+            space_id,
+            KnowledgeAction.ACCEPT,
+            for_update=True,
+        )
+        await self._enforce_rate(context, workspace_id, "draft-accept", DRAFT_ACCEPT_RATE)
+        canonical_hash = self.acceptance_payload_sha256(
+            workspace_id,
+            space_id,
+            draft_id,
+            payload,
+        )
+        if canonical_hash != payload.payload_sha256:
+            raise acceptance_precondition_invalid_error()
+
+        receipt = await db.scalar(
+            select(KnowledgeAcceptanceReceipt)
+            .where(
+                KnowledgeAcceptanceReceipt.workspace_id == workspace_id,
+                KnowledgeAcceptanceReceipt.accepted_by == context.user.id,
+                KnowledgeAcceptanceReceipt.idempotency_key == payload.idempotency_key,
+            )
+            .with_for_update()
+        )
+        if receipt is not None:
+            if (
+                receipt.space_id != space_id
+                or receipt.draft_id != draft_id
+                or receipt.payload_sha256 != canonical_hash
+            ):
+                raise acceptance_idempotency_conflict_error()
+            return self._acceptance_receipt_response(receipt)
+
+        draft = await db.scalar(
+            select(AIOutputDraft)
+            .join(AIRun, AIRun.id == AIOutputDraft.run_id)
+            .where(
+                AIOutputDraft.id == draft_id,
+                AIOutputDraft.workspace_id == workspace_id,
+                AIRun.requested_by == context.user.id,
+            )
+            .with_for_update()
+        )
+        if draft is None:
+            raise resource_not_found_error()
+        if draft.version != payload.expected_draft_version or draft.status != "pending":
+            committed_receipt = await db.scalar(
+                select(KnowledgeAcceptanceReceipt).where(
+                    KnowledgeAcceptanceReceipt.workspace_id == workspace_id,
+                    KnowledgeAcceptanceReceipt.accepted_by == context.user.id,
+                    KnowledgeAcceptanceReceipt.idempotency_key == payload.idempotency_key,
+                )
+            )
+            if (
+                committed_receipt is not None
+                and committed_receipt.space_id == space_id
+                and committed_receipt.draft_id == draft_id
+                and committed_receipt.payload_sha256 == canonical_hash
+            ):
+                return self._acceptance_receipt_response(committed_receipt)
+            if committed_receipt is not None:
+                raise acceptance_idempotency_conflict_error()
+        validate_write_precondition(
+            expected_version=payload.expected_draft_version,
+            current_version=draft.version,
+            if_match=if_match,
+            current_etag=self._etag("ai-draft", draft.id, draft.version),
+        )
+        if draft.status != "pending":
+            raise acceptance_state_conflict_error()
+        if payload.accepted_edits is not None and set(payload.accepted_edits) != set(
+            draft.structured_output
+        ):
+            raise APIError(
+                code="KNOWLEDGE_TARGET_INVALID",
+                message="Accepted edits must contain exactly the draft output fields.",
+                status_code=422,
+                headers={"Cache-Control": "private, no-store"},
+            )
+
+        candidates = list(
+            (
+                await db.scalars(
+                    select(AIOutputDraftCandidate)
+                    .where(
+                        AIOutputDraftCandidate.id.in_(payload.accepted_candidate_ids),
+                        AIOutputDraftCandidate.draft_id == draft_id,
+                        AIOutputDraftCandidate.workspace_id == workspace_id,
+                        AIOutputDraftCandidate.space_id == space_id,
+                    )
+                    .order_by(AIOutputDraftCandidate.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if len(candidates) != len(payload.accepted_candidate_ids):
+            raise resource_not_found_error()
+
+        target_expectations = {
+            (item.target_type, item.target_id): item for item in payload.target_expectations
+        }
+        excerpt_expectations = {item.excerpt_id: item for item in payload.excerpt_expectations}
+        target_keys = {
+            (KnowledgeTargetType(candidate.target_type), candidate.target_id)
+            for candidate in candidates
+        }
+        excerpt_ids = {candidate.source_excerpt_id for candidate in candidates}
+        if set(target_expectations) != target_keys or set(excerpt_expectations) != excerpt_ids:
+            raise acceptance_version_conflict_error()
+
+        draft_target_key: tuple[KnowledgeTargetType, UUID]
+        try:
+            draft_target_key = (KnowledgeTargetType(draft.target_type), draft.target_id)
+        except ValueError as exc:
+            raise acceptance_state_conflict_error() from exc
+        draft_target_expectation = target_expectations.get(draft_target_key)
+        if (
+            draft_target_expectation is None
+            or draft_target_expectation.expected_version != draft.target_version
+        ):
+            raise acceptance_version_conflict_error()
+
+        excerpts = list(
+            (
+                await db.scalars(
+                    select(SourceExcerpt)
+                    .where(
+                        SourceExcerpt.id.in_(excerpt_ids),
+                        SourceExcerpt.workspace_id == workspace_id,
+                        SourceExcerpt.space_id == space_id,
+                        SourceExcerpt.status == "active",
+                        SourceExcerpt.deleted_at.is_(None),
+                    )
+                    .order_by(SourceExcerpt.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if len(excerpts) != len(excerpt_ids):
+            raise resource_not_found_error()
+        excerpt_rows = {row.id: row for row in excerpts}
+
+        target_rows: dict[tuple[KnowledgeTargetType, UUID], Any] = {}
+        for target_key in sorted(target_keys, key=lambda item: (item[0].value, item[1].hex)):
+            target_type, target_id = target_key
+            target = await self._load_target_by_id(
+                db,
+                target_type,
+                target_id,
+                workspace_id,
+                space_id,
+                caller_user_id=context.user.id,
+                for_update=True,
+            )
+            if target is None:
+                raise resource_not_found_error()
+            expectation = target_expectations[target_key]
+            if target.version != expectation.expected_version:
+                raise acceptance_version_conflict_error()
+            target_rows[target_key] = target
+
+        semantics: set[tuple[UUID, KnowledgeTargetType, UUID, str]] = set()
+        for candidate in candidates:
+            target_type = KnowledgeTargetType(candidate.target_type)
+            target_key = (target_type, candidate.target_id)
+            target_expectation = target_expectations[target_key]
+            excerpt_expectation = excerpt_expectations[candidate.source_excerpt_id]
+            excerpt = excerpt_rows[candidate.source_excerpt_id]
+            if (
+                candidate.target_version != target_expectation.expected_version
+                or candidate.excerpt_version != excerpt_expectation.expected_version
+                or candidate.excerpt_sha256 != excerpt_expectation.expected_excerpt_sha256
+                or candidate.source_version_key != excerpt_expectation.expected_source_version_key
+                or excerpt.version != excerpt_expectation.expected_version
+                or excerpt.excerpt_sha256 != excerpt_expectation.expected_excerpt_sha256
+                or excerpt.source_version_key != excerpt_expectation.expected_source_version_key
+            ):
+                raise acceptance_version_conflict_error()
+            semantic = (
+                candidate.source_excerpt_id,
+                target_type,
+                candidate.target_id,
+                candidate.relationship_kind,
+            )
+            if semantic in semantics:
+                raise acceptance_state_conflict_error()
+            semantics.add(semantic)
+            target_column = self._citation_column(target_type)
+            if await db.scalar(
+                select(KnowledgeCitation.id).where(
+                    KnowledgeCitation.workspace_id == workspace_id,
+                    KnowledgeCitation.space_id == space_id,
+                    KnowledgeCitation.source_excerpt_id == candidate.source_excerpt_id,
+                    KnowledgeCitation.relationship_kind == candidate.relationship_kind,
+                    target_column == candidate.target_id,
+                    KnowledgeCitation.status == "active",
+                    KnowledgeCitation.deleted_at.is_(None),
+                )
+            ):
+                raise acceptance_state_conflict_error()
+
+        now = datetime.now(UTC)
+        receipt_id = uuid7()
+        created_ids: list[UUID] = []
+        for candidate in candidates:
+            target_type = KnowledgeTargetType(candidate.target_type)
+            target = CitationTarget(**{f"{target_type.value}_id": candidate.target_id})
+            citation = KnowledgeCitation(
+                id=candidate.id,
+                workspace_id=workspace_id,
+                space_id=space_id,
+                source_excerpt_id=candidate.source_excerpt_id,
+                relationship_kind=candidate.relationship_kind,
+                relation_note=candidate.relation_note,
+                accepted_draft_id=draft.id,
+                acceptance_operation_id=receipt_id,
+                accepted_by=context.user.id,
+                accepted_at=now,
+                status="active",
+                version=1,
+                created_by=context.user.id,
+                **self._target_values(target, target_rows[(target_type, candidate.target_id)]),
+            )
+            db.add(citation)
+            created_ids.append(citation.id)
+
+        receipt = KnowledgeAcceptanceReceipt(
+            id=receipt_id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            draft_id=draft.id,
+            accepted_by=context.user.id,
+            idempotency_key=payload.idempotency_key,
+            payload_sha256=canonical_hash,
+            status="applied",
+            created_object_ids=[str(identifier) for identifier in created_ids],
+            accepted_at=now,
+        )
+        db.add(receipt)
+        draft.status = "accepted"
+        draft.edited_output = payload.accepted_edits
+        draft.decided_by = context.user.id
+        draft.decided_at = now
+        draft.updated_at = now
+        draft.version += 1
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="knowledge.draft_accepted",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="knowledge_acceptance_receipt",
+                target_id=receipt.id,
+                metadata={"candidate_count": len(created_ids)},
+            )
+        )
+        try:
+            await db.flush()
+        except IntegrityError as exc:
+            await db.rollback()
+            existing = await db.scalar(
+                select(KnowledgeAcceptanceReceipt).where(
+                    KnowledgeAcceptanceReceipt.workspace_id == workspace_id,
+                    KnowledgeAcceptanceReceipt.accepted_by == context.user.id,
+                    KnowledgeAcceptanceReceipt.idempotency_key == payload.idempotency_key,
+                )
+            )
+            if (
+                existing is not None
+                and existing.space_id == space_id
+                and existing.draft_id == draft_id
+                and existing.payload_sha256 == canonical_hash
+            ):
+                return self._acceptance_receipt_response(existing)
+            raise acceptance_state_conflict_error() from exc
+        return self._acceptance_receipt_response(receipt)
 
     async def list_knowledge_citations(
         self,
@@ -1007,6 +1323,43 @@ class KnowledgeService:
                     ),
                 )
         return updated
+
+    @staticmethod
+    def acceptance_payload_sha256(
+        workspace_id: UUID,
+        space_id: UUID,
+        draft_id: UUID,
+        payload: KnowledgeDraftAcceptanceRequest,
+    ) -> str:
+        """Hash the order-independent, route-bound acceptance payload."""
+
+        data = payload.model_dump(mode="json", exclude={"idempotency_key", "payload_sha256"})
+        data["workspace_id"] = str(workspace_id)
+        data["space_id"] = str(space_id)
+        data["draft_id"] = str(draft_id)
+        data["accepted_candidate_ids"] = sorted(data["accepted_candidate_ids"])
+        data["target_expectations"] = sorted(
+            data["target_expectations"],
+            key=lambda item: (item["target_type"], item["target_id"]),
+        )
+        data["excerpt_expectations"] = sorted(
+            data["excerpt_expectations"],
+            key=lambda item: item["excerpt_id"],
+        )
+        return hashlib.sha256(rfc8785.dumps(data)).hexdigest()
+
+    @staticmethod
+    def _acceptance_receipt_response(
+        receipt: KnowledgeAcceptanceReceipt,
+    ) -> KnowledgeDraftAcceptanceReceipt:
+        return KnowledgeDraftAcceptanceReceipt(
+            receipt_id=receipt.id,
+            idempotency_key=receipt.idempotency_key,
+            draft_id=receipt.draft_id,
+            status="applied",
+            created_object_ids=[UUID(identifier) for identifier in receipt.created_object_ids],
+            accepted_at=receipt.accepted_at,
+        )
 
     def _cursor_codec(self) -> KnowledgeCursorCodec:
         active_key_id = self._settings.knowledge_cursor_active_key_id
