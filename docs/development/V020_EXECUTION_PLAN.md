@@ -160,6 +160,6 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 
 Codex 已完成服务端增量：增加 Space-scoped bounded lexical search、HMAC 绑定的搜索 Cursor，并让 Graph route 校验并使用签名快照边界；OpenAPI/TypeScript 仅产生加法合同。图续页在 BFS frontier 能被安全封装前保持 `next_cursor = null`，不以不安全 token 伪造全局分页。
 
-用户后续一次性指定 Kimi K2.7-code 完成正式前端首版。Windows Codex 已把受控原型、真实 Review 数据适配、只读动态图谱、移动列表、键盘交互和状态面板集成到 `codex/v020-integration`，并修复真实节点 `(0,0)` 重叠及复习安排重复扫描。Prettier、ESLint、TypeScript、224 个 Web 单测与生产构建通过；2 条认证 Playwright 用例可发现。真实 `127.0.0.1:8080` 服务栈未运行，且本轮不启动 Docker、不伪造登录、不绕过 `SessionBoundary`，所以浏览器、390px、axe/键盘和存储型 XSS 仍记为 unrun；V20-10 整项不能标记完成。
+用户后续一次性指定 Kimi K2.7-code 完成正式前端首版。Windows Codex 已把受控原型、真实 Review 数据适配、只读动态图谱、移动列表、键盘交互和状态面板集成到 `codex/v020-integration`，并修复真实节点 `(0,0)` 重叠及复习安排重复扫描。Prettier、ESLint、TypeScript、224 个 Web 单测与生产构建通过；4 条认证 Playwright 用例可发现，其中新增门禁覆盖 1440/390px 横向溢出、axe、移动节点列表、桌面图谱键盘导航与恶意持久化主题值的 XSS 防护。真实 `127.0.0.1:8080` 服务栈未运行，且本轮不启动 Docker、不伪造登录、不绕过 `SessionBoundary`，所以新增用例仍记为 unrun；V20-10 整项不能标记完成。
 
 本轮已完成 V20-08 commit/push：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 commit/push：`e4dc335b922ea15ce976299c000b9bc061588306`；V20-10 服务端增量 commit/push：`bfb4d35`（状态文档更新：`dfaaf5a`）；前端原始施工集成：`5d737b7`，Codex 审查修正：`7a93ac9`。后续工作必须从 `codex/v020-integration` 最新 SHA 继续，并重新通过 V20-12 集成门后才能派发 DeepSeek 终审。

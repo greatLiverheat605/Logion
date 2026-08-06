@@ -150,6 +150,7 @@ V20-08 提交并推送：`bacc747f2e16a22c1d53e38c05878583b6a1a11f`；V20-09 提
 位置分散断言；同时把复习安排查找从逐节点扫描改为索引，审查修正提交为 `7a93ac9`。
 
 已观察的前端证据：Prettier、ESLint、TypeScript、44 个测试文件/224 个 Vitest 用例、生产构建和
-`git diff --check` 通过；2 条认证 Playwright 用例可发现。由于本机没有运行
+`git diff --check` 通过；4 条认证 Playwright 用例可发现，其中新增门禁覆盖 1440/390px
+横向溢出、axe、移动节点列表、桌面图谱键盘导航与恶意持久化主题值的 XSS 防护。由于本机没有运行
 `http://127.0.0.1:8080` 的 API/Web 服务栈，且既定约束是不启动 Docker、伪造登录或绕过
-`SessionBoundary`，Playwright 真实执行、390px、axe/键盘和存储型 XSS 仍是 V20-10 的未完成门禁。
+`SessionBoundary`，上述新增用例仅完成定义和发现，真实执行仍是 V20-10 的未完成门禁。
