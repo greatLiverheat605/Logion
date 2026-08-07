@@ -247,5 +247,6 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - 租约 token 只返回一次，数据库只保存 SHA-256 摘要；checkpoint 阶段单调、job/workspace/space/input hash 绑定；result receipt 单次提交，重复请求仅允许同 payload replay，不同 payload 返回稳定冲突；recovery 仅返回受限阶段摘要。
 - 实际验收：目标合同/核心/Acceptance/图内核/协议测试 `74 passed, 3 deselected`；真实认证 Local Worker 集成 `3 passed`；迁移集成 `3 passed`；`alembic check` 报告无新升级操作；Ruff lint/format 与知识空间 strict mypy 通过；OpenAPI/TypeScript 合同已重新生成。
 - 协调 Run 已追加 `handoff-api`、`obs-api-contract`、`obs-api-migration`、`obs-api-auth`，并记录 `task-api completed` 与 `task-api accepted`。候选实现仍受 `knowledge_space_local_worker_enabled=false` 约束，未启动 Docker、未绕过 SessionBoundary。
+- 集成提交 `2ba0554`（`feat(api): add default-closed local worker protocol`）已由 Codex 推送到 `codex/v020-integration`；推送后的 `pnpm ci:fast` 与 `pnpm contracts:check` 均通过。
 
 V20-11 仍保持硬停止：Crash/Reboot/上传中断真实恢复演练、正式扫描器接入/隔离/告警/人工处置及完整 worker-offline 认证证据尚未齐备；在这些门禁完成前不进入 V20-12，也不打开 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 生产开关。
