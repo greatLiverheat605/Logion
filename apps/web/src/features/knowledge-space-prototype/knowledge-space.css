@@ -261,7 +261,7 @@
 .ks-view-btn.active {
   border-color: color-mix(in srgb, var(--primary) 30%, transparent);
   background: var(--bg-selected);
-  color: var(--primary);
+  color: var(--text-primary);
 }
 
 .ks-view-btn:focus-visible {
