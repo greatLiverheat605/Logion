@@ -273,6 +273,28 @@ class LocalWorkerSecurity:
                     target.rmdir()
         return removed
 
+    def recover_after_restart(self) -> int:
+        """Remove checkpoint artifacts that cannot belong to a live lease.
+
+        Lease state is intentionally held in memory. A fresh worker instance
+        therefore cannot resume a checkpoint left by a crashed instance; it
+        must remove the bounded checkpoint residue before accepting new work.
+        Unknown artifacts remain a hard error instead of being guessed at.
+        """
+
+        removed = self.cleanup_residue()
+        for target in list(self._root.iterdir()):
+            if target.is_symlink() or not target.is_dir():
+                continue
+            self._reject_unknown_artifacts(target)
+            checkpoint = target / "checkpoint.json"
+            if checkpoint.is_file() and not checkpoint.is_symlink():
+                checkpoint.unlink()
+                removed += 1
+            if not any(target.iterdir()):
+                target.rmdir()
+        return removed
+
     def cleanup_job(self, job_id: UUID) -> int:
         """Remove only known checkpoint artifacts after terminal completion."""
 

@@ -150,6 +150,23 @@ def test_new_security_instance_rejects_old_checkpoint_after_restart(tmp_path) ->
     assert restarted.cleanup_residue() == 0
 
 
+def test_restart_recovery_removes_stale_checkpoint_and_part(tmp_path) -> None:
+    security = LocalWorkerSecurity(tmp_path)
+    job_id, workspace_id, space_id, _ = ids()
+    claims, token = security.issue_lease(
+        job_id=job_id,
+        workspace_id=workspace_id,
+        space_id=space_id,
+        input_sha256="a" * 64,
+    )
+    security.write_checkpoint(claims, token=token, stage="running")
+    (tmp_path / str(job_id) / "checkpoint.json.part").write_bytes(b"partial")
+
+    restarted = LocalWorkerSecurity(tmp_path)
+    assert restarted.recover_after_restart() == 2
+    assert not (tmp_path / str(job_id)).exists()
+
+
 def test_invalid_hash_and_naive_clock_are_rejected(tmp_path) -> None:
     security = LocalWorkerSecurity(tmp_path)
     job_id, workspace_id, space_id, _ = ids()
