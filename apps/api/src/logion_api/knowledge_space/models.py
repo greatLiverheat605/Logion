@@ -411,3 +411,227 @@ class KnowledgeAcceptanceReceipt(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class LocalWorkerJob(Base):
+    """Server-owned scope for one bounded Local Worker execution."""
+
+    __tablename__ = "knowledge_local_worker_jobs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_local_worker_job_space_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "state IN ('queued','running','uploaded','completed','failed')",
+            name="ck_local_worker_job_state",
+        ),
+        CheckConstraint(
+            "input_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_job_input_hash",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_local_worker_job_workspace"),
+        Index(
+            "ix_local_worker_jobs_owner_state",
+            "created_by",
+            "state",
+            "updated_at",
+            "id",
+        ),
+        Index(
+            "ix_local_worker_jobs_scope",
+            "workspace_id",
+            "space_id",
+            "state",
+            "updated_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    input_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LocalWorkerLease(Base):
+    """Short-lived bearer capability; only its SHA-256 digest is persisted."""
+
+    __tablename__ = "knowledge_local_worker_leases"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["job_id", "workspace_id"],
+            ["knowledge_local_worker_jobs.id", "knowledge_local_worker_jobs.workspace_id"],
+            name="fk_local_worker_lease_job_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_local_worker_lease_space_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "state IN ('active','revoked','expired','completed')",
+            name="ck_local_worker_lease_state",
+        ),
+        CheckConstraint(
+            "token_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_lease_token_hash",
+        ),
+        CheckConstraint("expires_at > issued_at", name="ck_local_worker_lease_expiry"),
+        UniqueConstraint("id", "job_id", "workspace_id", name="uq_local_worker_lease_job_scope"),
+        Index(
+            "ix_local_worker_leases_job_state",
+            "job_id",
+            "state",
+            "expires_at",
+            "id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    token_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LocalWorkerCheckpoint(Base):
+    """One bounded, scope-bound recovery marker per job."""
+
+    __tablename__ = "knowledge_local_worker_checkpoints"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["job_id", "workspace_id"],
+            ["knowledge_local_worker_jobs.id", "knowledge_local_worker_jobs.workspace_id"],
+            name="fk_local_worker_checkpoint_job_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["lease_id", "job_id", "workspace_id"],
+            [
+                "knowledge_local_worker_leases.id",
+                "knowledge_local_worker_leases.job_id",
+                "knowledge_local_worker_leases.workspace_id",
+            ],
+            name="fk_local_worker_checkpoint_lease_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "stage IN ('claimed','running','uploaded')",
+            name="ck_local_worker_checkpoint_stage",
+        ),
+        CheckConstraint(
+            "input_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_checkpoint_input_hash",
+        ),
+        CheckConstraint(
+            "output_sha256 IS NULL OR output_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_checkpoint_output_hash",
+        ),
+        CheckConstraint(
+            "(stage = 'uploaded' AND output_sha256 IS NOT NULL) "
+            "OR (stage <> 'uploaded' AND output_sha256 IS NULL)",
+            name="ck_local_worker_checkpoint_uploaded_hash",
+        ),
+        UniqueConstraint("job_id", name="uq_local_worker_checkpoint_job"),
+        Index(
+            "ix_local_worker_checkpoints_recovery",
+            "workspace_id",
+            "space_id",
+            "updated_at",
+            "job_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    lease_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    input_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    stage: Mapped[str] = mapped_column(String(16), nullable=False)
+    output_sha256: Mapped[str | None] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class LocalWorkerResultReceipt(Base):
+    """Durable, idempotent acknowledgement with no raw worker payload."""
+
+    __tablename__ = "knowledge_local_worker_result_receipts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["job_id", "workspace_id"],
+            ["knowledge_local_worker_jobs.id", "knowledge_local_worker_jobs.workspace_id"],
+            name="fk_local_worker_receipt_job_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["lease_id", "job_id", "workspace_id"],
+            [
+                "knowledge_local_worker_leases.id",
+                "knowledge_local_worker_leases.job_id",
+                "knowledge_local_worker_leases.workspace_id",
+            ],
+            name="fk_local_worker_receipt_lease_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "input_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_receipt_input_hash",
+        ),
+        CheckConstraint(
+            "output_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_receipt_output_hash",
+        ),
+        CheckConstraint(
+            "payload_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_local_worker_receipt_payload_hash",
+        ),
+        CheckConstraint(
+            "char_length(idempotency_key) BETWEEN 1 AND 128 "
+            "AND octet_length(idempotency_key) <= 128 "
+            "AND idempotency_key ~ '^[!-~]+$'",
+            name="ck_local_worker_receipt_idempotency_key",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "job_id",
+            "idempotency_key",
+            name="uq_local_worker_receipt_idempotency",
+        ),
+        Index(
+            "ix_local_worker_receipts_job",
+            "workspace_id",
+            "space_id",
+            "job_id",
+            "accepted_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    job_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    lease_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    input_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

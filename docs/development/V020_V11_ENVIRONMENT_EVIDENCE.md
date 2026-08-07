@@ -30,3 +30,10 @@
 ## 决策
 
 V20-11 继续保持硬停止：迁移、加密卷、ACL、默认关闭边界、临时 ClamAV 命中与核心在线流程已通过；但正式恶意扫描器接入/处置演练及 Local Worker 真实远端协议、崩溃恢复和生产离线流程仍缺失。在这些证据齐备并由 Codex 重新观察前，不进入 V20-12，不启动本机 Docker，也不打开 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 的生产开关。
+
+## 持久化 Local Worker API 候选复核（2026-08-07）
+
+- 真实认证集成 `test_knowledge_space_local_worker_integration.py`：3 passed；覆盖默认关闭优先级、CSRF/Origin/近期认证、Private Space owner 隔离、lease/checkpoint/result 生命周期、撤销、受限 recovery 和幂等 replay/冲突。
+- `0038_local_worker_protocol` 已在验收数据库升级；`alembic -c apps/api/alembic.ini check` 报告无新升级操作；迁移集成 3 passed。
+- token 只在 lease 响应返回一次，数据库持久化 SHA-256 摘要；候选 API 的错误响应对 Local Worker 路径统一 `Cache-Control: private, no-store`。
+- 本节只证明候选 API/迁移在隔离验收环境可运行，不证明生产准入。Crash/Reboot/上传中断恢复、正式扫描器接入/处置和完整 worker-offline 认证流程仍是硬停止，所有敏感生产开关继续关闭。

@@ -76,6 +76,69 @@ def attachment_ingest_disabled_error() -> APIError:
     )
 
 
+def local_worker_disabled_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_DISABLED",
+        message="Local Worker execution is not available.",
+        status_code=404,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def local_worker_token_invalid_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_TOKEN_INVALID",
+        message="The Local Worker lease is not valid.",
+        status_code=401,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def local_worker_lease_expired_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_LEASE_EXPIRED",
+        message="The Local Worker lease has expired.",
+        status_code=401,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def local_worker_scope_conflict_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_SCOPE_CONFLICT",
+        message="The Local Worker scope or input does not match the lease.",
+        status_code=409,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def local_worker_state_conflict_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_STATE_CONFLICT",
+        message="The Local Worker job is not in an acceptable state for this operation.",
+        status_code=409,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def local_worker_idempotency_conflict_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_IDEMPOTENCY_CONFLICT",
+        message="The result idempotency key was reused with a different payload.",
+        status_code=409,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
+def local_worker_checkpoint_too_large_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_LOCAL_WORKER_CHECKPOINT_TOO_LARGE",
+        message="The Local Worker checkpoint exceeds the bounded size limit.",
+        status_code=413,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
 def acceptance_version_conflict_error() -> APIError:
     return APIError(
         code="KNOWLEDGE_VERSION_CONFLICT",

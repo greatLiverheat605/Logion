@@ -237,3 +237,15 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - 新增 `apps/api/src/logion_api/knowledge_space/local_worker_protocol.py` 作为隔离的服务端协议候选内核：服务端生成短租约、绑定 job/workspace/space/input 摘要，支持幂等撤销、单调 checkpoint、uploaded 结果校验、单次 result receipt 和恢复元数据；没有 FastAPI 路由、数据库、认证依赖、Provider 或生产开关接入。
 - 新增 `apps/api/tests/test_knowledge_space_local_worker_protocol.py`，实际通过 scope/过期、撤销、上传前结果拒绝、结果幂等、冲突 key 和非法 key 场景；目标协议与既有知识合同共 `31 passed`。核心知识空间回归 `1 passed, 3 deselected`；新模块 Ruff lint/format 与 strict mypy 通过。
 - 本轮仍不能宣称远端 Local Worker API 已完成。需要后续独立设计/迁移/认证授权批准后，才能把候选内核接入真实 lease/revoke/checkpoint/result 路由；Crash/Reboot/上传中断演练、扫描器接入/处置和 worker-offline 认证流程仍为硬停止。所有敏感生产开关继续关闭，不进入 V20-12。
+
+## V20-11 持久化 Local Worker API 候选（2026-08-07）
+
+本轮由 Windows Codex 接管并完成 `task-api` 的独立验收；该结果是候选实现通过，不是生产启用批准：
+
+- 新增 Job、Lease、Checkpoint、Result Receipt 持久化模型与 `0038_local_worker_protocol` 迁移；迁移包含 scope 外键、hash/状态约束、幂等键唯一性和非空降级保护。
+- 新增严格请求/响应 Schema 与四组 API：`leases`、`revoke`、`checkpoints`、`result`、`recovery`。路由统一经过默认关闭 Feature Boundary；启用候选时要求 CSRF、可信 Origin、近期重新认证和 Private Space owner/admin 授权。
+- 租约 token 只返回一次，数据库只保存 SHA-256 摘要；checkpoint 阶段单调、job/workspace/space/input hash 绑定；result receipt 单次提交，重复请求仅允许同 payload replay，不同 payload 返回稳定冲突；recovery 仅返回受限阶段摘要。
+- 实际验收：目标合同/核心/Acceptance/图内核/协议测试 `74 passed, 3 deselected`；真实认证 Local Worker 集成 `3 passed`；迁移集成 `3 passed`；`alembic check` 报告无新升级操作；Ruff lint/format 与知识空间 strict mypy 通过；OpenAPI/TypeScript 合同已重新生成。
+- 协调 Run 已追加 `handoff-api`、`obs-api-contract`、`obs-api-migration`、`obs-api-auth`，并记录 `task-api completed` 与 `task-api accepted`。候选实现仍受 `knowledge_space_local_worker_enabled=false` 约束，未启动 Docker、未绕过 SessionBoundary。
+
+V20-11 仍保持硬停止：Crash/Reboot/上传中断真实恢复演练、正式扫描器接入/隔离/告警/人工处置及完整 worker-offline 认证证据尚未齐备；在这些门禁完成前不进入 V20-12，也不打开 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 生产开关。
