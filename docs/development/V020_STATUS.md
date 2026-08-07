@@ -191,6 +191,7 @@ V20-12 或启用任何本地执行/附件生产路径。
   （40 passed）；Ruff check/format 与 Mypy（4 个源文件）均通过；Compose 附件边界/备份测试 7 passed；offline 包 55 tests passed。
 - 已尝试真实附件集成，但当前本地 shell 未提供测试所需的 `LOGION_ALLOWED_ORIGINS`，注册请求在附件流程前返回
   `AUTH_ORIGIN_INVALID`；该结果不计为通过，CI 集成仍需在完整测试环境重跑。
+- 本轮修复已由 Codex 提交并推送：`69a7c58`（`fix(api): enforce V20-11 default-closed boundaries`）。
 
 以下硬停止仍未改变：准确 Volume 的 BitLocker/等价加密、Recovery/ACL 证据，Attachment migration 与
 Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理，以及 worker offline 时认证知识核心流程。
