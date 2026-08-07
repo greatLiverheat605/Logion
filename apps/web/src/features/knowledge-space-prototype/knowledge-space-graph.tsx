@@ -97,6 +97,7 @@ export interface KnowledgeSpaceGraphProps {
   state: KnowledgeSpaceGraphState;
   eyebrow?: string;
   title?: React.ReactNode;
+  headingLevel?: "h1" | "h2";
   description?: React.ReactNode;
   selectedId?: string | null;
   onNodeSelect?: (id: string | null) => void;
@@ -720,7 +721,7 @@ function MobileTreeView({
             {TYPE_LABELS[group.type]}
             <span className="ks-mobile-group-count">{group.nodes.length}</span>
           </h3>
-          <ul role="group">
+          <ul>
             {group.nodes.map((node) => {
               const review = reviews[node.id];
               const isSelected = selectedId === node.id;
@@ -1194,6 +1195,7 @@ export function KnowledgeSpaceGraph({
   state,
   eyebrow = "KNOWLEDGE SPACE",
   title = "知识空间",
+  headingLevel = "h1",
   description,
   selectedId: controlledSelectedId,
   onNodeSelect,
@@ -1370,6 +1372,7 @@ export function KnowledgeSpaceGraph({
       <ProductPageHeader
         eyebrow={eyebrow}
         title={title}
+        headingLevel={headingLevel}
         description={headerDescription}
         actions={
           showSearch ? (

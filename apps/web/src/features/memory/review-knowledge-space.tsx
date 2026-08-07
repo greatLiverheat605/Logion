@@ -141,6 +141,7 @@ export function ReviewKnowledgeSpaceGraph({
       state={state}
       eyebrow="REVIEW · KNOWLEDGE SPACE"
       title="知识空间"
+      headingLevel="h2"
       description={
         <span>
           当前 Space
