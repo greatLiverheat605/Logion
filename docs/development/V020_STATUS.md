@@ -225,3 +225,9 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - 在 Local Worker 进程不运行时，PostgreSQL/Redis 仍可用，知识空间核心 + AI acceptance 真实集成 3 passed，证明在线核心不依赖本地 Worker。
 
 本轮仍不进入 V20-12：缺少真实远端 Local Worker lease/revoke API、job/Space/输入摘要协议、生产 Crash/Reboot/上传中断恢复和正式扫描器接入/处置演练。新增内核仅作为下一阶段设计候选；`knowledge_space_local_worker_enabled`、Attachment、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。
+
+## V20-11 隔离内核加固与接入合同（2026-08-07）
+
+- `apps/worker/src/logion_worker/local_worker_security.py` 继续保持隔离候选定位；新增检查点大小上限、允许文件名、未知工件拒绝、符号链接拒绝和 `fsync` 后原子替换。新增回归后，Local Worker 安全内核 8 passed，Worker 包 32 passed、4 deselected；Ruff lint/format 与新增模块 strict mypy 通过。
+- 新增 [`V020_V11_LOCAL_WORKER_CONTRACT.md`](./V020_V11_LOCAL_WORKER_CONTRACT.md)，冻结待实现的远端 lease/revoke/checkpoint/result 合同、scope/input hash 绑定、fail-closed 语义、Crash/Reboot/上传中断恢复、扫描器隔离/告警/处置和进入 V20-12 的必要条件。该文档不授权 API、迁移、Provider 或任何生产开关。
+- 本轮只完成隔离安全内核加固与设计合同，未宣称 V20-11 通过。真实远端 Local Worker 协议、生产扫描器接入/处置演练和认证恢复流程仍是硬停止；Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭，不进入 V20-12。
