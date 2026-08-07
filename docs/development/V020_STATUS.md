@@ -205,3 +205,14 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - Redis 不可用导致真实附件协议在注册阶段返回 `AUTH_RATE_LIMIT_UNAVAILABLE`；PostgreSQL 不可用导致迁移集成的 3 个断言连接被拒绝。两者均记录为未执行，不计为通过。
 - 本机 `C:` 卷为未加密状态，不能作为生产附件卷加密证明；恢复密钥、准确命名卷 ACL、恶意/Polyglot 语料、Local Worker 租约/残留与 offline 核心流程仍缺证据。
 - 继续保持 `knowledge_space_attachment_ingest_enabled=false`、`knowledge_space_local_worker_enabled=false` 及其余敏感生产开关关闭；不启动本机 Docker，不进入 V20-12。
+
+## V20-11 方案 1 本机环境复核与真实集成补证（2026-08-07）
+
+用户已批准方案 1：在非 C 盘建立隔离验收环境，恢复密钥保存到桌面。该环境仅用于验收，不改变生产开关：
+
+- G: 上创建 `LogionV20.vhdx`，挂载为 J:；J: 使用 BitLocker XTS-AES 256，100% 已加密且 Protection On。恢复密钥仅保存于桌面，未进入仓库、Git 历史或协调账本。
+- PostgreSQL 与 Redis 均由 G: 安装并使用 J: 数据目录；完整测试环境变量从加密卷读取。未启动 Docker。
+- `test_attachment_integration.py`：1 passed；`test_knowledge_space_migration_integration.py`：3 passed；知识空间核心 + AI acceptance 组合：3 passed。此前因服务未启动导致的失败 observation 保留，新的成功 observation 已追加到 `run-v020-v11-remediation`。
+- `pnpm audit --prod --audit-level high`、`pip-audit`、`pnpm ci:fast`、Compose/备份边界与 offline 包检查均通过。`J:\Attachments`/`staging`/`verified` ACL 已收紧，当前无 `.part` 残留；ClamAV 对干净 Polyglot/HTML/PNG/文本语料扫描退出码为 0。
+
+本轮仍不能宣称 V20-11 或整个 v0.2.0 发布通过：尚缺经批准的恶意样本检测命中证据，以及 Local Worker 的 lease 绑定、撤销/过期拒绝、Crash/Reboot/上传中断残留清理和 worker-offline 时真实认证核心流程。`knowledge_space_attachment_ingest_enabled`、`knowledge_space_local_worker_enabled`、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭；在上述门禁补齐前不进入 V20-12。

@@ -634,21 +634,21 @@ async def test_citation_typed_targets_scope_lifecycle_uniqueness_and_restrict() 
             text("DELETE FROM source_excerpts WHERE id = :id"),
             {"id": excerpt_id},
             "fk_knowledge_citation_excerpt_scope",
-            "23503",
+            "23001",
         )
         await _assert_rejected(
             connection,
             text("DELETE FROM resources WHERE id = :id"),
             {"id": own.resource_id},
             "fk_source_excerpt_resource_scope",
-            "23503",
+            "23001",
         )
         await _assert_rejected(
             connection,
             text("DELETE FROM notes WHERE id = :id"),
             {"id": own.note_id},
             "fk_knowledge_citation_note_scope",
-            "23503",
+            "23001",
         )
 
         active_before = await connection.scalar(
