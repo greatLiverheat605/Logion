@@ -132,6 +132,10 @@ class Settings(BaseSettings):
     knowledge_space_shared_writes_enabled: bool = False
     knowledge_space_ai_acceptance_enabled: bool = False
     knowledge_space_deletion_enabled: bool = False
+    # These capabilities have independent admission gates and remain
+    # fail-closed even when the read-only knowledge-space API is enabled.
+    knowledge_space_attachment_ingest_enabled: bool = False
+    knowledge_space_local_worker_enabled: bool = False
     knowledge_cursor_active_key_id: str | None = Field(default=None, max_length=64)
     knowledge_cursor_previous_key_id: str | None = Field(default=None, max_length=64)
     knowledge_cursor_keys: dict[str, SecretStr] = Field(default_factory=dict)
@@ -252,6 +256,14 @@ class Settings(BaseSettings):
         if self.knowledge_space_ai_acceptance_enabled and not self.knowledge_space_api_enabled:
             raise ValueError(
                 "LOGION_KNOWLEDGE_SPACE_AI_ACCEPTANCE_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_attachment_ingest_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_ATTACHMENT_INGEST_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_local_worker_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_LOCAL_WORKER_ENABLED requires the main API flag"
             )
         if self.knowledge_space_api_enabled:
             active_cursor_key_id = self.knowledge_cursor_active_key_id

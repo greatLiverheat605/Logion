@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.config import get_settings
 from logion_api.content.models import Attachment
 from logion_api.db import session_factory
 from logion_api.identity.models import AuditEvent
@@ -13,6 +14,19 @@ from sqlalchemy import select
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None:
+    base_settings = get_settings()
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
+        update={"knowledge_space_attachment_ingest_enabled": True}
+    )
+    try:
+        await _attachment_protocol_is_verified_idempotent_and_tenant_bound()
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
+async def _attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None:
     origin = "http://test"
     async with (
         AsyncClient(

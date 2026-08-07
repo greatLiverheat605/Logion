@@ -1,5 +1,6 @@
 import secrets
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from pathlib import Path
 from uuid import UUID
 
@@ -350,13 +351,17 @@ class AttachmentService:
             raise self._not_found()
         return row
 
-    @staticmethod
-    async def _fail(db: AsyncSession, row: Attachment, code: str) -> None:
+    async def _fail(self, db: AsyncSession, row: Attachment, code: str) -> None:
         row.status = "failed"
         row.failure_code = code[:64]
         row.version += 1
         row.updated_at = utc_now()
         await db.flush()
+        # Failed verification must not leave a reusable staging object. The
+        # cleanup is best-effort; a future bounded residue sweep can retry it
+        # if the filesystem is temporarily unavailable.
+        with suppress(OSError, AttachmentStorageError):
+            await self._storage.discard_staging(row.staging_key)
 
     @staticmethod
     def _not_found() -> APIError:

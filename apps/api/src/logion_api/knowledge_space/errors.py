@@ -67,6 +67,15 @@ def acceptance_disabled_error() -> APIError:
     )
 
 
+def attachment_ingest_disabled_error() -> APIError:
+    return APIError(
+        code="KNOWLEDGE_ATTACHMENT_INGEST_DISABLED",
+        message="Knowledge attachment ingestion is not available.",
+        status_code=404,
+        headers=PRIVATE_NO_STORE,
+    )
+
+
 def acceptance_version_conflict_error() -> APIError:
     return APIError(
         code="KNOWLEDGE_VERSION_CONFLICT",
