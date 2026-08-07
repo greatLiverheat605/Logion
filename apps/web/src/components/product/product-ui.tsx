@@ -32,18 +32,20 @@ export function ProductPageHeader({
   actions,
   description,
   eyebrow,
+  headingLevel = "h1",
   title,
 }: Readonly<{
   actions?: ReactNode;
   description: ReactNode;
   eyebrow: string;
+  headingLevel?: "h1" | "h2";
   title: ReactNode;
 }>) {
   return (
     <header className="product-page-head">
       <div>
         <p className="product-eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
+        {headingLevel === "h2" ? <h2>{title}</h2> : <h1>{title}</h1>}
         <div className="product-page-description">{description}</div>
       </div>
       {actions ? <div className="product-page-actions">{actions}</div> : null}

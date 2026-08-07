@@ -17,7 +17,9 @@ test.describe("knowledge space prototype", () => {
       page.getByRole("group", { name: "原型状态演示" }),
     ).toBeVisible();
 
-    const node = page.getByRole("button", { name: /主动回忆/ });
+    const node = page
+      .locator(".ks-graph-svg-wrap")
+      .getByRole("button", { name: /主动回忆/ });
     await expect(node).toBeVisible();
     await node.click();
 

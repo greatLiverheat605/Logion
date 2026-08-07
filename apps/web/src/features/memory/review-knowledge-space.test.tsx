@@ -100,6 +100,9 @@ describe("ReviewKnowledgeSpaceGraph", () => {
       />,
     );
     expect(screen.getByText("知识空间")).toBeDefined();
+    expect(
+      document.querySelector(".ks-page .product-page-head h2"),
+    ).not.toBeNull();
     expect(document.querySelectorAll("[data-node-id]").length).toBe(3);
   });
 

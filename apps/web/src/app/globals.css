@@ -2977,7 +2977,8 @@ h1 {
   text-transform: uppercase;
 }
 
-.product-page-head h1 {
+.product-page-head h1,
+.product-page-head h2 {
   max-width: 860px;
   margin: 0.35rem 0 0.45rem;
   font-size: clamp(1.65rem, 2.5vw, 2.2rem);
