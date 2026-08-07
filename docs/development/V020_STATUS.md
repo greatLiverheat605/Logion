@@ -231,3 +231,9 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - `apps/worker/src/logion_worker/local_worker_security.py` 继续保持隔离候选定位；新增检查点大小上限、允许文件名、未知工件拒绝、符号链接拒绝和 `fsync` 后原子替换。新增回归后，Local Worker 安全内核 8 passed，Worker 包 32 passed、4 deselected；Ruff lint/format 与新增模块 strict mypy 通过。
 - 新增 [`V020_V11_LOCAL_WORKER_CONTRACT.md`](./V020_V11_LOCAL_WORKER_CONTRACT.md)，冻结待实现的远端 lease/revoke/checkpoint/result 合同、scope/input hash 绑定、fail-closed 语义、Crash/Reboot/上传中断恢复、扫描器隔离/告警/处置和进入 V20-12 的必要条件。该文档不授权 API、迁移、Provider 或任何生产开关。
 - 本轮只完成隔离安全内核加固与设计合同，未宣称 V20-11 通过。真实远端 Local Worker 协议、生产扫描器接入/处置演练和认证恢复流程仍是硬停止；Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭，不进入 V20-12。
+
+## V20-11 服务端协议候选内核（2026-08-07）
+
+- 新增 `apps/api/src/logion_api/knowledge_space/local_worker_protocol.py` 作为隔离的服务端协议候选内核：服务端生成短租约、绑定 job/workspace/space/input 摘要，支持幂等撤销、单调 checkpoint、uploaded 结果校验、单次 result receipt 和恢复元数据；没有 FastAPI 路由、数据库、认证依赖、Provider 或生产开关接入。
+- 新增 `apps/api/tests/test_knowledge_space_local_worker_protocol.py`，实际通过 scope/过期、撤销、上传前结果拒绝、结果幂等、冲突 key 和非法 key 场景；目标协议与既有知识合同共 `31 passed`。核心知识空间回归 `1 passed, 3 deselected`；新模块 Ruff lint/format 与 strict mypy 通过。
+- 本轮仍不能宣称远端 Local Worker API 已完成。需要后续独立设计/迁移/认证授权批准后，才能把候选内核接入真实 lease/revoke/checkpoint/result 路由；Crash/Reboot/上传中断演练、扫描器接入/处置和 worker-offline 认证流程仍为硬停止。所有敏感生产开关继续关闭，不进入 V20-12。
