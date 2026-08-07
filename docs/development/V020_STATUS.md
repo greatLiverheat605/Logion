@@ -66,7 +66,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
    `64298ec597b6e45dfea9a94cc819c77daf0cda8b` 全绿。Shared Write、Deletion、Attachment 与 Local Worker 仍关闭。
 7. V20-11 已完成第一轮只读审查但因硬停止条件未通过：附件/备份边界 7 passed，offline 包 55 passed；
    加密、ACL、迁移/恶意文件、租约/残留和 worker offline 核心流程证据均待补齐。当前 Run 为
-   `.agents/coordination/runs/run-v020-v11-review`，不得进入 V20-12。
+   `.agents/coordination/runs/run-v020-v11-remediation`，不得进入 V20-12。
 8. 本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
    DeepSeek 继续等待 V20-12 完整候选 diff。
 
@@ -189,10 +189,19 @@ V20-12 或启用任何本地执行/附件生产路径。
 - 附件验证失败后立即 best-effort 删除 staging 对象；若文件系统暂时不可用，数据库仍保持 `failed`，后续残留清扫仍是待完成门禁。
 - 实际通过：`uv run --package logion-api pytest apps/api/tests/test_knowledge_space_contract.py apps/api/tests/test_attachments.py -q`
   （40 passed）；Ruff check/format 与 Mypy（4 个源文件）均通过；Compose 附件边界/备份测试 7 passed；offline 包 55 tests passed。
-- 已尝试真实附件集成，但当前本地 shell 未提供测试所需的 `LOGION_ALLOWED_ORIGINS`，注册请求在附件流程前返回
-  `AUTH_ORIGIN_INVALID`；该结果不计为通过，CI 集成仍需在完整测试环境重跑。
+- 已在完整测试环境变量下重跑真实附件集成；注册阶段返回 `503 AUTH_RATE_LIMIT_UNAVAILABLE`，原因是本机 Redis
+  服务不可用，附件断言没有执行；该结果不计为通过。迁移集成同样因本机 PostgreSQL 连接被拒绝而未执行断言。
 - 本轮修复已由 Codex 提交并推送：`69a7c58`（`fix(api): enforce V20-11 default-closed boundaries`）。
 
 以下硬停止仍未改变：准确 Volume 的 BitLocker/等价加密、Recovery/ACL 证据，Attachment migration 与
 Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理，以及 worker offline 时认证知识核心流程。
 在这些证据齐备前，不进入 V20-12，也不打开任何生产敏感开关。
+
+## V20-11 环境复核记录（2026-08-07）
+
+本轮环境复核的完整证据见 [`V020_V11_ENVIRONMENT_EVIDENCE.md`](./V020_V11_ENVIRONMENT_EVIDENCE.md)。结论仍为硬停止：
+
+- 本地单元、默认关闭边界和 offline 包检查保持通过；完整测试环境变量已正确注入。
+- Redis 不可用导致真实附件协议在注册阶段返回 `AUTH_RATE_LIMIT_UNAVAILABLE`；PostgreSQL 不可用导致迁移集成的 3 个断言连接被拒绝。两者均记录为未执行，不计为通过。
+- 本机 `C:` 卷为未加密状态，不能作为生产附件卷加密证明；恢复密钥、准确命名卷 ACL、恶意/Polyglot 语料、Local Worker 租约/残留与 offline 核心流程仍缺证据。
+- 继续保持 `knowledge_space_attachment_ingest_enabled=false`、`knowledge_space_local_worker_enabled=false` 及其余敏感生产开关关闭；不启动本机 Docker，不进入 V20-12。
