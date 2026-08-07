@@ -7,6 +7,7 @@ from logion_api.identity.dependencies import (
     SettingsDependency,
     get_security,
 )
+from logion_api.knowledge_space.local_worker_service import LocalWorkerService
 from logion_api.knowledge_space.service import KnowledgeService
 
 
@@ -18,3 +19,13 @@ def get_knowledge_service(
 
 
 KnowledgeServiceDependency = Annotated[KnowledgeService, Depends(get_knowledge_service)]
+
+
+def get_local_worker_service(settings: SettingsDependency) -> LocalWorkerService:
+    return LocalWorkerService(settings)
+
+
+LocalWorkerServiceDependency = Annotated[
+    LocalWorkerService,
+    Depends(get_local_worker_service),
+]

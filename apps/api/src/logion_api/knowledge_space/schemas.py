@@ -461,3 +461,120 @@ class KnowledgeSearchResult(StrictModel):
 class KnowledgeSearchPageResponse(StrictModel):
     results: list[KnowledgeSearchResult] = Field(max_length=SEARCH_MAX_RESULTS)
     next_cursor: Cursor | None = None
+
+
+LOCAL_WORKER_MAX_CHECKPOINT_BYTES = 16 * 1024
+LOCAL_WORKER_MAX_IDEMPOTENCY_KEY_BYTES = 128
+
+
+class LocalWorkerStage(StrEnum):
+    CLAIMED = "claimed"
+    RUNNING = "running"
+    UPLOADED = "uploaded"
+
+
+class LocalWorkerLeaseState(StrEnum):
+    ACTIVE = "active"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+    COMPLETED = "completed"
+
+
+class LocalWorkerJobState(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    UPLOADED = "uploaded"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class LocalWorkerLeaseCreateRequest(StrictModel):
+    job_id: UUID
+    workspace_id: UUID
+    space_id: UUID
+    input_sha256: Sha256Hex
+
+
+class LocalWorkerLeaseResponse(StrictModel):
+    lease_id: UUID
+    job_id: UUID
+    workspace_id: UUID
+    space_id: UUID
+    input_sha256: Sha256Hex
+    issued_at: datetime
+    expires_at: datetime
+    state: Literal["active"]
+    token: str = Field(min_length=32, max_length=256)
+
+
+class LocalWorkerRevokeResponse(StrictModel):
+    lease_id: UUID
+    state: LocalWorkerLeaseState
+
+
+class LocalWorkerCheckpointRequest(StrictModel):
+    lease_id: UUID
+    workspace_id: UUID
+    space_id: UUID
+    input_sha256: Sha256Hex
+    stage: LocalWorkerStage
+    output_sha256: Sha256Hex | None = None
+
+    @model_validator(mode="after")
+    def validate_stage_payload(self) -> "LocalWorkerCheckpointRequest":
+        if self.stage is LocalWorkerStage.UPLOADED and self.output_sha256 is None:
+            raise ValueError("uploaded checkpoint requires output_sha256")
+        if self.stage is not LocalWorkerStage.UPLOADED and self.output_sha256 is not None:
+            raise ValueError("only uploaded checkpoint may include output_sha256")
+        if len(self.model_dump_json().encode("utf-8")) > LOCAL_WORKER_MAX_CHECKPOINT_BYTES:
+            raise ValueError("checkpoint exceeds the bounded payload size")
+        return self
+
+
+class LocalWorkerCheckpointResponse(StrictModel):
+    job_id: UUID
+    lease_id: UUID
+    workspace_id: UUID
+    space_id: UUID
+    input_sha256: Sha256Hex
+    stage: LocalWorkerStage
+    output_sha256: Sha256Hex | None = None
+    updated_at: datetime
+
+
+class LocalWorkerResultRequest(StrictModel):
+    lease_id: UUID
+    workspace_id: UUID
+    space_id: UUID
+    input_sha256: Sha256Hex
+    idempotency_key: str = Field(
+        min_length=1,
+        max_length=LOCAL_WORKER_MAX_IDEMPOTENCY_KEY_BYTES,
+    )
+    output_sha256: Sha256Hex
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str) -> str:
+        encoded = value.encode("utf-8")
+        if len(encoded) > LOCAL_WORKER_MAX_IDEMPOTENCY_KEY_BYTES or any(
+            ord(character) < 0x21 or ord(character) > 0x7E for character in value
+        ):
+            raise ValueError("idempotency_key must contain printable ASCII only")
+        return value
+
+
+class LocalWorkerResultResponse(StrictModel):
+    receipt_id: UUID
+    job_id: UUID
+    lease_id: UUID
+    idempotency_key: str
+    output_sha256: Sha256Hex
+    accepted_at: datetime
+    replayed: bool = False
+
+
+class LocalWorkerRecoveryResponse(StrictModel):
+    job_id: UUID
+    state: LocalWorkerJobState
+    checkpoint: LocalWorkerCheckpointResponse | None = None

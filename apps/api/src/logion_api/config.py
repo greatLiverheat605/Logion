@@ -136,6 +136,8 @@ class Settings(BaseSettings):
     # fail-closed even when the read-only knowledge-space API is enabled.
     knowledge_space_attachment_ingest_enabled: bool = False
     knowledge_space_local_worker_enabled: bool = False
+    local_worker_write_limit_per_hour: int = Field(default=60, ge=1, le=1000)
+    local_worker_lease_seconds: int = Field(default=120, ge=30, le=600)
     knowledge_cursor_active_key_id: str | None = Field(default=None, max_length=64)
     knowledge_cursor_previous_key_id: str | None = Field(default=None, max_length=64)
     knowledge_cursor_keys: dict[str, SecretStr] = Field(default_factory=dict)
