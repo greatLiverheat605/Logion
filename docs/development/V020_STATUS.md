@@ -1,7 +1,7 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-07（Asia/Shanghai）。
-> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环与 V20-10 真实栈验收均已通过 Codex 验收；下一阶段为 V20-11 默认关闭准入评审**。
+> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环与 V20-10 真实栈验收均已通过 Codex 验收；V20-11 默认关闭准入评审已开始但因硬停止证据缺失暂未通过**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
@@ -49,6 +49,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-08 bounded core               | 已完成并推送                    | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
 | V20-09 AI acceptance              | 已完成并推送                    | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
 | V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收 | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过 | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
+| V20-11 默认关闭准入               | 审查进行中，硬停止              | 附件边界/备份单测 7 passed；offline 包 7 文件/55 tests passed；BitLocker/等价加密、ACL、迁移与恶意文件、租约/残留、worker offline 核心流程证据缺失，故未通过                                                 | 补齐全部证据后重新审查；生产开关继续关闭                          |
 | V20-12～15 集成、终审、回滚、发布 | 候选集成树已形成，门禁未开始    | `codex/v020-integration` 已包含 V20-08/09/10 候选代码                                                                                                                                                        | 先完成 V20-11 决策，再执行 V20-12                                 |
 | DeepSeek 最终审查                 | 已打通、未派发正式终审          | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                                                                                                   | 等 V20-12 完整候选 diff                                           |
 
@@ -63,7 +64,10 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 5. V20-04、V20-08 与 V20-09 已完成并推送 `codex/v020-integration`；提交前后均通过整仓门禁。
 6. V20-10 服务端、前端与真实 `127.0.0.1:8080` 栈验收均已完成；Nightly #40 对固定提交
    `64298ec597b6e45dfea9a94cc819c77daf0cda8b` 全绿。Shared Write、Deletion、Attachment 与 Local Worker 仍关闭。
-7. 本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
+7. V20-11 已完成第一轮只读审查但因硬停止条件未通过：附件/备份边界 7 passed，offline 包 55 passed；
+   加密、ACL、迁移/恶意文件、租约/残留和 worker offline 核心流程证据均待补齐。当前 Run 为
+   `.agents/coordination/runs/run-v020-v11-review`，不得进入 V20-12。
+8. 本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
    DeepSeek 继续等待 V20-12 完整候选 diff。
 
 ## 模型所有权决定
@@ -97,7 +101,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 - 人类可读 SOP：[`AGENT_DELIVERY_WORKFLOW.md`](./AGENT_DELIVERY_WORKFLOW.md)
 - 版本 DAG：[`V020_EXECUTION_PLAN.md`](./V020_EXECUTION_PLAN.md)
 - 状态模型：[`AGENT_STATE_MODEL.md`](./AGENT_STATE_MODEL.md)
-- 当前本地 Run：`.agents/coordination/runs/run-v020-integration`（活动指针已建立并通过校验）
+- 当前本地 Run：`.agents/coordination/runs/run-v020-v11-review`（活动指针已建立并通过校验）
 
 状态变化后必须更新本文件并向当前 Run 追加事件；不得只在聊天中记录。
 
@@ -112,7 +116,7 @@ V20-08 bounded knowledge-space core 已由 Windows Codex 在 `codex/v020-integra
 Local Worker、Provider 和 sync-v1 均未启用或修改。图正式关系当前仅为 `TopicDependency`，Citation 图节点
 延后 V20-10。生产容量、备份恢复演练、DeepSeek 只读终审、浏览器 UX 验收仍是后续门禁，不能把本轮验收表述为整个 v0.2.0 完成。
 
-长期记录：当前 Run 指针必须保持 `.agents/coordination/current-run.json -> run-v020-core`；事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-core/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。
+长期记录：当前 Run 指针为 `.agents/coordination/current-run.json -> run-v020-v11-review`；事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-v11-review/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。
 
 ## V20-08 提交结果
 
@@ -160,3 +164,16 @@ XSS 防护均为实际通过；运行记录：
 V20-10 收口后，下一步转入 V20-11 默认关闭准入评审。Shared Write、Deletion、Attachment、Local
 Worker、Provider、sync-v1 与 AI Acceptance 的生产开关继续关闭；未取得 V20-11 证据前不得进入
 V20-12 或启用任何本地执行/附件生产路径。
+
+## V20-11 默认关闭准入评审记录（2026-08-07）
+
+第一轮只读审查已执行，结论为硬停止，未进入 V20-12：
+
+- `uv run --group dev pytest tests/test_compose_attachment_boundary.py tests/test_backup_bundle.py -q`：7 passed，覆盖附件初始化最小权限、只读消费者、备份挂载与 staging 排除。
+- `pnpm --filter @logion/offline test`：7 个文件、55 tests passed；该结果证明 offline library 的加密/校验/同步边界，不等同于 Local Worker 准入。
+- 当前设计与配置继续保持 `knowledge_space_attachment_ingest_enabled=false`、`knowledge_space_local_worker_enabled=false` 及其他敏感能力关闭；本轮未启动本机 Docker。
+- 未运行且不可记为通过：Attachment migration 与 Malware/Polyglot corpus；准确 Volume 的 BitLocker 或等价静态加密、Recovery/ACL 证明；Lease 绑定、Crash/Reboot/上传中断残留清理；worker offline 时认证知识核心流程。
+
+硬停止原因是上述任一项缺失都违反 V20-07/V20-11 的明确停止条件。协调记录位于
+`.agents/coordination/runs/run-v020-v11-review/`，任务 handoff 标记为 `blocked`；在补齐证据并重新验收前，
+不得启用 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 生产路径。
