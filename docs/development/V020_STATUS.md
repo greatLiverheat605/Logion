@@ -216,3 +216,12 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - `pnpm audit --prod --audit-level high`、`pip-audit`、`pnpm ci:fast`、Compose/备份边界与 offline 包检查均通过。`J:\Attachments`/`staging`/`verified` ACL 已收紧，当前无 `.part` 残留；ClamAV 对干净 Polyglot/HTML/PNG/文本语料扫描退出码为 0。
 
 本轮仍不能宣称 V20-11 或整个 v0.2.0 发布通过：尚缺经批准的恶意样本检测命中证据，以及 Local Worker 的 lease 绑定、撤销/过期拒绝、Crash/Reboot/上传中断残留清理和 worker-offline 时真实认证核心流程。`knowledge_space_attachment_ingest_enabled`、`knowledge_space_local_worker_enabled`、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭；在上述门禁补齐前不进入 V20-12。
+
+## V20-11 隔离安全内核与在线脱离验证（2026-08-07）
+
+- 新增 `apps/worker/src/logion_worker/local_worker_security.py` 作为未来 Local Worker 的隔离候选内核；它只处理短期租约、scope/input hash 绑定、单调 checkpoint、终态清理和残留清扫，不接 API、数据库、Provider 或生产开关。
+- 新增 6 项安全内核测试：`uv run --package logion-worker pytest apps/worker/tests/test_local_worker_security.py -q` 通过；Worker 测试集合 30 passed（4 deselected）。新增模块 Ruff、format、mypy 均通过。整个 Worker 包的严格 mypy 仍受既有 workspace `logion-api` 未提供 `py.typed` 标记影响，未将该既有问题写成新增模块失败。
+- ClamAV 临时 loopback daemon 从内存流式扫描标准 EICAR，实际命中 `Eicar-Test-Signature FOUND`；J: 上干净 PDF/HTML、PNG/PDF、纯文本语料均 `OK`。临时配置、日志、PID 和进程已清理，未关闭 Windows Defender，未将样本写入仓库。
+- 在 Local Worker 进程不运行时，PostgreSQL/Redis 仍可用，知识空间核心 + AI acceptance 真实集成 3 passed，证明在线核心不依赖本地 Worker。
+
+本轮仍不进入 V20-12：缺少真实远端 Local Worker lease/revoke API、job/Space/输入摘要协议、生产 Crash/Reboot/上传中断恢复和正式扫描器接入/处置演练。新增内核仅作为下一阶段设计候选；`knowledge_space_local_worker_enabled`、Attachment、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。

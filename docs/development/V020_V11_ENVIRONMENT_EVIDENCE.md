@@ -14,6 +14,9 @@
 - `pnpm ci:fast`：完整上下文校验、格式、lint、typecheck、Python/前端测试、构建和合同检查通过（382 Python tests selected，前端 224 Vitest tests）。
 - 方案 1 的本机加密环境已实测：`J:` 为 G: 上的 `LogionV20.vhdx` 挂载卷，BitLocker XTS-AES 256、100% 已加密、Protection On；恢复密钥仅保存于桌面，未写入 Git 或本账本。`J:\Attachments`、`staging`、`verified` ACL 已收紧，当前无 `.part` 残留。
 - ClamAV 便携版已使用 `J:\ClamAVData` 扫描 `J:\ClamAVCorpus` 中的 PDF/HTML、PNG/PDF 和纯文本语料，退出码 0。该结果只证明语料扫描完成且未命中，不等同于恶意样本检测通过。
+- ClamAV 临时回环守护进程使用 J: 病毒库，通过 `clamdscan --stream` 从内存扫描标准 EICAR，实际返回 `Eicar-Test-Signature FOUND`、退出码 1；同一引擎对上述三个干净语料返回 `OK`、退出码 0。临时配置、日志、PID 和进程已清理，Windows Defender 未关闭，样本未写入仓库。
+- Local Worker 候选安全内核单测：6 passed；覆盖短租约、job/workspace/space/input hash 绑定、过期/撤销拒绝、单调阶段、output hash、检查点篡改、部分残留清理、重启后旧租约拒绝和终态清理。该内核没有 API/数据库/Provider 接入，不构成生产启用授权。
+- Worker 进程未启动时，使用加密卷上的 PostgreSQL/Redis，知识空间核心 + AI acceptance 真实集成 3 passed；证明核心在线流程不依赖 Worker 进程。
 
 ## 已解决的历史基础设施阻塞
 
@@ -21,9 +24,9 @@
 
 ## 外部环境证据仍缺失
 
-- 当前 ClamAV 仅完成干净 Polyglot/HTML/PNG/文本语料扫描；尚未取得经批准的恶意样本检测命中证据（EICAR 会被 Windows Defender 自动删除），不能把“未命中”写成 Malware gate 通过。
-- 知识空间 Local Worker 仍无启用路径；Lease 与 Job/Space/输入摘要绑定、撤销/过期拒绝、Crash/Reboot/中断残留清理及 Worker offline 时的真实认证核心流程均未取得证据。
+- 尚未完成受控部署环境中的正式恶意样本/Polyglot 扫描器接入契约与告警处置演练；本轮 EICAR 仅证明临时 ClamAV 引擎能够命中，不等同于生产 Attachment gate 已批准。
+- Local Worker 仍无启用路径；候选安全内核已具备租约/检查点负测，但尚未接入真实远端 job、撤销 API、Crash/Reboot/上传中断恢复和生产 worker offline 认证流程，因此不能开启 Local Worker。
 
 ## 决策
 
-V20-11 继续保持硬停止：迁移、加密卷、ACL、默认关闭边界和真实集成已通过，但恶意样本检测命中、Local Worker lease/残留清理与 worker-offline 认证核心流程仍缺失。在这些证据齐备并由 Codex 重新观察前，不进入 V20-12，不启动本机 Docker，也不打开 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 的生产开关。
+V20-11 继续保持硬停止：迁移、加密卷、ACL、默认关闭边界、临时 ClamAV 命中与核心在线流程已通过；但正式恶意扫描器接入/处置演练及 Local Worker 真实远端协议、崩溃恢复和生产离线流程仍缺失。在这些证据齐备并由 Codex 重新观察前，不进入 V20-12，不启动本机 Docker，也不打开 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 的生产开关。
