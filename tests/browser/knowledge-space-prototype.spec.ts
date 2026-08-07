@@ -19,7 +19,7 @@ test.describe("knowledge space prototype", () => {
 
     const node = page
       .locator(".ks-graph-svg-wrap")
-      .getByRole("button", { name: /主动回忆/ });
+      .getByRole("button", { name: "主动回忆 — 主题 — 已确认" });
     await expect(node).toBeVisible();
     await node.click();
 
@@ -37,7 +37,9 @@ test.describe("knowledge space prototype", () => {
     await page.goto("/app/review#knowledge-graph");
     await expect(page.getByRole("button", { name: "图谱" })).toBeVisible();
     await page.getByRole("button", { name: "图谱" }).click();
-    await expect(page.getByRole("heading", { name: "知识空间" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "知识空间", exact: true }),
+    ).toBeVisible();
     await expect(
       page.locator(".ks-graph-svg-wrap, .ks-empty-canvas, .ks-state-panel"),
     ).toBeVisible();
@@ -55,7 +57,7 @@ test.describe("knowledge space prototype", () => {
         waitUntil: "domcontentloaded",
       });
       await expect(
-        page.getByRole("heading", { name: "知识空间" }),
+        page.getByRole("heading", { name: "知识空间", exact: true }),
       ).toBeVisible();
 
       const dimensions = await page.evaluate(() => ({
