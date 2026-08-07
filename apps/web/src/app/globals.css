@@ -1630,7 +1630,7 @@ h1 {
   padding: 0.5rem;
   border: 1px solid var(--line);
   border-radius: 0.75rem;
-  color: var(--text-secondary);
+  color: color-mix(in srgb, var(--text-primary) 30%, var(--text-secondary));
   background: var(--bg-selected);
   text-decoration: none;
 }
@@ -1853,7 +1853,7 @@ h1 {
 
 .persona-indicator small {
   margin-top: 0.15rem;
-  color: var(--muted);
+  color: inherit;
   font-size: 0.62rem;
 }
 

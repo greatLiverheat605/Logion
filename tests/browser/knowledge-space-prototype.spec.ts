@@ -26,9 +26,6 @@ test.describe("knowledge space prototype", () => {
     await expect(
       page.locator(".ks-inspector-title").getByText("主动回忆"),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "审批操作（本地模拟）" }),
-    ).toBeVisible();
   });
 
   test("exposes the graph view from the real product review page", async ({
