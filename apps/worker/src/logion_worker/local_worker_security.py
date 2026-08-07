@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -25,6 +26,8 @@ _STAGE_ORDER: Final[dict[CheckpointStage, int]] = {
     "running": 1,
     "uploaded": 2,
 }
+MAX_CHECKPOINT_BYTES: Final[int] = 16 * 1024
+_KNOWN_JOB_ARTIFACTS: Final[frozenset[str]] = frozenset({"checkpoint.json", "checkpoint.json.part"})
 
 
 class WorkerSecurityError(ValueError):
@@ -162,7 +165,11 @@ class LocalWorkerSecurity:
         )
         if output_sha256 is not None:
             self._validate_hash(output_sha256)
-        checkpoint_path = self._job_dir(claims.job_id) / "checkpoint.json"
+        job_dir = self._job_dir(claims.job_id)
+        self._reject_unknown_artifacts(job_dir)
+        checkpoint_path = job_dir / "checkpoint.json"
+        if checkpoint_path.is_symlink():
+            raise WorkerSecurityError("worker checkpoint must not be a symbolic link")
         if checkpoint_path.exists():
             previous = self.load_checkpoint(claims, token=token)
             if _STAGE_ORDER[stage] < _STAGE_ORDER[previous.stage]:
@@ -179,14 +186,23 @@ class LocalWorkerSecurity:
             output_sha256=output_sha256,
             updated_at=self._utc(now),
         )
-        job_dir = self._job_dir(claims.job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
         temporary = job_dir / "checkpoint.json.part"
         target = job_dir / "checkpoint.json"
-        temporary.write_text(
-            json.dumps(self._checkpoint_dict(checkpoint), sort_keys=True), encoding="utf-8"
-        )
-        temporary.replace(target)
+        payload = json.dumps(self._checkpoint_dict(checkpoint), sort_keys=True).encode("utf-8")
+        if len(payload) > MAX_CHECKPOINT_BYTES:
+            raise WorkerSecurityError("worker checkpoint exceeds size limit")
+        try:
+            with temporary.open("xb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, target)
+        except FileExistsError as exc:
+            raise WorkerSecurityError("worker checkpoint write is already in progress") from exc
+        finally:
+            if temporary.exists() and not temporary.is_symlink():
+                temporary.unlink()
         if stage == "uploaded":
             self._leases[claims.lease_id] = replace(claims, state="completed")
         return checkpoint
@@ -201,6 +217,14 @@ class LocalWorkerSecurity:
             input_sha256=claims.input_sha256,
         )
         path = self._job_dir(claims.job_id) / "checkpoint.json"
+        self._reject_unknown_artifacts(path.parent)
+        if path.is_symlink():
+            raise WorkerSecurityError("worker checkpoint must not be a symbolic link")
+        try:
+            if path.stat().st_size > MAX_CHECKPOINT_BYTES:
+                raise WorkerSecurityError("worker checkpoint exceeds size limit")
+        except FileNotFoundError as exc:
+            raise WorkerSecurityError("worker checkpoint is invalid") from exc
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             checkpoint = Checkpoint(
@@ -264,6 +288,21 @@ class LocalWorkerSecurity:
         if not any(job_dir.iterdir()):
             job_dir.rmdir()
         return removed
+
+    @staticmethod
+    def _reject_unknown_artifacts(job_dir: Path) -> None:
+        if not job_dir.exists():
+            return
+        if job_dir.is_symlink() or not job_dir.is_dir():
+            raise WorkerSecurityError("worker job directory is invalid")
+        try:
+            unknown = [
+                child.name for child in job_dir.iterdir() if child.name not in _KNOWN_JOB_ARTIFACTS
+            ]
+        except OSError as exc:
+            raise WorkerSecurityError("worker job directory is unavailable") from exc
+        if unknown:
+            raise WorkerSecurityError("worker job contains unknown artifacts")
 
     def _job_dir(self, job_id: UUID) -> Path:
         path = self._root / str(job_id)

@@ -2,7 +2,11 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from logion_worker.local_worker_security import LocalWorkerSecurity, WorkerSecurityError
+from logion_worker.local_worker_security import (
+    MAX_CHECKPOINT_BYTES,
+    LocalWorkerSecurity,
+    WorkerSecurityError,
+)
 
 NOW = datetime(2026, 8, 7, 12, 0, tzinfo=UTC)
 
@@ -164,3 +168,44 @@ def test_invalid_hash_and_naive_clock_are_rejected(tmp_path) -> None:
             input_sha256="a" * 64,
             now=datetime(2026, 8, 7, 12, 0),
         )
+
+
+def test_unknown_job_artifact_is_rejected(tmp_path) -> None:
+    security = LocalWorkerSecurity(tmp_path)
+    job_id, workspace_id, space_id, _ = ids()
+    claims, token = security.issue_lease(
+        job_id=job_id,
+        workspace_id=workspace_id,
+        space_id=space_id,
+        input_sha256="a" * 64,
+    )
+    job_dir = tmp_path / str(job_id)
+    job_dir.mkdir()
+    (job_dir / "unexpected.bin").write_bytes(b"should not be consumed")
+    with pytest.raises(WorkerSecurityError, match="unknown artifacts"):
+        security.write_checkpoint(claims, token=token, stage="claimed")
+
+
+def test_checkpoint_symlink_and_size_limits_are_rejected(tmp_path) -> None:
+    security = LocalWorkerSecurity(tmp_path)
+    job_id, workspace_id, space_id, _ = ids()
+    claims, token = security.issue_lease(
+        job_id=job_id,
+        workspace_id=workspace_id,
+        space_id=space_id,
+        input_sha256="a" * 64,
+    )
+    job_dir = tmp_path / str(job_id)
+    job_dir.mkdir()
+    target = tmp_path / "outside.json"
+    target.write_text("{}", encoding="utf-8")
+    try:
+        (job_dir / "checkpoint.json").symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symbolic links are unavailable in this environment")
+    with pytest.raises(WorkerSecurityError, match="symbolic link"):
+        security.write_checkpoint(claims, token=token, stage="claimed")
+    (job_dir / "checkpoint.json").unlink()
+    (job_dir / "checkpoint.json").write_bytes(b"x" * (MAX_CHECKPOINT_BYTES + 1))
+    with pytest.raises(WorkerSecurityError, match="size limit"):
+        security.load_checkpoint(claims, token=token)
