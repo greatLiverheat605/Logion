@@ -95,22 +95,32 @@ def test_knowledge_flags_default_closed_and_reject_unsafe_combinations() -> None
     assert settings.knowledge_space_api_enabled is False
     assert settings.knowledge_space_shared_writes_enabled is False
     assert settings.knowledge_space_deletion_enabled is False
+    assert settings.knowledge_space_attachment_ingest_enabled is False
+    assert settings.knowledge_space_local_worker_enabled is False
 
     with pytest.raises(ValidationError, match="SHARED_WRITES_ENABLED requires"):
         Settings(knowledge_space_shared_writes_enabled=True)
     with pytest.raises(ValidationError, match="DELETION_ENABLED requires"):
         Settings(knowledge_space_deletion_enabled=True)
+    with pytest.raises(ValidationError, match="ATTACHMENT_INGEST_ENABLED requires"):
+        Settings(knowledge_space_attachment_ingest_enabled=True)
+    with pytest.raises(ValidationError, match="LOCAL_WORKER_ENABLED requires"):
+        Settings(knowledge_space_local_worker_enabled=True)
     with pytest.raises(ValidationError, match="ACTIVE_KEY_ID"):
         Settings(knowledge_space_api_enabled=True)
 
     enabled = Settings(
         knowledge_space_api_enabled=True,
+        knowledge_space_attachment_ingest_enabled=True,
+        knowledge_space_local_worker_enabled=True,
         knowledge_cursor_active_key_id="current",
         knowledge_cursor_keys={"current": SecretStr("x" * 32)},
     )
     assert enabled.knowledge_space_api_enabled is True
     assert enabled.knowledge_space_shared_writes_enabled is False
     assert enabled.knowledge_space_deletion_enabled is False
+    assert enabled.knowledge_space_attachment_ingest_enabled is True
+    assert enabled.knowledge_space_local_worker_enabled is True
 
 
 def test_knowledge_query_timeout_is_retryable_and_private() -> None:

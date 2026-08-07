@@ -49,7 +49,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-08 bounded core               | 已完成并推送                    | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
 | V20-09 AI acceptance              | 已完成并推送                    | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
 | V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收 | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过 | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
-| V20-11 默认关闭准入               | 审查进行中，硬停止              | 附件边界/备份单测 7 passed；offline 包 7 文件/55 tests passed；BitLocker/等价加密、ACL、迁移与恶意文件、租约/残留、worker offline 核心流程证据缺失，故未通过                                                 | 补齐全部证据后重新审查；生产开关继续关闭                          |
+| V20-11 默认关闭准入               | 审查进行中，硬停止              | 附件边界/备份单测 7 passed；附件/知识 flag 与默认关闭边界 40 passed；offline 包 7 文件/55 tests passed；BitLocker/等价加密、ACL、迁移与恶意文件、租约/残留、worker offline 核心流程证据缺失，故未通过        | 补齐全部证据后重新审查；生产开关继续关闭                          |
 | V20-12～15 集成、终审、回滚、发布 | 候选集成树已形成，门禁未开始    | `codex/v020-integration` 已包含 V20-08/09/10 候选代码                                                                                                                                                        | 先完成 V20-11 决策，再执行 V20-12                                 |
 | DeepSeek 最终审查                 | 已打通、未派发正式终审          | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                                                                                                   | 等 V20-12 完整候选 diff                                           |
 
@@ -101,7 +101,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 - 人类可读 SOP：[`AGENT_DELIVERY_WORKFLOW.md`](./AGENT_DELIVERY_WORKFLOW.md)
 - 版本 DAG：[`V020_EXECUTION_PLAN.md`](./V020_EXECUTION_PLAN.md)
 - 状态模型：[`AGENT_STATE_MODEL.md`](./AGENT_STATE_MODEL.md)
-- 当前本地 Run：`.agents/coordination/runs/run-v020-v11-review`（活动指针已建立并通过校验）
+- 当前本地 Run：`.agents/coordination/runs/run-v020-v11-remediation`（活动指针已建立并通过校验；旧审查 Run 已关闭）
 
 状态变化后必须更新本文件并向当前 Run 追加事件；不得只在聊天中记录。
 
@@ -116,7 +116,7 @@ V20-08 bounded knowledge-space core 已由 Windows Codex 在 `codex/v020-integra
 Local Worker、Provider 和 sync-v1 均未启用或修改。图正式关系当前仅为 `TopicDependency`，Citation 图节点
 延后 V20-10。生产容量、备份恢复演练、DeepSeek 只读终审、浏览器 UX 验收仍是后续门禁，不能把本轮验收表述为整个 v0.2.0 完成。
 
-长期记录：当前 Run 指针为 `.agents/coordination/current-run.json -> run-v020-v11-review`；事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-v11-review/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。
+长期记录：当前 Run 指针为 `.agents/coordination/current-run.json -> run-v020-v11-remediation`；本轮修复事件、handoff、observation 和 SHA-256 证据位于 `.agents/coordination/runs/run-v020-v11-remediation/`，第一轮只读审查保留在已关闭的 `run-v020-v11-review/`。提交/推送前继续执行最终 diff、路径越界和秘密扫描。
 
 ## V20-08 提交结果
 
@@ -177,3 +177,21 @@ V20-12 或启用任何本地执行/附件生产路径。
 硬停止原因是上述任一项缺失都违反 V20-07/V20-11 的明确停止条件。协调记录位于
 `.agents/coordination/runs/run-v020-v11-review/`，任务 handoff 标记为 `blocked`；在补齐证据并重新验收前，
 不得启用 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 生产路径。
+
+## V20-11 默认关闭边界修复记录（2026-08-07）
+
+本轮只修复与验证默认关闭边界，不宣称 V20-11 已通过：
+
+- `Settings` 新增 `knowledge_space_attachment_ingest_enabled` 与
+  `knowledge_space_local_worker_enabled`，默认均为 `false`；两者在主知识空间 flag 关闭时拒绝启用。
+- 附件初始化、上传、完成和下载路由现在统一先经过附件准入 flag；关闭时返回
+  `KNOWLEDGE_ATTACHMENT_INGEST_DISABLED`、`404` 和 `Cache-Control: private, no-store`，不会触发认证、限流或文件访问。
+- 附件验证失败后立即 best-effort 删除 staging 对象；若文件系统暂时不可用，数据库仍保持 `failed`，后续残留清扫仍是待完成门禁。
+- 实际通过：`uv run --package logion-api pytest apps/api/tests/test_knowledge_space_contract.py apps/api/tests/test_attachments.py -q`
+  （40 passed）；Ruff check/format 与 Mypy（4 个源文件）均通过；Compose 附件边界/备份测试 7 passed；offline 包 55 tests passed。
+- 已尝试真实附件集成，但当前本地 shell 未提供测试所需的 `LOGION_ALLOWED_ORIGINS`，注册请求在附件流程前返回
+  `AUTH_ORIGIN_INVALID`；该结果不计为通过，CI 集成仍需在完整测试环境重跑。
+
+以下硬停止仍未改变：准确 Volume 的 BitLocker/等价加密、Recovery/ACL 证据，Attachment migration 与
+Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理，以及 worker offline 时认证知识核心流程。
+在这些证据齐备前，不进入 V20-12，也不打开任何生产敏感开关。

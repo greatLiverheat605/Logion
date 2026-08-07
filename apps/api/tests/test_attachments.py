@@ -6,12 +6,15 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from logion_api.config import Settings
+from logion_api.content.attachment_routes import require_attachment_feature
 from logion_api.content.attachment_schemas import AttachmentInit
 from logion_api.content.attachment_storage import (
     AttachmentStorageError,
     FilesystemAttachmentStorage,
     detect_mime,
 )
+from logion_api.errors import APIError
 from pydantic import ValidationError
 
 
@@ -88,6 +91,15 @@ async def test_storage_stages_inspects_finalizes_and_rejects_oversize(tmp_path: 
 
     with pytest.raises(AttachmentStorageError, match="ATTACHMENT_SIZE_MISMATCH"):
         await storage.write_staging("b" * 32, chunks(b"too large"), maximum_bytes=2)
+    assert list((tmp_path / "staging").glob("*.part")) == []
+
+
+@pytest.mark.asyncio
+async def test_attachment_feature_boundary_is_closed_by_default() -> None:
+    with pytest.raises(APIError) as raised:
+        await require_attachment_feature(Settings())
+    assert raised.value.code == "KNOWLEDGE_ATTACHMENT_INGEST_DISABLED"
+    assert raised.value.status_code == 404
 
 
 def test_text_mime_rejects_binary_and_json_requires_valid_document() -> None:
