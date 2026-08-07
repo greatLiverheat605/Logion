@@ -1,14 +1,39 @@
 import hashlib
+import shutil
+import tempfile
+from pathlib import Path
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import get_settings
+from logion_api.content.attachment_dependencies import get_attachment_scanner
+from logion_api.content.attachment_scanner import AttachmentScannerError, AttachmentScanResult
 from logion_api.content.models import Attachment
 from logion_api.db import session_factory
 from logion_api.identity.models import AuditEvent
 from logion_api.main import app
 from sqlalchemy import select
+
+
+class CleanAttachmentScanner:
+    async def scan(self, path: Path, *, maximum_bytes: int) -> AttachmentScanResult:
+        digest = hashlib.sha256()
+        size = 0
+        async with await anyio.open_file(path, "rb") as handle:
+            while chunk := await handle.read(1024 * 1024):
+                size += len(chunk)
+                if size > maximum_bytes:
+                    raise AssertionError("test scanner received an oversized file")
+                digest.update(chunk)
+        return AttachmentScanResult(size_bytes=size, sha256=digest.hexdigest())
+
+
+class MalwareAttachmentScanner:
+    async def scan(self, path: Path, *, maximum_bytes: int) -> AttachmentScanResult:
+        del path, maximum_bytes
+        raise AttachmentScannerError("ATTACHMENT_MALWARE_FOUND")
 
 
 @pytest.mark.integration
@@ -19,6 +44,7 @@ async def test_attachment_protocol_is_verified_idempotent_and_tenant_bound() -> 
     app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
         update={"knowledge_space_attachment_ingest_enabled": True}
     )
+    app.dependency_overrides[get_attachment_scanner] = CleanAttachmentScanner
     try:
         await _attachment_protocol_is_verified_idempotent_and_tenant_bound()
     finally:
@@ -27,7 +53,7 @@ async def test_attachment_protocol_is_verified_idempotent_and_tenant_bound() -> 
 
 
 async def _attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None:
-    origin = "http://test"
+    origin = "http://localhost:3000"
     async with (
         AsyncClient(
             transport=ASGITransport(app=app, client=("192.0.2.170", 49010)),
@@ -87,6 +113,7 @@ async def _attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None
 
         content = b"\x89PNG\r\n\x1a\nverified-result"
         attachment_id = uuid4()
+        expected_sha256 = hashlib.sha256(content).hexdigest()
         init_payload = {
             "id": str(attachment_id),
             "target_type": "note",
@@ -94,7 +121,7 @@ async def _attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None
             "filename": "result.png",
             "declared_mime": "image/png",
             "size_bytes": len(content),
-            "sha256": hashlib.sha256(content).hexdigest(),
+            "sha256": expected_sha256,
         }
         base = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments"
         assert (await owner.post(f"{base}/init", json=init_payload)).status_code == 403
@@ -204,4 +231,156 @@ async def _attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None
         )
         serialized = " ".join(str(row.event_metadata) for row in audits)
         assert "result.png" not in serialized
-        assert init_payload["sha256"] not in serialized
+        assert expected_sha256 not in serialized
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_attachment_clean_complete_uses_real_loopback_scanner() -> None:
+    base_settings = get_settings()
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
+        update={
+            "knowledge_space_attachment_ingest_enabled": True,
+            "attachment_scanner_enabled": True,
+        }
+    )
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.180", 49020)),
+            base_url="http://localhost:3000",
+            headers={"Origin": "http://localhost:3000"},
+        ) as client:
+            registered = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"attachment-real-{uuid4()}@example.com",
+                    "password": "a-strong-password-123",
+                    "device_name": "real-scanner",
+                },
+            )
+            assert registered.status_code == 201, registered.text
+            workspace_id = UUID(
+                (await client.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+            )
+            space_id = UUID(
+                (await client.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()["spaces"][0][
+                    "id"
+                ]
+            )
+            csrf = {"X-CSRF-Token": client.cookies["logion_csrf"]}
+            note = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/notes",
+                headers=csrf,
+                json={"id": str(uuid4()), "title": "Scanner note", "markdown_body": "clean"},
+            )
+            assert note.status_code == 201, note.text
+            content = b"%PDF-1.7\\nreal-loopback-scanner\\n"
+            attachment_id = uuid4()
+            base = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments"
+            payload = {
+                "id": str(attachment_id),
+                "target_type": "note",
+                "target_id": note.json()["id"],
+                "filename": "clean.pdf",
+                "declared_mime": "application/pdf",
+                "size_bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+            initiated = await client.post(f"{base}/init", headers=csrf, json=payload)
+            assert initiated.status_code == 201, initiated.text
+            uploaded = await client.put(
+                f"{base}/{attachment_id}/content",
+                headers={**csrf, "Content-Type": "application/octet-stream"},
+                content=content,
+            )
+            assert uploaded.status_code == 200, uploaded.text
+            completed = await client.post(
+                f"{base}/{attachment_id}/complete",
+                headers=csrf,
+                json={"expected_version": uploaded.json()["version"]},
+            )
+            assert completed.status_code == 200, completed.text
+            assert completed.json()["status"] == "verified"
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_attachment_malware_path_quarantines_and_stays_unverified() -> None:
+    base_settings = get_settings()
+    root = Path(tempfile.mkdtemp(prefix="v11-attachment-", dir=r"J:\ClamAVTmp"))
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
+        update={
+            "knowledge_space_attachment_ingest_enabled": True,
+            "attachment_scanner_enabled": True,
+            "attachment_root": str(root),
+            "attachment_quarantine_root": str(root / "quarantine"),
+        }
+    )
+    app.dependency_overrides[get_attachment_scanner] = MalwareAttachmentScanner
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.181", 49021)),
+            base_url="http://localhost:3000",
+            headers={"Origin": "http://localhost:3000"},
+        ) as client:
+            registered = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"attachment-malware-{uuid4()}@example.com",
+                    "password": "a-strong-password-123",
+                    "device_name": "malware-path",
+                },
+            )
+            assert registered.status_code == 201, registered.text
+            workspace_id = UUID(
+                (await client.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+            )
+            space_id = UUID(
+                (await client.get(f"/api/v1/workspaces/{workspace_id}/spaces")).json()["spaces"][0][
+                    "id"
+                ]
+            )
+            csrf = {"X-CSRF-Token": client.cookies["logion_csrf"]}
+            note = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/notes",
+                headers=csrf,
+                json={"id": str(uuid4()), "title": "Malware note", "markdown_body": "blocked"},
+            )
+            assert note.status_code == 201, note.text
+            content = b"\x89PNG\r\n\x1a\ncontrolled-test-payload"
+            attachment_id = uuid4()
+            base = f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments"
+            payload = {
+                "id": str(attachment_id),
+                "target_type": "note",
+                "target_id": note.json()["id"],
+                "filename": "blocked.png",
+                "declared_mime": "image/png",
+                "size_bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+            initiated = await client.post(f"{base}/init", headers=csrf, json=payload)
+            assert initiated.status_code == 201, initiated.text
+            uploaded = await client.put(
+                f"{base}/{attachment_id}/content",
+                headers={**csrf, "Content-Type": "application/octet-stream"},
+                content=content,
+            )
+            assert uploaded.status_code == 200, uploaded.text
+            blocked = await client.post(
+                f"{base}/{attachment_id}/complete",
+                headers=csrf,
+                json={"expected_version": uploaded.json()["version"]},
+            )
+            assert blocked.status_code == 422
+            assert blocked.json()["code"] == "ATTACHMENT_MALWARE_FOUND"
+            assert not list((root / "verified").rglob("*"))
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+        shutil.rmtree(root, ignore_errors=True)

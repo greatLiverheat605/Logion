@@ -1,7 +1,7 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-07（Asia/Shanghai）。
-> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环与 V20-10 真实栈验收均已通过 Codex 验收；V20-11 默认关闭准入评审已开始但因硬停止证据缺失暂未通过**。
+> 更新时间：2026-08-08（Asia/Shanghai）。
+> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环、V20-10 真实栈验收与 V20-11 默认关闭准入均已通过 Codex 验收；当前进入 V20-12 默认关闭集成门**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
@@ -30,7 +30,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 
 不要使用虚构百分比衡量当前进度。按门禁判断：**架构 M0、第一版 UX 方向以及 V20-01/03/07
 设计基线、V20-02 迁移证明、V20-04 合同门、V20-08 核心数据路径、V20-09 接受闭环与 V20-10
-真实栈浏览器/移动安全门已冻结；V20-11 默认关闭准入评审、V20-12 集成、V20-13 只读终审、V20-14
+真实栈浏览器/移动安全门与 V20-11 默认关闭准入已冻结；V20-12 集成门已开始，V20-13 只读终审、V20-14
 回滚和 V20-15 发布门尚未完成。**
 
 ## 阶段状态
@@ -49,8 +49,8 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-08 bounded core               | 已完成并推送                    | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
 | V20-09 AI acceptance              | 已完成并推送                    | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
 | V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收 | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过 | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
-| V20-11 默认关闭准入               | 审查进行中，硬停止              | 附件边界/备份单测 7 passed；附件/知识 flag 与默认关闭边界 40 passed；offline 包 7 文件/55 tests passed；BitLocker/等价加密、ACL、迁移与恶意文件、租约/残留、worker offline 核心流程证据缺失，故未通过        | 补齐全部证据后重新审查；生产开关继续关闭                          |
-| V20-12～15 集成、终审、回滚、发布 | 候选集成树已形成，门禁未开始    | `codex/v020-integration` 已包含 V20-08/09/10 候选代码                                                                                                                                                        | 先完成 V20-11 决策，再执行 V20-12                                 |
+| V20-11 默认关闭准入               | 已通过，生产能力继续关闭        | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                            | 保持全部生产开关关闭；进入 V20-12 集成门                          |
+| V20-12～15 集成、终审、回滚、发布 | V20-12 已开始，其余未开始       | `codex/v020-integration` 已包含 V20-08/09/10/11 候选代码；V20-12 任务节点仅建立默认关闭门禁，不授权生产启用                                                                                                  | 完成 V20-12 矩阵后再派发 DeepSeek 只读终审                        |
 | DeepSeek 最终审查                 | 已打通、未派发正式终审          | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                                                                                                   | 等 V20-12 完整候选 diff                                           |
 
 ## 当前等待点
@@ -64,10 +64,9 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 5. V20-04、V20-08 与 V20-09 已完成并推送 `codex/v020-integration`；提交前后均通过整仓门禁。
 6. V20-10 服务端、前端与真实 `127.0.0.1:8080` 栈验收均已完成；Nightly #40 对固定提交
    `64298ec597b6e45dfea9a94cc819c77daf0cda8b` 全绿。Shared Write、Deletion、Attachment 与 Local Worker 仍关闭。
-7. V20-11 已完成第一轮只读审查但因硬停止条件未通过：附件/备份边界 7 passed，offline 包 55 passed；
-   加密、ACL、迁移/恶意文件、租约/残留和 worker offline 核心流程证据均待补齐。当前 Run 为
-   `.agents/coordination/runs/run-v020-v11-remediation`，不得进入 V20-12。
-8. 本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
+7. V20-11 硬停止证据已补齐并由 Windows Codex 独立复核；当前 Run 为
+   `.agents/coordination/runs/run-v020-v11-remediation`。生产开关继续关闭，V20-12 默认关闭任务节点已建立。
+8. V20-12 先执行负测/安全/集成矩阵；只有全部真实通过后才派发 DeepSeek 只读终审。本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
    DeepSeek 继续等待 V20-12 完整候选 diff。
 
 ## 模型所有权决定
@@ -250,3 +249,33 @@ Malware/Polyglot corpus，Lease 绑定及 Crash/Reboot/上传中断残留清理�
 - 集成提交 `2ba0554`（`feat(api): add default-closed local worker protocol`）已由 Codex 推送到 `codex/v020-integration`；推送后的 `pnpm ci:fast` 与 `pnpm contracts:check` 均通过。
 
 V20-11 仍保持硬停止：Crash/Reboot/上传中断真实恢复演练、正式扫描器接入/隔离/告警/人工处置及完整 worker-offline 认证证据尚未齐备；在这些门禁完成前不进入 V20-12，也不打开 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance 生产开关。
+
+## V20-11 扫描器与恢复收口（2026-08-08）
+
+- 新增 `attachment_scanner.py`：loopback-only clamd `INSTREAM`、固定超时/分块/大小上限、恶意命中和不可用 fail-closed；新增 scanner 配置和 `.env.example` 默认关闭项。
+- Attachment finalize 只有在 MIME、大小、声明 SHA-256、扫描 SHA-256 全部一致时才执行；最终原子复制再次校验摘要；恶意命中尝试移动到 J: 加密隔离目录并写入最小审计告警，隔离失败返回固定错误码。
+- 本机常驻 ClamAV 1.5.2 已在 G: 安装、J: 病毒库/日志/临时/隔离，Automatic/Running 且仅 `127.0.0.1:3310`；J: BitLocker XTS-AES-256、Protection On，相关 ACL 已收紧。
+- 扫描器与附件单元/合同门禁 `45 passed`；真实附件认证集成 `1 passed`；真实 clamd clean + 内存 EICAR 命中 + 隔离/残留清理均已观察。Windows Defender 拦截落盘 EICAR 移动被记录为真实隔离失败并保持 fail-closed。
+- 真实 clamd API 路径 `test_attachment_integration.py -k real_loopback` 为 `1 passed, 1 deselected`；J: staging/verified/quarantine 路径均实际经过扫描器，干净 PDF finalize 为 `verified`。
+- Local Worker 新增 `recover_after_restart()` 及真实子进程 crash/上传中断演练；安全内核与恢复测试 `11 passed`。无 Worker 进程时知识空间核心 + AI acceptance 真实认证集成 `3 passed, 1 deselected`。
+
+本节完成后进入 V20-11 admission 复核；在整仓门禁、协调 observation、生产开关核对和用户 release 批准完成前，仍不进入 V20-12、不启用 Attachment/Local Worker/Shared Write/Deletion/Provider/sync-v1/AI Acceptance。
+
+## V20-11 最终准入决定与 V20-12 断点（2026-08-08）
+
+Windows Codex 已完成最终 admission 复核，V20-11 以“候选实现和恢复前提通过、生产能力继续默认关闭”的边界通过：
+
+- 扫描器/附件/知识合同 `45 passed`；真实附件、Local Worker API 与迁移集成合计 `9 passed`；Local Worker crash/upload 恢复 `11 passed`；无 Worker 进程时在线核心与 AI acceptance `3 passed, 1 deselected`。
+- 发现并修复搜索游标把快照时间截断到整秒的问题；游标 schema 升至 v2 并保留微秒级快照边界，新增回归后目标游标测试 `5 passed`，此前偶发的第二页空结果已不再复现。
+- `pnpm ci:fast` 全绿：402 Python tests、118 协调状态测试、224 Web Vitest、lint/typecheck/build/contracts 全部通过；`pnpm audit --prod --audit-level high` 与 `pip-audit` 均无已知漏洞，`alembic check` 无新升级操作。
+- 本机证据复核为 J: XTS-AES-256、100% 加密、Protection On、Automatic Unlock Disabled；常驻 clamd Automatic/Running 且仅监听 `127.0.0.1:3310`；相关 ACL 收紧且 `.part` 残留为 0。真实内存 `INSTREAM` 恶意样本命中与干净 API finalize 均已重新观察。
+- 默认设置实测：知识空间 API、Shared Write、Deletion、Attachment、Local Worker、AI Acceptance 与附件 scanner 均为 `false`，邮件 Provider 为 `disabled`；未启动 Docker，未绕过 SessionBoundary。
+
+下一断点为 V20-12 负测/安全/集成门。该节点的建立不授权开启 Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance，也不代表 v0.2.0 已具备发布条件；V20-12 全部通过后才进入 DeepSeek 只读终审。
+
+## V20-11 协调账本收口与 V20-12 当前节点（2026-08-08）
+
+- `task-v11-closeout` 已追加 `task.completed` 与 `task.accepted`；五项 Codex observation 已绑定最终 handoff 原始字节摘要：`obs-v11-scanner-contract`、`obs-v11-scanner-live`、`obs-v11-recovery-live`、`obs-v11-offline-auth`、`obs-v11-gates`。
+- 恢复证据另由只读 `task-v11-recovery` 复核并接受，绑定 `obs-v11-recovery-rehearsal`；该任务不拥有或修改既有 Local Worker 安全源文件。
+- 当前 Run 校验结果：`eventCount=36`、`task-v11-closeout=accepted`、`task-v11-recovery=accepted`、`task-v20-12-integration=started`；graph/context/tasks/handoff/observation 一致，所有摘要均按原始 UTF-8 字节计算。
+- 当前 V20-12 任务仅建立默认关闭集成门，验收项固定为 bounded negative、security/integration、default-closed 与 repository gates。所有敏感生产开关仍为关闭；未派发 DeepSeek，不代表发布批准。

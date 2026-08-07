@@ -1,5 +1,6 @@
 import base64
 import binascii
+import ipaddress
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlparse
@@ -91,11 +92,19 @@ class Settings(BaseSettings):
     content_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
     content_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     attachment_root: str = Field(default=".data/attachments", min_length=1, max_length=4096)
+    attachment_quarantine_root: str = Field(
+        default=".data/attachment-quarantine", min_length=1, max_length=4096
+    )
     attachment_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
     attachment_user_quota_bytes: int = Field(
         default=500 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024 * 1024
     )
     attachment_write_limit_per_hour: int = Field(default=120, ge=1, le=5000)
+    attachment_scanner_enabled: bool = False
+    attachment_scanner_host: str = Field(default="127.0.0.1", min_length=1, max_length=45)
+    attachment_scanner_port: int = Field(default=3310, ge=1, le=65535)
+    attachment_scanner_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    attachment_scanner_chunk_bytes: int = Field(default=65536, ge=1024, le=1024 * 1024)
     evidence_per_space_quota: int = Field(default=100000, ge=1, le=1000000)
     verification_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     topic_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
@@ -249,6 +258,12 @@ class Settings(BaseSettings):
         secret = self.secret_key.get_secret_value()
         if len(secret) < 32:
             raise ValueError("LOGION_SECRET_KEY must contain at least 32 characters")
+        try:
+            scanner_address = ipaddress.ip_address(self.attachment_scanner_host)
+        except ValueError as exc:
+            raise ValueError("LOGION_ATTACHMENT_SCANNER_HOST must be a literal IP address") from exc
+        if not scanner_address.is_loopback:
+            raise ValueError("LOGION_ATTACHMENT_SCANNER_HOST must be loopback")
         if self.knowledge_space_shared_writes_enabled and not self.knowledge_space_api_enabled:
             raise ValueError(
                 "LOGION_KNOWLEDGE_SPACE_SHARED_WRITES_ENABLED requires the main API flag"
@@ -262,6 +277,10 @@ class Settings(BaseSettings):
         if self.knowledge_space_attachment_ingest_enabled and not self.knowledge_space_api_enabled:
             raise ValueError(
                 "LOGION_KNOWLEDGE_SPACE_ATTACHMENT_INGEST_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_attachment_ingest_enabled and not self.attachment_scanner_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_ATTACHMENT_INGEST_ENABLED requires the scanner flag"
             )
         if self.knowledge_space_local_worker_enabled and not self.knowledge_space_api_enabled:
             raise ValueError(

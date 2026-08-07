@@ -112,6 +112,7 @@ def test_knowledge_flags_default_closed_and_reject_unsafe_combinations() -> None
     enabled = Settings(
         knowledge_space_api_enabled=True,
         knowledge_space_attachment_ingest_enabled=True,
+        attachment_scanner_enabled=True,
         knowledge_space_local_worker_enabled=True,
         knowledge_cursor_active_key_id="current",
         knowledge_cursor_keys={"current": SecretStr("x" * 32)},
@@ -331,17 +332,18 @@ def test_cursor_roundtrip_is_bound_to_scope_filters_and_cutoff() -> None:
     codec = _cursor_codec()
     scope = _cursor_scope()
     filters = {"page_size": 25, "resource_id": None, "stale": False}
+    cutoff_at = NOW.replace(microsecond=123456)
     token = codec.encode(
         scope=scope,
         filters=filters,
         position={"created_at": "2026-08-05T15:59:00Z", "id": str(uuid4())},
-        cutoff_at=NOW,
+        cutoff_at=cutoff_at,
         now=NOW,
     )
     decoded = codec.decode(token, scope=scope, filters=filters, now=NOW)
 
     assert len(token) <= 1024
-    assert decoded.cutoff_at == NOW
+    assert decoded.cutoff_at == cutoff_at
     assert decoded.position["created_at"] == "2026-08-05T15:59:00Z"
 
 

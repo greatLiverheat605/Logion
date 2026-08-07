@@ -36,3 +36,11 @@ Local Worker 只能作为用户明确授权后的本机执行器。服务端是�
 2. Crash/Reboot/上传中断/worker-offline 的真实认证演练通过，并证明不重复正式写入或计费。
 3. 扫描器接入、隔离、告警和 Runbook 在批准环境实际演练通过。
 4. 加密卷、ACL、备份恢复与残留清理证据保持可复核；所有敏感生产开关仍关闭，直至用户另行批准。
+
+## 收口实现复核（2026-08-08）
+
+- `apps/api/src/logion_api/content/attachment_scanner.py` 提供 loopback-only ClamAV `INSTREAM` 客户端；scanner unavailable、timeout、malware found、大小超限和异常响应均 fail-closed。
+- Attachment finalize 现在要求扫描结果的大小与 SHA-256 同时匹配 inspect 结果，并在原子 finalize 前再次计算摘要，防止扫描与落盘之间的内容替换。
+- 恶意命中会尝试移动到加密隔离目录并写入不含原始文件名、内容、token 或签名文本的审计摘要；隔离失败返回固定 `ATTACHMENT_QUARANTINE_FAILED`，不进入 verified。
+- `LocalWorkerSecurity.recover_after_restart()` 只删除允许列表中的旧 checkpoint/`.part`，未知工件仍拒绝；真实子进程 crash 与上传中断测试已通过。
+- 以上实现仍受 `knowledge_space_attachment_ingest_enabled=false` 与 `knowledge_space_local_worker_enabled=false` 约束，不改变生产默认关闭门禁。

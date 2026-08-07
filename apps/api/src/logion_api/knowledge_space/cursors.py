@@ -10,10 +10,12 @@ from typing import Any, cast
 
 from logion_api.errors import APIError
 
-CURSOR_SCHEMA_VERSION = 1
+CURSOR_SCHEMA_VERSION = 2
 CURSOR_MAX_LENGTH = 1024
 CURSOR_MAX_LIFETIME = timedelta(minutes=15)
 CURSOR_MAX_CLOCK_SKEW = timedelta(minutes=5)
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+_MICROSECONDS_PER_SECOND = 1_000_000
 
 type CursorScalar = str | int | bool | None
 
@@ -126,7 +128,7 @@ class KnowledgeCursorCodec:
         if not _valid_position(safe_position):
             raise ValueError("cursor position is not a bounded scalar mapping")
         payload = {
-            "cut": int(cutoff.timestamp()),
+            "cut": self._microsecond_timestamp(cutoff),
             "exp": int((issued_at + self._lifetime).timestamp()),
             "fd": _filter_digest(filters),
             "iat": int(issued_at.timestamp()),
@@ -228,7 +230,7 @@ class KnowledgeCursorCodec:
         ) as exc:
             raise self.invalid_cursor() from exc
         return DecodedKnowledgeCursor(
-            cutoff_at=datetime.fromtimestamp(cutoff_timestamp, UTC),
+            cutoff_at=_EPOCH + timedelta(microseconds=cutoff_timestamp),
             position=cast(dict[str, CursorScalar], position),
         )
 
@@ -237,6 +239,11 @@ class KnowledgeCursorCodec:
         if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError("cursor timestamp must be an integer")
         return value
+
+    @staticmethod
+    def _microsecond_timestamp(value: datetime) -> int:
+        delta = value - _EPOCH
+        return (delta.days * 86_400 + delta.seconds) * _MICROSECONDS_PER_SECOND + delta.microseconds
 
     @staticmethod
     def _normalize_time(value: datetime) -> datetime:

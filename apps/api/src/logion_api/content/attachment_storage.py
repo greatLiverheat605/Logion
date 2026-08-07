@@ -2,7 +2,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,14 +48,21 @@ def detect_mime(declared_mime: str, content: bytes) -> str:
 
 
 class FilesystemAttachmentStorage:
-    def __init__(self, root: str) -> None:
+    def __init__(self, root: str, quarantine_root: str | None = None) -> None:
         self._root = Path(root).expanduser().resolve()
         self._staging = self._root / "staging"
         self._verified = self._root / "verified"
+        self._quarantine = (
+            Path(quarantine_root).expanduser().resolve()
+            if quarantine_root is not None
+            else self._root / "quarantine"
+        )
         self._staging.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._verified.mkdir(mode=0o750, parents=True, exist_ok=True)
+        self._quarantine.mkdir(mode=0o750, parents=True, exist_ok=True)
         self._staging.chmod(0o700)
         self._verified.chmod(0o750)
+        self._quarantine.chmod(0o750)
 
     def _staging_path(self, key: str) -> Path:
         if KEY.fullmatch(key) is None:
@@ -120,13 +126,18 @@ class FilesystemAttachmentStorage:
         detected = detect_mime(declared_mime, bytes(content))
         return AttachmentInspection(size, digest.hexdigest(), detected)
 
-    async def finalize(self, staging_key: str, storage_key: str) -> None:
+    async def finalize(self, staging_key: str, storage_key: str, expected_sha256: str) -> None:
         source = self._staging_path(staging_key)
         destination = self._verified_path(storage_key)
         temporary = destination.with_name(f".{destination.name}.{os.urandom(16).hex()}.tmp")
         await anyio.to_thread.run_sync(destination.parent.mkdir, 0o750, True, True)
         try:
-            await anyio.to_thread.run_sync(shutil.copyfile, source, temporary)
+            await anyio.to_thread.run_sync(
+                self._copy_and_verify,
+                source,
+                temporary,
+                expected_sha256,
+            )
             await anyio.to_thread.run_sync(temporary.chmod, 0o640)
             await anyio.to_thread.run_sync(os.replace, temporary, destination)
         except FileNotFoundError as exc:
@@ -134,6 +145,47 @@ class FilesystemAttachmentStorage:
         finally:
             if temporary.exists():
                 await anyio.to_thread.run_sync(temporary.unlink)
+
+    @staticmethod
+    def _copy_and_verify(source: Path, temporary: Path, expected_sha256: str) -> None:
+        if source.is_symlink() or not source.is_file():
+            raise AttachmentStorageError("ATTACHMENT_UPLOAD_MISSING")
+        digest = hashlib.sha256()
+        with source.open("rb") as source_handle, temporary.open("xb") as target_handle:
+            while chunk := source_handle.read(1024 * 1024):
+                digest.update(chunk)
+                target_handle.write(chunk)
+            target_handle.flush()
+            os.fsync(target_handle.fileno())
+        if digest.hexdigest() != expected_sha256:
+            temporary.unlink(missing_ok=True)
+            raise AttachmentStorageError("ATTACHMENT_HASH_MISMATCH")
+
+    def staging_path(self, staging_key: str) -> Path:
+        path = self._staging_path(staging_key)
+        if path.is_symlink() or not path.is_file():
+            raise AttachmentStorageError("ATTACHMENT_UPLOAD_MISSING")
+        return path
+
+    def _quarantine_path(self, quarantine_key: str) -> Path:
+        if KEY.fullmatch(quarantine_key) is None:
+            raise AttachmentStorageError("ATTACHMENT_QUARANTINE_FAILED")
+        path = (self._quarantine / quarantine_key[:2] / quarantine_key).resolve()
+        if not path.is_relative_to(self._quarantine):
+            raise AttachmentStorageError("ATTACHMENT_QUARANTINE_FAILED")
+        return path
+
+    async def quarantine(self, staging_key: str, quarantine_key: str) -> None:
+        source = self._staging_path(staging_key)
+        destination = self._quarantine_path(quarantine_key)
+        if source.is_symlink() or not source.is_file():
+            raise AttachmentStorageError("ATTACHMENT_QUARANTINE_FAILED")
+        try:
+            await anyio.to_thread.run_sync(destination.parent.mkdir, 0o750, True, True)
+            await anyio.to_thread.run_sync(os.replace, source, destination)
+            await anyio.to_thread.run_sync(destination.chmod, 0o640)
+        except (FileExistsError, FileNotFoundError, OSError) as exc:
+            raise AttachmentStorageError("ATTACHMENT_QUARANTINE_FAILED") from exc
 
     async def discard_staging(self, staging_key: str) -> None:
         path = self._staging_path(staging_key)
