@@ -456,3 +456,11 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 回滚后只读复核通过：线上提交仍为 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`，迁移头仍为 `0034_sync_conflicts`；API、Web、Worker、Reverse Proxy、Backup、PostgreSQL、Redis 均处于运行/健康状态，`http://127.0.0.1:8080/health` 返回 `{"status":"ok","service":"web","version":"0.1.0"}`。
 - 本次发布门禁结论为 `blocked`，不是候选通过。下一次重试前必须先解决 ECS 到 GHCR blob/platform manifest 的网络问题（优先临时提升 ECS 公网带宽，或提供四个 digest 已完整校验的离线镜像包）；四个候选 digest 全部拉取并核验成功前，不执行迁移或切流。
 - 线上仍保持旧版本与默认关闭边界；Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1、AI Acceptance 等生产开关继续关闭，不启动本机 Docker，不绕过 SessionBoundary。
+
+## 候选镜像重试拉取完成（2026-08-09）
+
+- 按用户要求在隔离候选目录 `/opt/logion.failed-20260808T173400Z` 重新执行完整 Compose pull；任务持续约 21 分钟，未中断，最终退出码为 0。
+- 四个候选应用镜像均已成功拉取并与 `/root/logion-upgrade/candidate-manifest.json` 的固定 digest 一致：API `53528d1a…2607a`、Backup `a9b85709…0876`、Web `0639461f…e0b7`、Worker `bef54d48…8878c`。候选目录 source SHA 与 manifest 均为 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。
+- 本次只执行镜像拉取和 digest 核验，没有创建候选 Compose 容器，没有执行数据库迁移、候选启动、真实邮件、浏览器验收或流量切换。
+- 线上复核仍为旧提交 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`、迁移头 `0034_sync_conflicts`，`/health` 返回 `{"status":"ok","service":"web","version":"0.1.0"}`。
+- 下一步仍需单独进入受控 prerelease 维护窗口：重新生成候选维护备份并完成异地校验，随后才允许启动候选依赖、执行 `0038_local_worker_protocol` 迁移、健康检查和真实验收；本次拉取成功不等于生产发布批准。
