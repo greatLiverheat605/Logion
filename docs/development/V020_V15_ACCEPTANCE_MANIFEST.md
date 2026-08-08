@@ -90,9 +90,10 @@ sync-v1、AI Acceptance 任一生产能力。
 ## 8. 发布准备复核（2026-08-08）
 
 - GitHub 官方状态 API 返回 `All Systems Operational`；公开只读核对显示当前默认分支为 `main`。
-- 当前集成分支 `codex/v020-integration` 的候选提交尚未产生对应的成功 Main candidate 与 full-capacity
-  workflow 运行。现有成功 Release/Capacity 运行绑定的是 `main` 的旧提交
-  `ebf93ee192598430393f93e9313665c36446f84e`，不能复用于当前候选。
+- 合并提交 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 已产生成功的 `Main candidate` run
+  `31255904782`（`head_sha` 与 `main` 已核对一致），同一提交的 `Mobile builds` run `31255904757`
+  也已成功。该提交尚未产生对应的 full-capacity workflow 运行；现有旧 Release/Capacity 运行绑定
+  `main` 的 `ebf93ee192598430393f93e9313665c36446f84e`，不能复用于当前候选。
 - 本机 GitHub CLI 未登录，因此没有触发 workflow_dispatch；本轮不申请凭据、不合并默认分支、不启动
   Docker，也不创建镜像、签名或 attestation。生产发布仍需用户明确批准，并在同一 source SHA 上完成
   Main candidate、capacity、Release candidate 三段链路。

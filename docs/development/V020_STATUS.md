@@ -351,3 +351,13 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 合并后的依赖复核真实执行：`pnpm audit --prod --audit-level high` 无已知漏洞；`uv run --group dev pip-audit` 无已知漏洞（`logion-api`/`logion-worker` 为工作区包，按工具规范跳过 PyPI 审计）。
 - 合并不等于生产发布批准。Docker release smoke、镜像签名/attestation、发布授权仍是后续独立门禁；Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。
 - 下一断点保持为 V20-14：staging/隔离环境执行 upgrade → downgrade → upgrade、空环境恢复、feature-off、孤儿扫描与引用闭包检查；完成并复核后再进入 V20-15 发布准备。
+
+## V20-15 合并后候选复核（2026-08-08）
+
+- 合并提交 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 已触发 GitHub `Main candidate` run
+  `31255904782`，结论为 `success`；该 run 的 `head_sha`、分支和主分支均已核对一致。
+- 同一提交的 `Mobile builds` run `31255904757` 结论为 `success`。当前正式集成目录的 `pnpm ci:fast`、
+  `pnpm audit --prod --audit-level high`、`uv run --group dev pip-audit` 及 34 项默认关闭/备份/Compose
+  边界聚焦测试均真实通过，工作树保持 clean。
+- Full-capacity profile 仍需 workflow_dispatch，Release candidate 还必须校验同一 source SHA 的
+  Main candidate、capacity 与候选证据；本轮不启动 Docker、镜像发布或敏感生产能力，等待发布流程明确授权。
