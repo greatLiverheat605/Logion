@@ -1,6 +1,6 @@
 # v0.2.0 执行计划：自适应知识空间架构基础
 
-> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 AI acceptance、V20-10 真实栈验收、V20-11 默认关闭准入、V20-12 集成门、V20-13 DeepSeek 只读终审与 V20-14 隔离回滚演练均已完成并由 Codex 验收；当前进入 V20-15 最终发布门。
+> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 AI acceptance、V20-10 真实栈验收、V20-11 默认关闭准入、V20-12 集成门、V20-13 DeepSeek 只读终审与 V20-14 隔离回滚演练均已完成并由 Codex 验收；V20-15 候选 acceptance 已记录，生产发布门仍待实时栈/镜像前置条件与用户批准。
 > 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
 > V20-02 migration/tests 与 V20-04 default-off 合同门已完成；ORM/产品服务、生产启用、同步扩展和 Provider 配置仍受后续门禁约束。
 > 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
@@ -57,7 +57,7 @@ V20-00 design approval
 | V20-12 | Windows Codex / 已通过、默认关闭                       | 测试与必要修复；Run 任务 `task-v20-12-integration`                                   | 四组门禁均真实通过；敏感生产能力继续关闭，不等同于发布批准                                                              | bounded negative `73 passed`；安全/隔离集成通过；默认关闭 `45 passed`；`pnpm ci:fast`、`pnpm audit`、`pip-audit`、`alembic check` 与 Compose 边界检查通过；Run `task-v20-12-integration=accepted` |
 | V20-13 | DeepSeek V4 Flash / 已完成、Codex 已接受               | 无写权限；工具元数据残留由协调员清理                                                 | 完整 diff 只读终审无 High/Medium；5 个 Low/Info 已由 Codex 修复并完成真实本机复核                                       | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；[`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)；审查工作树 clean、目标 SHA 不变                                                         |
 | V20-14 | Windows Codex / 已完成、隔离演练通过                   | staging/隔离恢复环境                                                                 | 空环境迁移往返、备份恢复、非空降级停止、feature-off、孤儿扫描与引用闭包均真实完成                                       | [`V020_V14_ROLLBACK_REHEARSAL.md`](./V020_V14_ROLLBACK_REHEARSAL.md)；空环境 `upgrade/downgrade/upgrade`、恢复头、孤儿 `0`、非空停止线                                                            |
-| V20-15 | Windows Codex / 最终发布门                             | 集成 worktree；ledger 仅 Codex                                                       | 复核所有 handoff/diff/secret/path；运行最终 gates；生产发布或敏感能力启用必须另获用户明确批准                           | acceptance manifest、最终 commit SHA、未运行项、残余风险、清理清单                                                                                                                                |
+| V20-15 | Windows Codex / 候选验收已记录、发布阻塞               | 集成 worktree；ledger 仅 Codex                                                       | 已复核 handoff/diff/secret/path 并运行本机候选门禁；实时栈、镜像签名/attestation 与生产发布必须另获用户明确批准         | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；候选 SHA `0b66e03`；未运行项、残余风险与清理清单已列明                                                                    |
 
 ### ZCode 状态
 
@@ -152,7 +152,7 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 
 三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。V20-08 基线证据保持不变；本轮 V20-10 新增契约 27、图内核 42、核心集成 2，且全量 `pnpm test`、前端 lint/typecheck/test/build、Ruff/Mypy 均通过。
 
-下一顺序固定为：V20-15 最终发布门。V20-11～V20-14 已在全部生产能力继续默认关闭的前提下通过；Shared Write、删除、附件、本地 worker、Provider、sync-v1、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。V20-15 只做候选 acceptance，不自动发布。
+下一顺序固定为：补齐 V20-15 发布前置门禁并等待用户批准。V20-11～V20-14 已在全部生产能力继续默认关闭的前提下通过；Shared Write、删除、附件、本地 worker、Provider、sync-v1、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。V20-15 当前只完成候选 acceptance，不自动发布。
 
 ## V20-10 实施与真实栈验收记录（2026-08-07）
 
@@ -206,3 +206,10 @@ V20-14 已在非生产隔离环境完成并接受。空环境迁移往返、cust
 V20-15 只做最终候选 acceptance：复核分支/基线、全部差异、合同制品、秘密与路径边界、未运行项、
 生产开关和残余风险，形成 acceptance manifest。任何生产发布、merge 或敏感能力启用，都必须在
 V20-15 评审后再获得用户明确批准；当前不自动发布、不启动 Docker，也不绕过 SessionBoundary。
+
+## V20-15 候选验收记录（2026-08-08）
+
+候选 manifest 已建立并绑定 `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`。`pnpm ci:fast`、合同检查、
+依赖审计和默认关闭合同已通过；实时 PostgreSQL/认证浏览器、发布镜像 attestation 与 release
+workflow 因环境/授权边界未运行，均已在 manifest 单列，不计为通过。下一步只能在用户明确批准后补齐
+发布前置门禁；不自动 merge、push、发布或启用敏感能力。
