@@ -136,7 +136,7 @@ jobs:
           echo "LOGION_API_IMAGE=$(jq -r '.images.api.reference' "$MANIFEST")" >> "$GITHUB_ENV"
           echo "LOGION_WORKER_IMAGE=$(jq -r '.images.worker.reference' "$MANIFEST")" >> "$GITHUB_ENV"
           echo "LOGION_BACKUP_IMAGE=$(jq -r '.images.backup.reference' "$MANIFEST")" >> "$GITHUB_ENV"
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
