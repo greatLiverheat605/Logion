@@ -10,6 +10,7 @@ from logion_api.main import app
 from logion_api.memory.models import Topic, TopicDependency
 from logion_api.research.models import PaperRecord, ResearchClaim
 from logion_api.workspaces.models import WorkspaceMembership
+from pydantic import SecretStr
 
 ORIGIN = "http://test"
 PASSWORD = "a-strong-password-123"  # noqa: S105 - test-only credential
@@ -20,7 +21,13 @@ def _knowledge_space_api_enabled() -> Iterator[None]:
     base_settings = get_settings()
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
-        update={"knowledge_space_api_enabled": True}
+        update={
+            "knowledge_space_api_enabled": True,
+            "knowledge_cursor_active_key_id": "integration-test-v1",
+            "knowledge_cursor_keys": {
+                "integration-test-v1": SecretStr("integration-test-cursor-key-32-bytes!!")
+            },
+        }
     )
     try:
         yield
