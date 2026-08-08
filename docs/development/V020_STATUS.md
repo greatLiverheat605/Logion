@@ -1,7 +1,7 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-08（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 候选验收、PostgreSQL/认证浏览器实时复核与独立 Gitleaks 全历史扫描已通过，镜像签名/attestation、Docker release smoke 与发布授权仍未完成，生产发布保持阻塞**。
+> 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 Release candidate 已在隔离 GitHub runner 通过 Docker smoke、恢复、认证浏览器与 rollout 门禁，镜像签名/attestation 的独立核验和生产发布授权仍未完成，生产发布保持阻塞**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
@@ -57,7 +57,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-09 AI acceptance              | 已完成并推送                                         | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                                                                | 进入 V20-10；Acceptance 生产开关继续关闭                          |
 | V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收                      | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过                                       | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
 | V20-11 默认关闭准入               | 已通过，生产能力继续关闭                             | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                                                                  | 保持全部生产开关关闭；进入 V20-12 集成门                          |
-| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过；V20-15 候选验收通过、发布阻塞 | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；`codex/v020-integration` clean、整仓快速门禁/合同/依赖审计/临时 PostgreSQL/认证浏览器均通过；镜像 attestation、Docker release smoke 与发布授权未完成，不等同于生产发布批准 | 用户明确批准后补齐发布前置门禁                                    |
+| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过；V20-15 Release candidate 通过，生产发布阻塞 | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；Main candidate、full-capacity、Docker smoke、恢复、认证浏览器/WCAG、rollout rehearsal 均已在同一 SHA 通过；镜像签名/attestation 独立核验与生产发布授权仍未完成 | 用户明确批准后补齐签名/attestation 核验并决定是否发布 |
 | DeepSeek 最终审查                 | 已完成并由 Codex 接受                                | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；审查目标 `7d50e675be19b2779613ed61ba31dc821afa73dc`；详见 [`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)                                                                                 | 不再派发；保留只读报告与清洁工作树证据                            |
 
 ## 当前等待点
@@ -74,7 +74,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 7. V20-11 硬停止证据已补齐并由 Windows Codex 独立复核；当前 Run 为
    `.agents/coordination/runs/run-v020-v11-remediation`。生产开关继续关闭，V20-12 默认关闭任务节点已建立。
 8. V20-13 DeepSeek 只读终审已完成：无 High/Medium，5 个 Low/Info 已由 Windows Codex 修复并通过目标测试、整仓门禁、依赖审计、迁移检查及真实附件栈复核；审查工作树已恢复 clean。
-9. V20-14 隔离回滚演练已完成并接受；V20-15 候选 manifest 与实时栈复核均已记录，生产发布仍等待用户批准及镜像/Docker 前置门禁。本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
+9. V20-14 隔离回滚演练已完成并接受；V20-15 Release candidate 已通过同一 SHA 的候选、容量、Docker smoke、恢复、浏览器/WCAG 与 rollout 门禁，生产发布仍等待签名/attestation 独立核验和用户批准。本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
 
 ## 模型所有权决定
 
@@ -371,3 +371,15 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   `capacity-profile-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`（未过期）。
 - GitHub Actions 的 artifact 下载接口需要认证，协调员未将无法独立下载的内容伪造为本地复核；本次
   通过依据是该 job 的实际成功结论与工作流内置验证。Release candidate 仍需用户另行批准，不自动发布。
+
+## V20-15 Release candidate 收口（2026-08-08）
+
+- 已按用户批准触发 Release candidate `0.2.0-rc1` run `31259843000`，分支 `main`，
+  `head_sha=448cbdf8bd43c45aa25e3f2068e2246f3299be3a`，结论为 `success`；job `93108836660` 全部步骤
+  均为成功，Release artifact `release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`
+  未过期。
+- 实际通过的隔离门禁包括：同 SHA Main/capacity 证据校验、`pnpm ci:fast`、候选 manifest、digest
+  镜像加载、Docker smoke、空环境恢复、旧客户端/恢复 epoch 兼容、认证浏览器/WCAG、5/25/100% rollout
+  rehearsal、证据归档和 compose 清理。
+- 本轮未执行生产发布；独立镜像签名/attestation 核验和生产授权仍是剩余门禁。所有 Attachment、Local
+  Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。

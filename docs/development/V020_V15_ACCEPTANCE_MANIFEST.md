@@ -1,7 +1,7 @@
 # V20-15 最终发布门 Acceptance Manifest
 
 > 日期：2026-08-08（Asia/Shanghai）  
-> 结论：**候选验收记录完成；非 Docker 实时栈已补证，生产发布与敏感能力启用仍保持阻塞，等待用户另行明确批准。**
+> 结论：**Release candidate `0.2.0-rc1` 已在隔离 GitHub runner 通过；独立镜像签名/attestation 核验与生产发布仍保持阻塞，等待用户另行明确批准。**
 
 ## 1. 不可变身份与范围
 
@@ -59,10 +59,10 @@ PostgreSQL/Redis/ClamAV、附件扫描与残留清理、Local Worker crash/uploa
 
 以下项目仍不能记为当前候选的重新通过：
 
-1. Compose smoke 与真实 release workflow：本轮不启动 Docker；V20-10/V20-12 的隔离边界证据已
-   接受，但本轮不把 Docker 运行记为通过。
-2. 发布候选镜像 digest、签名/attestation、容量证据与真实 release workflow：没有获用户发布
-   授权，也没有生产镜像和凭据；不执行、不伪造。
+1. 本机 Docker smoke：本机仍未启动 Docker；但 Release candidate run `31259843000` 已在隔离
+   GitHub runner 实际通过 unchanged candidate 的 Docker smoke、空环境恢复、浏览器/WCAG 与清理。
+2. 独立镜像签名/attestation 核验与生产发布：Release candidate 已使用 digest-pinned 镜像并完成
+   候选 smoke，但独立签名/attestation 核验和生产发布授权仍未完成；不把它们伪造为通过。
 3. 独立 `gitleaks`：已完成全历史扫描并通过（Gitleaks `8.30.1`、406 commits、0 findings）。
    该结果只覆盖当前集成分支历史，不替代发布工作流对最终镜像的安全扫描与 attestation 校验。
 4. 临时隔离服务、进程和 Redis 测试库均已停止并清空；临时 J: 目录删除受当前文件策略阻止，
@@ -95,5 +95,17 @@ sync-v1、AI Acceptance 任一生产能力。
   也已成功；随后已补齐同一 SHA 的 `Full capacity profile` run `31257249374`，结论为 `success`。
 - 容量 job `93102425322` 的专用 PostgreSQL/Redis、迁移、实际容量数据生成和 artifact 上传步骤均为
   `success`；artifact `capacity-profile-448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 未过期。
-- artifact 下载端点需要认证，未将无法独立下载的内容伪造为本地复核。Release candidate 尚未触发；
-  本轮不启动本机 Docker、不创建新的发布流程，也不打开任何敏感生产能力，等待用户另行批准。
+- artifact 下载端点需要认证，未将无法独立下载的内容伪造为本地文件复核；Release candidate run
+  `31259843000` 已成功并生成 artifact `release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。
+- 本机 Docker 仍未启动；生产发布、独立镜像签名/attestation 核验和敏感生产能力启用仍需另行批准。
+
+## 9. Release candidate 实际运行证据（2026-08-08）
+
+- Run `31259843000` / job `93108836660`：`head_sha`、分支和候选输入校验成功；`pnpm ci:fast`、
+  full-capacity evidence、candidate manifest、digest-pinned image、Docker smoke、empty-environment
+  recovery、old-client compatibility、authenticated browser/WCAG、5/25/100% rollout rehearsal、
+  evidence capture 与 compose cleanup 均为 `success`。
+- Release artifact `9022539674`（`release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`）
+  当前未过期；下载端点需要认证，因此不把未下载的 artifact 内容冒充成本地复核结果。
+- 该 run 不是生产发布，也没有打开 Attachment、Local Worker、Shared Write、Deletion、Provider、
+  sync-v1 或 AI Acceptance。
