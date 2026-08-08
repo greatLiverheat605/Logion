@@ -5,25 +5,26 @@
 
 ## 1. 不可变身份与范围
 
-| 项目            | 结果                                                               |
-| --------------- | ------------------------------------------------------------------ |
-| 仓库            | `greatLiverheat605/Logion`                                         |
-| 正式集成目录    | `C:\Users\Administrator\orca\workspaces\ai_study\v020-integration` |
-| 分支            | `codex/v020-integration`                                           |
-| 不可变基线      | `08babebcd5a09861106c9b05accf32bd8f2ea01c`                         |
-| 候选提交        | `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`                         |
-| 远端状态        | `origin/codex/v020-integration` 与候选提交一致                     |
-| 协调者/实际模型 | Windows Codex / `gpt-5.6-sol`                                      |
-| 外部 worker     | 本门无新 worker；Kimi 首版施工与 DeepSeek 只读终审沿用已接受证据   |
+| 项目            | 结果                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------- |
+| 仓库            | `greatLiverheat605/Logion`                                                             |
+| 正式集成目录    | `C:\Users\Administrator\orca\workspaces\ai_study\v020-integration`                     |
+| 分支            | `codex/v020-integration`                                                               |
+| 不可变基线      | `08babebcd5a09861106c9b05accf32bd8f2ea01c`                                             |
+| 代码候选提交    | `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`                                             |
+| 远端状态        | `origin/codex/v020-integration` 与当前本地 HEAD 同步；本 manifest 已随文档收口提交推送 |
+| 协调者/实际模型 | Windows Codex / `gpt-5.6-sol`                                                          |
+| 外部 worker     | 本门无新 worker；Kimi 首版施工与 DeepSeek 只读终审沿用已接受证据                       |
 
 本门只复核候选集成，不发布、不 merge 默认分支、不启用生产敏感能力，不接触生产数据、凭据或
-Provider endpoint。V20-14 文档提交 `0b66e03` 是本轮唯一新增提交；代码自 `b4b2888` 后未改变。
+Provider endpoint。V20-14 演练文档提交为 `0b66e03`；本 manifest 与状态收口随后提交。代码自
+`b4b2888` 后未改变。
 
 ## 2. Diff、路径与秘密边界
 
 - 基线到候选共 95 个已跟踪变更路径，均位于仓库内的既定 API、Worker、Web、合同、测试、文档和
   配置范围；没有额外未跟踪文件、暂存文件或生成缓存。
-- `git diff --check` 通过，`git status --short --branch` clean；候选提交已推送，未改写历史。
+- `git diff --check` 通过，`git status --short --branch` clean；代码候选与文档收口均已推送，未改写历史。
 - `pnpm guard:context` 与 `pnpm agent:state:check` 通过；协调 Run 校验为
   `run-v020-v11-remediation`：38 events、46 nodes、8 handoffs、24 observations。
 - 增量 diff 的敏感文本复核只发现测试用的 Bearer 假值；没有真实 token、密钥、私有端点、生产
