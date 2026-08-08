@@ -1,7 +1,7 @@
 # V20-15 最终发布门 Acceptance Manifest
 
 > 日期：2026-08-08（Asia/Shanghai）  
-> 结论：**候选验收记录完成；生产发布与敏感能力启用保持阻塞，等待用户另行明确批准。**
+> 结论：**候选验收记录完成；非 Docker 实时栈已补证，生产发布与敏感能力启用仍保持阻塞，等待用户另行明确批准。**
 
 ## 1. 不可变身份与范围
 
@@ -41,6 +41,8 @@ Provider endpoint。V20-14 演练文档提交为 `0b66e03`；本 manifest 与状
 | `pnpm audit --prod --audit-level high` | **通过**：No known vulnerabilities found                                                                                                                         |
 | `uv run --group dev pip-audit`         | **通过**：No known vulnerabilities found；工作区包因非 PyPI 项按工具规则跳过                                                                                     |
 | 默认关闭合同                           | **通过**：`apps/api/tests/test_knowledge_space_contract.py` 为 `27 passed`；所有敏感开关默认 `false`，邮件 Provider 默认 `disabled`                              |
+| 临时 PostgreSQL 迁移门禁               | **通过**：非生产隔离集群完成 `upgrade head` 与 `alembic check`，迁移头为 `0038_local_worker_protocol`                                                            |
+| 真实认证浏览器                         | **通过**：`pnpm test:browser` 为 `95 passed, 6 skipped`；知识空间图谱 4 项、集成中心 5 项均通过，覆盖 axe、1440/390px、移动节点、键盘导航与持久化主题 XSS        |
 | 回滚与恢复                             | **通过（V20-14 已接受）**：空环境迁移往返、备份恢复、非空降级停止线、引用闭包孤儿 `0`；详见 [`V020_V14_ROLLBACK_REHEARSAL.md`](./V020_V14_ROLLBACK_REHEARSAL.md) |
 
 ## 4. 已接受但本轮不重复的真实栈证据
@@ -54,17 +56,16 @@ PostgreSQL/Redis/ClamAV、附件扫描与残留清理、Local Worker crash/uploa
 
 ## 5. 未运行项、失败项与原因
 
-以下项目不能记为当前候选的重新通过：
+以下项目仍不能记为当前候选的重新通过：
 
-1. `uv run --package logion-api alembic -c apps/api/alembic.ini check`：本轮 PostgreSQL 未运行，
-   连接在建立阶段关闭；V20-14 隔离环境的同项检查已通过，详见回滚记录。
-2. 认证 Playwright/Compose smoke/真实空环境恢复：本轮不启动 Docker，且 `127.0.0.1:8080`
-   Web/API 栈未运行；现有浏览器报告明确为 `ECONNREFUSED`，不能记为通过。V20-10 Nightly 的
-   同类门禁已在固定 UI 提交上通过，未发生 UI 差异。
-3. 发布候选镜像 digest、签名/attestation、容量证据与真实 release workflow：没有获用户发布
+1. Compose smoke 与真实 release workflow：本轮不启动 Docker；V20-10/V20-12 的隔离边界证据已
+   接受，但本轮不把 Docker 运行记为通过。
+2. 发布候选镜像 digest、签名/attestation、容量证据与真实 release workflow：没有获用户发布
    授权，也没有生产镜像和凭据；不执行、不伪造。
-4. 独立 `gitleaks`：本机未安装该工具；由仓库状态机秘密测试、候选安全测试与增量文本复核替代，
+3. 独立 `gitleaks`：本机未安装该工具；由仓库状态机秘密测试、候选安全测试与增量文本复核替代，
    仍保留为发布环境的补充检查项。
+4. 临时隔离服务、进程和 Redis 测试库均已停止并清空；临时 J: 目录删除受当前文件策略阻止，
+   目录不在仓库、无生产数据或凭据，待下一次允许安全清理时删除。
 
 ## 6. 生产开关与残余风险
 
@@ -77,7 +78,7 @@ Attachment scanner、AI Acceptance 均保持关闭；邮件 Provider 为 `disabl
 
 ## 7. 决定与下一步
 
-V20-15 **候选验收可审查，但发布门未解除**。下一步只有两种受控动作：
+V20-15 **候选验收可接受，但发布门未解除**。下一步只有两种受控动作：
 
 - 用户明确批准后，在非生产隔离环境补跑 PostgreSQL/认证浏览器/发布候选所需门禁；或
 - 用户明确批准生产发布流程后，另行创建 release candidate、镜像签名和发布 Run。
