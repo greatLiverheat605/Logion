@@ -1,11 +1,17 @@
 import hashlib
+import shutil
+import tempfile
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from httpx import ASGITransport, AsyncClient
-from logion_api.config import get_settings
+from logion_api.config import Settings, get_settings
+from logion_api.content.attachment_dependencies import get_attachment_scanner
+from logion_api.content.attachment_scanner import AttachmentScanResult
 from logion_api.content.models import Attachment
 from logion_api.db import session_factory
 from logion_api.identity.models import AuthSession, PasswordCredential, User
@@ -26,6 +32,42 @@ def path_is_file(path: Path) -> bool:
 
 def verified_attachment_path(root: str, workspace_id: UUID, attachment_id: UUID) -> Path:
     return Path(root).resolve() / "verified" / str(workspace_id) / str(attachment_id)
+
+
+class CleanAttachmentScanner:
+    async def scan(self, path: Path, *, maximum_bytes: int) -> AttachmentScanResult:
+        digest = hashlib.sha256()
+        size = 0
+        async with await anyio.open_file(path, "rb") as handle:
+            while chunk := await handle.read(1024 * 1024):
+                size += len(chunk)
+                if size > maximum_bytes:
+                    raise AssertionError("test scanner received an oversized file")
+                digest.update(chunk)
+        return AttachmentScanResult(size_bytes=size, sha256=digest.hexdigest())
+
+
+@pytest.fixture
+def enabled_clean_attachment_storage() -> Iterator[Settings]:
+    root = Path(tempfile.mkdtemp(prefix="account-deletion-attachment-"))
+    base_settings = get_settings()
+    original_overrides = dict(app.dependency_overrides)
+    settings = base_settings.model_copy(
+        update={
+            "knowledge_space_attachment_ingest_enabled": True,
+            "attachment_scanner_enabled": True,
+            "attachment_root": str(root),
+            "attachment_quarantine_root": str(root / "quarantine"),
+        }
+    )
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_attachment_scanner] = CleanAttachmentScanner
+    try:
+        yield settings
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+        shutil.rmtree(root, ignore_errors=True)
 
 
 async def register(client: AsyncClient, label: str) -> tuple[UUID, str]:
@@ -146,7 +188,9 @@ async def test_account_deletion_revokes_pending_workspace_invitations() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_grace() -> None:
+async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_grace(
+    enabled_clean_attachment_storage: Settings,
+) -> None:
     origin = "http://test"
     async with (
         AsyncClient(
@@ -229,7 +273,7 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         )
         assert completed.status_code == 200, completed.text
         attachment_path = verified_attachment_path(
-            get_settings().attachment_root,
+            enabled_clean_attachment_storage.attachment_root,
             physical_workspace,
             attachment_id,
         )
@@ -247,7 +291,7 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert row is not None
         row.delete_after = datetime.now(UTC) - timedelta(seconds=1)
         await db.commit()
-    assert await AccountDeletionService(get_settings()).execute_next() is True
+    assert await AccountDeletionService(enabled_clean_attachment_storage).execute_next() is True
     async with session_factory() as db:
         user = await db.get(User, user_id)
         request = await db.get(AccountDeletionRequest, deletion_id)
