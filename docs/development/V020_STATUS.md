@@ -1,7 +1,7 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-08（Asia/Shanghai）。
-> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环、V20-10 真实栈验收与 V20-11 默认关闭准入均已通过 Codex 验收；当前进入 V20-12 默认关闭集成门**。
+> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环、V20-10 真实栈验收、V20-11 默认关闭准入与 V20-12 默认关闭集成门均已通过 Codex 验收；下一步为 V20-13 DeepSeek 只读终审**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
@@ -50,7 +50,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-09 AI acceptance              | 已完成并推送                    | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
 | V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收 | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过 | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
 | V20-11 默认关闭准入               | 已通过，生产能力继续关闭        | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                            | 保持全部生产开关关闭；进入 V20-12 集成门                          |
-| V20-12～15 集成、终审、回滚、发布 | V20-12 已开始，其余未开始       | `codex/v020-integration` 已包含 V20-08/09/10/11 候选代码；V20-12 任务节点仅建立默认关闭门禁，不授权生产启用                                                                                                  | 完成 V20-12 矩阵后再派发 DeepSeek 只读终审                        |
+| V20-12～15 集成、终审、回滚、发布 | V20-12 已通过，其余未开始       | `codex/v020-integration` 已通过 bounded negative、安全/隔离集成、默认关闭与整仓 gates；敏感能力继续关闭，不等同于生产发布批准                                                                                | 派发 V20-13 DeepSeek 只读终审；不得修改文件                       |
 | DeepSeek 最终审查                 | 已打通、未派发正式终审          | 固定 OpenCode/DeepSeek V4 Flash 路径已验证                                                                                                                                                                   | 等 V20-12 完整候选 diff                                           |
 
 ## 当前等待点
@@ -277,5 +277,6 @@ Windows Codex 已完成最终 admission 复核，V20-11 以“候选实现和恢
 
 - `task-v11-closeout` 已追加 `task.completed` 与 `task.accepted`；五项 Codex observation 已绑定最终 handoff 原始字节摘要：`obs-v11-scanner-contract`、`obs-v11-scanner-live`、`obs-v11-recovery-live`、`obs-v11-offline-auth`、`obs-v11-gates`。
 - 恢复证据另由只读 `task-v11-recovery` 复核并接受，绑定 `obs-v11-recovery-rehearsal`；该任务不拥有或修改既有 Local Worker 安全源文件。
-- 当前 Run 校验结果：`eventCount=36`、`task-v11-closeout=accepted`、`task-v11-recovery=accepted`、`task-v20-12-integration=started`；graph/context/tasks/handoff/observation 一致，所有摘要均按原始 UTF-8 字节计算。
-- 当前 V20-12 任务仅建立默认关闭集成门，验收项固定为 bounded negative、security/integration、default-closed 与 repository gates。所有敏感生产开关仍为关闭；未派发 DeepSeek，不代表发布批准。
+- 当前 Run 校验结果：`eventCount=38`、`nodeCount=46`、`handoffCount=8`、`observationCount=24`；`task-v11-closeout=accepted`、`task-v11-recovery=accepted`、`task-v20-12-integration=accepted`；graph/context/tasks/handoff/observation 一致，所有摘要均按原始 UTF-8 字节计算。
+- V20-12 四组门禁真实通过：bounded negative `73 passed`；安全与隔离集成（Local Worker `11 passed`，API/迁移/附件/知识核心/Acceptance `12 passed, 1 deselected`）；默认关闭 `45 passed`；整仓 gates `pnpm ci:fast`（Python `402`、Web `224`、协调 `118`）、`pnpm audit` 无漏洞、`pip-audit` 无漏洞、`alembic check` 无新迁移、Compose 边界静态检查通过。此前发现的 `nanoid < 3.3.17` 高危依赖已通过 workspace override 与 lockfile 修复。
+- V20-12 收口不授权生产启用：Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 均保持关闭；未启动本机 Docker、未绕过 SessionBoundary。下一步可建立 V20-13 DeepSeek 只读终审任务包，终审不得修改、提交或推送。
