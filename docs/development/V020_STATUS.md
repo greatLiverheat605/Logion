@@ -429,3 +429,13 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   `F:\LogionBackups`，也未执行空环境恢复，因此异机恢复门禁仍未通过。
 - `_dmarc.logion.work` 仍未解析；DirectMail DKIM 仍需在阿里云控制台确认。生产数据库迁移、镜像替换、邮件
   投递和流量切换继续未执行，所有敏感生产开关继续关闭。
+
+## 异机备份链路复核（2026-08-09）
+
+- ECS 现有最新备份 `logion-20260808T054944Z-beta-v1.backup` 及 `.sha256` 已复制到加密的
+  `F:\LogionBackups\encrypted`；Windows 重新计算的 SHA-256 与 sidecar 一致：
+  `aa7b3f9421504d51601b67e4ccf0b197ba1ef7b6dd33d029f38a9aac2cbea20f`。
+- 服务器 Backup 容器 `logion-verify-backup` 返回 `OK`；在 ECS 上使用临时数据库完成隔离恢复，恢复头为
+  `0034_sync_conflicts`，`restore_requires_sync_epoch_bump=true`，临时数据库和附件目录已清理。
+- 该产物绑定线上旧提交 `5f44833…`，不替代候选 `448cbdf…` 的发布前备份；候选维护窗口仍必须重新备份、
+  校验、复制并恢复演练。线上当前仍为旧提交，未迁移、未替换镜像、未切流。
