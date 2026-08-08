@@ -5,6 +5,13 @@
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
+## PR #198 integration follow-up（2026-08-08）
+
+- 修复提交 `93eae8d` 后，GitHub Actions run `31254465425` 仅剩知识空间核心集成测试的 `POST /knowledge/search` 返回 404；图谱读取已通过。
+- 根因是测试夹具只打开知识空间 API，却没有配置 HMAC 分页游标密钥；首次搜索需要生成 `next_cursor` 时，服务按 fail-closed 规则返回资源不存在。生产默认配置未改变。
+- 提交 `dab9fcb` 为该夹具提供仅测试用的 32 字节游标密钥。其后的 run `31255160930` 在同一 head SHA `dab9fcbf0e4cac132a82ac0034e69addd64ab0ab` 上，integration、browser、fast 三个 job 全部成功；迁移往返、全量集成、真实认证浏览器、无障碍/响应式检查、`pnpm audit`、`pip-audit` 与 `pnpm ci:fast` 均由 CI 实际执行并通过。
+- 本机窄集成测试仍因未运行且凭据不匹配的 PostgreSQL 无法执行；该限制不影响 CI 的真实 PostgreSQL 验收，也未启动 Docker。所有敏感生产开关继续关闭。
+
 > 恢复记录：用户于 2026-08-06 明确要求从 V20-02 断点继续。Codex 已重新复核现有差异、PostgreSQL
 > 往返/失败关闭和整仓遗留门禁，完成 V20-08/V20-09 实现、独立验收、提交与推送。
 
