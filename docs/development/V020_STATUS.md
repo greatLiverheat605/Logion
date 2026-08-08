@@ -361,3 +361,13 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   边界聚焦测试均真实通过，工作树保持 clean。
 - Full-capacity profile 仍需 workflow_dispatch，Release candidate 还必须校验同一 source SHA 的
   Main candidate、capacity 与候选证据；本轮不启动 Docker、镜像发布或敏感生产能力，等待发布流程明确授权。
+
+## V20-15 Full-capacity 证据（2026-08-08）
+
+- 已按用户批准手动触发 `Full capacity profile` run `31257249374`，分支 `main`，
+  `head_sha=448cbdf8bd43c45aa25e3f2068e2246f3299be3a`，结论为 `success`。
+- GitHub job `93102425322` 的专用 PostgreSQL/Redis 容器初始化、迁移、实际容量数据生成和 artifact
+  上传步骤均为 `success`；容量 artifact 为
+  `capacity-profile-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`（未过期）。
+- GitHub Actions 的 artifact 下载接口需要认证，协调员未将无法独立下载的内容伪造为本地复核；本次
+  通过依据是该 job 的实际成功结论与工作流内置验证。Release candidate 仍需用户另行批准，不自动发布。

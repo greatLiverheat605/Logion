@@ -92,8 +92,8 @@ sync-v1、AI Acceptance 任一生产能力。
 - GitHub 官方状态 API 返回 `All Systems Operational`；公开只读核对显示当前默认分支为 `main`。
 - 合并提交 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 已产生成功的 `Main candidate` run
   `31255904782`（`head_sha` 与 `main` 已核对一致），同一提交的 `Mobile builds` run `31255904757`
-  也已成功。该提交尚未产生对应的 full-capacity workflow 运行；现有旧 Release/Capacity 运行绑定
-  `main` 的 `ebf93ee192598430393f93e9313665c36446f84e`，不能复用于当前候选。
-- 本机 GitHub CLI 未登录，因此没有触发 workflow_dispatch；本轮不申请凭据、不合并默认分支、不启动
-  Docker，也不创建镜像、签名或 attestation。生产发布仍需用户明确批准，并在同一 source SHA 上完成
-  Main candidate、capacity、Release candidate 三段链路。
+  也已成功；随后已补齐同一 SHA 的 `Full capacity profile` run `31257249374`，结论为 `success`。
+- 容量 job `93102425322` 的专用 PostgreSQL/Redis、迁移、实际容量数据生成和 artifact 上传步骤均为
+  `success`；artifact `capacity-profile-448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 未过期。
+- artifact 下载端点需要认证，未将无法独立下载的内容伪造为本地复核。Release candidate 尚未触发；
+  本轮不启动本机 Docker、不创建新的发布流程，也不打开任何敏感生产能力，等待用户另行批准。
