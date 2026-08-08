@@ -109,7 +109,7 @@ jobs:
     env:
       LOGION_DATABASE_URL: postgresql+asyncpg://logion:logion_test@localhost:5432/logion_test
       LOGION_REDIS_URL: redis://localhost:6379/0
-      LOGION_ALLOWED_ORIGINS: '["http://test"]'
+      LOGION_ALLOWED_ORIGINS: '["http://test","http://localhost:3000"]'
       LOGION_SECRET_KEY: phase1-integration-secret-key-must-be-at-least-32
       LOGION_WEBAUTHN_RP_ID: test
       LOGION_WEBAUTHN_ORIGINS: '["http://test"]'

@@ -1,7 +1,9 @@
+from collections.abc import Iterator
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.config import get_settings
 from logion_api.content.models import Resource
 from logion_api.db import session_factory
 from logion_api.main import app
@@ -11,6 +13,20 @@ from logion_api.workspaces.models import WorkspaceMembership
 
 ORIGIN = "http://test"
 PASSWORD = "a-strong-password-123"  # noqa: S105 - test-only credential
+
+
+@pytest.fixture
+def _knowledge_space_api_enabled() -> Iterator[None]:
+    base_settings = get_settings()
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
+        update={"knowledge_space_api_enabled": True}
+    )
+    try:
+        yield
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
 
 
 async def _register(client: AsyncClient, label: str) -> tuple[UUID, UUID]:
@@ -42,7 +58,9 @@ def _csrf(client: AsyncClient) -> dict[str, str]:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_private_excerpt_is_scoped_and_supports_authorized_304() -> None:
+async def test_private_excerpt_is_scoped_and_supports_authorized_304(
+    _knowledge_space_api_enabled: None,
+) -> None:
     async with (
         AsyncClient(
             transport=ASGITransport(app=app, client=("192.0.2.10", 48100)),
@@ -140,7 +158,9 @@ async def test_private_excerpt_is_scoped_and_supports_authorized_304() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_shared_write_stays_closed_and_graph_is_bounded() -> None:
+async def test_shared_write_stays_closed_and_graph_is_bounded(
+    _knowledge_space_api_enabled: None,
+) -> None:
     async with (
         AsyncClient(
             transport=ASGITransport(app=app, client=("192.0.2.12", 48102)),

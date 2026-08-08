@@ -328,3 +328,11 @@ Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产�
 
 下一断点为 V20-14：在 staging/隔离恢复环境执行 upgrade/downgrade/upgrade、空环境恢复、
 feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许禁用能力与前向修复，不允许破坏性降级。
+
+## PR #198 integration remediation（2026-08-08）
+
+- GitHub Actions run `31253445278` for commit `6d0cc65068fc395f1fbfcc8a821935b58164809f` failed in the integration job: 60 passed and 7 failed。
+- 失败属于集成测试环境不一致，不是生产边界变更：知识空间与 AI acceptance 集成测试未显式启用候选 API flag；附件测试使用 `http://localhost:3000`，而 PR 环境仅允许 `http://test`；PostgreSQL 外键拒绝码实际为 SQLSTATE `23503`。
+- 修复范围限定为集成测试夹具、loopback-only INSTREAM 协议测试服务（仍使用生产 `ClamdInstreamScanner` 客户端）、PR 集成允许来源和迁移断言；生产默认值及所有敏感生产开关保持关闭。
+- 修复后已观察：目标 Ruff/lint/format 与 `git diff --check` 通过；附件扫描器与知识空间合同单测通过；`pnpm ci:fast` 通过（Python 402、Web 224、协调 118、lint/typecheck/build/contracts）；`pnpm audit --prod --audit-level high` 与 `pip-audit` 无已知漏洞。
+- 本机数据库集成重跑已尝试，但隔离凭据无法建立连接，记录为环境限制而非通过；推送后必须等待 GitHub integration 在新提交上重新执行，PR 才能接受。
