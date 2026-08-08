@@ -8,7 +8,7 @@
 | 项目            | 结果                                                                                   |
 | --------------- | -------------------------------------------------------------------------------------- |
 | 仓库            | `greatLiverheat605/Logion`                                                             |
-| 正式集成目录    | `C:\Users\Administrator\orca\workspaces\ai_study\v020-integration`                     |
+| 正式集成工作树  | Orca `v020-integration`（不在仓库中持久化主机用户目录）                                |
 | 分支            | `codex/v020-integration`                                                               |
 | 不可变基线      | `08babebcd5a09861106c9b05accf32bd8f2ea01c`                                             |
 | 代码候选提交    | `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`                                             |
