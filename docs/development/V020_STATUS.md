@@ -1,7 +1,7 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-08（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 候选验收与 PostgreSQL/认证浏览器实时复核已通过，镜像签名/attestation、Docker release smoke 与发布授权仍未完成，生产发布保持阻塞**。
+> 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 候选验收、PostgreSQL/认证浏览器实时复核与独立 Gitleaks 全历史扫描已通过，镜像签名/attestation、Docker release smoke 与发布授权仍未完成，生产发布保持阻塞**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
@@ -112,6 +112,18 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 详见 [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)。本门不自动发布、不
 merge、不启动 Docker，也不启用敏感生产能力；实时 PostgreSQL/认证浏览器、镜像签名/attestation
 和发布授权必须在用户明确批准后另行执行。
+
+## V20-15 发布准备复核（2026-08-08）
+
+- 非 C 盘临时工具目录中的 Gitleaks `8.30.1` 已对当前仓库完整 Git 历史执行秘密扫描：406 个提交、
+  约 15.74 MB，0 条泄漏；报告未写入仓库。
+- GitHub 官方状态为 `All Systems Operational`。公开只读核对确认当前默认分支为 `main`，但当前
+  `codex/v020-integration` 候选尚无同一 source SHA 的成功 Main candidate 与 full-capacity 运行；
+  现有成功 Release/Capacity 运行属于 `main` 旧提交 `ebf93ee192598430393f93e9313665c36446f84e`，
+  不可复用。
+- GitHub CLI 未登录，本轮未触发 workflow_dispatch；没有创建镜像、签名/attestation、Docker release
+  smoke，也没有 merge、发布或开启 Attachment、Local Worker、Shared Write、Deletion、Provider、
+  sync-v1、AI Acceptance。V20-15 仍是候选可接受、生产发布阻塞。
 
 ## V20-08 最新断点（2026-08-06，覆盖前述旧快照）
 
