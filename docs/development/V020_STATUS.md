@@ -343,3 +343,11 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 修复范围限定为集成测试夹具、loopback-only INSTREAM 协议测试服务（仍使用生产 `ClamdInstreamScanner` 客户端）、PR 集成允许来源和迁移断言；生产默认值及所有敏感生产开关保持关闭。
 - 修复后已观察：目标 Ruff/lint/format 与 `git diff --check` 通过；附件扫描器与知识空间合同单测通过；`pnpm ci:fast` 通过（Python 402、Web 224、协调 118、lint/typecheck/build/contracts）；`pnpm audit --prod --audit-level high` 与 `pip-audit` 无已知漏洞。
 - 本机数据库集成重跑已尝试，但隔离凭据无法建立连接，记录为环境限制而非通过；推送后必须等待 GitHub integration 在新提交上重新执行，PR 才能接受。
+
+## PR #198 合并收口（2026-08-08）
+
+- PR `#198` 已按用户授权使用 GitHub `Rebase and merge` 合并，页面状态为 `Merged`。
+- 合并提交：`448cbdf8bd43c45aa25e3f2068e2246f3299be3a`；正式集成目录已执行 `git fetch origin main`，`origin/main` 已指向该提交。
+- 合并后的依赖复核真实执行：`pnpm audit --prod --audit-level high` 无已知漏洞；`uv run --group dev pip-audit` 无已知漏洞（`logion-api`/`logion-worker` 为工作区包，按工具规范跳过 PyPI 审计）。
+- 合并不等于生产发布批准。Docker release smoke、镜像签名/attestation、发布授权仍是后续独立门禁；Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。
+- 下一断点保持为 V20-14：staging/隔离环境执行 upgrade → downgrade → upgrade、空环境恢复、feature-off、孤儿扫描与引用闭包检查；完成并复核后再进入 V20-15 发布准备。
