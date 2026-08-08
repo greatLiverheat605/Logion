@@ -4922,6 +4922,13 @@ export interface components {
             next_cursor?: string | null;
             /** Results */
             results: components["schemas"]["KnowledgeSearchResult"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Truncation Reasons */
+            truncation_reasons?: components["schemas"]["SearchTruncationReason"][];
         };
         /**
          * KnowledgeSearchRequest
@@ -6550,6 +6557,11 @@ export interface components {
              */
             workspace_id: string;
         };
+        /**
+         * SearchTruncationReason
+         * @enum {string}
+         */
+        SearchTruncationReason: "candidate_limit" | "byte_limit";
         /** SelfStudyListResponse */
         SelfStudyListResponse: {
             /** Deliverables */
