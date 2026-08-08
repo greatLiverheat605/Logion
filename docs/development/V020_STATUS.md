@@ -417,3 +417,6 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   当前未解析；DirectMail DKIM/DMARC 需在 DNS/控制台确认后，才能满足生产邮件门禁。
 - 本轮仅执行只读检查，未停止服务、未修改 `.env`、未迁移数据库、未切换流量。下一断点是补齐
   DMARC/DKIM 与异机备份确认，再按 runbook 进入 prerelease 维护窗口。
+- Windows `F:\LogionBackups` 现有异机副本最晚为 2026-07-30，且该卷当前未显示 BitLocker 保护；它不能
+  作为本次候选的最新异机恢复证据。服务器 2026-08-08 备份 checksum 虽为 `OK`，仍需在受保护目标上
+  完成复制、校验和空环境恢复。

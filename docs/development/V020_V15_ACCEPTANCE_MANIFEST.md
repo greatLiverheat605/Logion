@@ -140,3 +140,5 @@ sync-v1、AI Acceptance 任一生产能力。
   成功；`mail.logion.work` SPF 已存在，但 `_dmarc.logion.work` 尚未解析，DKIM/DMARC 仍需完成公开 DNS
   与控制台确认。
 - 只读预检没有改变生产状态；在邮件 DNS 与异机备份门禁补齐前，不进行维护窗口、迁移或流量切换。
+- `F:\LogionBackups` 的现有副本最晚为 2026-07-30，且该卷未显示 BitLocker 保护；服务器最新备份
+  `2026-08-08` 尚未复制到受保护异机并完成恢复验证，因此不计为本次发布的 off-host 证据。
