@@ -420,3 +420,12 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - Windows `F:\LogionBackups` 现有异机副本最晚为 2026-07-30，且该卷当前未显示 BitLocker 保护；它不能
   作为本次候选的最新异机恢复证据。服务器 2026-08-08 备份 checksum 虽为 `OK`，仍需在受保护目标上
   完成复制、校验和空环境恢复。
+
+## 生产发布前置修复（2026-08-09）
+
+- 按已批准的方案 1，本机 `F:` 异机备份目标已完成 BitLocker XTS-AES-256 加密，状态为
+  `FullyEncrypted`、`Protection On`、100%；恢复密钥仅保存到 Windows 桌面，不进入仓库、Git 历史或协调记录。
+- `J:` 安全卷继续保持 XTS-AES-256、100% 加密和 `Protection On`。本轮尚未把 ECS 最新加密备份复制到
+  `F:\LogionBackups`，也未执行空环境恢复，因此异机恢复门禁仍未通过。
+- `_dmarc.logion.work` 仍未解析；DirectMail DKIM 仍需在阿里云控制台确认。生产数据库迁移、镜像替换、邮件
+  投递和流量切换继续未执行，所有敏感生产开关继续关闭。
