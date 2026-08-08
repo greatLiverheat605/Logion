@@ -1,7 +1,7 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-08（Asia/Shanghai）。
-> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环、V20-10 真实栈验收、V20-11 默认关闭准入、V20-12 默认关闭集成门与 V20-13 DeepSeek 只读终审均已通过 Codex 验收；下一步为 V20-14 回滚演练**。
+> 当前阶段：**M0、V20-01/03/07 设计包、V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 接受闭环、V20-10 真实栈验收、V20-11 默认关闭准入、V20-12 默认关闭集成门、V20-13 DeepSeek 只读终审与 V20-14 隔离回滚演练均已通过 Codex 验收；下一步为 V20-15 最终发布门**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
 
@@ -30,28 +30,28 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 
 不要使用虚构百分比衡量当前进度。按门禁判断：**架构 M0、第一版 UX 方向以及 V20-01/03/07
 设计基线、V20-02 迁移证明、V20-04 合同门、V20-08 核心数据路径、V20-09 接受闭环与 V20-10
-真实栈浏览器/移动安全门、V20-11 默认关闭准入、V20-12 集成门与 V20-13 只读终审已冻结；V20-14
-回滚和 V20-15 发布门尚未完成。**
+真实栈浏览器/移动安全门、V20-11 默认关闭准入、V20-12 集成门、V20-13 只读终审与 V20-14
+隔离回滚演练已冻结；V20-15 发布门尚未完成。**
 
 ## 阶段状态
 
-| 范围                              | 状态                                | 已有证据                                                                                                                                                                                                     | 下一门禁                                                          |
-| --------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| 多 Agent 协调闭环                 | 已完成基础能力                      | `AGENTS.md`、协调 Skill/contract、状态 Schema/校验器、可验证 Runs；`codex/v011-coordination` 已推送                                                                                                          | 持续按本 SOP 更新账本和快照                                       |
-| V20-00 / M0 架构基础              | 已批准                              | ADR-0029 Accepted；Orca `task_5f8745a5770e` complete；五项推荐边界已冻结                                                                                                                                     | 执行 V20-01/03/07 设计门，不扩大为实现授权                        |
-| 旧 Kimi A/B 原型                  | 技术验收通过、产品方向已否决        | 9 个限定原型文件；23/23 Vitest、lint、typecheck、build 通过；A/B 评审包完整                                                                                                                                  | 仅保留历史证据，不进入施工                                        |
-| 整体动态知识空间原型              | 已作为受控演示入口集成              | Kimi 原型代码、既有浏览器 QA、正式施工提交 `5d737b7`；生产视图不默认使用 mock                                                                                                                                | 保留演示边界；未来迭代 owner 仍由用户另行指定                     |
-| V20-06 UI 冻结                    | 第一版方向与首版实现已集成          | 用户批准 Kimi 第一版方向，并一次性指定 Kimi K2.7-code 施工；Codex 审查修正 `7a93ac9`，Nightly #40 真实浏览器门禁已通过                                                                                       | 进入 V20-11，前端后续 owner 仍由用户指定                          |
-| GLM bounded graph kernel          | 纯图内核模块候选验收通过            | 42 个 pytest、Ruff lint/format、mypy、空白/范围/秘密检查及四组关键运行时复现均由 Codex 独立通过                                                                                                              | 保持未提交候选；正式接入须等待设计门及授权、scope、游标和资源治理 |
-| V20-01/02 schema 与迁移           | V20-02 隔离证明已完成               | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`                                                                                            | ORM 登记和 `alembic check` 收口留给 V20-08                        |
-| V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收                 | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135`                                                                                 | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
-| V20-07 保留/隐私签核              | 设计与推荐矩阵已批准                | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭                                                                                           | 生产启用前完成独立合规证据与 Owner 门禁                           |
-| V20-08 bounded core               | 已完成并推送                        | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
-| V20-09 AI acceptance              | 已完成并推送                        | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
-| V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收     | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过 | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
-| V20-11 默认关闭准入               | 已通过，生产能力继续关闭            | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                            | 保持全部生产开关关闭；进入 V20-12 集成门                          |
-| V20-12～15 集成、终审、回滚、发布 | V20-12/V20-13 已通过，V20-14 待开始 | `codex/v020-integration` 已通过集成门；DeepSeek 对固定 SHA 只读终审无 High/Medium，5 个 Low/Info 已由 Codex 修复并完成真实本机复核；敏感能力继续关闭，不等同于生产发布批准                                   | 进入 V20-14 隔离回滚演练                                          |
-| DeepSeek 最终审查                 | 已完成并由 Codex 接受               | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；审查目标 `7d50e675be19b2779613ed61ba31dc821afa73dc`；详见 [`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)                                           | 不再派发；保留只读报告与清洁工作树证据                            |
+| 范围                              | 状态                                 | 已有证据                                                                                                                                                                                                     | 下一门禁                                                          |
+| --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| 多 Agent 协调闭环                 | 已完成基础能力                       | `AGENTS.md`、协调 Skill/contract、状态 Schema/校验器、可验证 Runs；`codex/v011-coordination` 已推送                                                                                                          | 持续按本 SOP 更新账本和快照                                       |
+| V20-00 / M0 架构基础              | 已批准                               | ADR-0029 Accepted；Orca `task_5f8745a5770e` complete；五项推荐边界已冻结                                                                                                                                     | 执行 V20-01/03/07 设计门，不扩大为实现授权                        |
+| 旧 Kimi A/B 原型                  | 技术验收通过、产品方向已否决         | 9 个限定原型文件；23/23 Vitest、lint、typecheck、build 通过；A/B 评审包完整                                                                                                                                  | 仅保留历史证据，不进入施工                                        |
+| 整体动态知识空间原型              | 已作为受控演示入口集成               | Kimi 原型代码、既有浏览器 QA、正式施工提交 `5d737b7`；生产视图不默认使用 mock                                                                                                                                | 保留演示边界；未来迭代 owner 仍由用户另行指定                     |
+| V20-06 UI 冻结                    | 第一版方向与首版实现已集成           | 用户批准 Kimi 第一版方向，并一次性指定 Kimi K2.7-code 施工；Codex 审查修正 `7a93ac9`，Nightly #40 真实浏览器门禁已通过                                                                                       | 进入 V20-11，前端后续 owner 仍由用户指定                          |
+| GLM bounded graph kernel          | 纯图内核模块候选验收通过             | 42 个 pytest、Ruff lint/format、mypy、空白/范围/秘密检查及四组关键运行时复现均由 Codex 独立通过                                                                                                              | 保持未提交候选；正式接入须等待设计门及授权、scope、游标和资源治理 |
+| V20-01/02 schema 与迁移           | V20-02 隔离证明已完成                | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`                                                                                            | ORM 登记和 `alembic check` 收口留给 V20-08                        |
+| V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收                  | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135`                                                                                 | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
+| V20-07 保留/隐私签核              | 设计与推荐矩阵已批准                 | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭                                                                                           | 生产启用前完成独立合规证据与 Owner 门禁                           |
+| V20-08 bounded core               | 已完成并推送                         | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                       | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
+| V20-09 AI acceptance              | 已完成并推送                         | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                          | 进入 V20-10；Acceptance 生产开关继续关闭                          |
+| V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收      | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过 | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
+| V20-11 默认关闭准入               | 已通过，生产能力继续关闭             | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                            | 保持全部生产开关关闭；进入 V20-12 集成门                          |
+| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过，V20-15 待开始 | `codex/v020-integration` 已通过集成门、DeepSeek 终审与隔离回滚演练；敏感能力继续关闭，不等同于生产发布批准                                                                                                   | 进入 V20-15 最终发布门                                            |
+| DeepSeek 最终审查                 | 已完成并由 Codex 接受                | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；审查目标 `7d50e675be19b2779613ed61ba31dc821afa73dc`；详见 [`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)                                           | 不再派发；保留只读报告与清洁工作树证据                            |
 
 ## 当前等待点
 
@@ -67,7 +67,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 7. V20-11 硬停止证据已补齐并由 Windows Codex 独立复核；当前 Run 为
    `.agents/coordination/runs/run-v020-v11-remediation`。生产开关继续关闭，V20-12 默认关闭任务节点已建立。
 8. V20-13 DeepSeek 只读终审已完成：无 High/Medium，5 个 Low/Info 已由 Windows Codex 修复并通过目标测试、整仓门禁、依赖审计、迁移检查及真实附件栈复核；审查工作树已恢复 clean。
-9. 下一节点为 V20-14 隔离回滚演练。本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
+9. V20-14 隔离回滚演练已完成并接受；下一节点为 V20-15 最终发布门。本次正式首版前端由用户一次性指定 Kimi K2.7-code 完成；未来迭代 owner 仍待用户另行指定。
 
 ## 模型所有权决定
 
