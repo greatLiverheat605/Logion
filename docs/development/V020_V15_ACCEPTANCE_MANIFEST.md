@@ -1,7 +1,7 @@
 # V20-15 最终发布门 Acceptance Manifest
 
 > 日期：2026-08-08（Asia/Shanghai）  
-> 结论：**Release candidate `0.2.0-rc1` 已在隔离 GitHub runner 通过；独立镜像签名/attestation 核验与生产发布仍保持阻塞，等待用户另行明确批准。**
+> 结论：**Release candidate `0.2.0-rc1` 与同 SHA 镜像 provenance attestation 已通过；生产发布仍保持阻塞，等待用户另行明确批准。**
 
 ## 1. 不可变身份与范围
 
@@ -61,8 +61,9 @@ PostgreSQL/Redis/ClamAV、附件扫描与残留清理、Local Worker crash/uploa
 
 1. 本机 Docker smoke：本机仍未启动 Docker；但 Release candidate run `31259843000` 已在隔离
    GitHub runner 实际通过 unchanged candidate 的 Docker smoke、空环境恢复、浏览器/WCAG 与清理。
-2. 独立镜像签名/attestation 核验与生产发布：Release candidate 已使用 digest-pinned 镜像并完成
-   候选 smoke，但独立签名/attestation 核验和生产发布授权仍未完成；不把它们伪造为通过。
+2. 生产发布：Main candidate 已对同一 SHA 的四个 digest 执行 provenance attestation 和 exact-candidate
+   security scan，并且全部成功；Release candidate 已使用 digest-pinned 镜像完成候选 smoke。生产发布授权
+   和生产环境执行仍未完成，不把候选通过等同于生产发布。
 3. 独立 `gitleaks`：已完成全历史扫描并通过（Gitleaks `8.30.1`、406 commits、0 findings）。
    该结果只覆盖当前集成分支历史，不替代发布工作流对最终镜像的安全扫描与 attestation 校验。
 4. 临时隔离服务、进程和 Redis 测试库均已停止并清空；临时 J: 目录删除受当前文件策略阻止，
@@ -97,7 +98,8 @@ sync-v1、AI Acceptance 任一生产能力。
   `success`；artifact `capacity-profile-448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 未过期。
 - artifact 下载端点需要认证，未将无法独立下载的内容伪造为本地文件复核；Release candidate run
   `31259843000` 已成功并生成 artifact `release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。
-- 本机 Docker 仍未启动；生产发布、独立镜像签名/attestation 核验和敏感生产能力启用仍需另行批准。
+- Main candidate run `31255904782` 的四项 `actions/attest-build-provenance` 与 `Verify provenance and
+  scan exact candidate` 均成功；本机 Docker 仍未启动，生产发布和敏感生产能力启用仍需另行批准。
 
 ## 9. Release candidate 实际运行证据（2026-08-08）
 
@@ -109,3 +111,12 @@ sync-v1、AI Acceptance 任一生产能力。
   当前未过期；下载端点需要认证，因此不把未下载的 artifact 内容冒充成本地复核结果。
 - 该 run 不是生产发布，也没有打开 Attachment、Local Worker、Shared Write、Deletion、Provider、
   sync-v1 或 AI Acceptance。
+
+## 10. 同 SHA 镜像 provenance 证据（2026-08-08）
+
+- Main candidate run `31255904782` / job `93099092811`：web、api、worker、backup 四个
+  `actions/attest-build-provenance` 步骤均为 `success`。
+- 同 job 的 `Verify provenance and scan exact candidate` 为 `success`，工作流使用
+  `gh attestation verify --repo` 对四个 digest 执行 provenance 核验，并完成 exact-candidate 安全扫描。
+- 该证据与 Release candidate 的 `source_sha=448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 一致；生产发布
+  尚未执行，敏感生产开关继续关闭。
