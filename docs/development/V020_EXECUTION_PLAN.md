@@ -1,6 +1,6 @@
 # v0.2.0 执行计划：自适应知识空间架构基础
 
-> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 AI acceptance、V20-10 真实栈验收与 V20-11 默认关闭准入均已完成并由 Codex 验收；当前进入 V20-12 默认关闭集成门。
+> 状态：M0 与 V20-01/03/07 已批准，V20-02 隔离迁移证明、V20-04 加法合同门、V20-08 核心实现、V20-09 AI acceptance、V20-10 真实栈验收、V20-11 默认关闭准入、V20-12 集成门与 V20-13 DeepSeek 只读终审均已完成并由 Codex 验收；当前进入 V20-14 回滚演练。
 > 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
 > V20-02 migration/tests 与 V20-04 default-off 合同门已完成；ORM/产品服务、生产启用、同步扩展和 Provider 配置仍受后续门禁约束。
 > 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
@@ -55,8 +55,8 @@ V20-00 design approval
 | V20-10 | Kimi K2.7-code 首版施工 / Windows Codex 集成（已完成） | 前后端路径不重叠；共享合同与最终写入由 Codex                                         | 服务端 1–2 跳/150/400 硬限、bounded search，前端浏览器布局、移动列表/树、只读真实数据适配与安全状态呈现                 | Nightly #40（固定 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`）真实栈、审计、迁移/恢复、认证 Playwright、响应式、axe、键盘和主题 XSS 全部通过                                                  |
 | V20-11 | Windows Codex / 已通过、生产开关关闭                   | attachment migration/worker security，单一协调写入                                   | 常驻 loopback scanner、加密/ACL、租约、crash/upload 恢复、worker-offline 在线核心和默认关闭边界均已实证                 | scanner/附件合同 45 passed、真实集成 9 passed、恢复 11 passed、offline 核心 3 passed、整仓门禁/审计/迁移检查通过                                                                                  |
 | V20-12 | Windows Codex / 已通过、默认关闭                       | 测试与必要修复；Run 任务 `task-v20-12-integration`                                   | 四组门禁均真实通过；敏感生产能力继续关闭，不等同于发布批准                                                              | bounded negative `73 passed`；安全/隔离集成通过；默认关闭 `45 passed`；`pnpm ci:fast`、`pnpm audit`、`pip-audit`、`alembic check` 与 Compose 边界检查通过；Run `task-v20-12-integration=accepted` |
-| V20-13 | DeepSeek V4 Flash / 待派发、只读                       | 无写权限                                                                             | 独立审查完整 diff：租户逃逸、约束、stale acceptance、重放/计费、XSS、DoS、sync-v1、删除/回滚；不得修文件                | 结构化 findings（severity/path/evidence/fix）；零文件变更、无 merge/push                                                                                                                          |
-| V20-14 | Windows Codex / 待修完 findings                        | staging/隔离恢复环境                                                                 | 演练每个 checkpoint；首个正式写入后只禁用+前向修复；验证备份恢复与引用闭包                                              | upgrade/downgrade/upgrade、恢复、feature-off、孤儿扫描的观测结果                                                                                                                                  |
+| V20-13 | DeepSeek V4 Flash / 已完成、Codex 已接受               | 无写权限；工具元数据残留由协调员清理                                                 | 完整 diff 只读终审无 High/Medium；5 个 Low/Info 已由 Codex 修复并完成真实本机复核                                       | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；[`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)；审查工作树 clean、目标 SHA 不变                                                         |
+| V20-14 | Windows Codex / 下一节点                               | staging/隔离恢复环境                                                                 | 演练每个 checkpoint；首个正式写入后只禁用+前向修复；验证备份恢复与引用闭包                                              | upgrade/downgrade/upgrade、恢复、feature-off、孤儿扫描的观测结果                                                                                                                                  |
 | V20-15 | Windows Codex / 最后                                   | 集成 worktree；ledger 仅 Codex                                                       | 复核所有 handoff/diff/secret/path；运行最终 gates；只有授权后 commit/merge/push                                         | acceptance manifest、commit SHA（若授权）、未运行项、残余风险、清理清单                                                                                                                           |
 
 ### ZCode 状态
@@ -152,7 +152,7 @@ V20-08 已进入“核心实现完成、后续门禁未完成”状态。Codex �
 
 三项任务共用 `codex/v020-integration` 单一 writer，writable paths 不重叠；完整事件、handoff、observation 和摘要 SHA-256 记录在 `.agents/coordination/runs/run-v020-core/`。V20-08 基线证据保持不变；本轮 V20-10 新增契约 27、图内核 42、核心集成 2，且全量 `pnpm test`、前端 lint/typecheck/test/build、Ruff/Mypy 均通过。
 
-下一顺序固定为：V20-13 DeepSeek 只读终审 → V20-14 回滚演练 → V20-15 最终发布门。V20-11 与 V20-12 已在全部生产能力继续默认关闭的前提下通过；Shared Write、删除、附件、本地 worker、Provider、sync-v1、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。
+下一顺序固定为：V20-14 回滚演练 → V20-15 最终发布门。V20-11、V20-12 与 V20-13 已在全部生产能力继续默认关闭的前提下通过；Shared Write、删除、附件、本地 worker、Provider、sync-v1、AI Acceptance 生产启用和前端后续 owner 仍不得提前开启。
 
 ## V20-10 实施与真实栈验收记录（2026-08-07）
 
@@ -176,3 +176,23 @@ V20-12 已完成并接受。Windows Codex 在固定的正式集成目录与分�
 审计初始发现 `next → postcss → nanoid@3.3.16` 高危漏洞，已通过 workspace override 固定到 `nanoid@3.3.17` 并重新生成 `pnpm-lock.yaml`；后续审计已通过。协调账本已验证 `eventCount=38`、`nodeCount=46`、`handoffCount=8`、`observationCount=24`，`task-v20-12-integration=accepted`。
 
 该收口只代表候选集成门通过，不代表生产发布批准，也不授权打开任何敏感能力。下一步建立 V20-13 DeepSeek V4 Flash 只读终审任务包；终审范围为完整 diff 的租户隔离、约束、stale acceptance、重放/计费、XSS、DoS、sync-v1、删除/回滚与开关边界，DeepSeek 不得编辑文件、提交、合并或推送。
+
+## V20-13 终审收口与 V20-14 入口（2026-08-08）
+
+V20-13 的 DeepSeek V4 Flash 只读审查已针对固定候选提交
+`7d50e675be19b2779613ed61ba31dc821afa73dc` 完成。审查无 High/Medium；5 个 Low/Info
+已由 Windows Codex 修复，并通过针对性测试、整仓质量门、依赖审计、隔离 PostgreSQL 迁移检查
+与真实 Redis/ClamAV 附件集成复核。完整 finding、修复映射和未运行项见
+[`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)。
+
+V20-13 接受条件现已满足：
+
+1. 只读工作树无源码/Git 修改，OpenCode `.omo` 会话残留已清理，HEAD 与审查目标 SHA 一致；
+2. 搜索候选窗口与响应字节上限显式返回截断原因，不承诺无法恢复的深分页；
+3. 图谱 preview 共享总时间预算，超时安全降级；附件测试路径、`.env.example` 和 deletion flag 语义已收口；
+4. 所有生产敏感开关继续关闭，未启动 Docker、未绕过 SessionBoundary。
+
+下一阶段 V20-14 只在 staging/隔离恢复环境执行：迁移 `upgrade/downgrade/upgrade`、空环境恢复、
+feature-off、孤儿扫描、引用闭包和回滚点观测。首个正式知识写入后禁止破坏性 downgrade，任何修复
+必须采用禁用能力、保留数据可读性和前向迁移。V20-14 不授权打开 Attachment、Local Worker、
+Shared Write、Deletion、Provider、sync-v1 或 AI Acceptance。

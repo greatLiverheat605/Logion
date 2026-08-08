@@ -44,6 +44,7 @@ from logion_api.knowledge_space.schemas import (
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
     KnowledgeTargetType,
+    SearchTruncationReason,
     SourceExcerptCreateRequest,
     SourceLocator,
 )
@@ -102,6 +103,13 @@ def test_knowledge_flags_default_closed_and_reject_unsafe_combinations() -> None
         Settings(knowledge_space_shared_writes_enabled=True)
     with pytest.raises(ValidationError, match="DELETION_ENABLED requires"):
         Settings(knowledge_space_deletion_enabled=True)
+    with pytest.raises(ValidationError, match="DELETION_ENABLED is reserved"):
+        Settings(
+            knowledge_space_api_enabled=True,
+            knowledge_space_deletion_enabled=True,
+            knowledge_cursor_active_key_id="current",
+            knowledge_cursor_keys={"current": SecretStr("x" * 32)},
+        )
     with pytest.raises(ValidationError, match="ATTACHMENT_INGEST_ENABLED requires"):
         Settings(knowledge_space_attachment_ingest_enabled=True)
     with pytest.raises(ValidationError, match="LOCAL_WORKER_ENABLED requires"):
@@ -227,6 +235,20 @@ def test_knowledge_search_contract_is_strict_and_bounded() -> None:
     )
     page = KnowledgeSearchPageResponse(results=[result], next_cursor="opaque")
     assert page.results[0].label == "Topic"
+    assert page.truncated is False
+    assert page.truncation_reasons == []
+    truncated_page = KnowledgeSearchPageResponse(
+        results=[result],
+        truncated=True,
+        truncation_reasons=[SearchTruncationReason.CANDIDATE_LIMIT],
+    )
+    assert truncated_page.truncation_reasons == [SearchTruncationReason.CANDIDATE_LIMIT]
+    with pytest.raises(ValidationError, match="truncated must agree"):
+        KnowledgeSearchPageResponse(
+            results=[result],
+            truncated=False,
+            truncation_reasons=[SearchTruncationReason.BYTE_LIMIT],
+        )
 
 
 def test_knowledge_search_rejects_controls_and_escapes_like_wildcards() -> None:

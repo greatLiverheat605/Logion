@@ -458,9 +458,24 @@ class KnowledgeSearchResult(StrictModel):
     updated_at: datetime
 
 
+class SearchTruncationReason(StrEnum):
+    CANDIDATE_LIMIT = "candidate_limit"
+    BYTE_LIMIT = "byte_limit"
+
+
 class KnowledgeSearchPageResponse(StrictModel):
     results: list[KnowledgeSearchResult] = Field(max_length=SEARCH_MAX_RESULTS)
     next_cursor: Cursor | None = None
+    truncated: bool = False
+    truncation_reasons: list[SearchTruncationReason] = Field(default_factory=list, max_length=2)
+
+    @model_validator(mode="after")
+    def validate_truncation_shape(self) -> "KnowledgeSearchPageResponse":
+        if self.truncated != bool(self.truncation_reasons):
+            raise ValueError("truncated must agree with truncation_reasons")
+        if len(set(self.truncation_reasons)) != len(self.truncation_reasons):
+            raise ValueError("truncation_reasons must be unique")
+        return self
 
 
 LOCAL_WORKER_MAX_CHECKPOINT_BYTES = 16 * 1024

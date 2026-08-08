@@ -5749,6 +5749,19 @@
             "maxItems": 50,
             "title": "Results",
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "truncation_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/SearchTruncationReason"
+            },
+            "maxItems": 2,
+            "title": "Truncation Reasons",
+            "type": "array"
           }
         },
         "required": [
@@ -9509,6 +9522,14 @@
         ],
         "title": "SearchResult",
         "type": "object"
+      },
+      "SearchTruncationReason": {
+        "enum": [
+          "candidate_limit",
+          "byte_limit"
+        ],
+        "title": "SearchTruncationReason",
+        "type": "string"
       },
       "SelfStudyListResponse": {
         "additionalProperties": false,

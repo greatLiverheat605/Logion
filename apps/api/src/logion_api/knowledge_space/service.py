@@ -86,6 +86,7 @@ from logion_api.knowledge_space.schemas import (
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
     KnowledgeTargetType,
+    SearchTruncationReason,
     SourceExcerptCreateRequest,
     SourceExcerptPageResponse,
     SourceExcerptPreview,
@@ -987,13 +988,19 @@ class KnowledgeService:
                 for candidate in candidates
                 if self._search_sort_key(candidate) > cursor_position
             ]
+        truncation_reasons: list[SearchTruncationReason] = []
+        if row_limited:
+            truncation_reasons.append(SearchTruncationReason.CANDIDATE_LIMIT)
         visible = candidates[: payload.limit]
+        initial_visible_count = len(visible)
         while (
             visible
             and len(
                 KnowledgeSearchPageResponse(
                     results=[candidate.response() for candidate in visible],
                     next_cursor=None,
+                    truncated=bool(truncation_reasons),
+                    truncation_reasons=truncation_reasons,
                 )
                 .model_dump_json()
                 .encode("utf-8")
@@ -1001,8 +1008,14 @@ class KnowledgeService:
             > LIST_MAX_BYTES
         ):
             visible.pop()
+        if len(visible) < initial_visible_count:
+            truncation_reasons.append(SearchTruncationReason.BYTE_LIMIT)
 
-        has_more = row_limited or len(candidates) > len(visible)
+        # A cursor paginates only the bounded candidate window. Candidate rows
+        # omitted by the per-family cap are disclosed through ``truncated``;
+        # minting a cursor solely for those unavailable rows would falsely
+        # promise that deep pagination can recover them.
+        has_more = len(candidates) > len(visible)
         next_cursor = None
         if has_more and visible:
             last = visible[-1]
@@ -1020,6 +1033,8 @@ class KnowledgeService:
         return KnowledgeSearchPageResponse(
             results=[candidate.response() for candidate in visible],
             next_cursor=next_cursor,
+            truncated=bool(truncation_reasons),
+            truncation_reasons=truncation_reasons,
         )
 
     async def _search_target_rows(
@@ -1289,13 +1304,15 @@ class KnowledgeService:
                 self._append_reason(truncation, GraphTruncationReason.EDGE_LIMIT)
 
         if include_excerpt_preview:
-            records = await self._attach_previews(
+            records, preview_timed_out = await self._attach_previews(
                 db,
                 workspace_id,
                 space_id,
                 records,
                 cutoff_at=graph_cutoff,
             )
+            if preview_timed_out:
+                self._append_reason(truncation, GraphTruncationReason.TIME_LIMIT)
         ordered_records = [records[(root_type, root_id)]] + sorted(
             (record for key, record in records.items() if key != (root_type, root_id)),
             key=lambda record: (record.type.value, str(record.id)),
@@ -1611,7 +1628,8 @@ class KnowledgeService:
         records: dict[tuple[KnowledgeTargetType, UUID], GraphNodeRecord],
         *,
         cutoff_at: datetime | None = None,
-    ) -> dict[tuple[KnowledgeTargetType, UUID], GraphNodeRecord]:
+    ) -> tuple[dict[tuple[KnowledgeTargetType, UUID], GraphNodeRecord], bool]:
+        deadline = time.monotonic() + GRAPH_STATEMENT_TIMEOUT_SECONDS
         updated = dict(records)
         for target_type in KnowledgeTargetType:
             ids = {node_id for (node_type, node_id) in records if node_type is target_type}
@@ -1635,22 +1653,32 @@ class KnowledgeService:
                         SourceExcerpt.updated_at <= cutoff_at,
                     )
                 )
-            rows = (
-                await db.execute(
-                    select(KnowledgeCitation, SourceExcerpt)
-                    .join(
-                        SourceExcerpt,
-                        and_(
-                            SourceExcerpt.id == KnowledgeCitation.source_excerpt_id,
-                            SourceExcerpt.workspace_id == KnowledgeCitation.workspace_id,
-                            SourceExcerpt.space_id == KnowledgeCitation.space_id,
-                        ),
-                    )
-                    .where(*preview_conditions)
-                    .order_by(KnowledgeCitation.created_at.desc(), KnowledgeCitation.id.asc())
-                    .limit(GRAPH_MAX_NODES * 4)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return updated, True
+            statement = (
+                select(KnowledgeCitation, SourceExcerpt)
+                .join(
+                    SourceExcerpt,
+                    and_(
+                        SourceExcerpt.id == KnowledgeCitation.source_excerpt_id,
+                        SourceExcerpt.workspace_id == KnowledgeCitation.workspace_id,
+                        SourceExcerpt.space_id == KnowledgeCitation.space_id,
+                    ),
                 )
-            ).all()
+                .where(*preview_conditions)
+                .order_by(KnowledgeCitation.created_at.desc(), KnowledgeCitation.id.asc())
+                .limit(GRAPH_MAX_NODES * 4)
+            )
+            try:
+                rows = (
+                    await asyncio.wait_for(
+                        db.execute(statement),
+                        timeout=remaining,
+                    )
+                ).all()
+            except TimeoutError:
+                return updated, True
             seen: set[UUID] = set()
             for citation, excerpt in rows:
                 target_id = self._citation_target_id(citation)
@@ -1669,7 +1697,7 @@ class KnowledgeService:
                         stale=excerpt.status == "stale",
                     ),
                 )
-        return updated
+        return updated, False
 
     @staticmethod
     def acceptance_payload_sha256(

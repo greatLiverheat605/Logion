@@ -1,4 +1,5 @@
 import hashlib
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -311,7 +312,8 @@ async def test_attachment_clean_complete_uses_real_loopback_scanner() -> None:
 @pytest.mark.asyncio
 async def test_attachment_malware_path_quarantines_and_stays_unverified() -> None:
     base_settings = get_settings()
-    root = Path(tempfile.mkdtemp(prefix="v11-attachment-", dir=r"J:\ClamAVTmp"))
+    configured_tmp_root = os.environ.get("LOGION_TEST_ATTACHMENT_TMP_ROOT")
+    root = Path(tempfile.mkdtemp(prefix="v11-attachment-", dir=configured_tmp_root))
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
         update={

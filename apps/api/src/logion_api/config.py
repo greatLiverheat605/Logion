@@ -270,6 +270,10 @@ class Settings(BaseSettings):
             )
         if self.knowledge_space_deletion_enabled and not self.knowledge_space_api_enabled:
             raise ValueError("LOGION_KNOWLEDGE_SPACE_DELETION_ENABLED requires the main API flag")
+        if self.knowledge_space_deletion_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_DELETION_ENABLED is reserved until deletion is wired"
+            )
         if self.knowledge_space_ai_acceptance_enabled and not self.knowledge_space_api_enabled:
             raise ValueError(
                 "LOGION_KNOWLEDGE_SPACE_AI_ACCEPTANCE_ENABLED requires the main API flag"
