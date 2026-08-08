@@ -72,7 +72,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push web candidate
         id: web
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/web/Dockerfile
@@ -82,7 +82,7 @@ jobs:
           sbom: true
       - name: Build and push API candidate
         id: api
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/api/Dockerfile
@@ -92,7 +92,7 @@ jobs:
           sbom: true
       - name: Build and push worker candidate
         id: worker
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/worker/Dockerfile
@@ -102,7 +102,7 @@ jobs:
           sbom: true
       - name: Build and push backup candidate
         id: backup
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: infra/backup
           file: infra/backup/Dockerfile
