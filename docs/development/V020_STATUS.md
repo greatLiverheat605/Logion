@@ -447,3 +447,12 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 受控 SSH 会话的实际来源由服务器 `SSH_CONNECTION` 证明为 `183.159.53.63`；安全组中对应 `/32` 规则保留。
   删除多余 `100.104.0.0/16` 规则时触发阿里云短信二次验证，尚未提交删除，不把它记为完成。
 - 生产候选 `0.2.0-rc1` 尚未部署；数据库迁移、镜像替换、真实邮件投递和流量切换继续保持停止状态。
+
+## 候选镜像拉取失败与线上回滚（2026-08-09）
+
+- 生产候选仍固定为 `0.2.0-rc1` / source SHA `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。在 ECS 维护窗口中，Public ECR 基础镜像和 Web 镜像拉取成功；API、Worker、Backup 的 GHCR 平台 manifest/API token 路径持续超时，未使用未验证代理、临时镜像或本地构建物。
+- 候选未执行数据库迁移、Compose 候选启动、真实邮件、浏览器验收或流量切换；线上数据库没有被候选迁移触碰。
+- 已执行回滚任务 `2714`：失败候选目录隔离为 `/opt/logion.failed-20260808T173400Z`，旧目录 `/opt/logion.before-20260808T170123Z` 恢复为 `/opt/logion`，并重新启动旧 API/Web/Worker/Reverse Proxy/Backup。
+- 回滚后只读复核通过：线上提交仍为 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`，迁移头仍为 `0034_sync_conflicts`；API、Web、Worker、Reverse Proxy、Backup、PostgreSQL、Redis 均处于运行/健康状态，`http://127.0.0.1:8080/health` 返回 `{"status":"ok","service":"web","version":"0.1.0"}`。
+- 本次发布门禁结论为 `blocked`，不是候选通过。下一次重试前必须先解决 ECS 到 GHCR blob/platform manifest 的网络问题（优先临时提升 ECS 公网带宽，或提供四个 digest 已完整校验的离线镜像包）；四个候选 digest 全部拉取并核验成功前，不执行迁移或切流。
+- 线上仍保持旧版本与默认关闭边界；Attachment、Local Worker、Shared Write、Deletion、Provider、sync-v1、AI Acceptance 等生产开关继续关闭，不启动本机 Docker，不绕过 SessionBoundary。
