@@ -1,9 +1,11 @@
 import asyncio
+from collections.abc import Iterator
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.ai_gateway.models import AIOutputDraft, AIOutputDraftCandidate, AIRun, AITaskRoute
+from logion_api.config import get_settings
 from logion_api.content.models import Resource
 from logion_api.db import session_factory
 from logion_api.knowledge_space.models import KnowledgeAcceptanceReceipt, KnowledgeCitation
@@ -15,6 +17,23 @@ from sqlalchemy import select
 
 ORIGIN = "http://test"
 PASSWORD = "a-strong-password-123"  # noqa: S105 - test-only credential
+
+
+@pytest.fixture
+def _knowledge_space_api_enabled() -> Iterator[None]:
+    base_settings = get_settings()
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
+        update={
+            "knowledge_space_api_enabled": True,
+            "knowledge_space_ai_acceptance_enabled": True,
+        }
+    )
+    try:
+        yield
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
 
 
 async def _register(client: AsyncClient, label: str) -> tuple[UUID, UUID]:
@@ -88,7 +107,7 @@ def _payload(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_acceptance_is_atomic_and_idempotent() -> None:
+async def test_acceptance_is_atomic_and_idempotent(_knowledge_space_api_enabled: None) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=app, client=("192.0.2.59", 48204)),
         base_url=ORIGIN,

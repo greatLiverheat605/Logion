@@ -1,6 +1,8 @@
+import asyncio
 import hashlib
 import os
 import shutil
+import struct
 import tempfile
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -37,13 +39,36 @@ class MalwareAttachmentScanner:
         raise AttachmentScannerError("ATTACHMENT_MALWARE_FOUND")
 
 
+async def _clean_clamd_handler(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+) -> None:
+    try:
+        command = await reader.readuntil(b"\0")
+        if command != b"zINSTREAM\0":
+            return
+        while True:
+            chunk_size = struct.unpack("!I", await reader.readexactly(4))[0]
+            if chunk_size == 0:
+                break
+            await reader.readexactly(chunk_size)
+        writer.write(b"stream: OK\0")
+        await writer.drain()
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None:
     base_settings = get_settings()
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
-        update={"knowledge_space_attachment_ingest_enabled": True}
+        update={
+            "knowledge_space_api_enabled": True,
+            "knowledge_space_attachment_ingest_enabled": True,
+        }
     )
     app.dependency_overrides[get_attachment_scanner] = CleanAttachmentScanner
     try:
@@ -238,12 +263,17 @@ async def _attachment_protocol_is_verified_idempotent_and_tenant_bound() -> None
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_attachment_clean_complete_uses_real_loopback_scanner() -> None:
+    server = await asyncio.start_server(_clean_clamd_handler, "127.0.0.1", 0)
+    assert server.sockets
+    scanner_port = int(server.sockets[0].getsockname()[1])
     base_settings = get_settings()
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
         update={
+            "knowledge_space_api_enabled": True,
             "knowledge_space_attachment_ingest_enabled": True,
             "attachment_scanner_enabled": True,
+            "attachment_scanner_port": scanner_port,
         }
     )
     try:
@@ -306,6 +336,8 @@ async def test_attachment_clean_complete_uses_real_loopback_scanner() -> None:
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.integration
@@ -317,6 +349,7 @@ async def test_attachment_malware_path_quarantines_and_stays_unverified() -> Non
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides[get_settings] = lambda: base_settings.model_copy(
         update={
+            "knowledge_space_api_enabled": True,
             "knowledge_space_attachment_ingest_enabled": True,
             "attachment_scanner_enabled": True,
             "attachment_root": str(root),
