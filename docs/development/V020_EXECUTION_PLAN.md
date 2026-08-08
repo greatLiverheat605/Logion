@@ -207,6 +207,15 @@ V20-15 只做最终候选 acceptance：复核分支/基线、全部差异、合�
 生产开关和残余风险，形成 acceptance manifest。任何生产发布、merge 或敏感能力启用，都必须在
 V20-15 评审后再获得用户明确批准；当前不自动发布、不启动 Docker，也不绕过 SessionBoundary。
 
+## V20-15 发布准备复核（2026-08-08）
+
+候选验收后先补齐可在本机安全完成的门禁：Gitleaks `8.30.1` 已扫描当前仓库完整历史（406 commits，
+0 findings），GitHub 官方状态为 `All Systems Operational`。发布工作流的 source SHA 必须同时拥有成功
+的 Main candidate、full-capacity 和 Release candidate 证据；目前可公开核对到的成功运行仍绑定 `main`
+旧提交 `ebf93ee192598430393f93e9313665c36446f84e`，并非当前集成候选，因此保持发布阻塞。只有用户明确
+批准发布流程、并提供可用 GitHub 凭据后，才可按同一 SHA 依次触发和复核这些工作流；此前不启动 Docker、
+不创建镜像/签名、不合并默认分支，也不打开敏感生产开关。
+
 ## V20-15 候选验收记录（2026-08-08）
 
 候选 manifest 已建立并绑定 `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`。`pnpm ci:fast`、合同检查、
