@@ -120,3 +120,12 @@ sync-v1、AI Acceptance 任一生产能力。
   `gh attestation verify --repo` 对四个 digest 执行 provenance 核验，并完成 exact-candidate 安全扫描。
 - 该证据与 Release candidate 的 `source_sha=448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 一致；生产发布
   尚未执行，敏感生产开关继续关闭。
+
+## 11. 生产发布执行前提（2026-08-08）
+
+- 用户已批准进入生产发布执行，但项目没有自动部署 workflow；生产入口是
+  `infra/runbooks/aliyun-production-release.md` 的受控 ECS 手册流程。
+- 生产执行尚缺目标 ECS/SSH 访问、正式域名/DNS/TLS、DirectMail/RAM、生产密钥环、异机备份副本和
+  受控运维接收人。上述信息必须通过安全渠道提供，不能写入仓库或聊天。
+- 在这些外部前提满足前，不进行 SSH、DNS、数据库迁移、生产邮件投递、流量切换或敏感能力启用；本
+  manifest 结论仍为“候选已通过、生产未发布”。
