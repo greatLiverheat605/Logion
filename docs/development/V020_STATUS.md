@@ -439,3 +439,11 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   `0034_sync_conflicts`，`restore_requires_sync_epoch_bump=true`，临时数据库和附件目录已清理。
 - 该产物绑定线上旧提交 `5f44833…`，不替代候选 `448cbdf…` 的发布前备份；候选维护窗口仍必须重新备份、
   校验、复制并恢复演练。线上当前仍为旧提交，未迁移、未替换镜像、未切流。
+
+## DNS 与 SSH 入口复核（2026-08-09）
+
+- 阿里云 DNS 已存在 DirectMail DKIM：`aliyun-cn-hangzhou._domainkey.mail.logion.work`；通过公共解析器复核
+  记录可见。已新增 `_dmarc.logion.work` TXT，策略为 `v=DMARC1; p=none; adkim=s; aspf=s`，并通过公共解析器复核。
+- 受控 SSH 会话的实际来源由服务器 `SSH_CONNECTION` 证明为 `183.159.53.63`；安全组中对应 `/32` 规则保留。
+  删除多余 `100.104.0.0/16` 规则时触发阿里云短信二次验证，尚未提交删除，不把它记为完成。
+- 生产候选 `0.2.0-rc1` 尚未部署；数据库迁移、镜像替换、真实邮件投递和流量切换继续保持停止状态。
