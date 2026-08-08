@@ -403,3 +403,17 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   投递或生产流量切换。
 - 已通过的候选仍固定为 `0.2.0-rc1` / source SHA `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`；生产
   开关继续默认关闭，当前停在“生产目标与凭据准备”而非“已发布”。
+
+## 生产目标只读预检（2026-08-08）
+
+- 已复用首版现有 ECS 配置完成只读预检：Ubuntu 24.04、Docker 29.6.2、Compose 5.3.1、Nginx、jq、
+  `/opt/logion`、生产 `.env` 与备份密钥文件均存在；SSH 密钥登录成功，未读取私钥或密钥值。
+- 当前线上代码仍为旧提交 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`，迁移头为
+  `0034_sync_conflicts`；候选 `448cbdf` 的迁移头更高，尚未进行线上替换或迁移。
+- 现有服务全部运行且健康，当前线上 `logion.work/health` 返回 HTTP 200；最新备份文件
+  `logion-20260808T054944Z-beta-v1.backup` 校验为 `OK`。
+- `.env` 已配置 `aliyun_directmail`、`cn-hangzhou` 和 `LogionDirectMailSender`；ECS IMDSv2 只读角色名
+  核对成功，未读取临时凭据正文。公网 DNS 已有 `mail.logion.work` SPF，但 `_dmarc.logion.work`
+  当前未解析；DirectMail DKIM/DMARC 需在 DNS/控制台确认后，才能满足生产邮件门禁。
+- 本轮仅执行只读检查，未停止服务、未修改 `.env`、未迁移数据库、未切换流量。下一断点是补齐
+  DMARC/DKIM 与异机备份确认，再按 runbook 进入 prerelease 维护窗口。

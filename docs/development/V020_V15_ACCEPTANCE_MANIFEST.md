@@ -129,3 +129,14 @@ sync-v1、AI Acceptance 任一生产能力。
   受控运维接收人。上述信息必须通过安全渠道提供，不能写入仓库或聊天。
 - 在这些外部前提满足前，不进行 SSH、DNS、数据库迁移、生产邮件投递、流量切换或敏感能力启用；本
   manifest 结论仍为“候选已通过、生产未发布”。
+
+## 12. 生产目标只读预检（2026-08-08）
+
+- 首版 ECS 配置已复用并通过只读检查：Ubuntu 24.04、Docker/Compose/Nginx/jq、应用目录、`.env`、
+  备份密钥与 SSH 密钥登录均正常；没有读取私钥或生产密钥值。
+- 线上仍运行旧提交 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`、迁移头 `0034_sync_conflicts`，
+  服务健康；最新备份 checksum 为 `OK`。候选 `448cbdf` 尚未部署或迁移。
+- `aliyun_directmail`、杭州地域和 `LogionDirectMailSender` 已在现有 `.env` 配置，IMDSv2 角色名核对
+  成功；`mail.logion.work` SPF 已存在，但 `_dmarc.logion.work` 尚未解析，DKIM/DMARC 仍需完成公开 DNS
+  与控制台确认。
+- 只读预检没有改变生产状态；在邮件 DNS 与异机备份门禁补齐前，不进行维护窗口、迁移或流量切换。
