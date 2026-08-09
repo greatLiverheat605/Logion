@@ -14,6 +14,8 @@
   `2339002cd084950c3b859db561ade66fcfa528f4`，与合并提交一致。
 - 该候选 job 实际完成 `pnpm ci:fast`、生产依赖许可策略、Compose 校验、候选镜像构建、provenance、精确候选 smoke、
   Trivy/CodeQL/SBOM、artifact 上传和环境清理；未触发生产发布或流量切换。
+- 受控公网检查：`https://logion.work/health` 返回 HTTP 200，但响应版本仍为 `0.1.0`；Main candidate 尚未部署到公网，
+  因此当前线上版本不能标记为 v0.2.0。认证后人工回归因浏览器无已登录验收会话暂记 `not_run`，未输入凭据、未发送真实邀请。
 - GLM 切换按用户当前指令暂缓；交接包已准备但不视为已启动 GLM 任务。用户同意后再重新规划并发出新的提示词。
 - 当前主线实施模型改为 GLM/ZCode；Kimi、DeepSeek、OpenCode 暂停派发，特殊专业场景需用户另行配置。GLM 交接包位于
   [`docs/coordination/glm-handoff/`](../coordination/glm-handoff/)。

@@ -45,5 +45,6 @@ GLM 曾交付过一个纯 Python、有界、无递归 BFS 图内核候选：42 �
 
 1. 已核对 Main candidate `31300835608`：`status=completed`、`conclusion=success`，运行 `head_sha` 等于 `2339002…`。
 2. 候选 job 的 `pnpm ci:fast`、Compose 校验、候选镜像构建/证明、精确候选 smoke、Trivy/CodeQL/SBOM 和清理步骤均为成功。
-3. 进行候选环境的人工作用回归（不发送真实邀请、不启用敏感生产能力），并将真实观察追加到状态文档/协调 Run。
-4. GLM 切换暂不执行；只有用户明确同意后，才启用新的 GLM 任务包并重新规划下一项任务。
+3. 公网 `https://logion.work/health` 实际返回 HTTP 200，但版本为 `0.1.0`；当前公网仍不是 v0.2.0，不能把 Main candidate 通过写成已部署。
+4. 登录入口可达，但浏览器没有已登录验收会话；认证后的按钮/邀请反馈回归为 `not_run`，没有输入凭据，也没有发送真实邀请。
+5. GLM 切换暂不执行；只有用户明确同意后，才启用新的 GLM 任务包并重新规划下一项任务。
