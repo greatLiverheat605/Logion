@@ -30,6 +30,7 @@ import {
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -192,7 +193,7 @@ export function PlanningCenter() {
       setStatus("本地资料已解锁。密钥只保留在当前应用会话内存中。");
       event.currentTarget.reset();
     } catch (error) {
-      setStatus(message(error));
+      setStatus(offlineUnlockMessage(error) ?? message(error));
     }
   }
 

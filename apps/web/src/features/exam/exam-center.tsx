@@ -31,6 +31,7 @@ import {
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -360,7 +361,7 @@ export function ExamCenter() {
       setStatus("备考资料已解锁；考试可断网创建并稍后同步。");
       event.currentTarget.reset();
     } catch (error) {
-      setStatus(message(error));
+      setStatus(offlineUnlockMessage(error) ?? message(error));
     }
   }
 
