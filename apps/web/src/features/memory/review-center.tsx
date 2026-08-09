@@ -32,6 +32,7 @@ import {
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -464,7 +465,7 @@ export function ReviewCenter() {
       setStatus("审查数据已解锁；知识点与掌握确认支持断网编辑。");
       event.currentTarget.reset();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(offlineUnlockMessage(error) ?? errorMessage(error));
     }
   }
 

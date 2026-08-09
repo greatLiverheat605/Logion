@@ -28,13 +28,17 @@ import {
   ProductTag,
   ProductTaskRow,
 } from "@/components/product/product-ui";
+import { InlineFormFeedback } from "@/components/product/inline-form-feedback";
 import {
   deriveProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { useSession } from "@/features/auth/session-provider";
-import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
+import {
+  offlineCapabilityMessage,
+  offlineUnlockMessage,
+} from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -127,6 +131,11 @@ export function ContentCenter() {
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备记录与资料库……");
+  const [unlockPending, setUnlockPending] = useState(false);
+  const [unlockFeedback, setUnlockFeedback] = useState<{
+    message: string;
+    tone: "error" | "loading" | "success";
+  } | null>(null);
   const [notes, setNotes] = useState<View<NotePayload>[]>([]);
   const [resources, setResources] = useState<View<ResourcePayload>[]>([]);
   const [attachments, setAttachments] = useState<AttachmentQueueEntry[]>([]);
@@ -273,17 +282,31 @@ export function ContentCenter() {
   async function unlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (session.status !== "authenticated") return;
+    const form = event.currentTarget;
+    const passphrase = String(new FormData(form).get("passphrase") ?? "");
+    if (passphrase.length < 10) {
+      const message = "本地口令至少需要 10 个字符。";
+      setStatus(message);
+      setUnlockFeedback({ message, tone: "error" });
+      return;
+    }
+    setUnlockPending(true);
+    setUnlockFeedback({ message: "正在解锁本地资料…", tone: "loading" });
     try {
-      const passphrase = String(
-        new FormData(event.currentTarget).get("passphrase") ?? "",
-      );
       const { database: db, vault: localVault } = await unlockVault(passphrase);
       await bootstrap(db, localVault);
       await refresh(db, localVault);
-      setStatus("已在应用内解锁。Markdown 只按纯文本预览，不执行其中的 HTML。");
-      event.currentTarget.reset();
+      const message =
+        "已在应用内解锁。Markdown 只按纯文本预览，不执行其中的 HTML。";
+      setStatus(message);
+      setUnlockFeedback({ message, tone: "success" });
+      form.reset();
     } catch (error) {
-      setStatus(userMessage(error));
+      const message = offlineUnlockMessage(error) ?? userMessage(error);
+      setStatus(message);
+      setUnlockFeedback({ message, tone: "error" });
+    } finally {
+      setUnlockPending(false);
     }
   }
 
@@ -652,16 +675,37 @@ export function ContentCenter() {
             ))}
           </select>
         </div>
-        <form className="inline-form" onSubmit={unlock}>
+        <form
+          aria-busy={unlockPending}
+          className="inline-form"
+          noValidate
+          onSubmit={unlock}
+        >
           <label htmlFor="content-passphrase">本地口令</label>
           <input
+            aria-describedby={
+              unlockFeedback?.tone === "error"
+                ? "content-unlock-feedback"
+                : undefined
+            }
+            aria-invalid={unlockFeedback?.tone === "error"}
             id="content-passphrase"
             name="passphrase"
             type="password"
             minLength={10}
             required
           />
-          <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
+          <button disabled={unlockPending} type="submit">
+            {unlockPending ? "正在解锁…" : unlocked ? "重新解锁" : "解锁资料"}
+          </button>
+          {unlockFeedback ? (
+            <InlineFormFeedback
+              id="content-unlock-feedback"
+              tone={unlockFeedback.tone}
+            >
+              {unlockFeedback.message}
+            </InlineFormFeedback>
+          ) : null}
         </form>
       </ProductDisclosure>
 
