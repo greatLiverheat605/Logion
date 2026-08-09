@@ -1,19 +1,19 @@
-# 当前状态（GLM 接手时点）
+# 当前状态（主线接手时点）
 
 ## 1. 真实基线
 
-| 项目 | 当前值 |
-| --- | --- |
-| 仓库 | `greatLiverheat605/Logion` |
-| 正式集成工作树 | `v020-integration` |
-| 集成分支 | `codex/v020-integration` |
-| 集成树交接前 HEAD | `26a1b24` |
-| 远端 `main` | `2339002cd084950c3b859db561ade66fcfa528f4` |
-| PR | [#202](https://github.com/greatLiverheat605/Logion/pull/202) |
-| PR 状态 | 已合并（Rebase and merge） |
-| PR 合并提交 | `2339002cd084950c3b859db561ade66fcfa528f4` |
-| PR 检查 | `fast`、`integration`、`browser` 均成功 |
-| 合并后工作流 | [Main candidate #31300835608](https://github.com/greatLiverheat605/Logion/actions/runs/31300835608)，`success` |
+| 项目              | 当前值                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| 仓库              | `greatLiverheat605/Logion`                                                                                     |
+| 正式集成工作树    | `v020-integration`                                                                                             |
+| 集成分支          | `codex/v020-integration`                                                                                       |
+| 集成树交接前 HEAD | `26a1b24`                                                                                                      |
+| 远端 `main`       | `2339002cd084950c3b859db561ade66fcfa528f4`                                                                     |
+| PR                | [#202](https://github.com/greatLiverheat605/Logion/pull/202)                                                   |
+| PR 状态           | 已合并（Rebase and merge）                                                                                     |
+| PR 合并提交       | `2339002cd084950c3b859db561ade66fcfa528f4`                                                                     |
+| PR 检查           | `fast`、`integration`、`browser` 均成功                                                                        |
+| 合并后工作流      | [Main candidate #31300835608](https://github.com/greatLiverheat605/Logion/actions/runs/31300835608)，`success` |
 
 `codex/v020-integration` 与远端 `main` 是两个不同用途的分支：前者是协调/验收工作树，后者是已合并产品基线。开始新实现前必须由协调者确认目标基线和新分支，禁止直接在 `main` 或共享集成分支上并行写入。
 
@@ -35,9 +35,9 @@ PR #202 的两个提交为：
 
 V20-01～V20-14 的设计/实现/验收门已记录为通过；Main candidate 已按合并 SHA 成功完成。V20-15 仍需完成候选观察、真实受邀验收和用户发布授权，不能将候选 CI 通过等同于生产发布完成。
 
-## 4. GLM 候选图内核的边界
+## 4. 候选图内核的边界
 
-GLM 曾交付过一个纯 Python、有界、无递归 BFS 图内核候选：42 个测试、Ruff lint/format、Mypy 均通过。它只处理调用方已经授权过滤后的字符串 ID 节点/边，支持无向 1/2 跳遍历、自环、多重边去重、150 节点/400 边硬上限和确定性冲突错误。
+曾交付过一个纯 Python、有界、无递归 BFS 图内核候选：42 个测试、Ruff lint/format、Mypy 均通过。它只处理调用方已经授权过滤后的字符串 ID 节点/边，支持无向 1/2 跳遍历、自环、多重边去重、150 节点/400 边硬上限和确定性冲突错误。
 
 该候选没有正式接入授权、Space scope、数据库查询、游标、响应字节限制、超时、速率/配额或服务端资源治理，不能直接声明为正式 API 或 V20-08/V20-10 证据。除非出现新的设计批准和任务包，它保持隔离、不提交、不启用。
 
@@ -47,4 +47,4 @@ GLM 曾交付过一个纯 Python、有界、无递归 BFS 图内核候选：42 �
 2. 候选 job 的 `pnpm ci:fast`、Compose 校验、候选镜像构建/证明、精确候选 smoke、Trivy/CodeQL/SBOM 和清理步骤均为成功。
 3. 公网 `https://logion.work/health` 实际返回 HTTP 200，但版本为 `0.1.0`；当前公网仍不是 v0.2.0，不能把 Main candidate 通过写成已部署。
 4. 登录入口可达，但浏览器没有已登录验收会话；认证后的按钮/邀请反馈回归为 `not_run`，没有输入凭据，也没有发送真实邀请。
-5. GLM 切换暂不执行；只有用户明确同意后，才启用新的 GLM 任务包并重新规划下一项任务。
+5. 模型切换暂不执行；只有用户明确指定后，才启用新的主线任务包并重新规划下一项任务。

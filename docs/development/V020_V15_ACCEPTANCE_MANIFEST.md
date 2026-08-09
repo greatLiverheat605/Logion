@@ -14,7 +14,7 @@
 | 代码候选提交    | `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`                                             |
 | 远端状态        | `origin/codex/v020-integration` 与当前本地 HEAD 同步；本 manifest 已随文档收口提交推送 |
 | 协调者/实际模型 | Windows Codex / `gpt-5.6-sol`                                                          |
-| 外部 worker     | 本门无新 worker；Kimi 首版施工与 DeepSeek 只读终审沿用已接受证据                       |
+| 外部 worker     | 本门无新 worker；首版施工与只读终审沿用已接受证据                                      |
 
 本门只复核候选集成，不发布、不 merge 默认分支、不启用生产敏感能力，不接触生产数据、凭据或
 Provider endpoint。V20-14 演练文档提交为 `0b66e03`；本 manifest 与状态收口随后提交。代码自
@@ -50,7 +50,7 @@ Provider endpoint。V20-14 演练文档提交为 `0b66e03`；本 manifest 与状
 
 候选代码自 `b4b2888` 后未改变，以下证据可由 V20-11～V20-14 已接受 observation 继承：隔离
 PostgreSQL/Redis/ClamAV、附件扫描与残留清理、Local Worker crash/upload 恢复、worker-offline
-在线核心、迁移集成、Compose 边界和 DeepSeek 只读终审。V20-10 Nightly #40（GitHub run
+在线核心、迁移集成、Compose 边界和既有只读终审。V20-10 Nightly #40（GitHub run
 `31147645530`，固定 UI 提交 `64298ec597b6e45dfea9a94cc819c77daf0cda8b`）已通过
 1440/390px 溢出、axe、移动节点列表、桌面图谱键盘导航和持久化主题值 XSS；该提交到候选没有
 任何 Web、Playwright 或浏览器配置差异。
@@ -99,7 +99,7 @@ sync-v1、AI Acceptance 任一生产能力。
 - artifact 下载端点需要认证，未将无法独立下载的内容伪造为本地文件复核；Release candidate run
   `31259843000` 已成功并生成 artifact `release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。
 - Main candidate run `31255904782` 的四项 `actions/attest-build-provenance` 与 `Verify provenance and
-  scan exact candidate` 均成功；本机 Docker 仍未启动，生产发布和敏感生产能力启用仍需另行批准。
+scan exact candidate` 均成功；本机 Docker 仍未启动，生产发布和敏感生产能力启用仍需另行批准。
 
 ## 9. Release candidate 实际运行证据（2026-08-08）
 

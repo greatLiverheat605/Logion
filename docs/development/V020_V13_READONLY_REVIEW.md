@@ -1,7 +1,7 @@
-# V20-13 DeepSeek V4 Flash 只读终审记录
+# V20-13 只读终审记录
 
 > 日期：2026-08-08（Asia/Shanghai）
-> 终审模型：DeepSeek V4 Flash（固定 OpenCode 只读工作树）
+> 终审执行方：用户指定的只读审查方（固定只读工作树）
 > 审查目标：`7d50e675be19b2779613ed61ba31dc821afa73dc`
 > 基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`
 > Orca Task：`task_66a2bdb9ab08`
@@ -9,7 +9,7 @@
 
 ## 1. 终审结论
 
-DeepSeek 对完整候选 diff 执行了只读安全、合同和回归审查，覆盖租户隔离、PostgreSQL 约束、
+只读审查方对完整候选 diff 执行了安全、合同和回归审查，覆盖租户隔离、PostgreSQL 约束、
 stale acceptance、重放/计费边界、XSS/CSP、DoS、sync-v1、删除/回滚和默认开关。无 High 或
 Medium finding；5 个 Low/Info finding 已由 Windows Codex 修复并重新验证，因此 V20-13 接受。
 
@@ -38,7 +38,7 @@ Medium finding；5 个 Low/Info finding 已由 Windows Codex 修复并重新验�
 
 ## 4. 只读工作树完整性
 
-DeepSeek 审查工作树目标 SHA 正确。审查结束后发现 OpenCode 生成的 `.omo` 会话元数据残留；
+审查工作树目标 SHA 正确。审查结束后发现工具生成的会话元数据残留；
 协调员通过 Orca 清理该工具残留，并再次核对 `git status --short` 无输出、HEAD 仍为审查目标 SHA。
 该残留不属于项目源码，也未形成提交或推送。
 

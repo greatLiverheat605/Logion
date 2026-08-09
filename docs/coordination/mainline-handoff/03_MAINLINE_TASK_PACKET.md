@@ -1,9 +1,9 @@
-# 可直接交给 GLM 的启动提示词
+# 可直接交给主线执行方的启动提示词
 
-将下面整段粘贴给 GLM/ZCode。它是当前主线的启动包，不包含任何密钥或私有连接信息。
+将下面整段交给当前用户指定的执行方。它是当前主线的启动包，不包含任何密钥或私有连接信息。
 
 ```text
-你现在接手 Logion 项目的唯一主线实施工作，角色是 GLM/ZCode 主线执行模型。
+你现在接手 Logion 项目的唯一主线实施工作，角色是主线执行方。
 
 仓库与基线：
 - 正式集成工作树：v020-integration
@@ -18,7 +18,7 @@
 3. docs/development/V020_EXECUTION_PLAN.md
 4. docs/development/V020_STATUS.md
 5. .agents/coordination/current-run.json 及其指向的 Run
-6. docs/coordination/glm-handoff/README.md 及 00～06 全部文件
+6. docs/coordination/mainline-handoff/README.md 及 00～06 全部文件
 
 第一轮任务：只做基线和 Main candidate 核对，不修改业务代码：
 - 确认当前分支、HEAD、远端 main SHA 和工作树 clean 状态；
@@ -36,7 +36,7 @@
 - Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 生产开关保持关闭；
 - 不启动本机 Docker，不绕过 SessionBoundary，不修改 Provider/hooks/CCSwitch 配置；
 - 不在仓库写入 API key、token、密码、SSH 材料、私有主机数据、真实邮箱、终端转录或用户目录；
-- 不直接把 GLM 纯内存 graph kernel 候选接入正式 API；它缺少授权、scope、游标、资源治理；
+- 不直接把纯内存 graph kernel 候选接入正式 API；它缺少授权、scope、游标、资源治理；
 - 不自行 merge、push、release 或切换生产流量。
 
 完成后必须返回：
