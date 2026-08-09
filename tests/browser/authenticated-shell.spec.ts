@@ -208,9 +208,8 @@ test.describe("authenticated shell", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
 
     for (const route of authenticatedRoutes) {
-      await page.goto(route, { waitUntil: "domcontentloaded" });
-      await expect(page.locator(".app-shell-frame")).toBeVisible();
-      await expect(page.locator("h1")).toBeVisible();
+      await page.goto(route, { waitUntil: "load" });
+      await expect(page.locator(".app-shell-frame h1")).toBeVisible();
 
       const reducedMotionMatches = await page.evaluate(
         () => matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -220,23 +219,21 @@ test.describe("authenticated shell", () => {
         `${route} must run with reduced motion enabled`,
       ).toBe(true);
 
-      const motionReport = await page
-        .locator(".app-shell-frame, .app-shell-frame *")
-        .evaluateAll((elements) => {
-          const movingElements = elements.flatMap((element) => {
-            const style = getComputedStyle(element);
-            const hasAnimation =
-              style.animationName !== "none" &&
-              style.animationDuration !== "0s";
-            const hasTransition =
-              style.transitionDuration !== "0s" &&
-              style.transitionProperty !== "none";
-            if (!hasAnimation && !hasTransition) return [];
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const shell = document.querySelector(".app-shell-frame");
+              if (!shell) {
+                return {
+                  count: 0,
+                  elements: [],
+                  shellPresent: false,
+                  unresolvedElements: [],
+                };
+              }
 
-            return [
-              {
-                animationDuration: style.animationDuration,
-                animationName: style.animationName,
+              const describeElement = (element: Element) => ({
                 ariaLabel: element.getAttribute("aria-label"),
                 className:
                   typeof element.className === "string"
@@ -244,20 +241,55 @@ test.describe("authenticated shell", () => {
                     : null,
                 id: element.id || null,
                 tagName: element.tagName.toLowerCase(),
-                transitionDuration: style.transitionDuration,
-                transitionProperty: style.transitionProperty,
-              },
-            ];
-          });
-          return {
-            count: movingElements.length,
-            elements: movingElements.slice(0, 50),
-          };
+              });
+              const elements = [shell, ...shell.querySelectorAll("*")];
+              const unresolvedElements = elements.flatMap((element) => {
+                const style = getComputedStyle(element);
+                if (
+                  style.animationDuration.length > 0 &&
+                  style.animationName.length > 0 &&
+                  style.transitionDuration.length > 0 &&
+                  style.transitionProperty.length > 0
+                ) {
+                  return [];
+                }
+                return [describeElement(element)];
+              });
+              const movingElements = elements.flatMap((element) => {
+                const style = getComputedStyle(element);
+                const hasAnimation =
+                  style.animationName !== "none" &&
+                  style.animationDuration !== "0s";
+                const hasTransition =
+                  style.transitionDuration !== "0s" &&
+                  style.transitionProperty !== "none";
+                if (!hasAnimation && !hasTransition) return [];
+
+                return [
+                  {
+                    animationDuration: style.animationDuration,
+                    animationName: style.animationName,
+                    ...describeElement(element),
+                    transitionDuration: style.transitionDuration,
+                    transitionProperty: style.transitionProperty,
+                  },
+                ];
+              });
+              return {
+                count: movingElements.length,
+                elements: movingElements.slice(0, 50),
+                shellPresent: true,
+                unresolvedElements: unresolvedElements.slice(0, 50),
+              };
+            }),
+          { message: `${route} must honor reduced motion` },
+        )
+        .toEqual({
+          count: 0,
+          elements: [],
+          shellPresent: true,
+          unresolvedElements: [],
         });
-      expect(
-        motionReport.count,
-        `${route} must honor reduced motion: ${JSON.stringify(motionReport)}`,
-      ).toBe(0);
     }
   });
 
