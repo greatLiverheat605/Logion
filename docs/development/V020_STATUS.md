@@ -1,11 +1,20 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-10（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 仍运行于 ECS 受控 prerelease。认证会话修复已合并到新主线，但首个 RC3 因 reduced-motion 浏览器门禁失败而停止，尚未部署；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 仍运行于 ECS 受控 prerelease。RC4 因认证页面未稳定时提前执行 reduced-motion 断言而停止，修复分支正在等待 GitHub 真实 browser job；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前主线：PR #203 已 Squash 合并；`main` 为
-> `cb0ada40187088a58f591246ff4de03fc05293e6`。Main candidate run `31332165349` 与 Full capacity run
-> `31332633330` 均成功且 head SHA 一致；Release candidate `0.2.0-rc3` run `31332751602` 失败，禁止部署。
+> 当前主线：PR #204 已 Squash 合并；`main` 为
+> `dbea77dc9165497d34a37f051fc5cd1a80932851`。Main candidate run `31333796558` 与 Full capacity run
+> `31334189035` 均成功且 head SHA 一致；Release candidate `0.2.0-rc4` run `31334288158` 失败，禁止部署。
+
+## V20-15 RC4 浏览器门禁修复断点（2026-08-10）
+
+- PR #204 已将全局 reduced-motion CSS 修复 Squash 合并到 `main`；候选 CSS 与本机生产构建 CSS 的 SHA-256 一致，不是错误镜像或漏打包。
+- Release candidate `0.2.0-rc4` run `31334288158` 的候选镜像 smoke、空环境恢复与兼容验证通过，但认证浏览器门禁在 `/app/today` 报告 34 个 transition 元素，原执行与 retry 均失败，因此不得部署。
+- 失败 trace 证明样式表在断言前已加载，`page.emulateMedia({ reducedMotion: "reduce" })` 也成功；但 `goto(..., { waitUntil: "domcontentloaded" })` 返回时页面仍处于 SessionBoundary 验证状态，`.app-shell-frame` 尚未挂载。原 `evaluateAll` 在 React 挂载期间采样，门禁没有等待认证页面稳定。
+- 修复分支 `codex/v020-rc4-reduced-motion-today` 基于上述 `main` 创建。浏览器断言现在先等待应用外壳与 `h1` 可见，再显式校验 media query，并在失败时输出最多 50 个元素的标签、类名和计算动效属性；现有产品 CSS 不再重复修改。
+- 本机已通过目标文件 Prettier、Playwright 测试发现、Lint、TypeScript、Mypy、402 个 Python 测试、231 个 Web 测试、生产构建与合同检查。整仓聚合 `pnpm ci:fast` 的格式阶段仅因必须保留且不提交的 `.tmp-v020-rc4` 原始 trace/HTML/JSON 被扫描而停止；这些证据未被格式化、删除或纳入提交。
+- 真实认证浏览器仍必须由该分支 PR 的 GitHub browser job 执行并通过，之后才可合并并以新 `main` SHA 重跑 Main candidate、Full capacity 与新版本号 RC5。ECS 继续保持 RC2，所有敏感生产开关继续关闭。
 
 ## V20-15 RC3 reduced-motion 修复断点（2026-08-10）
 
