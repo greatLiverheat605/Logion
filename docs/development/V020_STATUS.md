@@ -3,7 +3,18 @@
 > 更新时间：2026-08-09（Asia/Shanghai）。
 > 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 候选已在 ECS 进入受控 prerelease 观察期，生产正式发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 协调基线：集成工作树分支 `codex/v020-integration`；当前候选 source SHA：`448cbdf8bd43c45aa25e3f2068e2246f3299be3a`；前端代码检查点仍由该候选固定。
+> 协调基线：集成工作树分支 `codex/v020-integration`；PR #202 合并后的 `main` 基线为
+> `2339002cd084950c3b859db561ade66fcfa528f4`；Main candidate 为 run `31300835608`，最终结论待核对。
+
+## GLM 主线交接更新（2026-08-09）
+
+- PR #202（`b850725` + `7fc1d84`）已由用户批准并以 Rebase and merge 合并到 `main`；合并提交为
+  `2339002cd084950c3b859db561ade66fcfa528f4`。
+- 合并后的 Main candidate 为 run `31300835608`，创建时状态为 `in_progress`；在最终结果核对前不得宣称通过，且运行 `head_sha` 必须等于合并提交。
+- 当前主线实施模型改为 GLM/ZCode；Kimi、DeepSeek、OpenCode 暂停派发，特殊专业场景需用户另行配置。GLM 交接包位于
+  [`docs/coordination/glm-handoff/`](../coordination/glm-handoff/)。
+- 本次记录只完成状态交接，不开启 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance，
+  不执行生产发布、真实邮件或流量切换。
 
 ## PR #198 integration follow-up（2026-08-08）
 
