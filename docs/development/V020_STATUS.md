@@ -1,9 +1,9 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-08（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 Release candidate、同 SHA 镜像 provenance attestation、Docker smoke、恢复、认证浏览器与 rollout 门禁均已通过，生产发布授权仍未完成，生产发布保持阻塞**。
+> 更新时间：2026-08-09（Asia/Shanghai）。
+> 当前阶段：**V20-01～V20-14 已通过 Codex 验收；V20-15 候选已在 ECS 进入受控 prerelease 观察期，生产正式发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 协调基线：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；前端代码检查点：`64298ec597b6e45dfea9a94cc819c77daf0cda8b`；集成工作树分支 `codex/v020-integration`。
+> 协调基线：集成工作树分支 `codex/v020-integration`；当前候选 source SHA：`448cbdf8bd43c45aa25e3f2068e2246f3299be3a`；前端代码检查点仍由该候选固定。
 
 ## PR #198 integration follow-up（2026-08-08）
 
@@ -57,7 +57,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 | V20-09 AI acceptance              | 已完成并推送                                         | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                                                                | 进入 V20-10；Acceptance 生产开关继续关闭                          |
 | V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收                      | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过                                       | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
 | V20-11 默认关闭准入               | 已通过，生产能力继续关闭                             | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                                                                  | 保持全部生产开关关闭；进入 V20-12 集成门                          |
-| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过；V20-15 Release candidate 与 attestation 通过，生产发布阻塞 | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；Main candidate、四项 provenance attestation、exact-candidate security scan、full-capacity、Docker smoke、恢复、认证浏览器/WCAG、rollout rehearsal 均已在同一 SHA 通过；生产发布授权仍未完成 | 用户明确批准后决定是否执行生产发布 |
+| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过；V20-15 候选已部署为 prerelease，生产正式发布仍阻塞 | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；同 SHA provenance、Docker smoke、恢复、认证浏览器/WCAG 与候选 ECS 迁移/健康证据均已记录；真实邮件投递、24 小时观察与最终流量切换仍未完成 | 完成受邀真实邮件/设备验收、观察期和发布授权后再决定是否切换 |
 | DeepSeek 最终审查                 | 已完成并由 Codex 接受                                | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；审查目标 `7d50e675be19b2779613ed61ba31dc821afa73dc`；详见 [`V020_V13_DEEPSEEK_REVIEW.md`](./V020_V13_DEEPSEEK_REVIEW.md)                                                                                 | 不再派发；保留只读报告与清洁工作树证据                            |
 
 ## 当前等待点
@@ -464,3 +464,31 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 本次只执行镜像拉取和 digest 核验，没有创建候选 Compose 容器，没有执行数据库迁移、候选启动、真实邮件、浏览器验收或流量切换。
 - 线上复核仍为旧提交 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`、迁移头 `0034_sync_conflicts`，`/health` 返回 `{"status":"ok","service":"web","version":"0.1.0"}`。
 - 下一步仍需单独进入受控 prerelease 维护窗口：重新生成候选维护备份并完成异地校验，随后才允许启动候选依赖、执行 `0038_local_worker_protocol` 迁移、健康检查和真实验收；本次拉取成功不等于生产发布批准。
+
+## 候选受控 prerelease 部署与首轮验收（2026-08-09）
+
+- 候选维护窗口已按用户批准的发布流程执行。候选 source SHA 为
+  `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`；四个应用镜像仍严格绑定 manifest digest：API
+  `53528d1a…2607a`、Backup `a9b85709…0876`、Web `0639461f…e0b7`、Worker `bef54d48…8878c`。
+- 迁移实际从 `0034_sync_conflicts` 执行到 `0038_local_worker_protocol`；候选 API ready、Web health、
+  PostgreSQL、Redis、Worker、Reverse Proxy 均健康。正式 `/opt/logion` 已晋级为候选目录，旧源码保留在
+  `/opt/logion.before-20260809T023701Z`，未删除任何数据卷；随后通过正式 `logion-compose` 强制重建并再次等待健康。
+- 候选运行时复核：反向代理端口仍只绑定 `127.0.0.1:8080`；公网 `https://logion.work/health` 返回 HTTP 200；
+  HSTS、CSP、X-Frame-Options、Referrer-Policy 和 X-Content-Type-Options 均存在；证书有效期至
+  `2026-10-27`，`certbot renew --dry-run` 全部模拟成功。候选服务 OOM 与重启计数均为 0，近 15 分钟严重日志计数均为 0。
+- 认证浏览器首轮 smoke 已真实执行：既有受控 Owner 会话在候选重建后仍保持登录，16 个应用路由均渲染 `main`、
+  未出现登录表单；连续 3 次刷新保持会话，浏览器控制台错误为空。邀请注册页显示“仅受邀邮箱开放”，未执行实际发送。
+- 迁移后的部署后加密备份已生成并通过 `logion-verify-backup`：
+  `logion-20260809T023930Z-beta-v1.backup`，SHA-256
+  `329f705215ae07fc5b1c5276e5bcbfbb55c83981fba61181eae8b0d5a913bbd9`；已复制至
+  `F:\LogionBackups\encrypted`，Windows SHA 与 sidecar 一致。使用同一备份完成 ECS 隔离空环境恢复，恢复头为
+  `0038_local_worker_protocol`、`workspace_count=1`、`null_sync_epoch_count=0`，临时数据库与附件目录已清理。
+- 预发布观察起点记录为 `2026-08-09T03:22:21Z`。本轮没有开启 Shared Write、Deletion、Attachment、Local Worker、
+  Provider、sync-v1 或 AI Acceptance，也没有执行真实邮件投递、移动实体设备验收或生产流量切换。
+- 一次使用未审核 `alpine:3.20` 的临时备份导出尝试因镜像不可用而停止，未拉取或引入该镜像；随后改用现有 Backup 容器直接导出并完成校验，生产状态不受影响。
+- 协调账本新增的 prerelease handoff/observation 已按实际结果写入；`pnpm agent:state:validate` 复核时仅剩历史
+  `graph.json` 与 `tasks.jsonl` 的 encoded-content safe-scan budget 超限（没有新的私有 IP、Schema 或证据哈希错误），
+  该本地账本校验问题保留为后续修复项，不影响已完成的 ECS 运行时、备份和恢复证据。
+
+当前结论是 **prerelease 已启动且首轮技术验收通过，生产发布仍未完成**。继续观察至少 24 小时，并在受邀收件人
+和实体设备验收完成、备份告警确认后，再请求下一次发布切换批准。

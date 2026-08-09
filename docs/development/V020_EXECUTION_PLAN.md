@@ -222,3 +222,15 @@ V20-15 评审后再获得用户明确批准；当前不自动发布、不启动 
 依赖审计、默认关闭合同、临时 PostgreSQL 迁移和完整认证浏览器均已通过；发布镜像 attestation 与
 Docker release workflow 因环境/授权边界未运行，已在 manifest 单列，不计为通过。下一步只能在用户明确批准后补齐
 发布前置门禁；不自动 merge、push、发布或启用敏感能力。
+
+## V20-15 受控 prerelease 执行断点（2026-08-09）
+
+用户已批准进入受控 ECS 发布流程。候选 source SHA 固定为
+`448cbdf8bd43c45aa25e3f2068e2246f3299be3a`，四个应用镜像使用同一 manifest 的不可变 digest；候选已完成
+`0034_sync_conflicts -> 0038_local_worker_protocol` 迁移，正式 `/opt/logion` 已切换到候选目录，旧源码保留用于回滚。
+迁移后备份、异机 SHA 校验、隔离空环境恢复、HTTPS/证书、健康、认证浏览器路由和默认关闭复核均已真实通过，观察期从
+`2026-08-09T03:22:21Z` 开始。
+
+该断点不等同于生产发布完成：真实 DirectMail 投递、移动实体设备验收、至少 24 小时观察、发布后告警确认和最终流量切换
+仍未完成。Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关必须保持关闭；
+观察期内保留旧源码、候选镜像、部署前/后备份和数据卷，任何异常按 runbook 停止并回滚应用（不回滚已执行的前向迁移）。
