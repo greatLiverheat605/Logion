@@ -52,4 +52,4 @@ Working tree status:
 Suggested next action for the coordinator:
 
 如果 Actions、环境、凭据、基线、模型证据或用户授权不满足，明确报告 blocker 并停止，不伪造通过。
-``` 
+```
