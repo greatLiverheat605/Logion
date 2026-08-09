@@ -65,3 +65,11 @@
 - 失败包含两个测试基础设施问题：认证 setup 创建的状态数量少于 Playwright 全局并行槽；reduced-motion 检查通过 locator 采样在 React 路由替换中脱离文档的旧节点，得到空计算样式并误报动效。
 - 修复分支 `codex/v020-rc5-browser-stability` 按全局 worker 数生成隔离认证状态，并改为在页面内同步查询、验证和采样当前壳层。SessionBoundary、产品 CSS、认证策略和生产开关不变。
 - 本机目标格式、Lint、类型/Mypy、Python 402 项、Web 231 项、离线/合同/移动测试、生产构建及 Playwright 101 项测试发现均通过；下一步必须先取得 PR 的真实 browser job 成功结果，再生成新的 Main/Capacity/RC 候选。
+
+## PR #206 与 RC6 全链路验收（2026-08-10）
+
+- PR #206 已 Squash 合并，新 `main` 为 `c47aa376d95b179200d59986c20289b796740959`；PR checks run `31337462102` 的 `fast`、`integration`、`browser` 全部成功。
+- Main candidate `31337611805` 与 Full capacity profile `31338032379` 均成功并绑定该 SHA。
+- Release candidate `0.2.0-rc6` run `31338128822` 成功通过 Main/Capacity 证据、候选 manifest、不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、真实认证 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据捕获与清理。
+- RC6 制品 `release-candidate-0.2.0-rc6-c47aa376d95b179200d59986c20289b796740959` 已生成；该候选尚未部署，ECS 仍运行 RC2，不得宣称线上已升级。
+- 受控 prerelease 部署是下一门：保持 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 关闭，执行部署前备份、精确 SHA/镜像核对、迁移、健康检查、真实认证 UX 回归及可执行回滚断点。
