@@ -2982,8 +2982,13 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-operation-feedback.loading .app-operation-indicator {
-    animation: none;
+  .app-shell-frame,
+  .app-shell-frame *,
+  .app-shell-frame *::before,
+  .app-shell-frame *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
   }
 }
 

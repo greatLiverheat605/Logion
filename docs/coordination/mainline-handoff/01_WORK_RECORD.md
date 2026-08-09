@@ -40,3 +40,11 @@
 - 纯内存图内核技术通过但不是正式 API。
 - 只读终审已完成，不再派发实现任务。
 - 任何 worker 的 `complete` 或“写了测试”都不等于 Codex/用户验收通过；必须有实际运行证据。
+
+## PR #203 与 RC3 门禁（2026-08-10）
+
+- PR #203 已按批准完成 Squash 合并，新 `main` 为 `cb0ada40187088a58f591246ff4de03fc05293e6`；合并树与已审批 PR head 一致。
+- Main candidate `31332165349` 与 Full capacity profile `31332633330` 均成功并绑定该 SHA。
+- Release candidate `0.2.0-rc3` run `31332751602` 在认证浏览器/WCAG 步骤失败：`/app/exam` 在 reduced-motion 模式仍报告 25 个 transition 元素，重试后相同；其余已完成的镜像、恢复和兼容步骤不能替代失败门禁。
+- 修复分支 `codex/v020-rc3-reduced-motion` 仅调整 reduced-motion CSS；本机 `pnpm ci:fast` 通过。进入新候选前必须先取得 PR browser job 的真实成功结果。
+- 旧本地协调 Run 仍因 encoded-content safe-scan budget 超限无法校验；不改写历史、不派发外部任务。ECS 保持 RC2，所有敏感生产开关继续关闭。

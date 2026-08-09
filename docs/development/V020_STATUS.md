@@ -1,10 +1,28 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-10（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 已部署到 ECS 受控 prerelease，非认证技术门通过，认证浏览器回归待重新登录；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 仍运行于 ECS 受控 prerelease。认证会话修复已合并到新主线，但首个 RC3 因 reduced-motion 浏览器门禁失败而停止，尚未部署；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 协调基线：集成工作树分支 `codex/v020-integration`；PR #202 合并后的 `main` 基线为
-> `2339002cd084950c3b859db561ade66fcfa528f4`；Main candidate 为 run `31300835608`，结论为 `success` 且 head SHA 一致。
+> 当前主线：PR #203 已 Squash 合并；`main` 为
+> `cb0ada40187088a58f591246ff4de03fc05293e6`。Main candidate run `31332165349` 与 Full capacity run
+> `31332633330` 均成功且 head SHA 一致；Release candidate `0.2.0-rc3` run `31332751602` 失败，禁止部署。
+
+## V20-15 RC3 reduced-motion 修复断点（2026-08-10）
+
+- PR #203 已按用户批准完成 Squash 合并，合并提交为
+  `cb0ada40187088a58f591246ff4de03fc05293e6`；其文件树与已审批的 PR head 一致。
+- 同一提交的 Main candidate run `31332165349` 与 Full capacity run `31332633330` 均成功。Main job 的构建、
+  digest 固定镜像 smoke、provenance、漏洞扫描和 SBOM 均实际执行；容量 job 的专用数据库迁移、数据生成和测量也实际执行。
+- Release candidate `0.2.0-rc3` run `31332751602` 正确校验了上述同 SHA 证据，并通过候选镜像 smoke、空环境恢复和旧客户端/恢复 epoch 兼容；
+  但在 `Browser, PWA and automated WCAG gate` 失败，因此 rollout rehearsal 被跳过，候选不得部署。
+- 失败可重复发生在认证路由 `/app/exam`：系统启用 `prefers-reduced-motion: reduce` 时仍有 25 个元素保留 transition；
+  原断言和 CI retry 均得到 `Expected: 0, Received: 25`。这不是 GitHub 基础设施事故。
+- 修复分支 `codex/v020-rc3-reduced-motion` 从该 `main` 创建，只在 reduced-motion 媒体查询中统一关闭应用外壳动画、过渡和滚动动画；
+  普通动效不变。本机 `pnpm ci:fast` 已通过（协调 118、Python 402、Web 231，以及格式、Lint、类型、Mypy、构建和合同检查）。
+- 本地协调 Run 校验仍因历史 `graph.json` 与 `tasks.jsonl` 的 encoded-content safe-scan budget 超限而失败；历史文件保持原样，
+  当前不派发外部任务。修复必须先进入 PR 并让认证 browser job 真实通过，再生成新的不可变候选；不得重跑失败 RC3 后伪造通过。
+- ECS 当前继续运行前一 RC2；未执行候选部署、数据库迁移、真实邮件或流量切换。Shared Write、Deletion、Attachment、
+  Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。
 
 ## 主线交接更新（2026-08-09）
 
