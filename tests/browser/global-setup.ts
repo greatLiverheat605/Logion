@@ -2,10 +2,9 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { request } from "@playwright/test";
+import { request, type FullConfig } from "@playwright/test";
 
 import {
-  authenticatedWorkerCount,
   authenticationManifestPath,
   authenticationStateDirectory,
   canProvisionAccounts,
@@ -114,12 +113,12 @@ async function seedAccount(
   }
 }
 
-export default async function globalSetup(): Promise<void> {
+export default async function globalSetup(config: FullConfig): Promise<void> {
   await rm(authenticationStateDirectory, { force: true, recursive: true });
   if (!shouldRunAuthenticated) return;
   await mkdir(authenticationStateDirectory, { recursive: true });
 
-  const count = configuredCredentials === null ? authenticatedWorkerCount : 1;
+  const count = configuredCredentials === null ? config.workers : 1;
   const accounts: Array<{ email: string; password: string; path: string }> = [];
   for (let index = 0; index < count; index += 1) {
     const credentials = configuredCredentials ?? {

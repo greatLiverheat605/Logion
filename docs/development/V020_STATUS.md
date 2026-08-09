@@ -1,11 +1,22 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-10（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 仍运行于 ECS 受控 prerelease。RC4 因认证页面未稳定时提前执行 reduced-motion 断言而停止，修复分支正在等待 GitHub 真实 browser job；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 仍运行于 ECS 受控 prerelease。RC5 因认证状态并行槽不足及路由替换期间采样到脱离文档的旧节点而停止，新修复分支等待 GitHub 真实 browser job；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前主线：PR #204 已 Squash 合并；`main` 为
-> `dbea77dc9165497d34a37f051fc5cd1a80932851`。Main candidate run `31333796558` 与 Full capacity run
-> `31334189035` 均成功且 head SHA 一致；Release candidate `0.2.0-rc4` run `31334288158` 失败，禁止部署。
+> 当前主线：PR #205 已 Squash 合并；`main` 为
+> `2317f83557f7be2c79f94a30ef89465bc06d7f0c`。Main candidate run `31336153147` 与 Full capacity run
+> `31336499869` 均成功且 head SHA 一致；Release candidate `0.2.0-rc5` run `31336608321` 失败，禁止部署。
+
+## V20-15 RC5 浏览器并行与路由采样修复断点（2026-08-10）
+
+- PR #205 已 Squash 合并到 `main`，PR 的 `fast`、`integration`、`browser` 三项门禁均成功；合并提交为
+  `2317f83557f7be2c79f94a30ef89465bc06d7f0c`。
+- 新提交的 Main candidate `31336153147` 与 Full capacity profile `31336499869` 均成功，并确认绑定同一完整 SHA。
+- Release candidate `0.2.0-rc5` run `31336608321` 通过指定 Main/Capacity 证据、快速检查、不可变镜像 smoke、空环境恢复与旧客户端/恢复 epoch 兼容，但在真实认证浏览器门禁失败；rollout rehearsal 未获得通过结论，候选不得部署。
+- 同一浏览器门禁暴露两个独立测试基础设施缺陷：全局 setup 只按认证项目 worker 数创建一份状态，而认证项目可被调度到 Playwright 全局并行槽 1；reduced-motion 断言通过 locator 跨边界传递元素，React 路由替换时旧节点脱离文档，计算样式变为空字符串并被误报为动效。
+- 修复分支 `codex/v020-rc5-browser-stability` 基于上述新 `main` 创建。setup 现在按实际全局 worker 数生成隔离认证状态；动效断言等待完整 load，并在页面内同步查询和采样当前壳层，同时显式拒绝壳层缺失和未解析计算样式。SessionBoundary、产品 CSS 与认证策略不变。
+- 本机已通过目标文件 Prettier、Lint、TypeScript/Mypy、Playwright 101 项测试发现、Python 402 项、Web 231 项、离线/合同/移动测试、生产构建与 `git diff --check`。真实认证浏览器仍必须由该分支 PR 验证。
+- 本地协调 Run 校验仍因历史 `graph.json` 与 `tasks.jsonl` 的 encoded-content safe-scan budget 超限而失败；历史文件保持原样，不派发外部任务。ECS 继续保持 RC2，所有敏感生产开关继续关闭。
 
 ## V20-15 RC4 浏览器门禁修复断点（2026-08-10）
 

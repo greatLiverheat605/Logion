@@ -56,3 +56,12 @@
 - RC4 trace 与候选制品证明 CSS 已正确打包且在断言前加载。根因是测试只等待 `domcontentloaded`；断言开始时 SessionBoundary 尚未挂载 `.app-shell-frame`，查询执行期间 React 才插入认证外壳，导致在未稳定首帧上采样。
 - 修复分支 `codex/v020-rc4-reduced-motion-today` 让断言先等待应用外壳和页面标题可见，显式验证 reduced-motion 媒体状态，并输出具体残留元素和计算样式。产品 CSS 不再重复修改。
 - 本机 Lint、类型检查、402 个 Python 测试、231 个 Web 测试、生产构建和合同检查通过；真实认证浏览器结果仍等待分支 PR。保留 `.tmp-v020-rc2/` 与 `.tmp-v020-rc4/` 证据，不提交、不删除、不格式化。
+
+## PR #205、RC5 与浏览器稳定性修复（2026-08-10）
+
+- PR #205 已 Squash 合并，新 `main` 为 `2317f83557f7be2c79f94a30ef89465bc06d7f0c`；PR 的 `fast`、`integration`、`browser` 三项门禁均成功。
+- Main candidate `31336153147` 与 Full capacity profile `31336499869` 均成功并绑定该 SHA。
+- Release candidate `0.2.0-rc5` run `31336608321` 通过镜像 smoke、空环境恢复和兼容检查，但真实认证浏览器门禁失败，因此 rollout rehearsal 未取得通过结论且候选不得部署。
+- 失败包含两个测试基础设施问题：认证 setup 创建的状态数量少于 Playwright 全局并行槽；reduced-motion 检查通过 locator 采样在 React 路由替换中脱离文档的旧节点，得到空计算样式并误报动效。
+- 修复分支 `codex/v020-rc5-browser-stability` 按全局 worker 数生成隔离认证状态，并改为在页面内同步查询、验证和采样当前壳层。SessionBoundary、产品 CSS、认证策略和生产开关不变。
+- 本机目标格式、Lint、类型/Mypy、Python 402 项、Web 231 项、离线/合同/移动测试、生产构建及 Playwright 101 项测试发现均通过；下一步必须先取得 PR 的真实 browser job 成功结果，再生成新的 Main/Capacity/RC 候选。
