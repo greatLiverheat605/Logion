@@ -209,21 +209,55 @@ test.describe("authenticated shell", () => {
 
     for (const route of authenticatedRoutes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
-      const movingElements = await page
-        .locator(".app-shell-frame *")
-        .evaluateAll(
-          (elements) =>
-            elements.filter((element) => {
-              const style = getComputedStyle(element);
-              return (
-                (style.animationName !== "none" &&
-                  style.animationDuration !== "0s") ||
-                (style.transitionDuration !== "0s" &&
-                  style.transitionProperty !== "none")
-              );
-            }).length,
-        );
-      expect(movingElements, `${route} must honor reduced motion`).toBe(0);
+      await expect(page.locator(".app-shell-frame")).toBeVisible();
+      await expect(page.locator("h1")).toBeVisible();
+
+      const reducedMotionMatches = await page.evaluate(
+        () => matchMedia("(prefers-reduced-motion: reduce)").matches,
+      );
+      expect(
+        reducedMotionMatches,
+        `${route} must run with reduced motion enabled`,
+      ).toBe(true);
+
+      const motionReport = await page
+        .locator(".app-shell-frame, .app-shell-frame *")
+        .evaluateAll((elements) => {
+          const movingElements = elements.flatMap((element) => {
+            const style = getComputedStyle(element);
+            const hasAnimation =
+              style.animationName !== "none" &&
+              style.animationDuration !== "0s";
+            const hasTransition =
+              style.transitionDuration !== "0s" &&
+              style.transitionProperty !== "none";
+            if (!hasAnimation && !hasTransition) return [];
+
+            return [
+              {
+                animationDuration: style.animationDuration,
+                animationName: style.animationName,
+                ariaLabel: element.getAttribute("aria-label"),
+                className:
+                  typeof element.className === "string"
+                    ? element.className
+                    : null,
+                id: element.id || null,
+                tagName: element.tagName.toLowerCase(),
+                transitionDuration: style.transitionDuration,
+                transitionProperty: style.transitionProperty,
+              },
+            ];
+          });
+          return {
+            count: movingElements.length,
+            elements: movingElements.slice(0, 50),
+          };
+        });
+      expect(
+        motionReport.count,
+        `${route} must honor reduced motion: ${JSON.stringify(motionReport)}`,
+      ).toBe(0);
     }
   });
 

@@ -48,3 +48,11 @@
 - Release candidate `0.2.0-rc3` run `31332751602` 在认证浏览器/WCAG 步骤失败：`/app/exam` 在 reduced-motion 模式仍报告 25 个 transition 元素，重试后相同；其余已完成的镜像、恢复和兼容步骤不能替代失败门禁。
 - 修复分支 `codex/v020-rc3-reduced-motion` 仅调整 reduced-motion CSS；本机 `pnpm ci:fast` 通过。进入新候选前必须先取得 PR browser job 的真实成功结果。
 - 旧本地协调 Run 仍因 encoded-content safe-scan budget 超限无法校验；不改写历史、不派发外部任务。ECS 保持 RC2，所有敏感生产开关继续关闭。
+
+## PR #204、RC4 与浏览器门禁修复（2026-08-10）
+
+- PR #204 已 Squash 合并，新 `main` 为 `dbea77dc9165497d34a37f051fc5cd1a80932851`；Main candidate `31333796558` 与 Full capacity `31334189035` 均成功并绑定该 SHA。
+- Release candidate `0.2.0-rc4` run `31334288158` 在认证浏览器门禁失败：`/app/today` 报告 34 个 transition 元素，原执行与 retry 均失败，候选不得部署。
+- RC4 trace 与候选制品证明 CSS 已正确打包且在断言前加载。根因是测试只等待 `domcontentloaded`；断言开始时 SessionBoundary 尚未挂载 `.app-shell-frame`，查询执行期间 React 才插入认证外壳，导致在未稳定首帧上采样。
+- 修复分支 `codex/v020-rc4-reduced-motion-today` 让断言先等待应用外壳和页面标题可见，显式验证 reduced-motion 媒体状态，并输出具体残留元素和计算样式。产品 CSS 不再重复修改。
+- 本机 Lint、类型检查、402 个 Python 测试、231 个 Web 测试、生产构建和合同检查通过；真实认证浏览器结果仍等待分支 PR。保留 `.tmp-v020-rc2/` 与 `.tmp-v020-rc4/` 证据，不提交、不删除、不格式化。
