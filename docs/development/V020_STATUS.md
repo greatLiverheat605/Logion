@@ -343,3 +343,12 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 修复范围限定为集成测试夹具、loopback-only INSTREAM 协议测试服务（仍使用生产 `ClamdInstreamScanner` 客户端）、PR 集成允许来源和迁移断言；生产默认值及所有敏感生产开关保持关闭。
 - 修复后已观察：目标 Ruff/lint/format 与 `git diff --check` 通过；附件扫描器与知识空间合同单测通过；`pnpm ci:fast` 通过（Python 402、Web 224、协调 118、lint/typecheck/build/contracts）；`pnpm audit --prod --audit-level high` 与 `pip-audit` 无已知漏洞。
 - 本机数据库集成重跑已尝试，但隔离凭据无法建立连接，记录为环境限制而非通过；推送后必须等待 GitHub integration 在新提交上重新执行，PR 才能接受。
+
+## V20-15 UX 反馈修复（2026-08-09）
+
+- 对受控 prerelease 的真实 Owner 会话复现了四类问题：空空间名称和非法邮箱只出现浏览器原生提示，单字符搜索没有
+  就地反馈，错误本地口令只显示笼统失败信息；本轮未发送真实邀请或开启任何敏感能力。
+- 前端修复已提交到集成分支，范围仅限工作区/空间/邀请、搜索、画像、本地解锁的 loading、禁用、防重复提交、中文错误映射、
+  就地反馈和无障碍关联；未修改 API 合同、权限、迁移、生产配置或默认关闭开关。
+- 本机实际门禁：Web `230` 测试、Python `402` 测试、Lint、TypeScript、Mypy、生产构建和 `pnpm contracts:check` 均通过。
+- 修复正在整理为主分支目标 PR；当前线上仍运行前一候选 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`，不能把 UX 问题标记为已解决。
