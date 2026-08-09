@@ -263,6 +263,23 @@ async def refresh(
 
 
 @router.get(
+    "/session",
+    response_model=AuthResponse,
+    operation_id="auth_session",
+    responses={401: ERROR_RESPONSE},
+)
+async def current_session(
+    response: Response,
+    context: AuthContextDependency,
+) -> AuthResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return AuthResponse(
+        user=UserResponse.model_validate(context.user),
+        session_expires_at=context.session.access_expires_at,
+    )
+
+
+@router.get(
     "/me",
     response_model=UserResponse,
     operation_id="auth_me",
