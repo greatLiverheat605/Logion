@@ -13,7 +13,7 @@
 | PR 状态 | 已合并（Rebase and merge） |
 | PR 合并提交 | `2339002cd084950c3b859db561ade66fcfa528f4` |
 | PR 检查 | `fast`、`integration`、`browser` 均成功 |
-| 合并后工作流 | [Main candidate #31300835608](https://github.com/greatLiverheat605/Logion/actions/runs/31300835608)，合并时为 `in_progress` |
+| 合并后工作流 | [Main candidate #31300835608](https://github.com/greatLiverheat605/Logion/actions/runs/31300835608)，`success` |
 
 `codex/v020-integration` 与远端 `main` 是两个不同用途的分支：前者是协调/验收工作树，后者是已合并产品基线。开始新实现前必须由协调者确认目标基线和新分支，禁止直接在 `main` 或共享集成分支上并行写入。
 
@@ -33,7 +33,7 @@ PR #202 的两个提交为：
 - Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance。
 - 任何生产流量切换、真实邮件投递、生产迁移和发布动作。
 
-V20-01～V20-14 的设计/实现/验收门已记录为通过；V20-15 仍需完成候选观察、真实受邀验收和用户发布授权。Main candidate 的最终结果未在本文件生成时确认，不能提前写成通过。
+V20-01～V20-14 的设计/实现/验收门已记录为通过；Main candidate 已按合并 SHA 成功完成。V20-15 仍需完成候选观察、真实受邀验收和用户发布授权，不能将候选 CI 通过等同于生产发布完成。
 
 ## 4. GLM 候选图内核的边界
 
@@ -43,7 +43,7 @@ GLM 曾交付过一个纯 Python、有界、无递归 BFS 图内核候选：42 �
 
 ## 5. 当前最近动作
 
-1. 核对 Main candidate `31300835608` 的最终结论和运行 SHA 必须等于 `2339002…`。
-2. 若通过，更新 `V020_STATUS.md` 的最新基线并补充 UX 合并证据；若失败，记录真实失败原因、保留断点，不伪造通过。
-3. 进行候选环境的人工作用回归（不发送真实邀请、不启用敏感生产能力）。
-4. 只有用户明确批准后，才进入 V20-15 发布或后续版本施工。
+1. 已核对 Main candidate `31300835608`：`status=completed`、`conclusion=success`，运行 `head_sha` 等于 `2339002…`。
+2. 候选 job 的 `pnpm ci:fast`、Compose 校验、候选镜像构建/证明、精确候选 smoke、Trivy/CodeQL/SBOM 和清理步骤均为成功。
+3. 进行候选环境的人工作用回归（不发送真实邀请、不启用敏感生产能力），并将真实观察追加到状态文档/协调 Run。
+4. GLM 切换暂不执行；只有用户明确同意后，才启用新的 GLM 任务包并重新规划下一项任务。

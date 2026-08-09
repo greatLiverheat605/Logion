@@ -10,7 +10,11 @@
 
 - PR #202（`b850725` + `7fc1d84`）已由用户批准并以 Rebase and merge 合并到 `main`；合并提交为
   `2339002cd084950c3b859db561ade66fcfa528f4`。
-- 合并后的 Main candidate 为 run `31300835608`，创建时状态为 `in_progress`；在最终结果核对前不得宣称通过，且运行 `head_sha` 必须等于合并提交。
+- 合并后的 Main candidate 为 run `31300835608`，已完成且 `conclusion=success`；运行 `head_sha` 为
+  `2339002cd084950c3b859db561ade66fcfa528f4`，与合并提交一致。
+- 该候选 job 实际完成 `pnpm ci:fast`、生产依赖许可策略、Compose 校验、候选镜像构建、provenance、精确候选 smoke、
+  Trivy/CodeQL/SBOM、artifact 上传和环境清理；未触发生产发布或流量切换。
+- GLM 切换按用户当前指令暂缓；交接包已准备但不视为已启动 GLM 任务。用户同意后再重新规划并发出新的提示词。
 - 当前主线实施模型改为 GLM/ZCode；Kimi、DeepSeek、OpenCode 暂停派发，特殊专业场景需用户另行配置。GLM 交接包位于
   [`docs/coordination/glm-handoff/`](../coordination/glm-handoff/)。
 - 本次记录只完成状态交接，不开启 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance，

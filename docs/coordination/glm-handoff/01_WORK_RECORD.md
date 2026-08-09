@@ -30,6 +30,8 @@
 - GLM/Kimi 的前端后续施工先暂停，后由指定模型完成修复；Codex 验收并创建 PR #202。
 - PR 检查 `fast`、`integration`、`browser` 全部成功后，用户批准合并。
 - 2026-08-09 PR #202 以 Rebase and merge 合并到 `main`，合并提交为 `2339002cd084950c3b859db561ade66fcfa528f4`；Main candidate 随即自动启动。
+- 2026-08-09 Main candidate `31300835608` 已完成并成功，`head_sha` 与合并提交一致；候选构建、provenance、精确候选 smoke、Trivy/CodeQL/SBOM 和清理步骤均真实完成。生产发布和流量切换未触发。
+- 用户要求先继续当前合并任务、暂不切换 GLM；GLM 交接包保持待命，待用户明确同意后再重新规划提示词。
 
 ## 不可混淆的历史候选
 
