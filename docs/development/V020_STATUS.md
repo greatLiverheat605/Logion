@@ -1,11 +1,20 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-10（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC2 仍运行于 ECS 受控 prerelease。RC5 因认证状态并行槽不足及路由替换期间采样到脱离文档的旧节点而停止，新修复分支等待 GitHub 真实 browser job；Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收，可进入受控 prerelease 部署，但 ECS 当前仍运行 RC2。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前主线：PR #205 已 Squash 合并；`main` 为
-> `2317f83557f7be2c79f94a30ef89465bc06d7f0c`。Main candidate run `31336153147` 与 Full capacity run
-> `31336499869` 均成功且 head SHA 一致；Release candidate `0.2.0-rc5` run `31336608321` 失败，禁止部署。
+> 当前主线：PR #206 已 Squash 合并；`main` 为
+> `c47aa376d95b179200d59986c20289b796740959`。Main candidate run `31337611805`、Full capacity run
+> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功且 head SHA 一致。RC6 尚未部署，不能宣称线上已升级。
+
+## V20-15 RC6 全链路验收通过（2026-08-10）
+
+- PR #206 已 Squash 合并到 `main`，合并提交为 `c47aa376d95b179200d59986c20289b796740959`；PR checks run `31337462102` 的 `fast`、`integration`、`browser` 三项门禁均成功，真实 browser job 覆盖 101 项浏览器用例。
+- 新提交的 Main candidate `31337611805` 与 Full capacity profile `31338032379` 均成功，并确认 `head_sha` 与上述完整 SHA 一致。
+- Release candidate `0.2.0-rc6` run `31338128822` 成功验证指定 Main/Capacity 证据与候选 manifest，并依次通过不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、真实认证 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据捕获与隔离环境清理。
+- RC6 制品 `release-candidate-0.2.0-rc6-c47aa376d95b179200d59986c20289b796740959` 已生成且未过期。该结论只授权进入受控 prerelease 部署流程，不等于 Production 发布或流量切换。
+- RC5 暴露的两个测试基础设施缺陷已由 PR #206 修复并在 PR browser 与 RC6 中复核：每个 Playwright 全局 worker 槽均有独立认证状态；reduced-motion 只原子采样当前文档中的已解析壳层节点，不再把脱离文档的旧节点误报为动效。
+- ECS 当前仍为 RC2；部署前必须继续保持 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关关闭，并按受控 prerelease 流程执行备份、迁移、健康检查、认证回归和回滚断点。
 
 ## V20-15 RC5 浏览器并行与路由采样修复断点（2026-08-10）
 
