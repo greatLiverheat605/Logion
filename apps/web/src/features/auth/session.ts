@@ -21,7 +21,7 @@ export type SessionState =
     };
 
 interface AuthApi {
-  me(): Promise<SessionUser>;
+  current(): Promise<AuthResponse>;
   refresh(): Promise<AuthResponse>;
 }
 
@@ -126,11 +126,25 @@ function authenticated(response: AuthResponse): SessionState {
   };
 }
 
+function sessionExpiryAdvanced(
+  candidate: string,
+  observed: string | null,
+): boolean {
+  if (observed === null) return true;
+  const candidateMs = Date.parse(candidate);
+  const observedMs = Date.parse(observed);
+  return (
+    Number.isFinite(candidateMs) &&
+    Number.isFinite(observedMs) &&
+    candidateMs > observedMs
+  );
+}
+
 export function createAuthApi(client: ApiClient): AuthApi {
   return {
-    async me(): Promise<SessionUser> {
-      const response = await client.request<unknown>("/api/v1/auth/me");
-      if (!isSessionUser(response)) throw invalidSuccessResponse();
+    async current(): Promise<AuthResponse> {
+      const response = await client.request<unknown>("/api/v1/auth/session");
+      if (!isAuthResponse(response)) throw invalidSuccessResponse();
       return response;
     },
     async refresh(): Promise<AuthResponse> {
@@ -149,17 +163,37 @@ export function createSessionCoordinator(
   crossTab: RefreshCoordinator = immediateRefreshCoordinator,
 ): SessionCoordinator {
   let refreshInFlight: Promise<SessionState> | null = null;
+  let observedSessionExpiresAt: string | null = null;
+
+  const track = (state: SessionState): SessionState => {
+    observedSessionExpiresAt =
+      state.status === "authenticated" ? state.sessionExpiresAt : null;
+    return state;
+  };
 
   const refresh = (): Promise<SessionState> => {
     if (refreshInFlight !== null) return refreshInFlight;
+    const expectedExpiresAt = observedSessionExpiresAt;
     const request: Promise<SessionState> = crossTab
-      .run(() => authApi.refresh())
-      .then(authenticated)
+      .run(async () => {
+        try {
+          const current = await authApi.current();
+          if (
+            sessionExpiryAdvanced(current.session_expires_at, expectedExpiresAt)
+          ) {
+            return authenticated(current);
+          }
+        } catch (error) {
+          if (!isAnonymousError(error)) throw error;
+        }
+        return authenticated(await authApi.refresh());
+      })
       .catch((error: unknown) =>
         isAnonymousError(error)
           ? ({ status: "anonymous" } satisfies SessionState)
           : errorState(error),
-      );
+      )
+      .then(track);
     const tracked = request.finally(() => {
       if (refreshInFlight === tracked) {
         refreshInFlight = null;
@@ -172,8 +206,7 @@ export function createSessionCoordinator(
   return {
     async bootstrap(): Promise<SessionState> {
       try {
-        await authApi.me();
-        return refresh();
+        return track(authenticated(await authApi.current()));
       } catch (error) {
         if (!isAnonymousError(error)) return errorState(error);
         return refresh();

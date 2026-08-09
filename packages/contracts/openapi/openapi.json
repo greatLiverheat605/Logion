@@ -14448,6 +14448,37 @@
         ]
       }
     },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "auth_session",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Current Session",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/api/v1/auth/totp": {
       "delete": {
         "operationId": "auth_totp_disable",

@@ -1,7 +1,7 @@
 # V20-15 最终发布门 Acceptance Manifest
 
 > 日期：2026-08-08（Asia/Shanghai）  
-> 结论：**候选验收记录完成；非 Docker 实时栈已补证，生产发布与敏感能力启用仍保持阻塞，等待用户另行明确批准。**
+> 结论：**Release candidate `0.2.0-rc1` 与同 SHA 镜像 provenance attestation 已通过；生产发布仍保持阻塞，等待用户另行明确批准。**
 
 ## 1. 不可变身份与范围
 
@@ -14,7 +14,7 @@
 | 代码候选提交    | `0b66e033c822bdcd759af8cd19e9ec9ead4eba94`                                             |
 | 远端状态        | `origin/codex/v020-integration` 与当前本地 HEAD 同步；本 manifest 已随文档收口提交推送 |
 | 协调者/实际模型 | Windows Codex / `gpt-5.6-sol`                                                          |
-| 外部 worker     | 本门无新 worker；Kimi 首版施工与 DeepSeek 只读终审沿用已接受证据                       |
+| 外部 worker     | 本门无新 worker；首版施工与只读终审沿用已接受证据                                      |
 
 本门只复核候选集成，不发布、不 merge 默认分支、不启用生产敏感能力，不接触生产数据、凭据或
 Provider endpoint。V20-14 演练文档提交为 `0b66e03`；本 manifest 与状态收口随后提交。代码自
@@ -50,7 +50,7 @@ Provider endpoint。V20-14 演练文档提交为 `0b66e03`；本 manifest 与状
 
 候选代码自 `b4b2888` 后未改变，以下证据可由 V20-11～V20-14 已接受 observation 继承：隔离
 PostgreSQL/Redis/ClamAV、附件扫描与残留清理、Local Worker crash/upload 恢复、worker-offline
-在线核心、迁移集成、Compose 边界和 DeepSeek 只读终审。V20-10 Nightly #40（GitHub run
+在线核心、迁移集成、Compose 边界和既有只读终审。V20-10 Nightly #40（GitHub run
 `31147645530`，固定 UI 提交 `64298ec597b6e45dfea9a94cc819c77daf0cda8b`）已通过
 1440/390px 溢出、axe、移动节点列表、桌面图谱键盘导航和持久化主题值 XSS；该提交到候选没有
 任何 Web、Playwright 或浏览器配置差异。
@@ -59,10 +59,11 @@ PostgreSQL/Redis/ClamAV、附件扫描与残留清理、Local Worker crash/uploa
 
 以下项目仍不能记为当前候选的重新通过：
 
-1. Compose smoke 与真实 release workflow：本轮不启动 Docker；V20-10/V20-12 的隔离边界证据已
-   接受，但本轮不把 Docker 运行记为通过。
-2. 发布候选镜像 digest、签名/attestation、容量证据与真实 release workflow：没有获用户发布
-   授权，也没有生产镜像和凭据；不执行、不伪造。
+1. 本机 Docker smoke：本机仍未启动 Docker；但 Release candidate run `31259843000` 已在隔离
+   GitHub runner 实际通过 unchanged candidate 的 Docker smoke、空环境恢复、浏览器/WCAG 与清理。
+2. 生产发布：Main candidate 已对同一 SHA 的四个 digest 执行 provenance attestation 和 exact-candidate
+   security scan，并且全部成功；Release candidate 已使用 digest-pinned 镜像完成候选 smoke。生产发布授权
+   和生产环境执行仍未完成，不把候选通过等同于生产发布。
 3. 独立 `gitleaks`：已完成全历史扫描并通过（Gitleaks `8.30.1`、406 commits、0 findings）。
    该结果只覆盖当前集成分支历史，不替代发布工作流对最终镜像的安全扫描与 attestation 校验。
 4. 临时隔离服务、进程和 Redis 测试库均已停止并清空；临时 J: 目录删除受当前文件策略阻止，
@@ -90,9 +91,54 @@ sync-v1、AI Acceptance 任一生产能力。
 ## 8. 发布准备复核（2026-08-08）
 
 - GitHub 官方状态 API 返回 `All Systems Operational`；公开只读核对显示当前默认分支为 `main`。
-- 当前集成分支 `codex/v020-integration` 的候选提交尚未产生对应的成功 Main candidate 与 full-capacity
-  workflow 运行。现有成功 Release/Capacity 运行绑定的是 `main` 的旧提交
-  `ebf93ee192598430393f93e9313665c36446f84e`，不能复用于当前候选。
-- 本机 GitHub CLI 未登录，因此没有触发 workflow_dispatch；本轮不申请凭据、不合并默认分支、不启动
-  Docker，也不创建镜像、签名或 attestation。生产发布仍需用户明确批准，并在同一 source SHA 上完成
-  Main candidate、capacity、Release candidate 三段链路。
+- 合并提交 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 已产生成功的 `Main candidate` run
+  `31255904782`（`head_sha` 与 `main` 已核对一致），同一提交的 `Mobile builds` run `31255904757`
+  也已成功；随后已补齐同一 SHA 的 `Full capacity profile` run `31257249374`，结论为 `success`。
+- 容量 job `93102425322` 的专用 PostgreSQL/Redis、迁移、实际容量数据生成和 artifact 上传步骤均为
+  `success`；artifact `capacity-profile-448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 未过期。
+- artifact 下载端点需要认证，未将无法独立下载的内容伪造为本地文件复核；Release candidate run
+  `31259843000` 已成功并生成 artifact `release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。
+- Main candidate run `31255904782` 的四项 `actions/attest-build-provenance` 与 `Verify provenance and
+scan exact candidate` 均成功；本机 Docker 仍未启动，生产发布和敏感生产能力启用仍需另行批准。
+
+## 9. Release candidate 实际运行证据（2026-08-08）
+
+- Run `31259843000` / job `93108836660`：`head_sha`、分支和候选输入校验成功；`pnpm ci:fast`、
+  full-capacity evidence、candidate manifest、digest-pinned image、Docker smoke、empty-environment
+  recovery、old-client compatibility、authenticated browser/WCAG、5/25/100% rollout rehearsal、
+  evidence capture 与 compose cleanup 均为 `success`。
+- Release artifact `9022539674`（`release-candidate-0.2.0-rc1-448cbdf8bd43c45aa25e3f2068e2246f3299be3a`）
+  当前未过期；下载端点需要认证，因此不把未下载的 artifact 内容冒充成本地复核结果。
+- 该 run 不是生产发布，也没有打开 Attachment、Local Worker、Shared Write、Deletion、Provider、
+  sync-v1 或 AI Acceptance。
+
+## 10. 同 SHA 镜像 provenance 证据（2026-08-08）
+
+- Main candidate run `31255904782` / job `93099092811`：web、api、worker、backup 四个
+  `actions/attest-build-provenance` 步骤均为 `success`。
+- 同 job 的 `Verify provenance and scan exact candidate` 为 `success`，工作流使用
+  `gh attestation verify --repo` 对四个 digest 执行 provenance 核验，并完成 exact-candidate 安全扫描。
+- 该证据与 Release candidate 的 `source_sha=448cbdf8bd43c45aa25e3f2068e2246f3299be3a` 一致；生产发布
+  尚未执行，敏感生产开关继续关闭。
+
+## 11. 生产发布执行前提（2026-08-08）
+
+- 用户已批准进入生产发布执行，但项目没有自动部署 workflow；生产入口是
+  `infra/runbooks/aliyun-production-release.md` 的受控 ECS 手册流程。
+- 生产执行尚缺目标 ECS/SSH 访问、正式域名/DNS/TLS、DirectMail/RAM、生产密钥环、异机备份副本和
+  受控运维接收人。上述信息必须通过安全渠道提供，不能写入仓库或聊天。
+- 在这些外部前提满足前，不进行 SSH、DNS、数据库迁移、生产邮件投递、流量切换或敏感能力启用；本
+  manifest 结论仍为“候选已通过、生产未发布”。
+
+## 12. 生产目标只读预检（2026-08-08）
+
+- 首版 ECS 配置已复用并通过只读检查：Ubuntu 24.04、Docker/Compose/Nginx/jq、应用目录、`.env`、
+  备份密钥与 SSH 密钥登录均正常；没有读取私钥或生产密钥值。
+- 线上仍运行旧提交 `5f44833dbfbe32e29ad2f64a4a9eb2b47f85ac50`、迁移头 `0034_sync_conflicts`，
+  服务健康；最新备份 checksum 为 `OK`。候选 `448cbdf` 尚未部署或迁移。
+- `aliyun_directmail`、杭州地域和 `LogionDirectMailSender` 已在现有 `.env` 配置，IMDSv2 角色名核对
+  成功；`mail.logion.work` SPF 已存在，但 `_dmarc.logion.work` 尚未解析，DKIM/DMARC 仍需完成公开 DNS
+  与控制台确认。
+- 只读预检没有改变生产状态；在邮件 DNS 与异机备份门禁补齐前，不进行维护窗口、迁移或流量切换。
+- `F:\LogionBackups` 的现有副本最晚为 2026-07-30，且该卷未显示 BitLocker 保护；服务器最新备份
+  `2026-08-08` 尚未复制到受保护异机并完成恢复验证，因此不计为本次发布的 off-host 证据。
