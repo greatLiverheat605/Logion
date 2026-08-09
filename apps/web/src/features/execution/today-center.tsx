@@ -30,6 +30,7 @@ import {
   ProductWorkflowStage,
 } from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import {
   type PersonaDashboardRecord,
@@ -493,7 +494,7 @@ export function TodayCenter() {
       );
       event.currentTarget.reset();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(offlineUnlockMessage(error) ?? errorMessage(error));
       setDashboardPhase("error");
     }
   }

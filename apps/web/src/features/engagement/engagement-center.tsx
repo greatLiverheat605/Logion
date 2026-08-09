@@ -22,9 +22,11 @@ import {
   ProductPanel,
   ProductTag,
 } from "@/components/product/product-ui";
+import { InlineFormFeedback } from "@/components/product/inline-form-feedback";
 import { useSession } from "@/features/auth/session-provider";
 import { integrationCapabilityService } from "@/features/integrations/integration-capability-service";
 import type { CalendarFeed as Feed } from "@/features/integrations/integration-capability-model";
+import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -44,6 +46,12 @@ type DisplayResult = Pick<
 > & { permission_source: string };
 
 function errorText(error: unknown) {
+  if (
+    error instanceof LogionApiError &&
+    (error.code === "VALIDATION_ERROR" || error.status === 422)
+  ) {
+    return "请检查输入内容后重试。";
+  }
   if (error instanceof LogionApiError)
     return `操作未完成（${error.code}，请求编号：${error.requestId}）。`;
   return "操作未完成；离线学习数据不受影响。";
@@ -89,6 +97,16 @@ export function EngagementCenter() {
   const [status, setStatus] = useState(
     "搜索不会把查询正文写入日志或第三方服务。",
   );
+  const [searchPending, setSearchPending] = useState(false);
+  const [searchFeedback, setSearchFeedback] = useState<{
+    message: string;
+    tone: "error" | "loading" | "success";
+  } | null>(null);
+  const [unlockPending, setUnlockPending] = useState(false);
+  const [unlockFeedback, setUnlockFeedback] = useState<{
+    message: string;
+    tone: "error" | "loading" | "success";
+  } | null>(null);
 
   const loadWorkspaces = useCallback(async () => {
     try {
@@ -168,22 +186,47 @@ export function EngagementCenter() {
   async function unlockOffline(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (session.status !== "authenticated") return;
+    const form = event.currentTarget;
+    const passphrase = String(new FormData(form).get("passphrase") ?? "");
+    if (passphrase.length < 10) {
+      const message = "本地口令至少需要 10 个字符。";
+      setStatus(message);
+      setUnlockFeedback({ message, tone: "error" });
+      return;
+    }
+    setUnlockFeedback({ message: "正在解锁本机保险箱…", tone: "loading" });
+    setUnlockPending(true);
     try {
-      const { database: db, vault: localVault } = await unlockVault(
-        String(new FormData(event.currentTarget).get("passphrase") ?? ""),
-      );
+      const { database: db, vault: localVault } = await unlockVault(passphrase);
       offlineSearch.current = new OfflineSearchRepository(db, localVault);
-      setStatus("离线搜索已解锁，只检索本设备已缓存且未删除的数据。");
-      event.currentTarget.reset();
+      const message = "离线搜索已解锁，只检索本设备已缓存且未删除的数据。";
+      setStatus(message);
+      setUnlockFeedback({ message, tone: "success" });
+      form.reset();
     } catch (error) {
-      setStatus(errorText(error));
+      const message = offlineUnlockMessage(error) ?? errorText(error);
+      setStatus(message);
+      setUnlockFeedback({ message, tone: "error" });
+    } finally {
+      setUnlockPending(false);
     }
   }
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!workspaceId) return;
-    const query = String(new FormData(event.currentTarget).get("query") ?? "");
+    const query = String(
+      new FormData(event.currentTarget).get("query") ?? "",
+    ).trim();
+    setSearchFeedback(null);
+    if (query.length < 2) {
+      const message = "请至少输入两个字符后再搜索。";
+      setSearchFeedback({ message, tone: "error" });
+      setStatus(message);
+      return;
+    }
+    setSearchPending(true);
+    setSearchFeedback({ message: "正在搜索…", tone: "loading" });
     try {
       if (online) {
         const response = await browserApiClient.request<{
@@ -194,7 +237,9 @@ export function EngagementCenter() {
           body: JSON.stringify({ query, limit: 30 }),
         });
         setResults(response.results);
-        setStatus(`在线搜索完成，共 ${response.results.length} 条。`);
+        const message = `在线搜索完成，共 ${response.results.length} 条。`;
+        setStatus(message);
+        setSearchFeedback({ message, tone: "success" });
       } else {
         if (!offlineSearch.current || !offlineUnlocked)
           throw new Error("offline vault locked");
@@ -204,14 +249,19 @@ export function EngagementCenter() {
           30,
         );
         setResults(local.map(offlineResult));
-        setStatus(`离线搜索完成，共 ${local.length} 条本机缓存结果。`);
+        const message = `离线搜索完成，共 ${local.length} 条本机缓存结果。`;
+        setStatus(message);
+        setSearchFeedback({ message, tone: "success" });
       }
     } catch (error) {
-      setStatus(
+      const message =
         !online && !offlineUnlocked
           ? "离线搜索前需要解锁本设备保险箱。"
-          : errorText(error),
-      );
+          : errorText(error);
+      setStatus(message);
+      setSearchFeedback({ message, tone: "error" });
+    } finally {
+      setSearchPending(false);
     }
   }
 
@@ -386,24 +436,75 @@ export function EngagementCenter() {
         aside={<ProductTag tone="info">{results.length} 项结果</ProductTag>}
       >
         <div className="product-search-controls">
-          <form className="planning-form" onSubmit={search}>
+          <form
+            aria-busy={searchPending}
+            className="planning-form"
+            noValidate
+            onSubmit={search}
+          >
             <label>
               查询
-              <input name="query" minLength={2} maxLength={100} required />
+              <input
+                aria-describedby={
+                  searchFeedback ? "search-feedback" : undefined
+                }
+                aria-invalid={searchFeedback?.tone === "error"}
+                name="query"
+                minLength={2}
+                maxLength={100}
+                required
+                onChange={() => {
+                  if (searchFeedback?.tone === "error") setSearchFeedback(null);
+                }}
+              />
             </label>
-            <button>搜索{online ? "服务器" : "本机缓存"}</button>
+            <button disabled={searchPending || !workspaceId} type="submit">
+              {searchPending
+                ? "正在搜索…"
+                : `搜索${online ? "服务器" : "本机缓存"}`}
+            </button>
+            {searchFeedback ? (
+              <InlineFormFeedback
+                id="search-feedback"
+                tone={searchFeedback.tone}
+              >
+                {searchFeedback.message}
+              </InlineFormFeedback>
+            ) : null}
           </form>
-          <form className="planning-form" onSubmit={unlockOffline}>
+          <form
+            aria-busy={unlockPending}
+            className="planning-form"
+            noValidate
+            onSubmit={unlockOffline}
+          >
             <label>
               离线保险箱口令
               <input
+                aria-describedby={
+                  unlockFeedback?.tone === "error"
+                    ? "offline-search-feedback"
+                    : undefined
+                }
+                aria-invalid={unlockFeedback?.tone === "error"}
                 name="passphrase"
                 type="password"
                 autoComplete="current-password"
+                minLength={10}
                 required
               />
             </label>
-            <button disabled={offlineUnlocked}>解锁离线搜索</button>
+            <button disabled={offlineUnlocked || unlockPending} type="submit">
+              {unlockPending ? "正在解锁…" : "解锁离线搜索"}
+            </button>
+            {unlockFeedback ? (
+              <InlineFormFeedback
+                id="offline-search-feedback"
+                tone={unlockFeedback.tone}
+              >
+                {unlockFeedback.message}
+              </InlineFormFeedback>
+            ) : null}
           </form>
         </div>
         <ul className="item-list">

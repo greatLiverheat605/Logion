@@ -46,6 +46,7 @@ export function PersonaSettings() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function choose(persona: PersonaDefinition) {
     setPendingId(persona.id);
@@ -77,6 +78,12 @@ export function PersonaSettings() {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
+    const name = String(data.get("name") ?? "").trim();
+    setFormError(null);
+    if (!name) {
+      setFormError("请输入画像名称。");
+      return;
+    }
     const selectedRoutes = new Set(
       data.getAll("routes").map((route) => String(route)),
     );
@@ -88,7 +95,7 @@ export function PersonaSettings() {
     try {
       await createCustomPersona({
         id,
-        name: String(data.get("name") ?? "").trim(),
+        name,
         icon: String(data.get("icon") ?? ICONS[0]),
         description: String(data.get("description") ?? "").trim(),
         routes: [...routes],
@@ -97,7 +104,7 @@ export function PersonaSettings() {
       setDialogOpen(false);
       setStatus("自定义画像已创建。");
     } catch (error) {
-      setStatus(errorMessage(error));
+      setFormError(errorMessage(error));
     } finally {
       setPendingId(null);
     }
@@ -157,7 +164,10 @@ export function PersonaSettings() {
             className="primary-action"
             ref={createButtonRef}
             type="button"
-            onClick={() => setDialogOpen(true)}
+            onClick={() => {
+              setFormError(null);
+              setDialogOpen(true);
+            }}
           >
             新建自定义画像
           </button>
@@ -211,12 +221,22 @@ export function PersonaSettings() {
           eyebrow="CUSTOM PERSONA"
           returnFocusRef={createButtonRef}
           title="新建自定义画像"
-          onClose={() => setDialogOpen(false)}
+          onClose={() => {
+            setFormError(null);
+            setDialogOpen(false);
+          }}
         >
-          <form className="persona-dialog-form" onSubmit={create}>
+          <form
+            aria-busy={pendingId !== null}
+            className="persona-dialog-form"
+            noValidate
+            onSubmit={create}
+          >
             <label htmlFor="custom-persona-name">名称</label>
             <input
               data-modal-autofocus
+              aria-describedby={formError ? "custom-persona-error" : undefined}
+              aria-invalid={formError !== null}
               id="custom-persona-name"
               maxLength={40}
               name="name"
@@ -272,7 +292,10 @@ export function PersonaSettings() {
                 className="secondary-button"
                 disabled={pendingId !== null}
                 type="button"
-                onClick={() => setDialogOpen(false)}
+                onClick={() => {
+                  setFormError(null);
+                  setDialogOpen(false);
+                }}
               >
                 取消
               </button>
@@ -284,6 +307,15 @@ export function PersonaSettings() {
                 {pendingId ? "正在保存…" : "保存"}
               </button>
             </div>
+            {formError ? (
+              <p
+                className="inline-form-feedback error"
+                id="custom-persona-error"
+                role="alert"
+              >
+                {formError}
+              </p>
+            ) : null}
           </form>
         </AppModal>
       ) : null}

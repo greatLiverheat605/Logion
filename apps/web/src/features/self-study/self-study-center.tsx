@@ -32,6 +32,7 @@ import {
 } from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { useSession } from "@/features/auth/session-provider";
+import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -326,7 +327,7 @@ function OfflineLearningCenter({
       setStatus("资料已在应用内解锁，可断网编辑并稍后同步。");
       event.currentTarget.reset();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(offlineUnlockMessage(error) ?? errorMessage(error));
     }
   }
 
