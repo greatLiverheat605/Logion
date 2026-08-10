@@ -1,32 +1,46 @@
 # 主线验收清单
 
-## 基线与交付
+## 接管与基线
 
-- [ ] 读取 `AGENTS.md`、SOP、执行计划、状态和当前 Run。
-- [ ] 记录分支、HEAD、远端可达性、目标基线和唯一 writable paths。
-- [ ] 工作树无未授权修改；所有新增文件在允许范围内。
-- [ ] 任务包包含固定验收命令、停止条件和回滚说明。
-- [ ] 返回结构化 handoff；没有把 worker 自报等同于 coordinator acceptance。
+- [ ] 已按 `AGENTS.md` 顺序读取长期工作流、V020 状态、RC6 证据、当前 Run 和完整交接包。
+- [ ] 已记录 branch、HEAD、`origin/main`、远端可达性和完整 `git status`。
+- [ ] 已确认产品 source SHA、文档 main SHA、manifest SHA 和运行镜像的不同职责。
+- [ ] `.tmp-v020-rc2/` 与 `.tmp-v020-rc4/` 保留原样且未进入提交。
+- [ ] 协调账本验证结果按实际记录；历史 safe-scan blocker 未被改写或伪装为通过。
 
-## Main candidate / v0.2.0
+## RC6 受控 prerelease
 
-- [ ] Main candidate 的 `head_sha` 等于合并提交 `2339002…`。
-- [ ] `fast`、`integration`、`browser`、审计、迁移/恢复和安全检查真实执行并成功。
-- [ ] 认证浏览器覆盖成功、失败、空值、加载、禁用、重复提交、权限和离线反馈。
-- [ ] 邀请 409 显示明确中文提示；不发送真实邮件。
-- [ ] 1440px 与 390px 无横向溢出；移动节点列表可用；桌面图谱支持键盘导航。
-- [ ] `aria-invalid`、`aria-describedby`、live region 关联正确；axe 无新增违规。
-- [ ] 持久化主题值经过 XSS 防护；不把用户输入当作 HTML/脚本执行。
+- [ ] API ready source SHA、迁移头和四个运行应用镜像与 RC6 manifest 一致。
+- [ ] 公网与 loopback health、安全响应头、证书和端口边界通过。
+- [ ] API/Worker/Web/Reverse Proxy/Backup/PostgreSQL/Redis 无 OOM 或异常重启。
+- [ ] 严重日志、磁盘、内存、Swap、容器资源和备份新鲜度在停止线内。
+- [ ] 发布后备份通过服务器校验、BitLocker 异机 SHA-256 复核和隔离恢复。
+- [ ] RC2 回滚源码、旧镜像、部署前后备份和数据卷未清理。
 
-## 生产与数据安全
+## 认证 UX
+
+- [ ] 使用同一可控登录会话，未读取 Cookie、localStorage、密码或会话文件。
+- [ ] 21 个受保护路由均渲染已认证应用壳，不出现登录表单或 SessionBoundary 抖动。
+- [ ] Today、Review、Workspace、Space、邀请、搜索、Settings、Profile、Security、Sync、Data、Integrations、AI 的核心操作已人工复测。
+- [ ] 成功、失败、空值、loading、disabled、防重复提交、权限和离线状态均有明确就地反馈。
+- [ ] 邀请 409 显示可行动中文提示；未向真实邮箱发送邀请。
+- [ ] 1440/1024/390/320 px 无横向溢出；移动知识列表和桌面图谱键盘导航可用。
+- [ ] 明暗主题、焦点、读屏语义、axe、reduced-motion 和主题持久化 XSS 防护通过。
+- [ ] 浏览器控制台无新的 error；请求失败保留可追踪且去敏的恢复提示。
+
+## 前端重设计审批
+
+- [ ] 两个方案均完成产品诊断、UX 审查、信息架构、交互、视觉、Design System 和高保真原型。
+- [ ] 两个方案使用相同事实基线、独立 worktree/目录，未修改 `apps/web/src/**`。
+- [ ] 原型覆盖桌面/移动、明暗主题、核心状态、知识图谱和系统操作页。
+- [ ] 方案明确减少认知负担、操作步骤和无反馈按钮，而非只替换颜色/圆角。
+- [ ] 用户已经明确选择、组合或退回方案；未批准前没有正式前端施工。
+- [ ] 获批方案已冻结页面/组件/状态矩阵、tokens、交互和响应式规则。
+
+## 安全与发布
 
 - [ ] Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 仍关闭。
-- [ ] 不启动本机 Docker，不绕过 SessionBoundary，不执行未经批准的生产迁移/发布。
-- [ ] 不写入密钥、令牌、密码、私有主机、真实用户数据、真实邮箱或终端转录。
-- [ ] 任何外部请求失败或状态不确定时不自动重试，不产生重复计费/重复正式记录。
-
-## 下一版本设计门
-
-- [ ] v0.2.1 本地解析/论文证据先完成 ADR、威胁模型、容量和离线边界，再实现。
-- [ ] v0.3.0 移动薄壳先完成设备矩阵、签名、恢复和撤销设计，再实现。
-- [ ] v0.4.0 Connector/Automation 先完成 Credential Vault、OAuth/PKCE、签名/重放、人工确认和回滚设计，再实现。
+- [ ] 不启动本机 Docker，不绕过 SessionBoundary，不写入秘密、私有主机或真实用户数据。
+- [ ] 真实邮件、实体设备、Production、切流和回滚点清理均有用户当前明确授权。
+- [ ] Commit/push/merge/release 权限与当前任务包一致；未从模型品牌推断权限。
+- [ ] 所有检查记录实际命令、退出码和结果；未运行项单列原因与风险。

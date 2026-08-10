@@ -1,11 +1,52 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-10（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收，可进入受控 prerelease 部署，但 ECS 当前仍运行 RC2。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收并部署到受控 prerelease。部署、加密备份、异机校验、隔离恢复和首轮运行时检查通过；用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前主线：PR #206 已 Squash 合并；`main` 为
-> `c47aa376d95b179200d59986c20289b796740959`。Main candidate run `31337611805`、Full capacity run
-> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功且 head SHA 一致。RC6 尚未部署，不能宣称线上已升级。
+> 当前文档主线：`origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`。RC6 实际产品源码仍为
+> `c47aa376d95b179200d59986c20289b796740959`；Main candidate run `31337611805`、Full capacity run
+> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功并绑定该产品 SHA。文档主线 SHA
+> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC6；该状态不等于 Production 发布。
+
+## V20-15 RC6 受控 prerelease 部署断点（2026-08-10）
+
+- RC6 已在受控维护窗口完成原子切换。当前源码与 API ready 版本均为
+  `c47aa376d95b179200d59986c20289b796740959`，迁移头为 `0038_local_worker_protocol`；候选 manifest
+  SHA-256 为 `12280604e31621ef3cad437ec712a1b9e80dfccb64c2d7326509c0354f1624e7`。
+- API、Worker、Web、Reverse Proxy、Backup、PostgreSQL 与 Redis 均运行；有健康检查的服务全部 healthy，
+  OOMKilled 均为 `false`、RestartCount 均为 0。四个应用容器的运行镜像与 RC6 manifest 固定 digest 逐项一致。
+- 公网 `/health` 返回 HTTP 200；HSTS、nonce CSP、`X-Frame-Options: DENY`、
+  `X-Content-Type-Options: nosniff` 和 `Referrer-Policy: no-referrer` 均存在。切换后 20 分钟内五个应用服务的
+  serious log 匹配数均为 0；磁盘使用 37%，可用内存 758 MiB，Swap 使用 125 MiB。
+- RC6 启动后加密备份 `logion-20260809T225859Z-beta-v1.backup` 已通过服务器完整校验并同步到
+  BitLocker XTS-AES-256、100% 加密且 Protection On 的受控 Windows 异机卷；Windows 独立计算的
+  SHA-256 为 `cd423291ebf372a35484e839e4788125027959379f2d07ae90fea605654dcf99`，与 sidecar 一致。
+- 使用同一备份完成 ECS 隔离空环境恢复：迁移头 `0038_local_worker_protocol`、`workspace_count=2`、
+  `null_sync_epoch_count=0`。精确命名的临时数据库和临时附件目录均已清理，未覆盖线上数据库或数据卷。
+- 运行配置复核显示 Knowledge Space API、Shared Write、Deletion、Attachment Ingest、Local Worker、
+  AI Acceptance 与 Legacy Registration 均为 `false`，启用的 AI Provider 数量为 0；sync-v1 未变。
+- 认证浏览器仍是当前断点：用户已经报告当前浏览器会话登录，但协调方尚未在该会话真实完成走查；此前
+  可控标签访问 `/app/review` 得到“需要登录”。21 个受保护路由、交互反馈、邀请 409、重复提交、
+  搜索、知识图谱、主题持久化和控制台错误回归保持 `not_run`，不得写成通过。
+- RC2 回滚源码、旧镜像、部署前/后备份和数据卷继续保留。RC6 观察期从
+  `2026-08-09T22:59:03Z` 起算；认证 UX、真实受邀邮件、实体移动设备和至少 24 小时观察未完成前，
+  不宣称 Production，不清理回滚点，不开启任何敏感生产能力。
+
+完整部署证据见 [`V020_V15_PRERELEASE_RC6_EVIDENCE.md`](./V020_V15_PRERELEASE_RC6_EVIDENCE.md)。
+
+## 主线交接与系统操作体验重设计断点（2026-08-10）
+
+- 用户决定把后续主线交给一个指定执行方接手。仓库长期规则只记录“主线执行方”等通用角色名；模型品牌
+  不自动授予 Git、秘密、生产开关或发布权限。
+- 主线下一步先完成只读接管、认证 UX 人工回归和 RC6 至少 24 小时观察收口。真实邀请邮件、实体移动设备、
+  Production、流量切换、回滚点清理和任何敏感能力启用仍需用户逐项批准。
+- 用户明确不习惯当前系统操作页的样式与操作方式。现有 RC6 继续作为功能、安全和合同基线，但不视为下一轮
+  视觉与交互批准稿。
+- 两个专项设计执行方将基于同一 approved base 独立完成“产品诊断 → UX 审查 → 信息架构重构 → 交互重构 →
+  视觉重构 → Design System → 高保真交互原型”。它们使用独立 worktree/目录，只能写设计与隔离原型，
+  不得修改 `apps/web/src/**`，也不得提交、推送、合并或部署。
+- 用户审批一份完整原型或明确要求组合修订后，主线执行方才可开始正式前端施工。双方案任务包见
+  [`mainline-handoff/07_FRONTEND_REDESIGN_BRIEFS.md`](../coordination/mainline-handoff/07_FRONTEND_REDESIGN_BRIEFS.md)。
 
 ## V20-15 RC6 全链路验收通过（2026-08-10）
 
@@ -14,7 +55,7 @@
 - Release candidate `0.2.0-rc6` run `31338128822` 成功验证指定 Main/Capacity 证据与候选 manifest，并依次通过不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、真实认证 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据捕获与隔离环境清理。
 - RC6 制品 `release-candidate-0.2.0-rc6-c47aa376d95b179200d59986c20289b796740959` 已生成且未过期。该结论只授权进入受控 prerelease 部署流程，不等于 Production 发布或流量切换。
 - RC5 暴露的两个测试基础设施缺陷已由 PR #206 修复并在 PR browser 与 RC6 中复核：每个 Playwright 全局 worker 槽均有独立认证状态；reduced-motion 只原子采样当前文档中的已解析壳层节点，不再把脱离文档的旧节点误报为动效。
-- ECS 当前仍为 RC2；部署前必须继续保持 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关关闭，并按受控 prerelease 流程执行备份、迁移、健康检查、认证回归和回滚断点。
+- RC6 已在后续受控维护窗口部署；实际部署、备份、恢复和浏览器断点以上一节为准。Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。
 
 ## V20-15 RC5 浏览器并行与路由采样修复断点（2026-08-10）
 

@@ -4,6 +4,9 @@
 > 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
 > V20-02 migration/tests 与 V20-04 default-off 合同门已完成；ORM/产品服务、生产启用、同步扩展和 Provider 配置仍受后续门禁约束。
 > 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
+> 当前所有权覆盖（2026-08-10）：下文出现的具体执行方名称只记录历史责任。后续任务统一由用户指定的
+> 主线执行方接手；专项设计执行方只产出隔离设计与原型，用户批准前不得修改正式前端。Git、Production、
+> 外部副作用和敏感能力权限必须由用户逐项明确授予，不能从模型品牌或历史角色推断。
 
 ## 1. 不可变边界
 
@@ -12,7 +15,8 @@
 - `TopicDependency` 是唯一 Topic 先修关系。
 - AI 输出始终是 Draft/Suggested；只有用户接受事务可写正式知识、typed citation、幂等收据和审计。
 - 不增加一级导航目的地；考、学、研、导仅投影同一图谱/引擎。
-- 外部 worker 不合并、不推送；Windows Codex 负责架构、敏感后端、迁移/合同、集成、最终测试、提交和推送，并且是本地 coordination ledger 唯一写入者。
+- 非主线 worker 不合并、不推送；用户指定的主线执行方负责架构、敏感后端、迁移/合同、集成和最终测试，
+  并且是本地 coordination ledger 唯一写入者。提交、推送与发布仍以用户当前授权为准。
 - 任何秘密、Provider endpoint、私有主机数据、用户目录、终端记录或 dispatch capability 不得进入仓库或协调状态。
 
 ## 2. 有序任务 DAG

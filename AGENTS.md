@@ -25,8 +25,8 @@ events to hide a superseded decision.
 - For multi-client work, read
   `.agents/skills/logion-orca-coordinator/SKILL.md` and its coordination contract before
   dispatching workers.
-- Treat Windows Codex as the only writer of local coordination state under
-  `.agents/coordination/runs/`. External workers receive self-contained task packets and return
+- Treat the user-designated coordinator session as the only writer of local coordination state
+  under `.agents/coordination/runs/`. Other workers receive self-contained task packets and return
   structured handoffs; they do not edit the ledger.
 - Keep one writer per branch and worktree. Do not give concurrent workers overlapping writable
   paths.
@@ -35,8 +35,10 @@ events to hide a superseded decision.
   repository files or coordination state.
 - Record checks as passed only after observing the result. A written test, planned command, or
   worker claim is not equivalent to a passing coordinator verification.
-- Codex owns architecture, sensitive backend work, integration, final tests, commits, and pushes.
-  External workers do not merge or push unless a task explicitly transfers that authority.
+- The user-designated mainline owner owns architecture, sensitive backend work, integration and
+  final tests within the approved task packet. Commit, push, merge and release authority must be
+  transferred explicitly; Production changes and sensitive feature enablement always require
+  current user approval.
 
 When a local active-run pointer exists at `.agents/coordination/current-run.json`, validate and
 read that run before continuing coordinated work. The Git working tree and observed test results

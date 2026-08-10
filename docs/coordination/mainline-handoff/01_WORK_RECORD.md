@@ -71,5 +71,18 @@
 - PR #206 已 Squash 合并，新 `main` 为 `c47aa376d95b179200d59986c20289b796740959`；PR checks run `31337462102` 的 `fast`、`integration`、`browser` 全部成功。
 - Main candidate `31337611805` 与 Full capacity profile `31338032379` 均成功并绑定该 SHA。
 - Release candidate `0.2.0-rc6` run `31338128822` 成功通过 Main/Capacity 证据、候选 manifest、不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、真实认证 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据捕获与清理。
-- RC6 制品 `release-candidate-0.2.0-rc6-c47aa376d95b179200d59986c20289b796740959` 已生成；该候选尚未部署，ECS 仍运行 RC2，不得宣称线上已升级。
-- 受控 prerelease 部署是下一门：保持 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 关闭，执行部署前备份、精确 SHA/镜像核对、迁移、健康检查、真实认证 UX 回归及可执行回滚断点。
+- RC6 制品 `release-candidate-0.2.0-rc6-c47aa376d95b179200d59986c20289b796740959` 已部署到受控 prerelease。当前源码、API ready 和四个运行镜像均与 RC6 manifest 一致；迁移头为 `0038_local_worker_protocol`，旧 RC2 源码、镜像、备份和数据卷继续保留用于回滚。
+- RC6 启动后加密备份已通过服务器完整校验、BitLocker Windows 异机 SHA-256 复核和 ECS 隔离空环境恢复；恢复得到 2 个 Workspace、0 个空 `sync_epoch`，临时数据库与附件目录已清理。
+- 公网健康、安全头、OOM/重启、资源和切换后严重日志检查通过；所有敏感生产开关继续关闭，启用 AI Provider 数量为 0。
+- 认证 UX 是当前唯一直接断点：用户已报告当前浏览器会话登录，但协调方尚未在该会话完成真实走查；此前可控标签仍被 SessionBoundary 判定需要登录。21 路由、交互反馈、邀请 409、图谱和主题回归不得提前记为通过。
+- RC6 观察期从 `2026-08-09T22:59:03Z` 起算。至少 24 小时观察、真实受邀邮件、实体移动设备和 Production 授权完成前，不清理回滚点、不启用 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 或 AI Acceptance。
+
+## 当前主线交接与前端重设计决策（2026-08-10）
+
+- 当前文档主线为 `origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`；RC6 运行产品源码仍为
+  `c47aa376d95b179200d59986c20289b796740959`，两者不得混淆。
+- 用户决定后续只保留一个指定的主线执行方；长期文档使用通用角色名，不从模型品牌推断 Git、秘密、
+  敏感能力或 Production 权限。
+- 用户不习惯当前系统操作页的样式与操作方式。两名专项设计执行方将分别产出独立完整方案，顺序固定为
+  产品诊断、UX 审查、信息架构、交互、视觉、Design System 与高保真原型；审批前不得修改正式前端。
+- 双方案使用不同 worktree/分支和不重叠输出目录。用户批准完整原型后，才由主线执行方按冻结方案施工。
