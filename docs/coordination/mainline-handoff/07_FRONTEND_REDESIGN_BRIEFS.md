@@ -20,6 +20,21 @@
 - 原型只用合成数据，不请求生产 API，不包含真实邮箱、密码、Token、主机、用户目录或私有内容。
 - 用户批准完整原型前，不修改 `apps/web/src/**`，不 commit、push、merge、release 或部署。
 
+## 开源组件使用规则
+
+- 允许并鼓励在隔离原型中采用成熟的开源组件或库；它们不是限制，设计方可以根据证据选择更合适的方案。
+  可评估的类别包括 Radix UI、React Aria、Headless UI、shadcn/ui、Floating UI、TanStack Table、XYFlow/React Flow、
+  Cytoscape.js、D3 和其他同等级替代品，不要求照抄示例或默认主题。
+- 每个候选组件必须先评估：许可证及版本、维护活跃度、键盘/读屏/焦点支持、移动适配、reduced-motion、包体、
+  SSR/构建兼容性、主题定制能力、供应链风险和与现有 API/状态契约的适配度。许可证必须与仓库 MIT 许可兼容，
+  具体结论以实际版本的 LICENSE/NOTICE 为准。
+- 组件库只能提供行为和可访问性基础，最终视觉必须接入本任务书的双主题 tokens、单一强调色、Lucide 图标和
+  App Shell 规则；不得把多个库的默认样式直接拼在一起，也不得用组件库默认主题替代产品 Design System。
+- 依赖只能写入对应隔离原型目录的 `package.json`/lockfile；不得修改根 `package.json`、`pnpm-lock.yaml`、正式
+  `apps/web/**` 或共享构建配置。原型不使用未固定版本的 CDN、远程脚本或不可审计的复制代码。
+- 必须交付 `07-open-source-component-evaluation.md`，列出实际使用的包、精确版本、许可证来源、选择理由、替代方案、
+  未采用的候选及未来接入正式前端时的审计/迁移注意事项。没有必要时可以选择零新增依赖，但仍须说明判断依据。
+
 ## 必须覆盖的完整流程
 
 1. 产品诊断：目标用户、核心任务、当前价值链、页面/能力地图、成功指标和主要矛盾。
@@ -62,6 +77,7 @@
    docs/design/system-redesign-a/** 与 prototype/system-redesign-a/**。
 3. 检查当前 Web 路由、导航、Today、Review、Workspace/Space/邀请、Settings/Profile/Security/Sync/Data/
    Integrations/AI 和知识图谱实现。引用具体页面/组件作为证据，但不要修改它们。
+4. 针对控件、浮层、表格和知识图谱分别评估可复用的开源候选；先记录取舍，再决定原型是否引入依赖。
 
 按以下顺序交付，不能跳步：
 A. 产品诊断：用户、场景、JTBD、价值链、21 路由能力地图、现有高频/低频任务、问题假设与成功指标。
@@ -91,6 +107,7 @@ G. 高保真原型：实现浏览器可直接打开的交互原型。至少精�
 04-visual-directions.md
 05-design-system.md
 06-prototype-walkthrough.md
+07-open-source-component-evaluation.md
 prototype/**
 
 完成后停止，等待用户审批。不得修改 apps/web/src/**，不得提交/推送/部署。返回结构化 handoff，列出实际检查、
@@ -112,6 +129,8 @@ prototype/**
    docs/design/system-redesign-b/** 与 prototype/system-redesign-b/**。
 3. 只读盘点 apps/web/src：21 个受保护路由、app shell/nav、design tokens、表单命令、状态组件、Today、Review、
    Workspace/Space/邀请、Settings/Profile/Security/Sync/Data/Integrations/AI、知识图谱和相关测试。
+4. 检查现有依赖和构建约束，针对 UI primitives、浮层/菜单、表格和知识图谱建立开源候选矩阵；不得为了使用库而
+   改动根 manifest 或锁文件。
 
 先输出代码感知诊断：
 - 页面→组件→数据/命令→状态→测试的映射；
@@ -126,6 +145,7 @@ D. 关键 interaction state machine，包括 loading/disabled/idempotency/confli
 E. 视觉系统和知识图谱语言；
 F. Design System tokens、组件 API、variant/state matrix、responsive contract、a11y contract；
 G. 组件化高保真原型与测试走查。
+H. 开源组件评估与依赖边界：把选中的组件包裹在产品组件契约内，记录许可证、版本、供应链和正式接入风险。
 
 原型要求：
 - 可直接运行，组件化但完全隔离于 apps/web/src/**；不调用生产 API，只用类型明确的合成 fixtures；
@@ -153,6 +173,7 @@ G. 组件化高保真原型与测试走查。
 04-design-system-and-component-contract.md
 05-implementation-mapping.md
 06-prototype-walkthrough.md
+07-open-source-component-evaluation.md
 prototype/**
 
 完成后停止，等待用户审批。不得修改 apps/web/src/**，不得提交/推送/部署。返回结构化 handoff，包含 changed files、

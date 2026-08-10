@@ -45,6 +45,8 @@
 - 两个专项设计执行方将基于同一 approved base 独立完成“产品诊断 → UX 审查 → 信息架构重构 → 交互重构 →
   视觉重构 → Design System → 高保真交互原型”。它们使用独立 worktree/目录，只能写设计与隔离原型，
   不得修改 `apps/web/src/**`，也不得提交、推送、合并或部署。
+- 设计方可以在隔离原型中采用成熟开源组件或图谱/布局库，但必须记录精确版本、许可证、可访问性、维护状态、
+  包体和供应链评估；不得修改根 manifest/lockfile。正式前端接入任何新依赖前，主线执行方必须另行完成依赖审查。
 - 用户审批一份完整原型或明确要求组合修订后，主线执行方才可开始正式前端施工。双方案任务包见
   [`mainline-handoff/07_FRONTEND_REDESIGN_BRIEFS.md`](../coordination/mainline-handoff/07_FRONTEND_REDESIGN_BRIEFS.md)。
 
