@@ -621,3 +621,19 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 本机实际门禁：Web `230` 测试、Python `402` 测试、Lint、TypeScript、Mypy、生产构建和 `pnpm contracts:check` 均通过。
 - 当前修复尚未进入同 SHA release candidate，也尚未部署到 ECS；线上仍运行前一候选 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。因此
   不能把 UX 问题标记为已解决，下一步必须完成主分支集成/候选构建、受控 prerelease 部署和同一组浏览器回归。
+
+## 产品重构 G0 审批与 D0 断点（2026-08-10）
+
+- 产品 Owner 已明确批准 `docs/product/PRODUCT_REDESIGN_EXECUTION_PLAN.md`；D1～D8、产品定位“认知作业空间”、
+  目标信息架构、对象边界、设计语言、执行 DAG 和两级原型验收自此作为产品重构基线。
+- 当前 Gate 为 **G0 已通过，D0 可启动**。D0 只允许写入 `docs/design/logion-redesign-v1/**` 与
+  `prototype/logion-redesign-v1/**`，用于代码感知诊断、21 路由映射、三套方向准备和隔离原型；不得修改
+  `apps/web/src/**`、API、Worker、Contracts、Offline、迁移、根 Manifest、锁文件或生产配置。
+- G1 方向选择、G2 完整原型、G3 正式前端一级验收和 G4 真实用户测试仍是独立审批门。G2 通过前不开始正式
+  Web 施工；本次批准不授权 commit、push、merge、deploy、生产流量切换或任何敏感能力启用。
+- 2026-08-10 复核 `.agents/coordination/current-run.json` 指向的历史 Run 时，校验仍因 `graph.json` 与
+  `tasks.jsonl` 的 encoded-content safe-scan budget 超限而失败。按长期工作流暂不派发新 Worker、不改写历史
+  事件；Git、源码、合同和真实检查继续作为事实源。
+- 模型无关的 D0 自包含合同已写入 `docs/design/logion-redesign-v1/D0_TASK_PACKET.md`。它冻结了基线、21 路由、
+  唯一允许路径、禁止范围、交付物、验收命令、交接格式和停止条件；旧 A/B 隔离产物只允许作为历史对照。
+  当前任务包尚未派发，且批准产品文档尚未形成用户授权的 commit/push，跨机器执行前必须先解决可见基线与协调断点。
