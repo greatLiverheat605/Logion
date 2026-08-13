@@ -56,6 +56,8 @@ apps/mobile/harmony/local.properties
 /LOGION_EXECUTION_PLAN.md
 /archive/
 /prototype/
+/.tmp-v020-*/
+/.zcode/
 /docs/OWNERSHIP.md
 /docs/phase-reviews/
 
