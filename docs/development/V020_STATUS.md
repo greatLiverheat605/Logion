@@ -1,6 +1,6 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-10（Asia/Shanghai）。
+> 更新时间：2026-08-13（Asia/Shanghai）。
 > 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收并部署到受控 prerelease。部署、加密备份、异机校验、隔离恢复和首轮运行时检查通过；用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > 当前文档主线：`origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`。RC6 实际产品源码仍为
