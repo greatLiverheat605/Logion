@@ -271,7 +271,7 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 ## 近期方向
 
-当前主线是把已批准的 Adaptive Desk 候选安全集成到 `main`：同步主线、通过 PR 的 `fast`、`integration`、`browser` 与移动门禁，再以合并后的同一 SHA 生成 Main candidate、Full capacity 和新的 Release Candidate。
+当前主线是固定已合入 Adaptive Desk 的最终 `main` SHA：完成同一提交的 Main candidate、Full capacity 与 `0.2.0-rc7` Release Candidate，再依据真实验收结果决定是否更新受控 prerelease。Production 发布和流量切换仍需单独审批。
 
 后续产品迭代优先处理 Today/Review/Sync 大型模块拆分、页面级离线能力说明、实体设备验收和认知工作台的真实用户验证。Connector/Automation v2、共享写入、附件、本地 Worker 和 AI Acceptance 仍需独立设计与生产准入。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 
