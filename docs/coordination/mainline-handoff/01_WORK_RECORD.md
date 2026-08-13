@@ -97,3 +97,11 @@
 - 下一节点固定为推送最终分支、创建 PR、等待 GitHub `fast/integration/browser/mobile` 四项门禁全绿；全绿后只请求用户批准合并，不自动部署或开启任何默认关闭能力。
 - `codex/logion-redesign-i0` 已推送并创建 [PR #208](https://github.com/greatLiverheat605/Logion/pull/208)，base 为 `main`。后续事实源改为 PR 最终 head 与四项远端门禁；未取得全绿和用户合并批准前保持 Open，不部署。
 - head `31b0b647a74d81bf05b16abc345d00f768aee28c` 已取得 PR checks run `31669501110` 的 `fast/integration/browser` 成功，以及手动 Mobile builds run `31669799252` 的 `android-debug` 成功；两个 run 均核对相同 `head_sha`。记录该事实的文档提交会产生最终新 head，必须再次验证后才请求合并批准。
+
+## I0 合并、README 与 RC7 证据闭环（2026-08-13）
+
+- PR #208 已经用户批准并 Squash 合入 `main`。保护分支拒绝包含历史 merge commit 的直接快进推送，因此未绕过规则；README 的合并后状态与路线说明分别通过 PR #209、#210 更新，两个文档 PR 的 `fast/integration/browser` 均成功。
+- 产品候选固定为 `480adc721600243308fa7b5a32200044efd88f07`：Main candidate run `31672956241`、Full capacity run `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 全部成功并绑定该 SHA。
+- RC7 真实执行了不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、107 项 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据上传与隔离卷清理。唯一 warning 是 `docker/login-action@v3` 的 Node.js 20 上游弃用提醒，不改变 success 结论。
+- 当前 ECS 受控 prerelease 仍为 RC6。RC7 未部署，Production 未授权；所有敏感生产开关继续关闭。下一审批节点仅是“是否用已验收 RC7 更新受控 prerelease”，不能解释为 Production 或流量切换授权。
+- 后续仅文档收口不会改变 RC7 产品候选 SHA；历史协调 Run 的 safe-scan budget 限制继续独立保留。

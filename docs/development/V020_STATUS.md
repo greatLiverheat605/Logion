@@ -726,3 +726,12 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 当前节点是“本机收口完成，进入分支推送、PR 与 GitHub `fast/integration/browser/mobile` 门禁”；仍未 merge、deploy 或启用敏感生产能力。
 - 分支已推送并创建 [PR #208](https://github.com/greatLiverheat605/Logion/pull/208)，目标分支为 `main`。PR 描述明确列出本机门禁、非目标、安全边界和历史协调 Run 未绿项；当前只等待最终 head 的 `fast/integration/browser/mobile` 远端门禁，不自动合并或部署。
 - PR head `31b0b647a74d81bf05b16abc345d00f768aee28c` 的 PR checks run [`31669501110`](https://github.com/greatLiverheat605/Logion/actions/runs/31669501110) 已成功：`fast`、`integration`、`browser` 全绿。由于 `mobile.yml` 受路径过滤未自动触发，已对同一分支手动运行 Mobile builds [`31669799252`](https://github.com/greatLiverheat605/Logion/actions/runs/31669799252)，`android-debug` 成功且 `head_sha` 相同。该证据写入后会形成仅文档的新 head；仍需等待新 head 的远端门禁，不自动合并。
+
+## I0 合并与 RC7 候选验收（2026-08-13）
+
+- 用户批准后，PR [#208](https://github.com/greatLiverheat605/Logion/pull/208) 已按仓库禁止 merge commit 的保护规则 Squash 合入 `main`；直接快进推送曾被保护规则拒绝，未绕过规则。随后两次仅 README 状态修正分别经 PR [#209](https://github.com/greatLiverheat605/Logion/pull/209) 与 [#210](https://github.com/greatLiverheat605/Logion/pull/210) 的 `fast/integration/browser` 门禁后 Squash 合并。
+- RC7 产品候选源码固定为 `480adc721600243308fa7b5a32200044efd88f07`。Main candidate [`31672956241`](https://github.com/greatLiverheat605/Logion/actions/runs/31672956241) 成功并生成候选清单、digest-pinned 镜像、provenance 与安全证据；Full capacity [`31673689291`](https://github.com/greatLiverheat605/Logion/actions/runs/31673689291) 成功并生成同 SHA 的容量报告。
+- Release candidate `0.2.0-rc7` run [`31673881951`](https://github.com/greatLiverheat605/Logion/actions/runs/31673881951) 成功：可信 Main/Capacity 证据、`pnpm ci:fast`、容量报告、候选 manifest、不可变镜像 smoke、空环境恢复、旧客户端与恢复 epoch 兼容、107 项真实 Browser/PWA/WCAG 矩阵、5%/25%/100% rollout rehearsal、证据捕获及 Compose 卷清理均实际完成。
+- RC7 唯一注释是 `docker/login-action@v3` 目标 Node.js 20 的上游弃用 warning；GitHub 已强制其在 Node.js 24 运行，job 结论仍为 success。该 warning 不等于产品门禁失败，后续依赖维护应单独升级 Action。
+- 当前受控 prerelease 仍运行 RC6；RC7 只完成候选验收，尚未部署。是否更新受控 prerelease 需要用户单独批准；Production 发布、流量切换和 Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1、AI Acceptance 继续未授权且保持关闭。
+- 本节后的文档提交只记录既成事实，不重建或替换 RC7 产品候选，也不得把文档提交 SHA 冒充 `480adc721600243308fa7b5a32200044efd88f07` 的候选证据。历史协调 Run 的 encoded-content safe-scan budget 超限仍单独未绿，未改写为通过。
