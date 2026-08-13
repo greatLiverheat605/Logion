@@ -35,19 +35,22 @@
 6. 邀请与成员角色更新增加客户端白名单，合同外角色不会发送请求；动态 Workspace、Space 与 Member 路径段统一编码。CSRF 与成员 `expected_version` 保持不变。
 7. 知识图谱响应解析增加实际 UTF-8 JSON 1 MiB 上限、`next_cursor` 1024 字符上限和各对象合同外字段拒绝；原有 150/400 上限、UUID、重复 ID、悬空边和截断元数据校验继续失败关闭。
 8. 一次 standalone 重启后因静态文件复制层级错误出现 `/_next/static/chunks/*` 404，页面停留在会话验证状态。修正 standalone 目录层级并重启后，静态资源、登录页和 Web health 均恢复 200；该失败属于本机验收栈装配问题，不是产品回归。
+9. 同步最新 `main` 后的完整矩阵发现 `/app/search` “搜索服务器”按钮从异步禁用态切换为启用态时，文字色与背景色同时进行 160ms 过渡，中间帧对比度约为 3.02:1。禁用态改为不透明的语义灰色，并移除按钮文字色与背景色的过渡；保留边框、阴影、滤镜和位移反馈。修复后 21 条认证路由 axe 与横向溢出定向门禁 1/1 通过。
+10. 同一矩阵发现 WorkspaceCenter 使用无语义角色的 `div[aria-label="工作区列表"]`，触发 axe `aria-prohibited-attr`。容器改为具名 `role="list"`，每个工作区使用 `role="listitem"` 包装原生按钮，并增加单元测试验证列表名称、列表项数量和按钮可操作性。
 
 ## 静态与构建门禁
 
 - `corepack pnpm exec prettier --check apps/web/src tests/browser/integration-hub.spec.ts tests/browser/persona-system.spec.ts`：通过。
 - `corepack pnpm --filter @logion/web lint`：通过。
 - `corepack pnpm --filter @logion/web typecheck`：通过。
-- `corepack pnpm --filter @logion/web test`：62 个文件、448 项测试通过。
+- `corepack pnpm --filter @logion/web test`：62 个文件、449 项测试通过。
 - `corepack pnpm --filter @logion/web build`：通过，生成 36 条路由。
 - Workspace/Review 竞态与知识图谱合同定向测试：45/45 通过。
 - Python：Ruff 通过；Mypy strict 对 171 个源文件通过；Pytest 402 项通过、67 项按选择条件排除。
 - 合同与离线：合同测试 12 项通过；离线测试 55 项通过，行覆盖率 93.01%；`contracts:check` 通过且生成文件无差异。
 - 依赖审计：`pnpm audit --audit-level high` 与 `pip-audit` 均未发现已知漏洞。
 - `git diff --check`：通过。
+- `corepack pnpm ci:fast`：最终完整运行返回 0，覆盖状态模型 fixture、格式、Lint、类型、Web/Python/离线/合同/移动测试、36 条路由生产构建和合同生成一致性。
 
 ## 真实认证浏览器结果
 
@@ -60,7 +63,7 @@
 
 ### 完整矩阵
 
-- `authenticated-chromium`：31/31 通过，0 失败，0 跳过。
+- `authenticated-chromium`：最新完整运行 32/32 通过，0 失败，0 跳过。
 
 完整覆盖：
 
@@ -76,6 +79,8 @@
 - Vault、设备清理、Workspace/Private Space、导入导出和错误边界。
 
 首次完整认证运行曾得到 29 通过、1 失败、1 因串行依赖未运行；唯一失败是隔离环境缺少导出队列消费者，不是前端或 API 合同失败。补齐仅导出消费者后，最终完整矩阵为 31/31。
+
+2026-08-13 同步最新 `main` 并完成上述两项可访问性修复后，公开五浏览器与真实认证项目再次作为一个 107 项矩阵运行，最终为 `101 passed, 6 skipped, 0 failed`。认证部分包含新增账号首次登录强制 onboarding，因此最新认证统计为 32/32。
 
 ## 公开页面浏览器结果
 
@@ -93,10 +98,12 @@
 
 - 认证专项 18/18 通过，覆盖 21 条认证路由、axe、1440/1250/900/720/420/390/320、横向溢出、主题持久化/XSS、reduced-motion、正式 Review 图谱、图谱键盘导航和 Vault/设备边界。
 - 新增 Workspace/Review 真实竞态烟雾 1/1 通过：通过真实 UI 创建两个 Workspace 与各自 Space，故意延迟 A 响应并快速切换到 B，确认两个页面均不会被 A 的晚到响应覆盖。
+- 最新 107 项完整矩阵为 101 通过、6 项按规范跳过、0 失败；21 路由 axe/横向溢出定向复核 1/1 通过。
+- 一次全仓并发 Web 测试中，既有知识图谱 VC 用例超过固定 5 秒。该用例随后连续定向运行 5 次均通过，后续两次完整 Web 套件均为 449/449；最终 `ci:fast` 从头到尾返回 0，判定为本机并发资源抖动，未放宽断言或超时。
 - 最终安全与权限边界结论见 [`I0_FINAL_SECURITY_REVIEW_2026-08-12.md`](./I0_FINAL_SECURITY_REVIEW_2026-08-12.md)。
 
 ## 剩余限制
 
 - `.agents/coordination/current-run.json` 指向的历史 Run 已再次真实校验，但仍失败：`graph.json` 与 `tasks.jsonl` 包含超出 safe scan budget 的 encoded content。该协调账本门禁没有被记为通过，也没有改写历史事件。
 - 本轮结论仅为 I0-E 本机技术验收通过，不等于用户批准 commit、push、merge、部署、生产发布或敏感能力启用。
-- 临时导出消费者已停止。8180 Web 与 8000 隔离 API 保留在线，供当前会话人工复核；8080 未触碰。
+- 临时导出消费者已停止。为取得不受构建目录锁影响的最终 `ci:fast`，8180 standalone 在浏览器矩阵完成后也已停止；8000 隔离 API 保留在线。8080 未触碰。

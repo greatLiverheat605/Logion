@@ -714,3 +714,13 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   `0aeacb405eb61870a05efa7424ef528763a278e1` 已创建，包含 85 个已复核文件；分支
   `codex/logion-redesign-i0` 已成功推送到 `origin` 并建立跟踪关系。当前仍未 merge 或 deploy，也不等于 v0.2.0 已发布。`.tmp-v020-rc2/`、`.tmp-v020-rc4/` 与 `.zcode/` 未进入提交。
 - 唯一独立未绿项仍为历史协调 Run：`graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget。工具和 fixture 测试通过，但当前 Run 不得记为全绿，也不得改写历史事件。详细记录见 [`I0_FINAL_SECURITY_REVIEW_2026-08-12.md`](./I0_FINAL_SECURITY_REVIEW_2026-08-12.md)。
+
+## I0 主线同步与最终本机收口（2026-08-13）
+
+- `codex/logion-redesign-i0` 已合并最新 `origin/main`，根 `README.md` 已改为“自适应认知作业空间”定位，并明确仓库清单仍为 `0.1.0`、RC6 仅为受控 prerelease、I0 仍需 PR/远端门禁/合并审批；同时补充五区、21 路由、44px Context Bar、Inspector、移动五区和显式回环 E2E 说明。
+- 最新真实认证矩阵发现并修复两项可访问性问题：搜索服务器按钮状态切换中间帧对比度不足，以及 WorkspaceCenter 无角色 `div` 使用 `aria-label`。工作区选择现在是具名语义列表，按钮仍保留原生交互语义，并有回归测试。
+- 修复后 21 路由 axe/横向溢出定向门禁 1/1 通过；公开五浏览器与认证项目完整 107 项矩阵最终为 `101 passed, 6 skipped, 0 failed`。覆盖真实认证、主题持久化/XSS、reduced-motion、响应式、移动节点、桌面图谱键盘、Workspace 竞态、Calendar、Private Space 导入、近期认证门和加密导出下载校验。
+- 最终 `corepack pnpm ci:fast` 从头到尾返回 0：状态模型 fixture 118、Web 449、Python 402、离线 55、合同 12、移动 4，Ruff/Mypy/格式/Lint/类型/36 路由构建和合同一致性均通过。依赖审计未发现已知漏洞。
+- 仅导出消费者已在完整矩阵结束后停止；8180 standalone 已在最终构建门禁前停止；8080 无关服务未触碰。Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 的生产开关继续关闭。
+- 历史协调 Run 校验再次真实失败于 `graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget；没有伪造通过或改写历史。该独立限制不改变代码、合同、依赖和真实浏览器结果。
+- 当前节点是“本机收口完成，进入分支推送、PR 与 GitHub `fast/integration/browser/mobile` 门禁”；仍未 merge、deploy 或启用敏感生产能力。
