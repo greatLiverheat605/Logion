@@ -499,28 +499,33 @@ export function WorkspaceCenter({
           description="切换治理上下文并查看其中的私有与共享空间。"
           title="工作区与空间"
         >
-          <div aria-label="工作区列表" className="workspace-context-list">
+          <div
+            aria-label="工作区列表"
+            className="workspace-context-list"
+            role="list"
+          >
             {workspaces.map((workspace) => {
               const active = workspace.id === selected;
               return (
-                <button
-                  aria-current={active ? "true" : undefined}
-                  className={active ? "is-selected" : undefined}
-                  disabled={anyPending}
-                  key={workspace.id}
-                  onClick={() => selectWorkspace(workspace.id)}
-                  type="button"
-                >
-                  <span>
-                    <strong>{workspace.name}</strong>
-                    <small>
-                      {roleLabel(workspace.role)} · {workspace.status}
-                    </small>
-                  </span>
-                  <ProductTag tone={active ? "info" : "default"}>
-                    {active ? "当前" : "切换"}
-                  </ProductTag>
-                </button>
+                <div key={workspace.id} role="listitem">
+                  <button
+                    aria-current={active ? "true" : undefined}
+                    className={active ? "is-selected" : undefined}
+                    disabled={anyPending}
+                    onClick={() => selectWorkspace(workspace.id)}
+                    type="button"
+                  >
+                    <span>
+                      <strong>{workspace.name}</strong>
+                      <small>
+                        {roleLabel(workspace.role)} · {workspace.status}
+                      </small>
+                    </span>
+                    <ProductTag tone={active ? "info" : "default"}>
+                      {active ? "当前" : "切换"}
+                    </ProductTag>
+                  </button>
+                </div>
               );
             })}
           </div>

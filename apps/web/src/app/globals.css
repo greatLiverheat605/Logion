@@ -1418,8 +1418,11 @@ h1 {
 }
 
 .planning-form button:disabled {
+  border-color: var(--border);
+  background: var(--bg-muted);
+  color: var(--text-tertiary);
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 1;
 }
 
 .inline-form-feedback {
@@ -2372,9 +2375,7 @@ h1 {
   box-shadow: var(--shadow-card);
   transition:
     border-color 160ms ease,
-    background-color 160ms ease,
     box-shadow 160ms ease,
-    color 160ms ease,
     filter 160ms ease,
     transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -5221,7 +5222,7 @@ h1 {
   gap: var(--space-1);
 }
 
-.workspace-context-list > button {
+.workspace-context-list > [role="listitem"] > button {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -5238,18 +5239,18 @@ h1 {
   cursor: pointer;
 }
 
-.workspace-context-list > button:hover {
+.workspace-context-list > [role="listitem"] > button:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.workspace-context-list > button:focus-visible,
+.workspace-context-list > [role="listitem"] > button:focus-visible,
 .workspace-inline-disclosure > summary:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-.workspace-context-list > button.is-selected {
+.workspace-context-list > [role="listitem"] > button.is-selected {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
   background: var(--bg-selected);
   color: var(--text-primary);

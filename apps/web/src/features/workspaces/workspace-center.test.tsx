@@ -103,6 +103,29 @@ afterEach(() => {
 });
 
 describe("WorkspaceCenter request boundaries", () => {
+  it("exposes workspace choices as a named semantic list", async () => {
+    mockRequest.mockImplementation((path: string) => {
+      if (path === "/api/v1/workspaces") {
+        return Promise.resolve({
+          workspaces: [
+            workspace("workspace-a", "工作区 A"),
+            workspace("workspace-b", "工作区 B"),
+          ],
+        });
+      }
+      if (path.endsWith("/spaces")) return Promise.resolve({ spaces: [] });
+      if (path.endsWith("/members")) return Promise.resolve({ members: [] });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(<WorkspaceCenter />);
+
+    const list = await screen.findByRole("list", { name: "工作区列表" });
+    expect(list.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /工作区 A/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /工作区 B/ })).toBeTruthy();
+  });
+
   it("ignores stale detail responses after switching workspaces", async () => {
     const firstSpaces = deferred<{ spaces: Space[] }>();
     const firstMembers = deferred<{ members: Member[] }>();
