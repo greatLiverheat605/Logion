@@ -96,3 +96,4 @@
 - 历史协调 Run 仍因 encoded-content safe-scan budget 超限而未绿；这一限制单独保留，不影响 I0 代码与浏览器验收，也不得改写成通过。
 - 下一节点固定为推送最终分支、创建 PR、等待 GitHub `fast/integration/browser/mobile` 四项门禁全绿；全绿后只请求用户批准合并，不自动部署或开启任何默认关闭能力。
 - `codex/logion-redesign-i0` 已推送并创建 [PR #208](https://github.com/greatLiverheat605/Logion/pull/208)，base 为 `main`。后续事实源改为 PR 最终 head 与四项远端门禁；未取得全绿和用户合并批准前保持 Open，不部署。
+- head `31b0b647a74d81bf05b16abc345d00f768aee28c` 已取得 PR checks run `31669501110` 的 `fast/integration/browser` 成功，以及手动 Mobile builds run `31669799252` 的 `android-debug` 成功；两个 run 均核对相同 `head_sha`。记录该事实的文档提交会产生最终新 head，必须再次验证后才请求合并批准。

@@ -725,3 +725,4 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 历史协调 Run 校验再次真实失败于 `graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget；没有伪造通过或改写历史。该独立限制不改变代码、合同、依赖和真实浏览器结果。
 - 当前节点是“本机收口完成，进入分支推送、PR 与 GitHub `fast/integration/browser/mobile` 门禁”；仍未 merge、deploy 或启用敏感生产能力。
 - 分支已推送并创建 [PR #208](https://github.com/greatLiverheat605/Logion/pull/208)，目标分支为 `main`。PR 描述明确列出本机门禁、非目标、安全边界和历史协调 Run 未绿项；当前只等待最终 head 的 `fast/integration/browser/mobile` 远端门禁，不自动合并或部署。
+- PR head `31b0b647a74d81bf05b16abc345d00f768aee28c` 的 PR checks run [`31669501110`](https://github.com/greatLiverheat605/Logion/actions/runs/31669501110) 已成功：`fast`、`integration`、`browser` 全绿。由于 `mobile.yml` 受路径过滤未自动触发，已对同一分支手动运行 Mobile builds [`31669799252`](https://github.com/greatLiverheat605/Logion/actions/runs/31669799252)，`android-debug` 成功且 `head_sha` 相同。该证据写入后会形成仅文档的新 head；仍需等待新 head 的远端门禁，不自动合并。
