@@ -7,7 +7,7 @@
 
 Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前状态：仓库清单版本仍为 `0.1.0`；`v0.2.0-rc6` 已部署到受控 prerelease，尚未进入 Production。I0 Adaptive Desk 重构候选位于 `codex/logion-redesign-i0`，已完成本机技术验收，仍需通过 PR 远端门禁并获得合并审批。真实邮件、实体设备、观察期与生产流量切换仍未完成。
+> 当前状态：仓库清单版本仍为 `0.1.0`；`v0.2.0-rc6` 已部署到受控 prerelease，尚未进入 Production。I0 Adaptive Desk 已通过 PR #208 合入 `main`，合并后的 Main candidate 已通过；下一门禁是 Full capacity 与新 Release Candidate。真实邮件、实体设备、观察期与生产流量切换仍未完成。
 
 ## 为什么是 Logion
 
