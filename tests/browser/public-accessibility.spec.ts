@@ -60,6 +60,18 @@ test("login secondary action remains readable in the light theme", async ({
   expect(colors.foreground).not.toBe(colors.background);
 });
 
+test("root access card remains accessible in the dark theme", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("app-shell-theme", "dark"),
+  );
+  await page.goto("/");
+  await expect(page.locator("main")).toBeVisible();
+  const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
+  expect(results.violations).toEqual([]);
+});
+
 for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {
   test(`${route} fits a narrow viewport without page overflow`, async ({
     page,

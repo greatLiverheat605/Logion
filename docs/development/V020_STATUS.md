@@ -1,11 +1,54 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-10（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收，可进入受控 prerelease 部署，但 ECS 当前仍运行 RC2。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 更新时间：2026-08-13（Asia/Shanghai）。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收并部署到受控 prerelease。部署、加密备份、异机校验、隔离恢复和首轮运行时检查通过；用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前主线：PR #206 已 Squash 合并；`main` 为
-> `c47aa376d95b179200d59986c20289b796740959`。Main candidate run `31337611805`、Full capacity run
-> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功且 head SHA 一致。RC6 尚未部署，不能宣称线上已升级。
+> 当前文档主线：`origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`。RC6 实际产品源码仍为
+> `c47aa376d95b179200d59986c20289b796740959`；Main candidate run `31337611805`、Full capacity run
+> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功并绑定该产品 SHA。文档主线 SHA
+> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC6；该状态不等于 Production 发布。
+
+## V20-15 RC6 受控 prerelease 部署断点（2026-08-10）
+
+- RC6 已在受控维护窗口完成原子切换。当前源码与 API ready 版本均为
+  `c47aa376d95b179200d59986c20289b796740959`，迁移头为 `0038_local_worker_protocol`；候选 manifest
+  SHA-256 为 `12280604e31621ef3cad437ec712a1b9e80dfccb64c2d7326509c0354f1624e7`。
+- API、Worker、Web、Reverse Proxy、Backup、PostgreSQL 与 Redis 均运行；有健康检查的服务全部 healthy，
+  OOMKilled 均为 `false`、RestartCount 均为 0。四个应用容器的运行镜像与 RC6 manifest 固定 digest 逐项一致。
+- 公网 `/health` 返回 HTTP 200；HSTS、nonce CSP、`X-Frame-Options: DENY`、
+  `X-Content-Type-Options: nosniff` 和 `Referrer-Policy: no-referrer` 均存在。切换后 20 分钟内五个应用服务的
+  serious log 匹配数均为 0；磁盘使用 37%，可用内存 758 MiB，Swap 使用 125 MiB。
+- RC6 启动后加密备份 `logion-20260809T225859Z-beta-v1.backup` 已通过服务器完整校验并同步到
+  BitLocker XTS-AES-256、100% 加密且 Protection On 的受控 Windows 异机卷；Windows 独立计算的
+  SHA-256 为 `cd423291ebf372a35484e839e4788125027959379f2d07ae90fea605654dcf99`，与 sidecar 一致。
+- 使用同一备份完成 ECS 隔离空环境恢复：迁移头 `0038_local_worker_protocol`、`workspace_count=2`、
+  `null_sync_epoch_count=0`。精确命名的临时数据库和临时附件目录均已清理，未覆盖线上数据库或数据卷。
+- 运行配置复核显示 Knowledge Space API、Shared Write、Deletion、Attachment Ingest、Local Worker、
+  AI Acceptance 与 Legacy Registration 均为 `false`，启用的 AI Provider 数量为 0；sync-v1 未变。
+- 认证浏览器仍是当前断点：用户已经报告当前浏览器会话登录，但协调方尚未在该会话真实完成走查；此前
+  可控标签访问 `/app/review` 得到“需要登录”。21 个受保护路由、交互反馈、邀请 409、重复提交、
+  搜索、知识图谱、主题持久化和控制台错误回归保持 `not_run`，不得写成通过。
+- RC2 回滚源码、旧镜像、部署前/后备份和数据卷继续保留。RC6 观察期从
+  `2026-08-09T22:59:03Z` 起算；认证 UX、真实受邀邮件、实体移动设备和至少 24 小时观察未完成前，
+  不宣称 Production，不清理回滚点，不开启任何敏感生产能力。
+
+完整部署证据见 [`V020_V15_PRERELEASE_RC6_EVIDENCE.md`](./V020_V15_PRERELEASE_RC6_EVIDENCE.md)。
+
+## 主线交接与系统操作体验重设计断点（2026-08-10）
+
+- 用户决定把后续主线交给一个指定执行方接手。仓库长期规则只记录“主线执行方”等通用角色名；模型品牌
+  不自动授予 Git、秘密、生产开关或发布权限。
+- 主线下一步先完成只读接管、认证 UX 人工回归和 RC6 至少 24 小时观察收口。真实邀请邮件、实体移动设备、
+  Production、流量切换、回滚点清理和任何敏感能力启用仍需用户逐项批准。
+- 用户明确不习惯当前系统操作页的样式与操作方式。现有 RC6 继续作为功能、安全和合同基线，但不视为下一轮
+  视觉与交互批准稿。
+- 两个专项设计执行方将基于同一 approved base 独立完成“产品诊断 → UX 审查 → 信息架构重构 → 交互重构 →
+  视觉重构 → Design System → 高保真交互原型”。它们使用独立 worktree/目录，只能写设计与隔离原型，
+  不得修改 `apps/web/src/**`，也不得提交、推送、合并或部署。
+- 设计方可以在隔离原型中采用成熟开源组件或图谱/布局库，但必须记录精确版本、许可证、可访问性、维护状态、
+  包体和供应链评估；不得修改根 manifest/lockfile。正式前端接入任何新依赖前，主线执行方必须另行完成依赖审查。
+- 用户审批一份完整原型或明确要求组合修订后，主线执行方才可开始正式前端施工。双方案任务包见
+  [`mainline-handoff/07_FRONTEND_REDESIGN_BRIEFS.md`](../coordination/mainline-handoff/07_FRONTEND_REDESIGN_BRIEFS.md)。
 
 ## V20-15 RC6 全链路验收通过（2026-08-10）
 
@@ -14,7 +57,7 @@
 - Release candidate `0.2.0-rc6` run `31338128822` 成功验证指定 Main/Capacity 证据与候选 manifest，并依次通过不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、真实认证 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据捕获与隔离环境清理。
 - RC6 制品 `release-candidate-0.2.0-rc6-c47aa376d95b179200d59986c20289b796740959` 已生成且未过期。该结论只授权进入受控 prerelease 部署流程，不等于 Production 发布或流量切换。
 - RC5 暴露的两个测试基础设施缺陷已由 PR #206 修复并在 PR browser 与 RC6 中复核：每个 Playwright 全局 worker 槽均有独立认证状态；reduced-motion 只原子采样当前文档中的已解析壳层节点，不再把脱离文档的旧节点误报为动效。
-- ECS 当前仍为 RC2；部署前必须继续保持 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关关闭，并按受控 prerelease 流程执行备份、迁移、健康检查、认证回归和回滚断点。
+- RC6 已在后续受控维护窗口部署；实际部署、备份、恢复和浏览器断点以上一节为准。Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续关闭。
 
 ## V20-15 RC5 浏览器并行与路由采样修复断点（2026-08-10）
 
@@ -578,3 +621,108 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 本机实际门禁：Web `230` 测试、Python `402` 测试、Lint、TypeScript、Mypy、生产构建和 `pnpm contracts:check` 均通过。
 - 当前修复尚未进入同 SHA release candidate，也尚未部署到 ECS；线上仍运行前一候选 `448cbdf8bd43c45aa25e3f2068e2246f3299be3a`。因此
   不能把 UX 问题标记为已解决，下一步必须完成主分支集成/候选构建、受控 prerelease 部署和同一组浏览器回归。
+
+## 产品重构 G0 审批与 D0 断点（2026-08-10）
+
+- 产品 Owner 已明确批准 `docs/product/PRODUCT_REDESIGN_EXECUTION_PLAN.md`；D1～D8、产品定位“认知作业空间”、
+  目标信息架构、对象边界、设计语言、执行 DAG 和两级原型验收自此作为产品重构基线。
+- 当前 Gate 为 **G0 已通过，D0 可启动**。D0 只允许写入 `docs/design/logion-redesign-v1/**` 与
+  `prototype/logion-redesign-v1/**`，用于代码感知诊断、21 路由映射、三套方向准备和隔离原型；不得修改
+  `apps/web/src/**`、API、Worker、Contracts、Offline、迁移、根 Manifest、锁文件或生产配置。
+- G1 方向选择、G2 完整原型、G3 正式前端一级验收和 G4 真实用户测试仍是独立审批门。G2 通过前不开始正式
+  Web 施工；本次批准不授权 commit、push、merge、deploy、生产流量切换或任何敏感能力启用。
+- 2026-08-10 复核 `.agents/coordination/current-run.json` 指向的历史 Run 时，校验仍因 `graph.json` 与
+  `tasks.jsonl` 的 encoded-content safe-scan budget 超限而失败。按长期工作流暂不派发新 Worker、不改写历史
+  事件；Git、源码、合同和真实检查继续作为事实源。
+- 模型无关的 D0 自包含合同已写入 `docs/design/logion-redesign-v1/D0_TASK_PACKET.md`。它冻结了基线、21 路由、
+  唯一允许路径、禁止范围、交付物、验收命令、交接格式和停止条件；旧 A/B 隔离产物只允许作为历史对照。
+- 三份产品文档、D0 任务包和本状态断点已在用户明确授权后以提交
+  `65c6cb323f544b9b20cf8f995ec5f1aabe3a2521` 首次推送到 `origin/codex/v020-rc6-closeout`。D0 仍未派发；
+  派发时必须另行冻结包含后续基线校正的远端可达完整 SHA，并建立可验证协调断点。
+
+## 产品重构 D2 完成与 I0 主线交接准备（2026-08-11）
+
+- 根据产品 Owner 的继续施工指令，方向冻结为 `C Adaptive Desk + B 的 Knowledge/Research 证据三栏 + A 的 Today 极简行动线`。
+  该组合只冻结前端信息架构、交互和视觉输入，不改变现有权限、API、迁移、sync-v1 或默认关闭边界。
+- D2 隔离交互原型已完成：`prototype/logion-redesign-v1/d2-approved.html`。它覆盖 Today、五种受控工作台、Knowledge Base 五种视图、Research、Collaboration、System Center、21 条旧路由命令映射、桌面/390px、双主题、密度和五类状态。
+- D2 原型实际验收：四组主矩阵各 50 个场景，共 200 个；主标题、设备横向溢出和 Today 并列面板等高均通过。15 个桌面子视图和 15 个移动子视图通过；命令面板 21 条路由映射、`/app/review` 搜索、邀请 409、图谱方向键、移动列表和危险确认门均真实操作通过；本地原型控制台 error/warn 为 0。
+- D2 原型验收不等于正式 Web/API 验收：axe、真实认证、生产构建、真实数据和正式 Playwright 必须由 I0 施工后重新执行。原型不发送真实邮件、不执行真实删除，所有数据均为合成数据。
+- 新增设计输入与施工包：`docs/design/logion-redesign-v1/07_D2_DIRECTION_DECISION.md`、`08_D2_PROTOTYPE_SPEC.md`、`09_DESIGN_SYSTEM.md`、`10_ROUTE_MIGRATION_MAP.md`、`D2_ACCEPTANCE_REPORT.md`、`I0_CONSTRUCTION_TASK_PACKET.md`、`I0_MAINLINE_EXECUTION_PROMPT.md`。尚未 commit/push。
+- I0 现在可以由用户手工交给单一主线执行方；施工方只写 `apps/web/src/**` 和必要的 `apps/web/tests/**`，依赖、合同、状态、Git 与生产权限仍按任务包逐项审查。未获得新的 Git 授权前不 commit/push/merge/deploy。
+
+## I0-B Shell 与路由适配验收（2026-08-12）
+
+- I0-A、I0-B 及 I0-B-R1 已完成协调方独立验收。当前工作树仍固定在
+  `codex/logion-redesign-i0` / `e2b85987d816baf53a089007e674cd440e9ce64f`，未执行 commit、push 或 merge。
+- I0-B 建立五个固定区域、21 条正式 URL 的统一 route manifest、44px Context Bar、Persona 感知的桌面/移动区域入口和 Inspector 插槽；保留 `/app` 与历史 `/app/knowledge-prototype`。
+- I0-B-R1 修复了 `/app/search` 重复上下文标题、历史原型错误标题，以及桌面侧栏与移动端 Persona 默认入口不一致的问题。
+- 协调方实际观察：Web lint、TypeScript、55 个测试文件/388 个测试、Prettier、生产构建、`guard:context` 和 `git diff --check` 全部通过。
+- 真实认证 Playwright、320/390/1024/1440 响应式、axe、视觉比较、主题 XSS、图谱键盘和移动图谱门禁统一留到 I0-E；协调账本验证仍受历史 `graph.json`/`tasks.jsonl` safe-scan budget 限制，未伪造通过。
+- I0-C1 可启动：只迁移 Today 与 Knowledge Base 的 Review/Graph 高频只读路径；先接入现有真实 API/Space/SessionBoundary 和有界图谱合同，再处理后续 Records/Research，不改变 API、权限、迁移或 default-off 能力。
+
+## I0-C1 主线接管施工（2026-08-12）
+
+- 外部执行方中断后，主线在 `codex/logion-redesign-i0` / 固定基础
+  `e2b85987d816baf53a089007e674cd440e9ce64f` 上由协调方直接接管；本轮未重新派发模型，未执行
+  commit、push、merge、deploy。
+- 图谱请求已接入真实 `GET /api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/graph`：客户端只允许
+  1/2 跳，路径段编码，切换根节点/范围会取消旧请求并丢弃陈旧响应；响应失败关闭，校验节点/边 150/400 上限、重复
+  ID、悬空边、端点类型、UUID、截断元数据和服务端 limits。
+- Review 图谱已使用服务端授权数据；API error/locked/empty/loading 状态就地显示，不再把本地 sync-v1 Topic 图谱静默
+  伪装成授权成功。根节点与 1/2 跳范围可操作；桌面详情统一进入 AppShell Inspector，移动端使用同一节点集合列表/详情层。
+- Today 首屏保留真实 Task/Session/Evidence/Verification/Vault 行为，行动线补齐 WHY/EVIDENCE/NEXT，执行队列最多 3 项并按
+  进行中、截止时间、优先级排序；未改变 API、权限、迁移、Worker、sync-v1 或任何 default-off 生产能力。
+- 实际验证：Web 57 个测试文件/433 个测试、lint、TypeScript、Prettier、生产构建（36 路由）和 `guard:context` 通过；
+  `git diff --check` 通过。协调账本验证仍因历史 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限失败，
+  未记为通过。
+- 未运行真实认证 Playwright、1440/1024/390/320 浏览器矩阵、axe、主题持久化/XSS、桌面真实图谱键盘和移动真实设备门禁；
+  这些仍属于 I0-E，当前 I0-C1 结论为“施工完成，待真实浏览器验收”，不是版本完成。
+
+## I0-D Collaboration / System Center 施工（2026-08-12）
+
+- 外部执行方中断后，主线继续由协调方在 `codex/logion-redesign-i0` 工作区施工；本轮仍未 commit、push、merge 或 deploy。
+- 协作空间已拆为两个明确子视图：`/app/collaboration` 继续承载共享审阅与反馈，`/app/workspaces` 承载 Workspace、Space、成员、邀请和角色治理；`/app/spaces` 保留为知识库管理入口，不改变 Space 权限边界。
+- `WorkspaceCenter` 已改为左侧 Workspace/Space 上下文、右侧成员与邀请的双栏控制台；移动端堆叠。成员角色更新保留 `expected_version` 与行级 pending。
+- 邀请 409 已接入 `DeskConflictResolver`：根据现有服务端稳定原因安全区分“已是成员 / 已有待处理邀请”，未知原因按远端状态变化处理；提供“刷新并比较 / 调整角色 / 关闭”，不自动重发、不泄露服务端原文。
+- 新增 `SystemCenterFrame`，以“账户与偏好 / 安全与数据 / 服务与治理”分组列表承载 `/app/profile`、`/app/settings`、`/app/help`、`/app/security`、`/app/sync`、`/app/data`、`/app/audit`、`/app/integrations`、`/app/ai`；右侧继续渲染各页面真实组件，未复制数据逻辑。
+- 实际检查：Web 60 个测试文件/441 个测试、lint、TypeScript、Prettier、生产构建（36 路由）和 `git diff --check` 通过。
+- 真实认证 Playwright、21 条认证路由、邀请邮件、真实图谱键盘/移动节点、认证 axe、1440/1024/390/320 矩阵、主题 XSS 与 reduced-motion 尚未运行：本机 8080 被无关 `sub2api` 占用，隔离 API/网关已停止；E2E 保护已允许显式回环端口，下一次使用 8180，不能用 mock 或静态构建替代。
+- 协调 Run 校验仍受历史 `graph.json` / `tasks.jsonl` safe-scan/目录结构预算阻塞，未伪造通过。I0-D 结论为“施工完成，待真实浏览器验收”，不等于 v0.2.0 发布完成。
+- 详细记录：[`I0_D_COLLABORATION_SYSTEM_2026-08-12.md`](./I0_D_COLLABORATION_SYSTEM_2026-08-12.md)。
+
+## I0-E 浏览器验收与 8180 端口断点（2026-08-12）
+
+- 本机 `8080` 继续由无关 `sub2api` 占用且未被触碰；`127.0.0.1:8180` standalone Web 与 `127.0.0.1:8000` 隔离 API 已启动，Web、API、PostgreSQL 与 Redis 健康检查通过。没有启动 Docker，也没有修改生产配置。
+- `tests/browser/e2e-environment.ts` 已改为接受有效回环端口；8180 只有在显式设置 `LOGION_E2E_PROVISION_ACCOUNTS=true` 时才允许账号 provisioning，远程地址始终禁止自动建号。
+- 已修复暗色三级文字对比度，并把互操作命令和 Persona 桌面/移动导航测试对齐已批准的固定五区架构。静态门禁通过：Web lint、TypeScript、Prettier、60 个测试文件/441 项测试、36 路由生产构建和 `git diff --check`。
+- 真实认证专项回归 `9/9`、互操作真实流程 `5/5`、最终 `authenticated-chromium` 完整矩阵 `31/31` 通过。覆盖 21 条认证路由、axe、1440/1250/900/720/420/390/320、横向溢出、reduced-motion、主题持久化/XSS、移动节点列表、桌面图谱键盘、真实 Review 图谱 API、Vault/设备/导入导出及错误边界。
+- 真实数据导出首轮因隔离栈没有队列消费者停在 `queued`；仅启动 `PortabilityService.execute_next()` 的临时导出消费者后，加密归档、下载、内容与 SHA-256 校验通过。该临时消费者已停止，没有启用邮件、AI、账号删除或知识空间 Local Worker 队列。
+- 8180 公开 Playwright 五项目矩阵再次真实执行：`69 passed, 6 skipped, 0 failed`，覆盖 axe、键盘、320px 溢出、主题持久化、reduced-motion、manifest 与 offline shell。
+- Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 的生产能力继续关闭；仅本机隔离 API 临时启用知识空间只读主开关。未 commit、push、merge、deploy。
+- 协调 Run 校验再次真实执行，仍因历史 `graph.json` / `tasks.jsonl` encoded content 超出 safe scan budget 失败，未伪造通过。详细证据见 [`I0_E_BROWSER_ACCEPTANCE_2026-08-12.md`](./I0_E_BROWSER_ACCEPTANCE_2026-08-12.md)。当前结论为“I0-E 本机技术验收通过，待 Git/集成/发布授权”，不等于 v0.2.0 已发布。
+
+## I0 最终安全与权限边界审查（2026-08-12）
+
+- 最终审查补齐 WorkspaceCenter 与 Review 的陈旧响应竞态防护：列表、详情、Space 和本地解密请求均具有取消或最新请求守卫；切换 Workspace 时立即清理旧 Space、图谱根节点和 Inspector。新增真实 UI 竞态烟雾 1/1 通过。
+- 邀请和成员角色更新在请求前严格限制为 `viewer/reviewer/contributor/editor/admin`，合同外角色不发送请求；动态 Workspace、Space 和 Member 路径段统一编码，CSRF 与成员 `expected_version` 保持不变。
+- 知识图谱响应增加实际 UTF-8 JSON 1 MiB 上限、`next_cursor` 1024 字符上限和合同外字段拒绝；原有 150 节点、400 边、UUID、重复 ID、悬空边、端点类型及截断元数据验证继续失败关闭。
+- 最终静态与仓库门禁通过：Web 62 个测试文件/448 项测试、lint、TypeScript、Prettier、36 路由生产构建、`guard:context`、Ruff、171 个源文件 Mypy strict、Python 402 项、合同 12 项、离线 55 项/93.01% 行覆盖率、`contracts:check`、依赖审计和 `git diff --check` 均通过。
+- 修复后的认证专项 18/18 与 Workspace/Review 真实竞态烟雾 1/1 通过；此前完整认证矩阵 31/31 和公开五浏览器 69 通过/6 规范跳过/0 失败仍有效。
+- 8180 standalone 曾因本机静态文件复制层级错误出现 chunk 404；修复目录层级并重启后静态资源、登录页和 health 均恢复 200。该问题不是产品回归，8080 上的无关 `sub2api` 始终未触碰。
+- 安全扫描未发现硬编码密钥、令牌、真实密码、连接串、新的 SessionBoundary 绕过或生产敏感能力启用。Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 继续关闭。
+- 当前 I0 技术审查结论为通过。用户已于 2026-08-13 批准创建并推送 I0 分支；主实现提交
+  `0aeacb405eb61870a05efa7424ef528763a278e1` 已创建，包含 85 个已复核文件；分支
+  `codex/logion-redesign-i0` 已成功推送到 `origin` 并建立跟踪关系。当前仍未 merge 或 deploy，也不等于 v0.2.0 已发布。`.tmp-v020-rc2/`、`.tmp-v020-rc4/` 与 `.zcode/` 未进入提交。
+- 唯一独立未绿项仍为历史协调 Run：`graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget。工具和 fixture 测试通过，但当前 Run 不得记为全绿，也不得改写历史事件。详细记录见 [`I0_FINAL_SECURITY_REVIEW_2026-08-12.md`](./I0_FINAL_SECURITY_REVIEW_2026-08-12.md)。
+
+## I0 主线同步与最终本机收口（2026-08-13）
+
+- `codex/logion-redesign-i0` 已合并最新 `origin/main`，根 `README.md` 已改为“自适应认知作业空间”定位，并明确仓库清单仍为 `0.1.0`、RC6 仅为受控 prerelease、I0 仍需 PR/远端门禁/合并审批；同时补充五区、21 路由、44px Context Bar、Inspector、移动五区和显式回环 E2E 说明。
+- 最新真实认证矩阵发现并修复两项可访问性问题：搜索服务器按钮状态切换中间帧对比度不足，以及 WorkspaceCenter 无角色 `div` 使用 `aria-label`。工作区选择现在是具名语义列表，按钮仍保留原生交互语义，并有回归测试。
+- 修复后 21 路由 axe/横向溢出定向门禁 1/1 通过；公开五浏览器与认证项目完整 107 项矩阵最终为 `101 passed, 6 skipped, 0 failed`。覆盖真实认证、主题持久化/XSS、reduced-motion、响应式、移动节点、桌面图谱键盘、Workspace 竞态、Calendar、Private Space 导入、近期认证门和加密导出下载校验。
+- 最终 `corepack pnpm ci:fast` 从头到尾返回 0：状态模型 fixture 118、Web 449、Python 402、离线 55、合同 12、移动 4，Ruff/Mypy/格式/Lint/类型/36 路由构建和合同一致性均通过。依赖审计未发现已知漏洞。
+- 仅导出消费者已在完整矩阵结束后停止；8180 standalone 已在最终构建门禁前停止；8080 无关服务未触碰。Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 的生产开关继续关闭。
+- 历史协调 Run 校验再次真实失败于 `graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget；没有伪造通过或改写历史。该独立限制不改变代码、合同、依赖和真实浏览器结果。
+- 当前节点是“本机收口完成，进入分支推送、PR 与 GitHub `fast/integration/browser/mobile` 门禁”；仍未 merge、deploy 或启用敏感生产能力。
+- 分支已推送并创建 [PR #208](https://github.com/greatLiverheat605/Logion/pull/208)，目标分支为 `main`。PR 描述明确列出本机门禁、非目标、安全边界和历史协调 Run 未绿项；当前只等待最终 head 的 `fast/integration/browser/mobile` 远端门禁，不自动合并或部署。
+- PR head `31b0b647a74d81bf05b16abc345d00f768aee28c` 的 PR checks run [`31669501110`](https://github.com/greatLiverheat605/Logion/actions/runs/31669501110) 已成功：`fast`、`integration`、`browser` 全绿。由于 `mobile.yml` 受路径过滤未自动触发，已对同一分支手动运行 Mobile builds [`31669799252`](https://github.com/greatLiverheat605/Logion/actions/runs/31669799252)，`android-debug` 成功且 `head_sha` 相同。该证据写入后会形成仅文档的新 head；仍需等待新 head 的远端门禁，不自动合并。

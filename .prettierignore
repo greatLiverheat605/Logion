@@ -2,6 +2,8 @@
 .venv
 archive
 prototype
+.tmp-v020-*
+.zcode
 node_modules
 LOGION_EXECUTION_PLAN.md
 LOGION_AI_DEVELOPMENT_CONSTRAINTS.md

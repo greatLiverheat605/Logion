@@ -1,106 +1,54 @@
 import type { AppIconName } from "@/components/app-shell/app-icon";
-
 import {
-  ALL_ROUTES,
-  type BuiltinPersonaId,
-  type PersonaDefinition,
-} from "./persona-definitions";
+  type DeskAreaId,
+  DESK_AREAS,
+  defaultRouteForArea,
+} from "@/features/desk/route-manifest";
 
-type PersonaRoute = (typeof ALL_ROUTES)[number];
+import { type PersonaDefinition } from "./persona-definitions";
 
-export interface MobilePersonaNavItem {
-  href: PersonaRoute;
+/**
+ * A stable mobile bottom-nav entry. The five entries are always the same five
+ * areas regardless of persona — persona only affects which *route* the
+ * workbench and knowledge entries point to (via {@link defaultRouteForArea}).
+ */
+export interface MobileDeskNavItem {
+  area: DeskAreaId;
+  href: string;
   icon: AppIconName;
   label: string;
 }
 
-interface MobileSlot {
-  href: PersonaRoute;
+/**
+ * The five stable mobile navigation entries (areas only). The `href` is
+ * resolved per-persona at render time by {@link mobileDeskNavigation}.
+ */
+export const DESK_MOBILE_AREAS: readonly {
+  area: DeskAreaId;
+  icon: AppIconName;
   label: string;
+}[] = DESK_AREAS.map((area) => ({
+  area: area.id,
+  icon: area.icon,
+  label: area.label,
+}));
+
+/**
+ * Returns the five stable mobile navigation entries with persona-aware default
+ * routes. Persona only changes the default entry route for 工作台 and 知识库 —
+ * it never changes authorization or hides entries.
+ */
+export function mobileDeskNavigation(
+  persona: PersonaDefinition | null,
+): readonly MobileDeskNavItem[] {
+  return DESK_MOBILE_AREAS.map((entry) => ({
+    ...entry,
+    href: defaultRouteForArea(entry.area, persona),
+  }));
 }
 
-const ROUTE_META: Readonly<Record<PersonaRoute, MobilePersonaNavItem>> = {
-  "/app/today": { href: "/app/today", icon: "home", label: "今日" },
-  "/app/self-study": {
-    href: "/app/self-study",
-    icon: "book-open",
-    label: "自学",
-  },
-  "/app/records": { href: "/app/records", icon: "files", label: "记录" },
-  "/app/review": { href: "/app/review", icon: "refresh", label: "复习" },
-  "/app/exam": { href: "/app/exam", icon: "target", label: "考试" },
-  "/app/planning": {
-    href: "/app/planning",
-    icon: "calendar",
-    label: "规划",
-  },
-  "/app/templates": {
-    href: "/app/templates",
-    icon: "layout-template",
-    label: "模板",
-  },
-  "/app/audit": { href: "/app/audit", icon: "clipboard", label: "审计" },
-  "/app/spaces": { href: "/app/spaces", icon: "folder", label: "空间" },
-  "/app/settings": {
-    href: "/app/settings",
-    icon: "shield",
-    label: "设置",
-  },
-  "/app/profile": { href: "/app/profile", icon: "users", label: "个人" },
-  "/app/help": { href: "/app/help", icon: "book-open", label: "帮助" },
-};
-
-const BUILTIN_MOBILE_SLOTS: Readonly<
-  Record<BuiltinPersonaId, readonly MobileSlot[]>
-> = {
-  exam: [
-    { href: "/app/today", label: "今日" },
-    { href: "/app/exam", label: "备考" },
-    { href: "/app/review", label: "复习" },
-    { href: "/app/records", label: "错题" },
-  ],
-  self: [
-    { href: "/app/today", label: "今日" },
-    { href: "/app/planning", label: "计划" },
-    { href: "/app/self-study", label: "自学" },
-    { href: "/app/records", label: "记录" },
-  ],
-  research: [
-    { href: "/app/today", label: "今日" },
-    { href: "/app/planning", label: "计划" },
-    { href: "/app/self-study", label: "自学" },
-    { href: "/app/review", label: "复习" },
-  ],
-  mentor: [
-    { href: "/app/today", label: "今日" },
-    { href: "/app/planning", label: "计划" },
-    { href: "/app/spaces", label: "空间" },
-    { href: "/app/audit", label: "审计" },
-  ],
-};
-
-function isPersonaRoute(route: string): route is PersonaRoute {
-  return Object.hasOwn(ROUTE_META, route);
-}
-
-export function mobileNavigationForPersona(persona: PersonaDefinition): {
-  overflow: MobilePersonaNavItem[];
-  primary: MobilePersonaNavItem[];
-} {
-  const routes = persona.routes.filter(isPersonaRoute);
-  const allowed = new Set(routes);
-  const slots = persona.isBuiltin
-    ? BUILTIN_MOBILE_SLOTS[persona.id as BuiltinPersonaId]
-    : routes.slice(0, 4).map((href) => ({
-        href,
-        label: ROUTE_META[href].label,
-      }));
-  const primary = slots
-    .filter((slot) => allowed.has(slot.href))
-    .map((slot) => ({ ...ROUTE_META[slot.href], label: slot.label }));
-  const primaryRoutes = new Set(primary.map((item) => item.href));
-  const overflow = routes
-    .filter((route) => !primaryRoutes.has(route))
-    .map((route) => ROUTE_META[route]);
-  return { overflow, primary };
-}
+/* ---- Legacy compat (deprecated) ----------------------------------------- */
+/* The old persona-driven 4+more mobile layout is replaced by the stable 5-area
+ * layout above. These types are kept for any remaining callers but the old
+ * `mobileNavigationForPersona` function is removed — AppShell now uses
+ * {@link mobileDeskNavigation}. */

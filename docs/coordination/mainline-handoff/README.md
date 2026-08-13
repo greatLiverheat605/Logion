@@ -1,8 +1,8 @@
 # Logion v0.2.0：主线交接包
 
-更新时间：2026-08-09（Asia/Shanghai）
+更新时间：2026-08-10（Asia/Shanghai）
 
-本目录是交给用户当前指定执行方的唯一主线交接入口。它把当前基线、已完成工作、真实验收证据、未决门禁、版本规划和执行规则集中起来；聊天记录不是项目记忆，恢复工作时先读本目录，再按仓库 `AGENTS.md` 指定的顺序读取源文档。
+本目录是交给用户当前指定主线执行方的唯一主线交接入口。它把 RC6 受控 prerelease、真实验收证据、未决门禁、前端重设计审批门和后续版本计划集中起来；聊天记录不是项目记忆，恢复工作时先读本目录，再按仓库 `AGENTS.md` 指定的顺序读取源文档。
 
 ## 阅读顺序
 
@@ -13,6 +13,7 @@
 5. [04_ACCEPTANCE_CHECKLIST.md](./04_ACCEPTANCE_CHECKLIST.md)：每个阶段的验收清单和证据要求。
 6. [05_MODEL_ROUTING.md](./05_MODEL_ROUTING.md)：执行方职责调整和模型切换规则。
 7. [06_DECISION_LOG.md](./06_DECISION_LOG.md)：不可逆或跨会话决策索引。
+8. [07_FRONTEND_REDESIGN_BRIEFS.md](./07_FRONTEND_REDESIGN_BRIEFS.md)：两个互相独立、仅设计不施工的前端重设计任务包。
 
 ## 权威源
 
@@ -20,6 +21,7 @@
 - [AGENT_DELIVERY_WORKFLOW.md](../../development/AGENT_DELIVERY_WORKFLOW.md)
 - [V020_EXECUTION_PLAN.md](../../development/V020_EXECUTION_PLAN.md)
 - [V020_STATUS.md](../../development/V020_STATUS.md)
+- [V020_V15_PRERELEASE_RC6_EVIDENCE.md](../../development/V020_V15_PRERELEASE_RC6_EVIDENCE.md)
 - [.agents/coordination/current-run.json](../../../.agents/coordination/current-run.json)
 - [NEXT_VERSION_ROADMAP.md](../../product/NEXT_VERSION_ROADMAP.md)
 

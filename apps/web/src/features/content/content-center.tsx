@@ -34,6 +34,7 @@ import {
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
+import { DeskSubviewNav } from "@/components/desk/desk-subview-nav";
 import { useSession } from "@/features/auth/session-provider";
 import {
   offlineCapabilityMessage,
@@ -143,6 +144,7 @@ export function ContentCenter() {
     "link",
   );
   const [query, setQuery] = useState("");
+  const [selectedRecordId, setSelectedRecordId] = useState("");
   const [recordKind, setRecordKind] = useState<
     "all" | "attachment" | "link" | "note" | "pdf_index"
   >("all");
@@ -430,9 +432,10 @@ export function ContentCenter() {
           client_occurred_at: new Date().toISOString(),
         });
       } else {
+        const entityId = note?.entity.entity_id ?? crypto.randomUUID();
         await commit(
           "note",
-          note?.entity.entity_id ?? crypto.randomUUID(),
+          entityId,
           {
             space_id: spaceId,
             task_id: note?.payload.task_id ?? null,
@@ -441,6 +444,7 @@ export function ContentCenter() {
           },
           note?.entity,
         );
+        if (!note) setSelectedRecordId(entityId);
       }
       if (!note) form.reset();
       await synchronize();
@@ -579,6 +583,23 @@ export function ContentCenter() {
     0,
   );
   const latestNote = visibleNotes.at(-1);
+  const explicitlySelectedNote = filteredNotes.find(
+    (item) => item.entity.entity_id === selectedRecordId,
+  );
+  const explicitlySelectedResource = filteredResources.find(
+    (item) => item.entity.entity_id === selectedRecordId,
+  );
+  const selectedNote =
+    selectedRecordId === "new"
+      ? undefined
+      : (explicitlySelectedNote ??
+        (explicitlySelectedResource ? undefined : filteredNotes.at(-1)));
+  const selectedResource =
+    selectedRecordId === "new" || selectedNote
+      ? undefined
+      : (explicitlySelectedResource ?? filteredResources.at(-1));
+  const creatingNote =
+    selectedRecordId === "new" || (!selectedNote && !selectedResource);
   const contentState = deriveProductWorkbenchState({
     contextPhase,
     dataPhase,
@@ -619,6 +640,16 @@ export function ContentCenter() {
             立即同步
           </button>
         }
+      />
+
+      <DeskSubviewNav
+        activePath="/app/records"
+        ariaLabel="知识库视图"
+        items={[
+          { href: "/app/records", icon: "files", label: "来源与记录" },
+          { href: "/app/review", icon: "refresh", label: "复习与图谱" },
+          { href: "/app/spaces", icon: "folder", label: "知识库管理" },
+        ]}
       />
 
       <ProductWorkbenchStateNotice
@@ -781,7 +812,15 @@ export function ContentCenter() {
               .slice(-6)
               .reverse()
               .map((note) => (
-                <div className="product-record-row" key={note.entity.entity_id}>
+                <button
+                  aria-pressed={
+                    selectedNote?.entity.entity_id === note.entity.entity_id
+                  }
+                  className="product-record-row"
+                  key={note.entity.entity_id}
+                  type="button"
+                  onClick={() => setSelectedRecordId(note.entity.entity_id)}
+                >
                   <span aria-hidden="true">
                     <AppIcon name="book-open" size={16} />
                   </span>
@@ -789,7 +828,7 @@ export function ContentCenter() {
                     <strong>{note.payload.title}</strong>
                     <small>{note.payload.markdown_body.length} 个字符</small>
                   </span>
-                </div>
+                </button>
               ))}
             {filteredNotes.length === 0 ? (
               <p className="product-muted-note">当前筛选下没有笔记。</p>
@@ -801,9 +840,15 @@ export function ContentCenter() {
               .slice(-6)
               .reverse()
               .map((resource) => (
-                <div
+                <button
+                  aria-pressed={
+                    selectedResource?.entity.entity_id ===
+                    resource.entity.entity_id
+                  }
                   className="product-record-row"
                   key={resource.entity.entity_id}
+                  type="button"
+                  onClick={() => setSelectedRecordId(resource.entity.entity_id)}
                 >
                   <span aria-hidden="true">
                     <AppIcon name="files" size={16} />
@@ -816,7 +861,7 @@ export function ContentCenter() {
                         : "PDF 索引"}
                     </small>
                   </span>
-                </div>
+                </button>
               ))}
             {filteredResources.length === 0 ? (
               <p className="product-muted-note">当前筛选下没有资料索引。</p>
@@ -827,43 +872,132 @@ export function ContentCenter() {
         <ProductPanel
           id="new-note"
           className="product-form-panel product-records-editor"
-          title="新建 Markdown 笔记"
-          description="从一个问题开始，用标题、列表、引用和代码块组织理解。"
+          title={
+            creatingNote
+              ? "新建 Markdown 笔记"
+              : (selectedNote?.payload.title ??
+                selectedResource?.payload.title ??
+                "记录阅读器")
+          }
+          description={
+            creatingNote
+              ? "从一个问题开始，用标题、列表、引用和代码块组织理解。"
+              : "查看当前 Space 中选中记录的正文、来源与同步状态。"
+          }
           aside={
-            <ProductTag tone={unlocked ? "good" : "warn"}>
-              {unlocked ? "可以保存" : "请先解锁"}
+            <ProductTag
+              tone={
+                creatingNote
+                  ? unlocked
+                    ? "good"
+                    : "warn"
+                  : (selectedNote ?? selectedResource)?.entity.sync_status ===
+                      "clean"
+                    ? "good"
+                    : "warn"
+              }
+            >
+              {creatingNote
+                ? unlocked
+                  ? "可以保存"
+                  : "请先解锁"
+                : (selectedNote ?? selectedResource)?.entity.sync_status ===
+                    "clean"
+                  ? "已同步"
+                  : "本地变更"}
             </ProductTag>
           }
         >
-          <form
-            className="planning-form product-editor-form"
-            onSubmit={(event) => void saveNote(event)}
-          >
-            <label htmlFor="note-title">标题</label>
-            <input id="note-title" name="title" maxLength={200} required />
-            <label htmlFor="note-body">正文</label>
-            <div
-              className="product-editor-toolbar"
-              aria-label="支持的 Markdown 语法"
+          {creatingNote ? (
+            <form
+              className="planning-form product-editor-form"
+              onSubmit={(event) => void saveNote(event)}
             >
-              <span>H1</span>
-              <span>H2</span>
-              <span>• 列表</span>
-              <span>“ 引用</span>
-              <span>{`</>`} 代码</span>
-            </div>
-            <textarea
-              id="note-body"
-              name="markdown_body"
-              maxLength={500000}
-              placeholder={
-                "# 核心问题\n\n## 我的理解\n\n- 关键概念\n- 证据与例子\n\n> 下一步要验证什么？"
-              }
-            />
-            <button type="submit" disabled={!unlocked}>
-              保存笔记到本地
-            </button>
-          </form>
+              <label htmlFor="note-title">标题</label>
+              <input id="note-title" name="title" maxLength={200} required />
+              <label htmlFor="note-body">正文</label>
+              <div
+                className="product-editor-toolbar"
+                aria-label="支持的 Markdown 语法"
+              >
+                <span>H1</span>
+                <span>H2</span>
+                <span>• 列表</span>
+                <span>“ 引用</span>
+                <span>{`</>`} 代码</span>
+              </div>
+              <textarea
+                id="note-body"
+                name="markdown_body"
+                maxLength={500000}
+                placeholder={
+                  "# 核心问题\n\n## 我的理解\n\n- 关键概念\n- 证据与例子\n\n> 下一步要验证什么？"
+                }
+              />
+              <button type="submit" disabled={!unlocked}>
+                保存笔记到本地
+              </button>
+            </form>
+          ) : selectedNote ? (
+            <article className="product-record-reader" aria-label="选中笔记">
+              <div className="product-record-reader-meta">
+                <ProductTag tone="info">Markdown</ProductTag>
+                <span>{selectedNote.payload.markdown_body.length} 个字符</span>
+              </div>
+              <ProductMarkdownPreview
+                value={selectedNote.payload.markdown_body}
+              />
+              <button type="button" onClick={() => setSelectedRecordId("new")}>
+                <AppIcon name="plus" size={16} />
+                新建笔记
+              </button>
+            </article>
+          ) : selectedResource ? (
+            <article className="product-record-reader" aria-label="选中资料">
+              <div className="product-record-reader-meta">
+                <ProductTag tone="info">
+                  {selectedResource.payload.resource_type === "link"
+                    ? "外部链接"
+                    : "PDF 索引"}
+                </ProductTag>
+                <span>
+                  {selectedResource.payload.page_count
+                    ? `${selectedResource.payload.page_count} 页`
+                    : "来源索引"}
+                </span>
+              </div>
+              {safeExternalUrl(selectedResource.payload.source_url) ? (
+                <a
+                  href={
+                    safeExternalUrl(selectedResource.payload.source_url) ??
+                    undefined
+                  }
+                  rel="noreferrer noopener"
+                  target="_blank"
+                >
+                  打开原始来源
+                </a>
+              ) : (
+                <p className="product-muted-note">
+                  当前资料没有可打开的来源地址。
+                </p>
+              )}
+              {selectedResource.payload.page_index.length ? (
+                <dl className="product-record-page-index">
+                  {selectedResource.payload.page_index.map((entry) => (
+                    <div key={`${entry.page}-${entry.label}`}>
+                      <dt>第 {entry.page} 页</dt>
+                      <dd>{entry.label || entry.note || "已建立页码索引"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              <button type="button" onClick={() => setSelectedRecordId("new")}>
+                <AppIcon name="plus" size={16} />
+                新建笔记
+              </button>
+            </article>
+          ) : null}
         </ProductPanel>
 
         <ProductPanel

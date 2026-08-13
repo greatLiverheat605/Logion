@@ -12,8 +12,16 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
+import { DeskInlineError } from "@/components/desk/desk-feedback";
+import { DeskSegmentedControl } from "@/components/desk/desk-primitives";
 import {
   ProductBarChart,
   ProductDisclosure,
@@ -28,10 +36,12 @@ import {
 } from "@/components/product/product-ui";
 import {
   deriveProductWorkbenchState,
-  type ProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
+import { useInspector } from "@/features/desk/command-feedback-context";
+import { useKnowledgeGraph } from "@/features/desk/use-knowledge-graph";
+import type { KnowledgeSpaceGraphState } from "@/features/knowledge-space-prototype/knowledge-space-graph";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
@@ -39,9 +49,8 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 import { buildSevenDayReviewLoad } from "./review-workbench-model";
 import {
   ReviewKnowledgeSpaceGraph,
-  type ReviewKnowledgeSpaceGraphTopic,
+  ReviewKnowledgeSpaceInspector,
 } from "./review-knowledge-space";
-import type { KnowledgeSpaceGraphState } from "@/features/knowledge-space-prototype/knowledge-space-graph";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -197,6 +206,7 @@ async function decrypt<T extends JsonObject>(
 
 export function ReviewCenter() {
   const { state: session } = useSession();
+  const { closeInspector, openInspector } = useInspector();
   const {
     database,
     phase: vaultPhase,
@@ -239,37 +249,90 @@ export function ReviewCenter() {
     "error" | "idle" | "loading" | "ready"
   >("idle");
   const [knowledgeView, setKnowledgeView] = useState<"graph" | "list">("graph");
+  const [graphDepth, setGraphDepth] = useState<"1" | "2">("1");
+  const [requestedGraphRootId, setRequestedGraphRootId] = useState("");
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(
+    null,
+  );
+  const contextRequestRef = useRef<AbortController | null>(null);
+  const spacesRequestRef = useRef<AbortController | null>(null);
+  const dataRequestIdRef = useRef(0);
+  const currentWorkspaceIdRef = useRef(workspaceId);
+
+  useEffect(() => () => closeInspector(), [closeInspector]);
 
   const loadContext = useCallback(async () => {
+    contextRequestRef.current?.abort();
+    const controller = new AbortController();
+    contextRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
           "/api/v1/workspaces",
+          { signal: controller.signal },
         ),
-        browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
+        browserApiClient.request<{ devices: Device[] }>(
+          "/api/v1/auth/devices",
+          { signal: controller.signal },
+        ),
       ]);
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setWorkspaces(workspaceResult.workspaces);
-      setWorkspaceId((current) =>
-        workspaceResult.workspaces.some((item) => item.id === current)
-          ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
-      );
+      const nextWorkspaceId = workspaceResult.workspaces.some(
+        (item) => item.id === currentWorkspaceIdRef.current,
+      )
+        ? currentWorkspaceIdRef.current
+        : (workspaceResult.workspaces[0]?.id ?? "");
+      if (nextWorkspaceId !== currentWorkspaceIdRef.current) {
+        spacesRequestRef.current?.abort();
+        dataRequestIdRef.current += 1;
+        setSpaces([]);
+        setSpaceId("");
+      }
+      currentWorkspaceIdRef.current = nextWorkspaceId;
+      setWorkspaceId(nextWorkspaceId);
       setDeviceId(deviceResult.devices.find((item) => item.current)?.id ?? "");
       setStatus("请解锁本地学习记录。");
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (contextRequestRef.current === controller) {
+        contextRequestRef.current = null;
+      }
     }
   }, []);
 
   const loadSpaces = useCallback(async (selected: string) => {
+    spacesRequestRef.current?.abort();
+    const controller = new AbortController();
+    spacesRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const result = await browserApiClient.request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${selected}/spaces`,
+        `/api/v1/workspaces/${encodeURIComponent(selected)}/spaces`,
+        { signal: controller.signal },
       );
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selected
+      ) {
+        return;
+      }
       setSpaces(result.spaces);
       setSpaceId((current) =>
         result.spaces.some((item) => item.id === current)
@@ -278,19 +341,48 @@ export function ReviewCenter() {
       );
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selected
+      ) {
+        return;
+      }
       setSpaces([]);
       setSpaceId("");
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (spacesRequestRef.current === controller) {
+        spacesRequestRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => void loadContext());
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadContext();
+    });
+    return () => {
+      active = false;
+      contextRequestRef.current?.abort();
+    };
   }, [loadContext]);
 
   useEffect(() => {
-    if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
+    let active = true;
+    if (workspaceId) {
+      queueMicrotask(() => {
+        if (active) void loadSpaces(workspaceId);
+      });
+    } else {
+      spacesRequestRef.current?.abort();
+    }
+    return () => {
+      active = false;
+      spacesRequestRef.current?.abort();
+    };
   }, [loadSpaces, workspaceId]);
 
   async function bootstrap(
@@ -354,7 +446,9 @@ export function ReviewCenter() {
     db = database.current,
     localVault = vault.current,
   ): Promise<void> {
-    if (db === null || localVault === null || !workspaceId) return;
+    const targetWorkspaceId = workspaceId;
+    if (db === null || localVault === null || !targetWorkspaceId) return;
+    const requestId = ++dataRequestIdRef.current;
     setDataPhase("loading");
     const entityTypes = [
       "topic",
@@ -367,89 +461,131 @@ export function ReviewCenter() {
       "audit_review",
       "review_finding",
     ] as const;
-    const [rows, conflictCount] = await Promise.all([
-      Promise.all(
-        entityTypes.map((entityType) =>
-          db.entities
-            .where("[workspace_id+entity_type]")
-            .equals([workspaceId, entityType])
-            .toArray(),
+    try {
+      const [rows, conflictCount] = await Promise.all([
+        Promise.all(
+          entityTypes.map((entityType) =>
+            db.entities
+              .where("[workspace_id+entity_type]")
+              .equals([targetWorkspaceId, entityType])
+              .toArray(),
+          ),
         ),
-      ),
-      db.conflicts
-        .where("[workspace_id+status]")
-        .equals([workspaceId, "open"])
-        .count(),
-    ]);
-    const topicRows = rows[0] ?? [];
-    const dependencyRows = rows[1] ?? [];
-    const masteryRows = rows[2] ?? [];
-    const scheduleRows = rows[3] ?? [];
-    const quizItemRows = rows[4] ?? [];
-    const quizAttemptRows = rows[5] ?? [];
-    const errorPatternRows = rows[6] ?? [];
-    const auditReviewRows = rows[7] ?? [];
-    const reviewFindingRows = rows[8] ?? [];
-    const [
-      nextTopics,
-      nextDependencies,
-      nextMastery,
-      nextSchedules,
-      nextQuizItems,
-      nextQuizAttempts,
-      nextErrorPatterns,
-      nextAuditReviews,
-      nextReviewFindings,
-    ] = await Promise.all([
-      Promise.all(
-        topicRows.map((item) => decrypt<TopicPayload>(localVault, item)),
-      ),
-      Promise.all(
-        dependencyRows.map((item) =>
-          decrypt<DependencyPayload>(localVault, item),
+        db.conflicts
+          .where("[workspace_id+status]")
+          .equals([targetWorkspaceId, "open"])
+          .count(),
+      ]);
+      const topicRows = rows[0] ?? [];
+      const dependencyRows = rows[1] ?? [];
+      const masteryRows = rows[2] ?? [];
+      const scheduleRows = rows[3] ?? [];
+      const quizItemRows = rows[4] ?? [];
+      const quizAttemptRows = rows[5] ?? [];
+      const errorPatternRows = rows[6] ?? [];
+      const auditReviewRows = rows[7] ?? [];
+      const reviewFindingRows = rows[8] ?? [];
+      const [
+        nextTopics,
+        nextDependencies,
+        nextMastery,
+        nextSchedules,
+        nextQuizItems,
+        nextQuizAttempts,
+        nextErrorPatterns,
+        nextAuditReviews,
+        nextReviewFindings,
+      ] = await Promise.all([
+        Promise.all(
+          topicRows.map((item) => decrypt<TopicPayload>(localVault, item)),
         ),
-      ),
-      Promise.all(
-        masteryRows.map((item) => decrypt<MasteryPayload>(localVault, item)),
-      ),
-      Promise.all(
-        scheduleRows.map((item) => decrypt<SchedulePayload>(localVault, item)),
-      ),
-      Promise.all(
-        quizItemRows.map((item) => decrypt<QuizItemPayload>(localVault, item)),
-      ),
-      Promise.all(
-        quizAttemptRows.map((item) =>
-          decrypt<QuizAttemptPayload>(localVault, item),
+        Promise.all(
+          dependencyRows.map((item) =>
+            decrypt<DependencyPayload>(localVault, item),
+          ),
         ),
-      ),
-      Promise.all(
-        errorPatternRows.map((item) =>
-          decrypt<ErrorPatternPayload>(localVault, item),
+        Promise.all(
+          masteryRows.map((item) => decrypt<MasteryPayload>(localVault, item)),
         ),
-      ),
-      Promise.all(
-        auditReviewRows.map((item) =>
-          decrypt<AuditReviewPayload>(localVault, item),
+        Promise.all(
+          scheduleRows.map((item) =>
+            decrypt<SchedulePayload>(localVault, item),
+          ),
         ),
-      ),
-      Promise.all(
-        reviewFindingRows.map((item) =>
-          decrypt<ReviewFindingPayload>(localVault, item),
+        Promise.all(
+          quizItemRows.map((item) =>
+            decrypt<QuizItemPayload>(localVault, item),
+          ),
         ),
-      ),
-    ]);
-    setTopics(nextTopics);
-    setDependencies(nextDependencies);
-    setMastery(nextMastery);
-    setSchedules(nextSchedules);
-    setQuizItems(nextQuizItems);
-    setQuizAttempts(nextQuizAttempts);
-    setErrorPatterns(nextErrorPatterns);
-    setAuditReviews(nextAuditReviews);
-    setReviewFindings(nextReviewFindings);
-    setConflicts(conflictCount);
-    setDataPhase("ready");
+        Promise.all(
+          quizAttemptRows.map((item) =>
+            decrypt<QuizAttemptPayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          errorPatternRows.map((item) =>
+            decrypt<ErrorPatternPayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          auditReviewRows.map((item) =>
+            decrypt<AuditReviewPayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          reviewFindingRows.map((item) =>
+            decrypt<ReviewFindingPayload>(localVault, item),
+          ),
+        ),
+      ]);
+      if (
+        dataRequestIdRef.current !== requestId ||
+        currentWorkspaceIdRef.current !== targetWorkspaceId
+      ) {
+        return;
+      }
+      setTopics(nextTopics);
+      setDependencies(nextDependencies);
+      setMastery(nextMastery);
+      setSchedules(nextSchedules);
+      setQuizItems(nextQuizItems);
+      setQuizAttempts(nextQuizAttempts);
+      setErrorPatterns(nextErrorPatterns);
+      setAuditReviews(nextAuditReviews);
+      setReviewFindings(nextReviewFindings);
+      setConflicts(conflictCount);
+      setDataPhase("ready");
+    } catch (error) {
+      if (
+        dataRequestIdRef.current !== requestId ||
+        currentWorkspaceIdRef.current !== targetWorkspaceId
+      ) {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  function selectWorkspaceContext(nextWorkspaceId: string) {
+    if (nextWorkspaceId === workspaceId) return;
+    spacesRequestRef.current?.abort();
+    dataRequestIdRef.current += 1;
+    currentWorkspaceIdRef.current = nextWorkspaceId;
+    setWorkspaceId(nextWorkspaceId);
+    setSpaces([]);
+    setSpaceId("");
+    setRequestedGraphRootId("");
+    setSelectedGraphNodeId(null);
+    closeInspector();
+    setContextPhase("loading");
+  }
+
+  function selectSpaceContext(nextSpaceId: string) {
+    if (nextSpaceId === spaceId) return;
+    setSpaceId(nextSpaceId);
+    setRequestedGraphRootId("");
+    setSelectedGraphNodeId(null);
+    closeInspector();
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -991,60 +1127,87 @@ export function ReviewCenter() {
       allVisibleRecords.some((item) => item.entity.sync_status !== "clean"),
     unlocked,
   });
-  const masteryRecordByTopicId = new Map(
-    visibleMastery.map(
-      (item) => [item.payload.topic_id, item.payload] as const,
-    ),
+  const graphRootId = visibleTopics.some(
+    (topic) => topic.entity.entity_id === requestedGraphRootId,
+  )
+    ? requestedGraphRootId
+    : (visibleTopics[0]?.entity.entity_id ?? "");
+  const graph = useKnowledgeGraph(
+    unlocked && workspaceId ? workspaceId : null,
+    unlocked && spaceId ? spaceId : null,
+    graphRootId ? "topic" : null,
+    graphRootId || null,
+    { depth: Number(graphDepth) },
   );
-  const scheduleRecordByTopicId = new Map(
-    visibleSchedules.map(
-      (item) => [item.payload.topic_id, item.payload] as const,
-    ),
-  );
+  const graphState: KnowledgeSpaceGraphState = !unlocked
+    ? "locked"
+    : contextPhase === "error" || dataPhase === "error"
+      ? "error"
+      : contextPhase === "loading" ||
+          dataPhase === "loading" ||
+          dataPhase === "idle"
+        ? "loading"
+        : !workspaceId || !spaceId || !graphRootId
+          ? "empty"
+          : graph.state;
+  const activeSelectedGraphNodeId =
+    selectedGraphNodeId &&
+    graph.data?.nodes.some((node) => node.id === selectedGraphNodeId)
+      ? selectedGraphNodeId
+      : null;
 
-  const knowledgeTopics: ReviewKnowledgeSpaceGraphTopic[] = visibleTopics.map(
-    (topic) => {
-      const mastery = masteryRecordByTopicId.get(topic.entity.entity_id);
-      const schedule = scheduleRecordByTopicId.get(topic.entity.entity_id);
-      return {
-        id: topic.entity.entity_id,
-        title: topic.payload.title,
-        description: topic.payload.description,
-        confirmedLevel: mastery?.confirmed_level ?? null,
-        suggestedLevel: mastery?.suggested_level ?? null,
-        nextReviewAt: schedule?.next_review_at ?? null,
-        due:
-          schedule !== undefined &&
-          (schedule.status === "due" ||
-            new Date(schedule.next_review_at).getTime() <= referenceTime),
-      };
-    },
-  );
-  const knowledgeDependencies = visibleDependencies.map((dependency) => ({
-    prerequisiteId: dependency.payload.prerequisite_topic_id,
-    dependentId: dependency.payload.dependent_topic_id,
-  }));
-
-  const toKnowledgeSpaceState = (
-    reviewState: ProductWorkbenchState,
-  ): KnowledgeSpaceGraphState => {
-    switch (reviewState) {
-      case "ready":
-        return "ready";
-      case "empty":
-        return "empty";
-      case "locked":
-        return "locked";
-      case "error":
-        return "error";
-      case "loading":
-        return "loading";
-      case "needs-context":
-        return "locked";
-      case "offline-stale":
-        return "ready";
+  useEffect(() => {
+    if (!selectedGraphNodeId) return;
+    const node = graph.data?.nodes.find(
+      (candidate) => candidate.id === selectedGraphNodeId,
+    );
+    if (!node || !graph.data) {
+      closeInspector();
+      return;
     }
-  };
+    openInspector({
+      title: node.label,
+      body: (
+        <ReviewKnowledgeSpaceInspector
+          data={graph.data}
+          graphMeta={graph.meta}
+          nodeId={node.id}
+        />
+      ),
+    });
+  }, [
+    closeInspector,
+    graph.data,
+    graph.meta,
+    openInspector,
+    selectedGraphNodeId,
+  ]);
+
+  const selectGraphNode = useCallback(
+    (nodeId: string | null) => {
+      setSelectedGraphNodeId(nodeId);
+      if (nodeId === null) closeInspector();
+    },
+    [closeInspector],
+  );
+
+  const selectGraphRoot = useCallback(
+    (rootId: string) => {
+      setRequestedGraphRootId(rootId);
+      setSelectedGraphNodeId(null);
+      closeInspector();
+    },
+    [closeInspector],
+  );
+
+  const selectGraphDepth = useCallback(
+    (depth: "1" | "2") => {
+      setGraphDepth(depth);
+      setSelectedGraphNodeId(null);
+      closeInspector();
+    },
+    [closeInspector],
+  );
 
   return (
     <main id="main-content" className="settings-page today-page">
@@ -1204,7 +1367,7 @@ export function ReviewCenter() {
           <select
             id="review-workspace"
             value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
+            onChange={(event) => selectWorkspaceContext(event.target.value)}
           >
             {workspaces.map((item) => (
               <option key={item.id} value={item.id}>
@@ -1216,7 +1379,7 @@ export function ReviewCenter() {
           <select
             id="review-space"
             value={spaceId}
-            onChange={(event) => setSpaceId(event.target.value)}
+            onChange={(event) => selectSpaceContext(event.target.value)}
           >
             {spaces.map((item) => (
               <option key={item.id} value={item.id}>
@@ -1386,12 +1549,67 @@ export function ReviewCenter() {
         }
       >
         {knowledgeView === "graph" ? (
-          <ReviewKnowledgeSpaceGraph
-            topics={knowledgeTopics}
-            dependencies={knowledgeDependencies}
-            state={toKnowledgeSpaceState(reviewState)}
-            onRetry={() => void loadContext()}
-          />
+          <>
+            <div className="review-graph-controls">
+              <label htmlFor="review-graph-root">
+                根节点
+                <select
+                  id="review-graph-root"
+                  value={graphRootId}
+                  disabled={!unlocked || visibleTopics.length === 0}
+                  onChange={(event) => selectGraphRoot(event.target.value)}
+                >
+                  {visibleTopics.length === 0 ? (
+                    <option value="">当前 Space 暂无知识点</option>
+                  ) : null}
+                  {visibleTopics.map((topic) => (
+                    <option
+                      key={topic.entity.entity_id}
+                      value={topic.entity.entity_id}
+                    >
+                      {topic.payload.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <DeskSegmentedControl
+                aria-label="图谱范围"
+                options={[
+                  { label: "1 跳", value: "1" },
+                  { label: "2 跳", value: "2" },
+                ]}
+                value={graphDepth}
+                onChange={selectGraphDepth}
+              />
+            </div>
+            {graph.error && graphState === "error" ? (
+              <DeskInlineError
+                code={graph.error.code}
+                message={
+                  graph.error.code === "WEB_NETWORK_UNAVAILABLE" ||
+                  graph.error.code === "WEB_API_ABORTED" ||
+                  graph.error.code === "WEB_GRAPH_FETCH_FAILED"
+                    ? "知识图谱暂时无法连接，请确认网络后重试。"
+                    : "知识图谱返回了无法识别的数据，请稍后重试。"
+                }
+                requestId={graph.error.requestId}
+                onRetry={graph.reload}
+              />
+            ) : null}
+            <ReviewKnowledgeSpaceGraph
+              graphData={graph.data}
+              graphMeta={graph.meta}
+              onNodeSelect={selectGraphNode}
+              onRetry={graph.reload}
+              onUnlock={() =>
+                document
+                  .getElementById("review-vault")
+                  ?.scrollIntoView({ block: "start" })
+              }
+              selectedId={activeSelectedGraphNodeId}
+              state={graphState}
+            />
+          </>
         ) : (
           <div className="task-grid">
             {visibleTopics.map((topic) => {
