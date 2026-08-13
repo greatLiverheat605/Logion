@@ -1,34 +1,70 @@
 "use client";
 
 import type { components } from "@logion/contracts";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-
 import {
-  ProductDisclosure,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import { CollaborationSubviewNav } from "@/components/desk/collaboration-subview-nav";
+import { DeskConflictResolver } from "@/components/desk/desk-feedback";
+import {
+  DeskButton,
+  DeskField,
+  DeskInput,
+  DeskSelect,
+} from "@/components/desk/desk-primitives";
+import { DeskSubviewNav } from "@/components/desk/desk-subview-nav";
+import { InlineFormFeedback } from "@/components/product/inline-form-feedback";
+import {
   ProductEmptyState,
-  ProductHero,
-  ProductMetric,
   ProductPageHeader,
   ProductPanel,
   ProductTag,
 } from "@/components/product/product-ui";
-import { InlineFormFeedback } from "@/components/product/inline-form-feedback";
-import { browserApiClient } from "@/lib/api/client";
+import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import {
   type WorkspaceAction,
   workspaceActionError,
+  workspaceInvitationConflictDetail,
 } from "./workspace-feedback";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
 type Member = components["schemas"]["WorkspaceMemberResponse"];
 
-type PendingAction = WorkspaceAction | "member" | null;
+type PendingAction = WorkspaceAction | null;
 type FormFeedback = {
   message: string;
   tone: "error" | "loading" | "success";
 };
+type WorkspaceCenterView = "collaboration" | "knowledge";
+
+const MEMBER_ROLES = [
+  ["viewer", "查看者"],
+  ["reviewer", "审查者"],
+  ["contributor", "贡献者"],
+  ["editor", "编辑者"],
+  ["admin", "管理员"],
+] as const;
+
+type MemberRole = (typeof MEMBER_ROLES)[number][0];
+
+const MEMBER_ROLE_VALUES = new Set<string>(
+  MEMBER_ROLES.map(([value]) => value),
+);
+
+function isMemberRole(value: string): value is MemberRole {
+  return MEMBER_ROLE_VALUES.has(value);
+}
+
+function workspacePath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}`;
+}
 
 function fieldValue(form: HTMLFormElement, name: string): string {
   return String(new FormData(form).get(name) ?? "").trim();
@@ -37,52 +73,112 @@ function fieldValue(form: HTMLFormElement, name: string): string {
 function invalidInputMessage(action: WorkspaceAction): string {
   if (action === "invite") return "请输入有效邮箱，例如 name@example.com。";
   if (action === "space") return "请输入空间名称。";
+  if (action === "member") return "请选择有效成员角色。";
   return "请输入工作区名称。";
 }
 
-export function WorkspaceCenter() {
+function isInvitationConflict(error: unknown): error is LogionApiError {
+  return (
+    error instanceof LogionApiError &&
+    error.code === "INVITATION_CONFLICT" &&
+    error.status === 409
+  );
+}
+
+function roleLabel(role: string): string {
+  if (role === "owner") return "所有者";
+  return MEMBER_ROLES.find(([value]) => value === role)?.[1] ?? role;
+}
+
+export function WorkspaceCenter({
+  view = "collaboration",
+}: Readonly<{ view?: WorkspaceCenterView }>) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [status, setStatus] = useState("正在读取工作区…");
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
   const [workspaceFeedback, setWorkspaceFeedback] =
     useState<FormFeedback | null>(null);
   const [spaceFeedback, setSpaceFeedback] = useState<FormFeedback | null>(null);
   const [inviteFeedback, setInviteFeedback] = useState<FormFeedback | null>(
     null,
   );
+  const [inviteConflict, setInviteConflict] = useState<LogionApiError | null>(
+    null,
+  );
+  const workspaceRequestRef = useRef<AbortController | null>(null);
+  const detailsRequestRef = useRef<AbortController | null>(null);
 
   const loadWorkspaces = useCallback(async (): Promise<boolean> => {
+    workspaceRequestRef.current?.abort();
+    const controller = new AbortController();
+    workspaceRequestRef.current = controller;
     try {
       const result = await browserApiClient.request<{
         workspaces: Workspace[];
-      }>("/api/v1/workspaces");
+      }>("/api/v1/workspaces", { signal: controller.signal });
+      if (
+        controller.signal.aborted ||
+        workspaceRequestRef.current !== controller
+      ) {
+        return false;
+      }
       const next = Array.isArray(result.workspaces) ? result.workspaces : [];
       setWorkspaces(next);
-      setSelected((current) => current ?? next[0]?.id ?? null);
+      if (next.length === 0) {
+        setSpaces([]);
+        setMembers([]);
+      }
+      setSelected((current) =>
+        current && next.some((workspace) => workspace.id === current)
+          ? current
+          : (next[0]?.id ?? null),
+      );
       setStatus(
         next.length ? "工作区已更新。" : "创建第一个工作区以开始协作。",
       );
       return true;
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        workspaceRequestRef.current !== controller
+      ) {
+        return false;
+      }
       setStatus(workspaceActionError(error, "workspace"));
       return false;
+    } finally {
+      if (workspaceRequestRef.current === controller) {
+        workspaceRequestRef.current = null;
+      }
     }
   }, []);
 
   const loadDetails = useCallback(
     async (workspaceId: string): Promise<boolean> => {
+      detailsRequestRef.current?.abort();
+      const controller = new AbortController();
+      detailsRequestRef.current = controller;
+      const basePath = workspacePath(workspaceId);
       try {
         const [spaceResult, memberResult] = await Promise.all([
-          browserApiClient.request<{ spaces: Space[] }>(
-            `/api/v1/workspaces/${workspaceId}/spaces`,
-          ),
+          browserApiClient.request<{ spaces: Space[] }>(`${basePath}/spaces`, {
+            signal: controller.signal,
+          }),
           browserApiClient.request<{ members: Member[] }>(
-            `/api/v1/workspaces/${workspaceId}/members`,
+            `${basePath}/members`,
+            { signal: controller.signal },
           ),
         ]);
+        if (
+          controller.signal.aborted ||
+          detailsRequestRef.current !== controller
+        ) {
+          return false;
+        }
         setSpaces(Array.isArray(spaceResult.spaces) ? spaceResult.spaces : []);
         setMembers(
           Array.isArray(memberResult.members) ? memberResult.members : [],
@@ -90,24 +186,70 @@ export function WorkspaceCenter() {
         setStatus("工作区内容已更新。");
         return true;
       } catch (error) {
+        if (
+          controller.signal.aborted ||
+          detailsRequestRef.current !== controller
+        ) {
+          return false;
+        }
         setSpaces([]);
         setMembers([]);
         setStatus(workspaceActionError(error, "space"));
         return false;
+      } finally {
+        if (detailsRequestRef.current === controller) {
+          detailsRequestRef.current = null;
+        }
       }
     },
     [],
   );
 
   useEffect(() => {
-    queueMicrotask(() => void loadWorkspaces());
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadWorkspaces();
+    });
+    return () => {
+      active = false;
+      workspaceRequestRef.current?.abort();
+    };
   }, [loadWorkspaces]);
+
   useEffect(() => {
-    if (selected) queueMicrotask(() => void loadDetails(selected));
+    let active = true;
+    if (selected) {
+      queueMicrotask(() => {
+        if (active) void loadDetails(selected);
+      });
+    } else {
+      detailsRequestRef.current?.abort();
+    }
+    return () => {
+      active = false;
+      detailsRequestRef.current?.abort();
+    };
   }, [loadDetails, selected]);
+
+  const anyPending = pendingAction !== null || pendingMemberId !== null;
+  const selectedWorkspace = workspaces.find((item) => item.id === selected);
+  const privateSpaceCount = spaces.filter(
+    (item) => item.visibility === "private",
+  ).length;
+  const sharedSpaceCount = spaces.length - privateSpaceCount;
+
+  function selectWorkspace(workspaceId: string) {
+    setSelected(workspaceId);
+    setWorkspaceFeedback(null);
+    setSpaceFeedback(null);
+    setInviteFeedback(null);
+    setInviteConflict(null);
+    setStatus("正在读取工作区内容…");
+  }
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (anyPending) return;
     const form = event.currentTarget;
     setWorkspaceFeedback(null);
     const name = fieldValue(form, "name");
@@ -121,22 +263,24 @@ export function WorkspaceCenter() {
     setPendingAction("workspace");
     setWorkspaceFeedback({ message: "正在创建工作区…", tone: "loading" });
     try {
-      await browserApiClient.request("/api/v1/workspaces", {
-        method: "POST",
-        csrf: true,
-        body: JSON.stringify({
-          name,
-        }),
-      });
+      const created = await browserApiClient.request<Workspace>(
+        "/api/v1/workspaces",
+        {
+          body: JSON.stringify({ name }),
+          csrf: true,
+          method: "POST",
+        },
+      );
       form.reset();
       const refreshed = await loadWorkspaces();
+      if (refreshed) setSelected(created.id);
       setWorkspaceFeedback({
         message: refreshed
-          ? "工作区已创建。"
+          ? "工作区已创建并切换。"
           : "工作区已创建，但列表刷新失败，请稍后重试。",
         tone: refreshed ? "success" : "error",
       });
-      if (refreshed) setStatus("工作区已创建。");
+      if (refreshed) setStatus("工作区已创建并切换。");
     } catch (error) {
       const message = workspaceActionError(error, "workspace");
       setWorkspaceFeedback({ message, tone: "error" });
@@ -148,7 +292,7 @@ export function WorkspaceCenter() {
 
   async function createSpace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected) return;
+    if (!selected || anyPending) return;
     const form = event.currentTarget;
     setSpaceFeedback(null);
     const name = fieldValue(form, "name");
@@ -163,14 +307,14 @@ export function WorkspaceCenter() {
     setPendingAction("space");
     setSpaceFeedback({ message: "正在创建空间…", tone: "loading" });
     try {
-      await browserApiClient.request(`/api/v1/workspaces/${selected}/spaces`, {
-        method: "POST",
-        csrf: true,
+      await browserApiClient.request(`${workspacePath(selected)}/spaces`, {
         body: JSON.stringify({
           name,
           visibility:
             data.get("visibility") === "shared" ? "shared" : "private",
         }),
+        csrf: true,
+        method: "POST",
       });
       form.reset();
       const refreshed = await loadDetails(selected);
@@ -192,9 +336,10 @@ export function WorkspaceCenter() {
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected) return;
+    if (!selected || anyPending) return;
     const form = event.currentTarget;
     setInviteFeedback(null);
+    setInviteConflict(null);
     const emailInput = form.elements.namedItem("email");
     if (
       !(emailInput instanceof HTMLInputElement) ||
@@ -208,20 +353,25 @@ export function WorkspaceCenter() {
     }
     const data = new FormData(form);
     const email = String(data.get("email") ?? "").trim();
+    const role = String(data.get("role") ?? "");
+    if (!isMemberRole(role)) {
+      setInviteFeedback({
+        message: "请选择有效邀请角色。",
+        tone: "error",
+      });
+      return;
+    }
     setPendingAction("invite");
     setInviteFeedback({ message: "正在发送邀请…", tone: "loading" });
     try {
-      await browserApiClient.request(
-        `/api/v1/workspaces/${selected}/invitations`,
-        {
-          method: "POST",
-          csrf: true,
-          body: JSON.stringify({
-            email,
-            role: String(data.get("role") ?? "viewer"),
-          }),
-        },
-      );
+      await browserApiClient.request(`${workspacePath(selected)}/invitations`, {
+        body: JSON.stringify({
+          email,
+          role,
+        }),
+        csrf: true,
+        method: "POST",
+      });
       form.reset();
       setInviteFeedback({
         message: "邀请已创建，邮件投递状态由服务端处理。",
@@ -229,286 +379,449 @@ export function WorkspaceCenter() {
       });
       setStatus("邀请已创建；投递状态由服务端处理。");
     } catch (error) {
-      const message = workspaceActionError(error, "invite");
-      setInviteFeedback({ message, tone: "error" });
-      setStatus(message);
+      if (isInvitationConflict(error)) {
+        setInviteConflict(error);
+        setInviteFeedback(null);
+        setStatus(workspaceInvitationConflictDetail(error));
+      } else {
+        const message = workspaceActionError(error, "invite");
+        setInviteFeedback({ message, tone: "error" });
+        setStatus(message);
+      }
     } finally {
       setPendingAction(null);
     }
   }
 
   async function updateMember(member: Member, role: string) {
-    if (!selected) return;
-    setPendingAction("member");
-    setStatus("正在更新成员角色…");
+    if (!selected || anyPending || role === member.role) return;
+    if (!isMemberRole(role)) {
+      setStatus(invalidInputMessage("member"));
+      return;
+    }
+    setPendingMemberId(member.id);
+    setStatus(`正在更新 ${member.email} 的角色…`);
     try {
       await browserApiClient.request(
-        `/api/v1/workspaces/${selected}/members/${member.id}/update`,
+        `${workspacePath(selected)}/members/${encodeURIComponent(member.id)}/update`,
         {
-          method: "POST",
-          csrf: true,
           body: JSON.stringify({ expected_version: member.version, role }),
+          csrf: true,
+          method: "POST",
         },
       );
-      await loadDetails(selected);
-      setStatus("成员角色已更新。");
+      const refreshed = await loadDetails(selected);
+      setStatus(
+        refreshed
+          ? `${member.email} 的角色已更新。`
+          : "角色已更新，但成员列表刷新失败，请稍后重试。",
+      );
     } catch (error) {
-      setStatus(workspaceActionError(error, "invite"));
+      setStatus(workspaceActionError(error, "member"));
     } finally {
-      setPendingAction(null);
+      setPendingMemberId(null);
     }
   }
 
+  const subviewNavigation =
+    view === "knowledge" ? (
+      <DeskSubviewNav
+        activePath="/app/spaces"
+        ariaLabel="知识库视图"
+        items={[
+          { href: "/app/records", icon: "files", label: "来源与记录" },
+          { href: "/app/review", icon: "refresh", label: "复习与图谱" },
+          { href: "/app/spaces", icon: "folder", label: "知识库管理" },
+        ]}
+      />
+    ) : (
+      <CollaborationSubviewNav activePath="/app/workspaces" />
+    );
+
   return (
-    <main id="main-content" className="settings-page">
+    <main id="main-content" className="settings-page workspace-page">
       <ProductPageHeader
-        eyebrow="WORKSPACES · SPACES · MEMBERS"
-        title="把个人内容和小组协作边界看清楚"
+        actions={
+          selectedWorkspace ? (
+            <ProductTag tone="info">
+              {roleLabel(selectedWorkspace.role)}权限
+            </ProductTag>
+          ) : null
+        }
         description={
           <>
             <p>
-              工作区承载成员与治理，Space
-              决定实际内容可见性；管理员不自动读取私人 Space。
+              {view === "knowledge"
+                ? "Space 决定资料边界；私有空间只属于自己，共享空间沿用 Workspace 成员权限。"
+                : "Workspace 管理成员与治理，Space 决定资料边界；管理员不会自动读取私人空间。"}
             </p>
             <p className="product-page-status" aria-live="polite">
               {status}
             </p>
           </>
         }
-      />
-      <ProductHero
-        badge={<ProductTag tone="info">个人与小组协作</ProductTag>}
-        title={
-          workspaces.find((item) => item.id === selected)?.name ??
-          "创建第一个工作区"
+        eyebrow={
+          view === "knowledge"
+            ? "KNOWLEDGE BASE · SPACE BOUNDARY"
+            : "COLLABORATION · WORKSPACE GOVERNANCE"
         }
-        progressLabel="成员容量"
-        progressValue={Math.min(100, (members.length / 10) * 100)}
+        title={view === "knowledge" ? "知识库管理" : "空间与成员"}
+      />
+
+      {subviewNavigation}
+
+      <div
+        aria-label="当前工作区概览"
+        className="workspace-summary"
+        role="list"
       >
-        私有空间只属于自己，共享空间供受邀成员协作；角色和权限继续沿用现有规则。
-      </ProductHero>
-      <div className="product-metric-grid">
-        <ProductMetric
-          label="工作区"
-          value={workspaces.length}
-          detail="可切换上下文"
-          tone="info"
-        />
-        <ProductMetric
-          label="空间"
-          value={spaces.length}
-          detail={`${spaces.filter((item) => item.visibility === "private").length} 个私有`}
-        />
-        <ProductMetric
-          label="成员"
-          value={members.length}
-          detail="最多 10 人定位"
-          tone="good"
-        />
-        <ProductMetric
-          label="共享空间"
-          value={spaces.filter((item) => item.visibility === "shared").length}
-          detail="多人协作"
-        />
+        <div role="listitem">
+          <strong>{workspaces.length}</strong>
+          <span>工作区</span>
+        </div>
+        <div role="listitem">
+          <strong>{privateSpaceCount}</strong>
+          <span>私有空间</span>
+        </div>
+        <div role="listitem">
+          <strong>{sharedSpaceCount}</strong>
+          <span>共享空间</span>
+        </div>
+        <div role="listitem">
+          <strong>{members.length} / 10</strong>
+          <span>成员容量</span>
+        </div>
       </div>
 
-      <ProductDisclosure
-        summary="创建或切换工作区"
-        description="工作区承载成员和空间"
-      >
-        <form
-          aria-busy={pendingAction === "workspace"}
-          className="inline-form"
-          onSubmit={createWorkspace}
-          noValidate
+      <div className="workspace-console-grid">
+        <ProductPanel
+          className="workspace-console-panel"
+          description="切换治理上下文并查看其中的私有与共享空间。"
+          title="工作区与空间"
         >
-          <label htmlFor="workspace-name">新工作区名称</label>
-          <input
-            aria-describedby={
-              workspaceFeedback?.tone === "error"
-                ? "workspace-feedback"
-                : undefined
-            }
-            aria-invalid={workspaceFeedback?.tone === "error"}
-            id="workspace-name"
-            name="name"
-            maxLength={120}
-            required
-          />
-          <button disabled={pendingAction !== null} type="submit">
-            {pendingAction === "workspace" ? "正在创建…" : "创建"}
-          </button>
-          {workspaceFeedback ? (
-            <InlineFormFeedback
-              id="workspace-feedback"
-              tone={workspaceFeedback.tone}
-            >
-              {workspaceFeedback.message}
-            </InlineFormFeedback>
-          ) : null}
-        </form>
-        <label htmlFor="workspace-select">当前工作区</label>
-        <select
-          id="workspace-select"
-          value={selected ?? ""}
-          onChange={(event) => {
-            setSelected(event.target.value || null);
-            setWorkspaceFeedback(null);
-            setSpaceFeedback(null);
-            setInviteFeedback(null);
-            setStatus("正在读取工作区内容…");
-          }}
-        >
-          {workspaces.map((workspace) => (
-            <option value={workspace.id} key={workspace.id}>
-              {workspace.name} · {workspace.role}
-            </option>
-          ))}
-        </select>
-      </ProductDisclosure>
-      {selected ? (
-        <>
-          <ProductPanel
-            title="空间"
-            description="私有空间用于个人资料，共享空间用于受邀协作。"
-            aside={<ProductTag>{spaces.length} 个</ProductTag>}
-          >
-            <form
-              aria-busy={pendingAction === "space"}
-              className="inline-form"
-              onSubmit={createSpace}
-              noValidate
-            >
-              <label htmlFor="space-name">空间名称</label>
-              <input
-                aria-describedby={
-                  spaceFeedback?.tone === "error" ? "space-feedback" : undefined
-                }
-                aria-invalid={spaceFeedback?.tone === "error"}
-                id="space-name"
-                name="name"
-                maxLength={120}
-                required
-              />
-              <label htmlFor="space-visibility">可见性</label>
-              <select id="space-visibility" name="visibility">
-                <option value="private">仅自己</option>
-                <option value="shared">工作区共享</option>
-              </select>
-              <button disabled={pendingAction !== null} type="submit">
-                {pendingAction === "space" ? "正在创建…" : "创建空间"}
-              </button>
-              {spaceFeedback ? (
-                <InlineFormFeedback
-                  id="space-feedback"
-                  tone={spaceFeedback.tone}
+          <div aria-label="工作区列表" className="workspace-context-list">
+            {workspaces.map((workspace) => {
+              const active = workspace.id === selected;
+              return (
+                <button
+                  aria-current={active ? "true" : undefined}
+                  className={active ? "is-selected" : undefined}
+                  disabled={anyPending}
+                  key={workspace.id}
+                  onClick={() => selectWorkspace(workspace.id)}
+                  type="button"
                 >
-                  {spaceFeedback.message}
-                </InlineFormFeedback>
-              ) : null}
-            </form>
-            <ul className="item-list">
-              {spaces.map((space) => (
-                <li key={space.id}>
                   <span>
-                    <strong>{space.name}</strong>
+                    <strong>{workspace.name}</strong>
                     <small>
-                      {space.visibility === "private" ? "私有" : "共享"}
+                      {roleLabel(workspace.role)} · {workspace.status}
                     </small>
                   </span>
-                </li>
-              ))}
-            </ul>
-            {spaces.length === 0 ? (
-              <ProductEmptyState
-                icon="□"
-                title="还没有空间"
-                description="创建一个私有空间开始个人学习，或创建共享空间邀请成员。"
-              />
-            ) : null}
-          </ProductPanel>
-          <ProductPanel
-            title="成员与邀请"
-            description="受邀成员按现有角色参与查看、审查、贡献或管理。"
-            aside={<ProductTag tone="info">{members.length} / 10</ProductTag>}
-          >
+                  <ProductTag tone={active ? "info" : "default"}>
+                    {active ? "当前" : "切换"}
+                  </ProductTag>
+                </button>
+              );
+            })}
+          </div>
+
+          {workspaces.length === 0 ? (
+            <ProductEmptyState
+              description="创建工作区后，才能建立 Space 或邀请成员。"
+              icon="□"
+              title="尚无可访问工作区"
+            />
+          ) : null}
+
+          <details className="workspace-inline-disclosure">
+            <summary>新建工作区</summary>
             <form
-              aria-busy={pendingAction === "invite"}
-              className="inline-form"
-              onSubmit={invite}
+              aria-busy={pendingAction === "workspace"}
+              className="workspace-command-form"
               noValidate
+              onSubmit={createWorkspace}
             >
-              <label htmlFor="invite-email">邮箱</label>
-              <input
-                aria-describedby={
-                  inviteFeedback?.tone === "error"
-                    ? "invite-feedback"
+              <DeskField
+                errorId="workspace-feedback"
+                errorMessage={
+                  workspaceFeedback?.tone === "error"
+                    ? workspaceFeedback.message
                     : undefined
                 }
-                aria-invalid={inviteFeedback?.tone === "error"}
-                id="invite-email"
-                name="email"
-                type="email"
+                htmlFor="workspace-name"
+                label="工作区名称"
                 required
-              />
-              <label htmlFor="invite-role">角色</label>
-              <select id="invite-role" name="role">
-                <option value="viewer">查看者</option>
-                <option value="reviewer">审查者</option>
-                <option value="contributor">贡献者</option>
-                <option value="editor">编辑者</option>
-                <option value="admin">管理员</option>
-              </select>
-              <button disabled={pendingAction !== null} type="submit">
-                {pendingAction === "invite" ? "正在发送…" : "发送邀请"}
-              </button>
-              {inviteFeedback ? (
+              >
+                <DeskInput
+                  aria-describedby={
+                    workspaceFeedback?.tone === "error"
+                      ? "workspace-feedback"
+                      : undefined
+                  }
+                  id="workspace-name"
+                  invalid={workspaceFeedback?.tone === "error"}
+                  maxLength={120}
+                  name="name"
+                  required
+                />
+              </DeskField>
+              <DeskButton
+                disabled={anyPending}
+                loading={pendingAction === "workspace"}
+                type="submit"
+              >
+                创建工作区
+              </DeskButton>
+              {workspaceFeedback && workspaceFeedback.tone !== "error" ? (
                 <InlineFormFeedback
-                  id="invite-feedback"
-                  tone={inviteFeedback.tone}
+                  id="workspace-feedback"
+                  tone={workspaceFeedback.tone}
                 >
-                  {inviteFeedback.message}
+                  {workspaceFeedback.message}
                 </InlineFormFeedback>
               ) : null}
             </form>
-            <ul className="item-list">
-              {members.map((member) => (
-                <li key={member.id}>
-                  <span>
-                    <strong>{member.email}</strong>
-                    <small>{member.status}</small>
-                  </span>
-                  {member.role === "owner" ? (
-                    <strong>所有者</strong>
-                  ) : (
-                    <select
-                      aria-label={`修改 ${member.email} 的角色`}
-                      value={member.role}
-                      disabled={pendingAction !== null}
-                      onChange={(event) =>
-                        void updateMember(member, event.target.value)
-                      }
+          </details>
+
+          {selected ? (
+            <div className="workspace-space-section">
+              <header>
+                <strong>Space</strong>
+                <span>{spaces.length} 个</span>
+              </header>
+              <ul className="workspace-space-list">
+                {spaces.map((space) => (
+                  <li key={space.id}>
+                    <span>
+                      <strong>{space.name}</strong>
+                      <small>{space.status}</small>
+                    </span>
+                    <ProductTag
+                      tone={space.visibility === "shared" ? "info" : "default"}
                     >
-                      <option value="viewer">viewer</option>
-                      <option value="reviewer">reviewer</option>
-                      <option value="contributor">contributor</option>
-                      <option value="editor">editor</option>
-                      <option value="admin">admin</option>
-                    </select>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {members.length === 0 ? (
-              <ProductEmptyState
-                icon="＋"
-                title="尚无成员记录"
-                description="输入受邀邮箱并选择最小必要角色。"
-              />
-            ) : null}
-          </ProductPanel>
-        </>
-      ) : null}
+                      {space.visibility === "private" ? "私有" : "共享"}
+                    </ProductTag>
+                  </li>
+                ))}
+              </ul>
+              {spaces.length === 0 ? (
+                <ProductEmptyState
+                  description="创建私有空间开始个人资料管理，或创建共享空间开展小组协作。"
+                  icon="□"
+                  title="当前工作区还没有空间"
+                />
+              ) : null}
+              <details className="workspace-inline-disclosure">
+                <summary>新建 Space</summary>
+                <form
+                  aria-busy={pendingAction === "space"}
+                  className="workspace-command-form"
+                  noValidate
+                  onSubmit={createSpace}
+                >
+                  <DeskField
+                    errorId="space-feedback"
+                    errorMessage={
+                      spaceFeedback?.tone === "error"
+                        ? spaceFeedback.message
+                        : undefined
+                    }
+                    htmlFor="space-name"
+                    label="空间名称"
+                    required
+                  >
+                    <DeskInput
+                      aria-describedby={
+                        spaceFeedback?.tone === "error"
+                          ? "space-feedback"
+                          : undefined
+                      }
+                      id="space-name"
+                      invalid={spaceFeedback?.tone === "error"}
+                      maxLength={120}
+                      name="name"
+                      required
+                    />
+                  </DeskField>
+                  <DeskField htmlFor="space-visibility" label="可见性">
+                    <DeskSelect id="space-visibility" name="visibility">
+                      <option value="private">仅自己</option>
+                      <option value="shared">工作区共享</option>
+                    </DeskSelect>
+                  </DeskField>
+                  <DeskButton
+                    disabled={anyPending}
+                    loading={pendingAction === "space"}
+                    type="submit"
+                  >
+                    创建 Space
+                  </DeskButton>
+                  {spaceFeedback && spaceFeedback.tone !== "error" ? (
+                    <InlineFormFeedback
+                      id="space-feedback"
+                      tone={spaceFeedback.tone}
+                    >
+                      {spaceFeedback.message}
+                    </InlineFormFeedback>
+                  ) : null}
+                </form>
+              </details>
+            </div>
+          ) : null}
+        </ProductPanel>
+
+        <ProductPanel
+          aside={<ProductTag tone="info">{members.length} / 10</ProductTag>}
+          className="workspace-console-panel"
+          description="邀请保留最小必要角色；角色更新使用服务端版本检查。"
+          title="成员与邀请"
+        >
+          {selected ? (
+            <>
+              <form
+                aria-busy={pendingAction === "invite"}
+                className="workspace-command-form workspace-invite-form"
+                noValidate
+                onSubmit={invite}
+              >
+                <DeskField
+                  errorId="invite-feedback"
+                  errorMessage={
+                    inviteFeedback?.tone === "error"
+                      ? inviteFeedback.message
+                      : undefined
+                  }
+                  htmlFor="invite-email"
+                  label="受邀邮箱"
+                  required
+                >
+                  <DeskInput
+                    aria-describedby={
+                      inviteFeedback?.tone === "error"
+                        ? "invite-feedback"
+                        : undefined
+                    }
+                    id="invite-email"
+                    invalid={inviteFeedback?.tone === "error"}
+                    name="email"
+                    required
+                    type="email"
+                  />
+                </DeskField>
+                <DeskField htmlFor="invite-role" label="角色">
+                  <DeskSelect id="invite-role" name="role">
+                    {MEMBER_ROLES.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </DeskSelect>
+                </DeskField>
+                <DeskButton
+                  disabled={anyPending}
+                  loading={pendingAction === "invite"}
+                  type="submit"
+                >
+                  发送邀请
+                </DeskButton>
+                {inviteFeedback && inviteFeedback.tone !== "error" ? (
+                  <InlineFormFeedback
+                    id="invite-feedback"
+                    tone={inviteFeedback.tone}
+                  >
+                    {inviteFeedback.message}
+                  </InlineFormFeedback>
+                ) : null}
+              </form>
+
+              {inviteConflict ? (
+                <DeskConflictResolver
+                  actions={[
+                    {
+                      kind: "reload",
+                      label: "刷新并比较",
+                      onClick: () => {
+                        setInviteConflict(null);
+                        void loadDetails(selected);
+                      },
+                    },
+                    {
+                      kind: "merge",
+                      label: "调整角色",
+                      onClick: () => {
+                        setInviteConflict(null);
+                        document
+                          .querySelector<HTMLSelectElement>("#invite-role")
+                          ?.focus();
+                      },
+                    },
+                    {
+                      kind: "cancel",
+                      label: "关闭",
+                      onClick: () => setInviteConflict(null),
+                    },
+                  ]}
+                  detail={workspaceInvitationConflictDetail(inviteConflict)}
+                  error={inviteConflict}
+                  title="邀请未重复发送"
+                />
+              ) : null}
+
+              <ul className="workspace-member-list">
+                {members.map((member) => (
+                  <li key={member.id}>
+                    <span>
+                      <strong>{member.email}</strong>
+                      <small>
+                        {member.status} · 版本 {member.version}
+                      </small>
+                    </span>
+                    {member.role === "owner" ? (
+                      <ProductTag tone="good">所有者</ProductTag>
+                    ) : (
+                      <DeskSelect
+                        aria-label={`修改 ${member.email} 的角色`}
+                        disabled={anyPending}
+                        value={member.role}
+                        onChange={(event) =>
+                          void updateMember(member, event.currentTarget.value)
+                        }
+                      >
+                        {MEMBER_ROLES.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </DeskSelect>
+                    )}
+                    {pendingMemberId === member.id ? (
+                      <span
+                        aria-live="polite"
+                        className="workspace-row-pending"
+                      >
+                        正在保存…
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {members.length === 0 ? (
+                <ProductEmptyState
+                  description="输入受邀邮箱并选择最小必要角色。"
+                  icon="＋"
+                  title="尚无成员记录"
+                />
+              ) : null}
+            </>
+          ) : (
+            <ProductEmptyState
+              description="先创建或选择工作区，再管理成员和邀请。"
+              icon="◎"
+              title="尚未选择工作区"
+            />
+          )}
+        </ProductPanel>
+      </div>
     </main>
   );
 }

@@ -5,12 +5,20 @@
    Maps real Topic/TopicDependency/Mastery data from the review center
    into the reusable KnowledgeSpaceGraph. The graph is read-only here:
    accept/edit/reject are only available in the controlled prototype.
+
+   The rendered graph only accepts data from the server-authorised bounded
+   graph API. Local sync-v1 Topic/Dependency data remains available to the
+   Review list and edit flows, but is never presented as a successful online
+   graph fallback.
    ============================================================ */
 
 "use client";
 
-import { useMemo } from "react";
-
+import { ProductTag } from "@/components/product/product-ui";
+import {
+  type GraphMeta,
+  truncationReasonLabel,
+} from "@/features/desk/knowledge-graph-api";
 import {
   KnowledgeSpaceGraph,
   type KnowledgeSpaceGraphState,
@@ -40,11 +48,13 @@ export interface ReviewKnowledgeSpaceGraphDependency {
 }
 
 export interface ReviewKnowledgeSpaceGraphProps {
-  topics: ReviewKnowledgeSpaceGraphTopic[];
-  dependencies: ReviewKnowledgeSpaceGraphDependency[];
   state: KnowledgeSpaceGraphState;
   onRetry?: () => void;
   onUnlock?: () => void;
+  graphData: KsData | null;
+  graphMeta: GraphMeta | null;
+  selectedId?: string | null;
+  onNodeSelect?: (id: string | null) => void;
 }
 
 const MASTERY_ORDER = [
@@ -121,19 +131,175 @@ export function buildReviewKnowledgeSpaceData(
   };
 }
 
+/**
+ * Builds the truncation/limits description shown under the graph title. When
+ * the server-authorised API returned data (graphMeta), the description
+ * reflects the real truncation state, limits and pagination cursor — never
+ * silently dropped. When using local fallback data, the description shows the
+ * local node/edge count without a truncation claim.
+ */
+function buildGraphDescription(
+  graphData: KsData | null,
+  graphMeta: GraphMeta | null,
+): React.ReactNode {
+  if (graphData && graphMeta) {
+    const nodeCount = graphData.nodes.length;
+    const edgeCount = graphData.edges.length;
+    const parts: React.ReactNode[] = [];
+
+    parts.push(
+      <span key="source">
+        服务端授权 · {graphMeta.depth} 跳 · {nodeCount} 个节点 · {edgeCount}{" "}
+        条边（上限 {graphMeta.limits.nodes} 节点 / {graphMeta.limits.edges} 边）
+      </span>,
+    );
+
+    if (graphMeta.truncated) {
+      const reasons = graphMeta.truncationReasons.map((r) =>
+        truncationReasonLabel(r),
+      );
+      parts.push(
+        <span className="ks-page-subtitle" key="truncated">
+          数据已截断：{reasons.join("、")}。当前为局部视图。
+        </span>,
+      );
+    }
+
+    if (graphMeta.nextCursor) {
+      parts.push(
+        <span className="ks-page-subtitle" key="more">
+          还有更多数据可加载。
+        </span>,
+      );
+    }
+
+    return (
+      <span>
+        当前 Space
+        中知识点与依赖的关系图谱。节点位置由浏览器本地计算，不依赖服务端坐标。
+        {parts}
+      </span>
+    );
+  }
+
+  return (
+    <span>
+      当前 Space 的服务端授权局部图谱。选择根节点后加载 1/2
+      跳范围；请求失败时不会回退为本地成功数据。
+    </span>
+  );
+}
+
+const EMPTY_GRAPH_DATA: KsData = {
+  edges: [],
+  messages: [],
+  nodes: [],
+  tasks: [],
+  traceSteps: [],
+};
+
+const NODE_TYPE_LABELS = {
+  action: "行动",
+  claim: "论断",
+  evidence: "证据",
+  topic: "主题",
+} as const;
+
+export function ReviewKnowledgeSpaceInspector({
+  data,
+  graphMeta,
+  nodeId,
+}: Readonly<{
+  data: KsData;
+  graphMeta: GraphMeta | null;
+  nodeId: string;
+}>) {
+  const node = data.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) return <p>所选节点已不在当前有界视图中。</p>;
+
+  const relations = data.edges.filter(
+    (edge) => edge.source === node.id || edge.target === node.id,
+  );
+
+  return (
+    <div className="ks-inspector">
+      <section className="ks-inspector-section">
+        <div className="ks-inspector-tags">
+          <ProductTag>{NODE_TYPE_LABELS[node.type]}</ProductTag>
+          {node.tags.map((tag) => (
+            <ProductTag key={tag}>{tag}</ProductTag>
+          ))}
+        </div>
+        <h3 className="ks-inspector-title">{node.label}</h3>
+        <p className="ks-inspector-text">{node.description}</p>
+      </section>
+
+      <section className="ks-inspector-section">
+        <h3>当前范围</h3>
+        <p className="ks-inspector-text">
+          {graphMeta
+            ? `${graphMeta.depth} 跳授权视图 · ${data.nodes.length} 个节点 · ${data.edges.length} 条边`
+            : "正在等待服务端授权范围。"}
+        </p>
+        {graphMeta?.truncated ? (
+          <p className="ks-inspector-text">
+            已截断：
+            {graphMeta.truncationReasons
+              .map((reason) => truncationReasonLabel(reason))
+              .join("、")}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="ks-inspector-section">
+        <h3>关系 ({relations.length})</h3>
+        {relations.length ? (
+          <div className="ks-inspector-edges">
+            {relations.slice(0, 12).map((edge) => {
+              const otherId =
+                edge.source === node.id ? edge.target : edge.source;
+              const other = data.nodes.find(
+                (candidate) => candidate.id === otherId,
+              );
+              return (
+                <div className="ks-inspector-edge-item" key={edge.id}>
+                  <span className="ks-inspector-edge-label">{edge.label}</span>
+                  <span className="ks-inspector-edge-target">
+                    {other?.label ?? otherId}
+                  </span>
+                </div>
+              );
+            })}
+            {relations.length > 12 ? (
+              <p className="ks-inspector-text">
+                另有 {relations.length - 12} 条关系未在详情栏展开。
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="ks-inspector-text">当前范围内没有关联边。</p>
+        )}
+      </section>
+
+      <section className="ks-inspector-section">
+        <h3>对象标识</h3>
+        <strong className="ks-inspector-meta-mono">{node.id}</strong>
+      </section>
+    </div>
+  );
+}
+
 export function ReviewKnowledgeSpaceGraph({
-  topics,
-  dependencies,
   state,
   onRetry,
   onUnlock,
+  graphData,
+  graphMeta,
+  selectedId,
+  onNodeSelect,
 }: ReviewKnowledgeSpaceGraphProps) {
-  const data = useMemo(
-    () => buildReviewKnowledgeSpaceData(topics, dependencies),
-    [topics, dependencies],
-  );
-
-  const isTruncated = false;
+  const data = graphData ?? EMPTY_GRAPH_DATA;
+  const description = buildGraphDescription(graphData, graphMeta);
 
   return (
     <KnowledgeSpaceGraph
@@ -142,23 +308,11 @@ export function ReviewKnowledgeSpaceGraph({
       eyebrow="REVIEW · KNOWLEDGE SPACE"
       title="知识空间"
       headingLevel="h2"
-      description={
-        <span>
-          当前 Space
-          中知识点与先修依赖的关系图谱。节点位置由浏览器根据已有数据本地计算，不依赖服务端坐标。
-          {isTruncated ? (
-            <span className="ks-page-subtitle">
-              已加载 {topics.length}{" "}
-              个知识点；后端返回了截断标记，未完整展示全部数据。
-            </span>
-          ) : (
-            <span className="ks-page-subtitle">
-              {topics.length} 个知识点 · {dependencies.length} 条先修依赖
-            </span>
-          )}
-        </span>
-      }
+      description={description}
+      selectedId={selectedId}
+      onNodeSelect={onNodeSelect}
       readOnly={true}
+      showInspector={false}
       showTrace={false}
       onRetry={onRetry}
       onUnlock={onUnlock}

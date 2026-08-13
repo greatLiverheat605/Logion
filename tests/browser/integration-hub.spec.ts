@@ -18,7 +18,7 @@ test.describe("interoperability hub real flows", () => {
     await page.keyboard.press("Control+k");
     await expect(
       page.getByRole("link", {
-        name: "打开互操作中心 汇总只读日历与开放格式迁移能力 打开",
+        name: "打开互操作 汇总只读日历与开放格式迁移能力 打开",
       }),
     ).toBeVisible();
     await page.keyboard.press("Escape");

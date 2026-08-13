@@ -149,10 +149,19 @@ test.describe("authenticated shell", () => {
       commandDialog.getByRole("textbox", { name: "搜索页面或命令" }),
     ).toBeFocused();
     await expect(
-      commandDialog.getByRole("heading", { name: "学习", exact: true }),
+      commandDialog.getByRole("heading", { name: "今天", exact: true }),
     ).toBeVisible();
     await expect(
-      commandDialog.getByRole("heading", { name: "系统", exact: true }),
+      commandDialog.getByRole("heading", { name: "工作台", exact: true }),
+    ).toBeVisible();
+    await expect(
+      commandDialog.getByRole("heading", { name: "知识库", exact: true }),
+    ).toBeVisible();
+    await expect(
+      commandDialog.getByRole("heading", { name: "协作空间", exact: true }),
+    ).toBeVisible();
+    await expect(
+      commandDialog.getByRole("heading", { name: "系统中心", exact: true }),
     ).toBeVisible();
     await expect(
       commandDialog.getByRole("heading", { name: "创建", exact: true }),
@@ -366,5 +375,112 @@ test.describe("authenticated shell", () => {
       .getByLabel("输入 CLEAR THIS DEVICE 确认", { exact: true })
       .fill("CLEAR THIS DEVIC");
     await expect(clearButton).toBeDisabled();
+  });
+
+  test("workspace and review context switching discard stale detail responses", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    const suffix = Date.now().toString(36);
+    const workspaceAName = `竞态工作区 A ${suffix}`;
+    const workspaceBName = `竞态工作区 B ${suffix}`;
+    const spaceAName = `A 空间 ${suffix}`;
+    const spaceBName = `B 空间 ${suffix}`;
+
+    await page.goto("/app/workspaces");
+
+    const createWorkspace = async (name: string) => {
+      const disclosure = page.locator("details", {
+        has: page.getByText("新建工作区", { exact: true }),
+      });
+      if (!(await disclosure.evaluate((element) => element.open))) {
+        await disclosure.locator("summary").click();
+      }
+      await page.getByRole("textbox", { name: /工作区名称/ }).fill(name);
+      await page.getByRole("button", { name: "创建工作区" }).click();
+      await expect(page.locator("#workspace-feedback")).toHaveText(
+        "工作区已创建并切换。",
+      );
+    };
+
+    const createSpace = async (name: string) => {
+      const disclosure = page.locator("details", {
+        has: page.getByText("新建 Space", { exact: true }),
+      });
+      if (!(await disclosure.evaluate((element) => element.open))) {
+        await disclosure.locator("summary").click();
+      }
+      await page.getByRole("textbox", { name: /空间名称/ }).fill(name);
+      await page.getByRole("button", { name: "创建 Space" }).click();
+      await expect(page.locator("#space-feedback")).toHaveText("空间已创建。");
+    };
+
+    await createWorkspace(workspaceAName);
+    await createSpace(spaceAName);
+    await createWorkspace(workspaceBName);
+    await createSpace(spaceBName);
+
+    const workspaceResponse = await page.request.get("/api/v1/workspaces");
+    expect(workspaceResponse.ok()).toBe(true);
+    const workspacePayload = (await workspaceResponse.json()) as {
+      workspaces: Array<{ id: string; name: string }>;
+    };
+    const workspaceA = workspacePayload.workspaces.find(
+      (workspace) => workspace.name === workspaceAName,
+    );
+    expect(workspaceA).toBeDefined();
+
+    let delayedRequests = 0;
+    await page.route(
+      `**/api/v1/workspaces/${workspaceA!.id}/**`,
+      async (route) => {
+        delayedRequests += 1;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await route.continue();
+      },
+    );
+
+    await page
+      .locator(".workspace-context-list")
+      .getByRole("button", { name: new RegExp(workspaceAName) })
+      .click();
+    await page
+      .locator(".workspace-context-list")
+      .getByRole("button", { name: new RegExp(workspaceBName) })
+      .click();
+
+    await expect(page.getByText(spaceBName, { exact: true })).toBeVisible();
+    await page.waitForTimeout(800);
+    expect(delayedRequests).toBeGreaterThan(0);
+    await expect(page.getByText(spaceAName, { exact: true })).toHaveCount(0);
+
+    await page.unrouteAll({ behavior: "wait" });
+    await page.route(
+      `**/api/v1/workspaces/${workspaceA!.id}/spaces`,
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await route.continue();
+      },
+    );
+
+    await page.goto("/app/review");
+    const reviewWorkspace = page.getByLabel("工作区", { exact: true });
+    await expect(reviewWorkspace).toBeVisible();
+    await reviewWorkspace.selectOption({ label: workspaceAName });
+    await reviewWorkspace.selectOption({ label: workspaceBName });
+
+    const reviewSpace = page.getByLabel("空间", { exact: true });
+    await expect(
+      reviewSpace.getByRole("option", { name: new RegExp(spaceBName) }),
+    ).toHaveCount(1);
+    await page.waitForTimeout(800);
+    await expect(
+      reviewSpace.getByRole("option", { name: new RegExp(spaceAName) }),
+    ).toHaveCount(0);
+    await expect(reviewWorkspace).toHaveValue(
+      workspacePayload.workspaces.find(
+        (workspace) => workspace.name === workspaceBName,
+      )!.id,
+    );
   });
 });

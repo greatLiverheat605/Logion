@@ -175,6 +175,22 @@ describe("KnowledgeSpaceGraph", () => {
     expect(container.querySelector(".ks-trace-zone")).toBeNull();
   });
 
+  it("delegates selection without rendering a nested inspector", () => {
+    const onNodeSelect = vi.fn();
+    const { container } = renderGraph({
+      onNodeSelect,
+      selectedId: null,
+      showInspector: false,
+    });
+    const node = container.querySelector('[data-node-id="t2"]') as HTMLElement;
+    fireEvent.click(node);
+    expect(onNodeSelect).toHaveBeenCalledWith("t2");
+    expect(container.querySelector(".ks-inspector-zone")).toBeNull();
+    expect(
+      container.querySelector(".ks-body--without-inspector"),
+    ).not.toBeNull();
+  });
+
   it("computes distinct layout positions when nodes lack coordinates", () => {
     const dataWithoutCoords: KsData = {
       ...TEST_DATA,

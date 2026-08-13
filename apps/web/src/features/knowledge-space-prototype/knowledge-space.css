@@ -95,6 +95,10 @@
   align-items: stretch;
 }
 
+.ks-body--without-inspector {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .ks-canvas-zone {
   position: relative;
   min-height: 480px;

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildReviewKnowledgeSpaceData,
   ReviewKnowledgeSpaceGraph,
+  ReviewKnowledgeSpaceInspector,
 } from "./review-knowledge-space";
 
 const topics = [
@@ -91,11 +92,18 @@ describe("buildReviewKnowledgeSpaceData", () => {
 });
 
 describe("ReviewKnowledgeSpaceGraph", () => {
-  it("renders real topics as graph nodes", () => {
+  it("renders server-authorised graph nodes", () => {
+    const graphData = buildReviewKnowledgeSpaceData(topics, dependencies);
     render(
       <ReviewKnowledgeSpaceGraph
-        topics={topics}
-        dependencies={dependencies}
+        graphData={graphData}
+        graphMeta={{
+          depth: 1,
+          limits: { bytes: 1048576, edges: 400, nodes: 150 },
+          nextCursor: null,
+          truncated: false,
+          truncationReasons: [],
+        }}
         state="ready"
       />,
     );
@@ -108,7 +116,11 @@ describe("ReviewKnowledgeSpaceGraph", () => {
 
   it("does not use mock data as production defaults", () => {
     render(
-      <ReviewKnowledgeSpaceGraph topics={[]} dependencies={[]} state="empty" />,
+      <ReviewKnowledgeSpaceGraph
+        graphData={null}
+        graphMeta={null}
+        state="empty"
+      />,
     );
     expect(screen.queryByText("间隔重复元分析 (2025)")).toBeNull();
     expect(screen.getByText("当前空间暂无节点")).toBeDefined();
@@ -117,11 +129,180 @@ describe("ReviewKnowledgeSpaceGraph", () => {
   it("shows loading state for real data", () => {
     render(
       <ReviewKnowledgeSpaceGraph
-        topics={topics}
-        dependencies={dependencies}
+        graphData={null}
+        graphMeta={null}
         state="loading"
       />,
     );
     expect(document.querySelector("[aria-busy='true']")).not.toBeNull();
+  });
+
+  it("prioritises server-authorised graphData over local topics", () => {
+    const apiData = {
+      nodes: [
+        {
+          confirmState: "confirmed" as const,
+          description: "API 节点",
+          id: "api-node-1",
+          label: "API根节点",
+          mastery: 0,
+          tags: ["根节点"],
+          type: "topic" as const,
+        },
+      ],
+      edges: [],
+      messages: [],
+      tasks: [],
+      traceSteps: [],
+    };
+    const apiMeta = {
+      depth: 1,
+      limits: { bytes: 1048576, edges: 400, nodes: 150 },
+      nextCursor: null,
+      truncated: false,
+      truncationReasons: [],
+    };
+    render(
+      <ReviewKnowledgeSpaceGraph
+        state="ready"
+        graphData={apiData}
+        graphMeta={apiMeta}
+      />,
+    );
+    // The API node "API根节点" should be rendered (SVG + mobile list = 2),
+    // not the local topics. Only 1 unique data-node-id should exist.
+    expect(document.querySelectorAll("[data-node-id]").length).toBe(1);
+    expect(screen.getAllByText("API根节点").length).toBeGreaterThanOrEqual(1);
+    // Local-only topic should NOT appear anywhere.
+    expect(screen.queryByText("间隔重复")).toBeNull();
+  });
+
+  it("shows truncation reason when graphMeta.truncated is true", () => {
+    const apiData = {
+      nodes: [
+        {
+          confirmState: "confirmed" as const,
+          description: "x",
+          id: "n1",
+          label: "节点",
+          mastery: 0,
+          tags: [],
+          type: "topic" as const,
+        },
+      ],
+      edges: [],
+      messages: [],
+      tasks: [],
+      traceSteps: [],
+    };
+    const apiMeta = {
+      depth: 2,
+      limits: { bytes: 1048576, edges: 400, nodes: 150 },
+      nextCursor: "cursor-x",
+      truncated: true,
+      truncationReasons: ["node_limit" as const, "edge_limit" as const],
+    };
+    render(
+      <ReviewKnowledgeSpaceGraph
+        state="ready"
+        graphData={apiData}
+        graphMeta={apiMeta}
+      />,
+    );
+    // Truncation reason labels should be visible.
+    expect(screen.getByText(/节点数达到服务端上限/)).toBeDefined();
+    expect(screen.getByText(/边数达到服务端上限/)).toBeDefined();
+    // "More data available" prompt.
+    expect(screen.getByText(/还有更多数据可加载/)).toBeDefined();
+  });
+
+  it("does not silently fall back when authorised graph data is absent", () => {
+    render(
+      <ReviewKnowledgeSpaceGraph
+        state="error"
+        graphData={null}
+        graphMeta={null}
+      />,
+    );
+    expect(document.querySelectorAll("[data-node-id]").length).toBe(0);
+    expect(screen.queryByText("间隔重复")).toBeNull();
+    expect(screen.getByText("知识空间暂时无法读取")).toBeDefined();
+  });
+
+  it("shows server-authorised source label when API data is present", () => {
+    const apiData = {
+      nodes: [
+        {
+          confirmState: "confirmed" as const,
+          description: "x",
+          id: "n1",
+          label: "节点",
+          mastery: 0,
+          tags: [],
+          type: "topic" as const,
+        },
+      ],
+      edges: [],
+      messages: [],
+      tasks: [],
+      traceSteps: [],
+    };
+    const apiMeta = {
+      depth: 1,
+      limits: { bytes: 1048576, edges: 400, nodes: 150 },
+      nextCursor: null,
+      truncated: false,
+      truncationReasons: [],
+    };
+    render(
+      <ReviewKnowledgeSpaceGraph
+        state="ready"
+        graphData={apiData}
+        graphMeta={apiMeta}
+      />,
+    );
+    expect(screen.getByText(/服务端授权/)).toBeDefined();
+    expect(screen.getByText(/上限 150 节点/)).toBeDefined();
+    expect(screen.getByText(/400 边/)).toBeDefined();
+  });
+
+  it("delegates node details to the AppShell inspector", () => {
+    const graphData = buildReviewKnowledgeSpaceData(topics, dependencies);
+    render(
+      <ReviewKnowledgeSpaceGraph
+        graphData={graphData}
+        graphMeta={null}
+        onNodeSelect={() => undefined}
+        selectedId={null}
+        state="ready"
+      />,
+    );
+    expect(document.querySelector(".ks-inspector-zone")).toBeNull();
+    expect(
+      document.querySelector(".ks-body--without-inspector"),
+    ).not.toBeNull();
+  });
+});
+
+describe("ReviewKnowledgeSpaceInspector", () => {
+  it("shows the selected node, bounded scope and relationships", () => {
+    const data = buildReviewKnowledgeSpaceData(topics, dependencies);
+    render(
+      <ReviewKnowledgeSpaceInspector
+        data={data}
+        graphMeta={{
+          depth: 2,
+          limits: { bytes: 1048576, edges: 400, nodes: 150 },
+          nextCursor: "next",
+          truncated: true,
+          truncationReasons: ["node_limit"],
+        }}
+        nodeId="topic-a"
+      />,
+    );
+    expect(screen.getByText("间隔重复")).toBeDefined();
+    expect(screen.getByText(/2 跳授权视图/)).toBeDefined();
+    expect(screen.getByText(/节点数达到服务端上限/)).toBeDefined();
+    expect(screen.getByText("主动回忆")).toBeDefined();
   });
 });

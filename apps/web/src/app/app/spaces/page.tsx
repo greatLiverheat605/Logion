@@ -1,5 +1,5 @@
 import { WorkspaceCenter } from "@/features/workspaces/workspace-center";
 
 export default function SpacesPage() {
-  return <WorkspaceCenter />;
+  return <WorkspaceCenter view="knowledge" />;
 }

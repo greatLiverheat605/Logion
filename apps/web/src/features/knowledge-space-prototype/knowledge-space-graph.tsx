@@ -105,6 +105,7 @@ export interface KnowledgeSpaceGraphProps {
   showSearch?: boolean;
   showViewControls?: boolean;
   showLegend?: boolean;
+  showInspector?: boolean;
   showTrace?: boolean;
   searchPlaceholder?: string;
   onRetry?: () => void;
@@ -1203,6 +1204,7 @@ export function KnowledgeSpaceGraph({
   showSearch = true,
   showViewControls = true,
   showLegend = true,
+  showInspector = true,
   showTrace = true,
   searchPlaceholder = "搜索节点…",
   onRetry,
@@ -1213,7 +1215,10 @@ export function KnowledgeSpaceGraph({
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(
     null,
   );
-  const selectedId = controlledSelectedId ?? internalSelectedId;
+  const selectedId =
+    controlledSelectedId === undefined
+      ? internalSelectedId
+      : controlledSelectedId;
   const setSelectedId = useCallback(
     (id: string | null) => {
       setInternalSelectedId(id);
@@ -1394,7 +1399,9 @@ export function KnowledgeSpaceGraph({
         <ScenarioState scenario={state} onRetry={onRetry} onUnlock={onUnlock} />
       ) : (
         <>
-          <div className="ks-body">
+          <div
+            className={`ks-body${showInspector ? "" : " ks-body--without-inspector"}`}
+          >
             <div className="ks-canvas-zone">
               <div className="ks-canvas-toolbar">
                 {showLegend && (
@@ -1569,26 +1576,28 @@ export function KnowledgeSpaceGraph({
               )}
             </div>
 
-            <div className="ks-inspector-zone">
-              <div className="product-panel ks-inspector-panel">
-                <InspectorPanel
-                  data={data}
-                  nodeId={isEmpty ? null : selectedId}
-                  reviews={reviews}
-                  confirmStateOverrides={confirmStateOverrides}
-                  descOverrides={descOverrides}
-                  editDraft={editDraft}
-                  readOnly={readOnly}
-                  onAccept={handleAccept}
-                  onReject={handleReject}
-                  onEditStart={handleEditStart}
-                  onEditSave={handleEditSave}
-                  onEditCancel={handleEditCancel}
-                  onEditDraftChange={setEditDraft}
-                  onResetReview={handleResetReview}
-                />
+            {showInspector ? (
+              <div className="ks-inspector-zone">
+                <div className="product-panel ks-inspector-panel">
+                  <InspectorPanel
+                    data={data}
+                    nodeId={isEmpty ? null : selectedId}
+                    reviews={reviews}
+                    confirmStateOverrides={confirmStateOverrides}
+                    descOverrides={descOverrides}
+                    editDraft={editDraft}
+                    readOnly={readOnly}
+                    onAccept={handleAccept}
+                    onReject={handleReject}
+                    onEditStart={handleEditStart}
+                    onEditSave={handleEditSave}
+                    onEditCancel={handleEditCancel}
+                    onEditDraftChange={setEditDraft}
+                    onResetReview={handleResetReview}
+                  />
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {showTrace && (
               <div className="ks-trace-zone">

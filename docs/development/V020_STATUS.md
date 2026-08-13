@@ -639,3 +639,76 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 三份产品文档、D0 任务包和本状态断点已在用户明确授权后以提交
   `65c6cb323f544b9b20cf8f995ec5f1aabe3a2521` 首次推送到 `origin/codex/v020-rc6-closeout`。D0 仍未派发；
   派发时必须另行冻结包含后续基线校正的远端可达完整 SHA，并建立可验证协调断点。
+
+## 产品重构 D2 完成与 I0 主线交接准备（2026-08-11）
+
+- 根据产品 Owner 的继续施工指令，方向冻结为 `C Adaptive Desk + B 的 Knowledge/Research 证据三栏 + A 的 Today 极简行动线`。
+  该组合只冻结前端信息架构、交互和视觉输入，不改变现有权限、API、迁移、sync-v1 或默认关闭边界。
+- D2 隔离交互原型已完成：`prototype/logion-redesign-v1/d2-approved.html`。它覆盖 Today、五种受控工作台、Knowledge Base 五种视图、Research、Collaboration、System Center、21 条旧路由命令映射、桌面/390px、双主题、密度和五类状态。
+- D2 原型实际验收：四组主矩阵各 50 个场景，共 200 个；主标题、设备横向溢出和 Today 并列面板等高均通过。15 个桌面子视图和 15 个移动子视图通过；命令面板 21 条路由映射、`/app/review` 搜索、邀请 409、图谱方向键、移动列表和危险确认门均真实操作通过；本地原型控制台 error/warn 为 0。
+- D2 原型验收不等于正式 Web/API 验收：axe、真实认证、生产构建、真实数据和正式 Playwright 必须由 I0 施工后重新执行。原型不发送真实邮件、不执行真实删除，所有数据均为合成数据。
+- 新增设计输入与施工包：`docs/design/logion-redesign-v1/07_D2_DIRECTION_DECISION.md`、`08_D2_PROTOTYPE_SPEC.md`、`09_DESIGN_SYSTEM.md`、`10_ROUTE_MIGRATION_MAP.md`、`D2_ACCEPTANCE_REPORT.md`、`I0_CONSTRUCTION_TASK_PACKET.md`、`I0_MAINLINE_EXECUTION_PROMPT.md`。尚未 commit/push。
+- I0 现在可以由用户手工交给单一主线执行方；施工方只写 `apps/web/src/**` 和必要的 `apps/web/tests/**`，依赖、合同、状态、Git 与生产权限仍按任务包逐项审查。未获得新的 Git 授权前不 commit/push/merge/deploy。
+
+## I0-B Shell 与路由适配验收（2026-08-12）
+
+- I0-A、I0-B 及 I0-B-R1 已完成协调方独立验收。当前工作树仍固定在
+  `codex/logion-redesign-i0` / `e2b85987d816baf53a089007e674cd440e9ce64f`，未执行 commit、push 或 merge。
+- I0-B 建立五个固定区域、21 条正式 URL 的统一 route manifest、44px Context Bar、Persona 感知的桌面/移动区域入口和 Inspector 插槽；保留 `/app` 与历史 `/app/knowledge-prototype`。
+- I0-B-R1 修复了 `/app/search` 重复上下文标题、历史原型错误标题，以及桌面侧栏与移动端 Persona 默认入口不一致的问题。
+- 协调方实际观察：Web lint、TypeScript、55 个测试文件/388 个测试、Prettier、生产构建、`guard:context` 和 `git diff --check` 全部通过。
+- 真实认证 Playwright、320/390/1024/1440 响应式、axe、视觉比较、主题 XSS、图谱键盘和移动图谱门禁统一留到 I0-E；协调账本验证仍受历史 `graph.json`/`tasks.jsonl` safe-scan budget 限制，未伪造通过。
+- I0-C1 可启动：只迁移 Today 与 Knowledge Base 的 Review/Graph 高频只读路径；先接入现有真实 API/Space/SessionBoundary 和有界图谱合同，再处理后续 Records/Research，不改变 API、权限、迁移或 default-off 能力。
+
+## I0-C1 主线接管施工（2026-08-12）
+
+- 外部执行方中断后，主线在 `codex/logion-redesign-i0` / 固定基础
+  `e2b85987d816baf53a089007e674cd440e9ce64f` 上由协调方直接接管；本轮未重新派发模型，未执行
+  commit、push、merge、deploy。
+- 图谱请求已接入真实 `GET /api/v1/workspaces/{workspace_id}/spaces/{space_id}/knowledge/graph`：客户端只允许
+  1/2 跳，路径段编码，切换根节点/范围会取消旧请求并丢弃陈旧响应；响应失败关闭，校验节点/边 150/400 上限、重复
+  ID、悬空边、端点类型、UUID、截断元数据和服务端 limits。
+- Review 图谱已使用服务端授权数据；API error/locked/empty/loading 状态就地显示，不再把本地 sync-v1 Topic 图谱静默
+  伪装成授权成功。根节点与 1/2 跳范围可操作；桌面详情统一进入 AppShell Inspector，移动端使用同一节点集合列表/详情层。
+- Today 首屏保留真实 Task/Session/Evidence/Verification/Vault 行为，行动线补齐 WHY/EVIDENCE/NEXT，执行队列最多 3 项并按
+  进行中、截止时间、优先级排序；未改变 API、权限、迁移、Worker、sync-v1 或任何 default-off 生产能力。
+- 实际验证：Web 57 个测试文件/433 个测试、lint、TypeScript、Prettier、生产构建（36 路由）和 `guard:context` 通过；
+  `git diff --check` 通过。协调账本验证仍因历史 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限失败，
+  未记为通过。
+- 未运行真实认证 Playwright、1440/1024/390/320 浏览器矩阵、axe、主题持久化/XSS、桌面真实图谱键盘和移动真实设备门禁；
+  这些仍属于 I0-E，当前 I0-C1 结论为“施工完成，待真实浏览器验收”，不是版本完成。
+
+## I0-D Collaboration / System Center 施工（2026-08-12）
+
+- 外部执行方中断后，主线继续由协调方在 `codex/logion-redesign-i0` 工作区施工；本轮仍未 commit、push、merge 或 deploy。
+- 协作空间已拆为两个明确子视图：`/app/collaboration` 继续承载共享审阅与反馈，`/app/workspaces` 承载 Workspace、Space、成员、邀请和角色治理；`/app/spaces` 保留为知识库管理入口，不改变 Space 权限边界。
+- `WorkspaceCenter` 已改为左侧 Workspace/Space 上下文、右侧成员与邀请的双栏控制台；移动端堆叠。成员角色更新保留 `expected_version` 与行级 pending。
+- 邀请 409 已接入 `DeskConflictResolver`：根据现有服务端稳定原因安全区分“已是成员 / 已有待处理邀请”，未知原因按远端状态变化处理；提供“刷新并比较 / 调整角色 / 关闭”，不自动重发、不泄露服务端原文。
+- 新增 `SystemCenterFrame`，以“账户与偏好 / 安全与数据 / 服务与治理”分组列表承载 `/app/profile`、`/app/settings`、`/app/help`、`/app/security`、`/app/sync`、`/app/data`、`/app/audit`、`/app/integrations`、`/app/ai`；右侧继续渲染各页面真实组件，未复制数据逻辑。
+- 实际检查：Web 60 个测试文件/441 个测试、lint、TypeScript、Prettier、生产构建（36 路由）和 `git diff --check` 通过。
+- 真实认证 Playwright、21 条认证路由、邀请邮件、真实图谱键盘/移动节点、认证 axe、1440/1024/390/320 矩阵、主题 XSS 与 reduced-motion 尚未运行：本机 8080 被无关 `sub2api` 占用，隔离 API/网关已停止；E2E 保护已允许显式回环端口，下一次使用 8180，不能用 mock 或静态构建替代。
+- 协调 Run 校验仍受历史 `graph.json` / `tasks.jsonl` safe-scan/目录结构预算阻塞，未伪造通过。I0-D 结论为“施工完成，待真实浏览器验收”，不等于 v0.2.0 发布完成。
+- 详细记录：[`I0_D_COLLABORATION_SYSTEM_2026-08-12.md`](./I0_D_COLLABORATION_SYSTEM_2026-08-12.md)。
+
+## I0-E 浏览器验收与 8180 端口断点（2026-08-12）
+
+- 本机 `8080` 继续由无关 `sub2api` 占用且未被触碰；`127.0.0.1:8180` standalone Web 与 `127.0.0.1:8000` 隔离 API 已启动，Web、API、PostgreSQL 与 Redis 健康检查通过。没有启动 Docker，也没有修改生产配置。
+- `tests/browser/e2e-environment.ts` 已改为接受有效回环端口；8180 只有在显式设置 `LOGION_E2E_PROVISION_ACCOUNTS=true` 时才允许账号 provisioning，远程地址始终禁止自动建号。
+- 已修复暗色三级文字对比度，并把互操作命令和 Persona 桌面/移动导航测试对齐已批准的固定五区架构。静态门禁通过：Web lint、TypeScript、Prettier、60 个测试文件/441 项测试、36 路由生产构建和 `git diff --check`。
+- 真实认证专项回归 `9/9`、互操作真实流程 `5/5`、最终 `authenticated-chromium` 完整矩阵 `31/31` 通过。覆盖 21 条认证路由、axe、1440/1250/900/720/420/390/320、横向溢出、reduced-motion、主题持久化/XSS、移动节点列表、桌面图谱键盘、真实 Review 图谱 API、Vault/设备/导入导出及错误边界。
+- 真实数据导出首轮因隔离栈没有队列消费者停在 `queued`；仅启动 `PortabilityService.execute_next()` 的临时导出消费者后，加密归档、下载、内容与 SHA-256 校验通过。该临时消费者已停止，没有启用邮件、AI、账号删除或知识空间 Local Worker 队列。
+- 8180 公开 Playwright 五项目矩阵再次真实执行：`69 passed, 6 skipped, 0 failed`，覆盖 axe、键盘、320px 溢出、主题持久化、reduced-motion、manifest 与 offline shell。
+- Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 的生产能力继续关闭；仅本机隔离 API 临时启用知识空间只读主开关。未 commit、push、merge、deploy。
+- 协调 Run 校验再次真实执行，仍因历史 `graph.json` / `tasks.jsonl` encoded content 超出 safe scan budget 失败，未伪造通过。详细证据见 [`I0_E_BROWSER_ACCEPTANCE_2026-08-12.md`](./I0_E_BROWSER_ACCEPTANCE_2026-08-12.md)。当前结论为“I0-E 本机技术验收通过，待 Git/集成/发布授权”，不等于 v0.2.0 已发布。
+
+## I0 最终安全与权限边界审查（2026-08-12）
+
+- 最终审查补齐 WorkspaceCenter 与 Review 的陈旧响应竞态防护：列表、详情、Space 和本地解密请求均具有取消或最新请求守卫；切换 Workspace 时立即清理旧 Space、图谱根节点和 Inspector。新增真实 UI 竞态烟雾 1/1 通过。
+- 邀请和成员角色更新在请求前严格限制为 `viewer/reviewer/contributor/editor/admin`，合同外角色不发送请求；动态 Workspace、Space 和 Member 路径段统一编码，CSRF 与成员 `expected_version` 保持不变。
+- 知识图谱响应增加实际 UTF-8 JSON 1 MiB 上限、`next_cursor` 1024 字符上限和合同外字段拒绝；原有 150 节点、400 边、UUID、重复 ID、悬空边、端点类型及截断元数据验证继续失败关闭。
+- 最终静态与仓库门禁通过：Web 62 个测试文件/448 项测试、lint、TypeScript、Prettier、36 路由生产构建、`guard:context`、Ruff、171 个源文件 Mypy strict、Python 402 项、合同 12 项、离线 55 项/93.01% 行覆盖率、`contracts:check`、依赖审计和 `git diff --check` 均通过。
+- 修复后的认证专项 18/18 与 Workspace/Review 真实竞态烟雾 1/1 通过；此前完整认证矩阵 31/31 和公开五浏览器 69 通过/6 规范跳过/0 失败仍有效。
+- 8180 standalone 曾因本机静态文件复制层级错误出现 chunk 404；修复目录层级并重启后静态资源、登录页和 health 均恢复 200。该问题不是产品回归，8080 上的无关 `sub2api` 始终未触碰。
+- 安全扫描未发现硬编码密钥、令牌、真实密码、连接串、新的 SessionBoundary 绕过或生产敏感能力启用。Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 继续关闭。
+- 当前 I0 技术审查结论为通过，可以进入 Git 审批节点；仍未 commit、push、merge 或 deploy，也不等于 v0.2.0 已发布。`.tmp-v020-rc2/`、`.tmp-v020-rc4/` 与 `.zcode/` 不得进入提交。
+- 唯一独立未绿项仍为历史协调 Run：`graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget。工具和 fixture 测试通过，但当前 Run 不得记为全绿，也不得改写历史事件。详细记录见 [`I0_FINAL_SECURITY_REVIEW_2026-08-12.md`](./I0_FINAL_SECURITY_REVIEW_2026-08-12.md)。

@@ -865,7 +865,8 @@ export function TodayCenter() {
     (item) => item.payload.space_id === spaceId,
   );
   const activeSession = sessions.find(
-    (item) => item.payload.status === "active",
+    (item) =>
+      item.payload.space_id === spaceId && item.payload.status === "active",
   );
   const visibleEvidence = evidence.filter(
     (item) => item.payload.space_id === spaceId,
@@ -921,9 +922,50 @@ export function TodayCenter() {
     },
     { label: "已完成", value: completedTasks },
   ];
-  const nextTask =
-    actionableTasks.find((item) => item.payload.status === "in_progress") ??
-    actionableTasks[0];
+  const orderedActionableTasks = [...actionableTasks].sort((left, right) => {
+    if (left.payload.status === "in_progress") return -1;
+    if (right.payload.status === "in_progress") return 1;
+    const leftDue = left.payload.due_at
+      ? Date.parse(left.payload.due_at)
+      : Infinity;
+    const rightDue = right.payload.due_at
+      ? Date.parse(right.payload.due_at)
+      : Infinity;
+    const dueDelta =
+      (Number.isFinite(leftDue) ? leftDue : Infinity) -
+      (Number.isFinite(rightDue) ? rightDue : Infinity);
+    if (dueDelta !== 0) return dueDelta;
+    return right.payload.priority - left.payload.priority;
+  });
+  const activeTask = activeSession
+    ? visibleTasks.find(
+        (task) => task.entity.entity_id === activeSession.payload.task_id,
+      )
+    : undefined;
+  const nextTask = activeTask ?? orderedActionableTasks[0];
+  const nextGoal = nextTask
+    ? visibleGoals.find(
+        (goal) => goal.entity.entity_id === nextTask.payload.goal_id,
+      )
+    : undefined;
+  const nextPhase =
+    nextTask && nextGoal
+      ? nextGoal.payload.phases.find(
+          (phase) => phase.id === nextTask.payload.phase_id,
+        )
+      : undefined;
+  const nextTaskEvidence = nextTask
+    ? visibleEvidence.filter(
+        (item) => item.payload.task_id === nextTask.entity.entity_id,
+      )
+    : [];
+  const nextTaskPendingVerification = nextTask
+    ? visibleVerifications.filter(
+        (item) =>
+          item.payload.task_id === nextTask.entity.entity_id &&
+          item.payload.verdict === "pending",
+      ).length
+    : 0;
   const dashboardSource: PersonaDashboardSource = {
     members: members.map((member) => ({
       id: member.id,
@@ -1091,10 +1133,48 @@ export function TodayCenter() {
               )
             }
           >
-            {nextTask
-              ? nextTask.payload.description ||
-                `预计投入 ${nextTask.payload.estimated_minutes} 分钟，完成后留下证据与反思。`
-              : "先建立可验收目标，再把一个能在单次专注中完成的动作安排到今天。"}
+            <div className="today-action-brief">
+              <div>
+                <span>WHY</span>
+                <strong>
+                  {nextGoal?.payload.title ??
+                    "先建立一个可验收目标，再安排今天的第一步。"}
+                </strong>
+                <small>
+                  {nextPhase?.title ??
+                    nextTask?.payload.description ??
+                    "每次只推进一个能在单次专注中完成的动作。"}
+                </small>
+              </div>
+              <div>
+                <span>EVIDENCE</span>
+                <strong>
+                  {nextTaskEvidence.length
+                    ? `${nextTaskEvidence.length} 条成果已记录`
+                    : "完成后留下笔记、链接或资料"}
+                </strong>
+                <small>
+                  {nextTaskPendingVerification
+                    ? `${nextTaskPendingVerification} 项等待人工验收`
+                    : "不会自动接受正式结论"}
+                </small>
+              </div>
+              <div>
+                <span>NEXT</span>
+                <strong>
+                  {activeSession
+                    ? "结束专注并提交成果"
+                    : nextTask
+                      ? "开始一次专注"
+                      : "打开计划建立动作"}
+                </strong>
+                <small>
+                  {nextTask
+                    ? `预计 ${nextTask.payload.estimated_minutes} 分钟`
+                    : "完成后会回到今天的行动线"}
+                </small>
+              </div>
+            </div>
           </ProductWorkflowStage>
 
           <div className="product-metric-grid product-metric-grid-workflow">
@@ -1134,7 +1214,7 @@ export function TodayCenter() {
             aside={<ProductTag>{actionableTasks.length} 项</ProductTag>}
           >
             <div className="product-task-list">
-              {actionableTasks.slice(0, 4).map((task, index) => (
+              {orderedActionableTasks.slice(0, 3).map((task, index) => (
                 <ProductTaskRow
                   key={task.entity.entity_id}
                   icon={

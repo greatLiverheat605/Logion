@@ -31,6 +31,8 @@ import {
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
+import { CollaborationSubviewNav } from "@/components/desk/collaboration-subview-nav";
+import { DeskSubviewNav } from "@/components/desk/desk-subview-nav";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
@@ -798,6 +800,7 @@ function OfflineLearningCenter({
             </>
           }
         />
+        <CollaborationSubviewNav activePath="/app/collaboration" />
         <ProductWorkbenchStateNotice
           action={
             collaborationState === "locked" ? (
@@ -998,6 +1001,16 @@ function OfflineLearningCenter({
               </p>
             </>
           }
+        />
+        <DeskSubviewNav
+          activePath="/app/research"
+          ariaLabel="工作台视图"
+          items={[
+            { href: "/app/self-study", icon: "book-open", label: "自学" },
+            { href: "/app/research", icon: "flask", label: "研究" },
+            { href: "/app/exam", icon: "target", label: "考试" },
+            { href: "/app/planning", icon: "calendar", label: "规划" },
+          ]}
         />
         <ProductWorkbenchStateNotice
           action={

@@ -3,58 +3,95 @@ import {
   type BuiltinPersonaId,
   type PersonaDefinition,
 } from "@/features/personas/persona-definitions";
-import { INTEGRATION_ENTRY_PERSONAS } from "@/features/integrations/integration-navigation";
+import {
+  type DeskAreaId,
+  DESK_AREAS,
+  DESK_NAV_GROUPS,
+  DESK_ROUTES,
+  defaultRouteForArea,
+  type DeskRouteEntry,
+} from "@/features/desk/route-manifest";
+
+/* ---- Sidebar navigation (5 areas) ---------------------------------------- */
 
 export interface NavItem {
+  /** The default deep-link for this area entry. */
   href: string;
   icon: AppIconName;
   label: string;
+  /** The area this nav entry represents (for highlight reverse-lookup). */
+  area: DeskAreaId;
 }
 
-export const NAV_GROUPS: readonly Readonly<{
+export interface NavGroup {
   label: string;
   items: readonly NavItem[];
-}>[] = [
-  {
-    label: "每日",
-    items: [{ href: "/app/today", icon: "home", label: "每日工作台" }],
-  },
-  {
-    label: "知识",
-    items: [
-      { href: "/app/self-study", icon: "book-open", label: "自学" },
-      { href: "/app/records", icon: "files", label: "记录" },
-      { href: "/app/review", icon: "refresh", label: "复习" },
-      { href: "/app/exam", icon: "target", label: "考试" },
-    ],
-  },
-  {
-    label: "治理",
-    items: [
-      { href: "/app/planning", icon: "calendar", label: "规划" },
-      { href: "/app/templates", icon: "layout-template", label: "模板" },
-      { href: "/app/audit", icon: "clipboard", label: "审计" },
-      { href: "/app/spaces", icon: "folder", label: "空间" },
-    ],
-  },
-  {
-    label: "系统",
-    items: [
-      { href: "/app/settings", icon: "shield", label: "设置" },
-      { href: "/app/profile", icon: "users", label: "个人" },
-      { href: "/app/help", icon: "book-open", label: "帮助" },
-    ],
-  },
-];
+}
 
-export const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
-export const DEFAULT_NAV_ITEM: NavItem = {
-  href: "/app/today",
-  icon: "home",
-  label: "今日",
-};
+/**
+ * Sidebar groups derived from the single route manifest. Each group's items
+ * are the area default entries (without persona — the sidebar shows stable
+ * defaults; persona-based defaults apply to navigation, not to the sidebar
+ * label set).
+ */
+export const NAV_GROUPS: readonly NavGroup[] = DESK_NAV_GROUPS.map((group) => ({
+  items: group.areaIds.map((areaId) => {
+    const area = DESK_AREAS.find((a) => a.id === areaId)!;
+    return {
+      area: areaId,
+      href: defaultRouteForArea(areaId),
+      icon: area.icon,
+      label: area.label,
+    };
+  }),
+  label: group.label,
+}));
 
-export const COMMAND_GROUPS = ["学习", "研究", "系统", "创建"] as const;
+/**
+ * Builds persona-aware sidebar groups. The five areas, their order, labels and
+ * icons are always the same (driven by {@link DESK_NAV_GROUPS}); only the
+ * `href` of each entry is computed via
+ * {@link defaultRouteForArea}`(area, persona)` so that e.g. the exam persona's
+ * 工作台 entry points to `/app/exam` while other personas point to
+ * `/app/self-study`.
+ *
+ * Persona never hides an area, widens permissions, or changes area highlight
+ * (which is driven by `routeArea(pathname)`, not by the sidebar href).
+ */
+export function navGroupsForPersona(
+  persona: PersonaDefinition | null,
+): readonly NavGroup[] {
+  return DESK_NAV_GROUPS.map((group) => ({
+    items: group.areaIds.map((areaId) => {
+      const area = DESK_AREAS.find((a) => a.id === areaId)!;
+      return {
+        area: areaId,
+        href: defaultRouteForArea(areaId, persona),
+        icon: area.icon,
+        label: area.label,
+      };
+    }),
+    label: group.label,
+  }));
+}
+
+/** Flattened sidebar items (5 total, one per area). */
+export const NAV_ITEMS: readonly NavItem[] = NAV_GROUPS.flatMap(
+  (group) => group.items,
+);
+
+export const DEFAULT_NAV_ITEM: NavItem = NAV_ITEMS[0]!;
+
+/* ---- Command palette ----------------------------------------------------- */
+
+export const COMMAND_GROUPS = [
+  "今天",
+  "工作台",
+  "知识库",
+  "协作空间",
+  "系统中心",
+  "创建",
+] as const;
 export type CommandGroup = (typeof COMMAND_GROUPS)[number];
 export type OperationalCommand = "capture" | "focus";
 
@@ -82,191 +119,45 @@ export interface CommandActionItem extends CommandItemBase {
 
 export type AppCommandItem = CommandRouteItem | CommandActionItem;
 
-export const COMMAND_ITEMS: readonly AppCommandItem[] = [
-  {
-    description: "查看真实任务、证据与专注会话",
-    gateRoute: "/app/today",
-    group: "学习",
-    href: "/app/today",
-    icon: "home",
-    id: "today",
-    keywords: ["今日", "任务", "首页"],
+/** Maps a desk area to its command-palette group label. */
+const AREA_TO_COMMAND_GROUP: Readonly<Record<DeskAreaId, CommandGroup>> = {
+  collaboration: "协作空间",
+  knowledge: "知识库",
+  system: "系统中心",
+  today: "今天",
+  workbench: "工作台",
+};
+
+/**
+ * Derives command-palette route items from the single route manifest. This
+ * preserves the existing `gateRoute` + `allowedBuiltinPersonas` +
+ * `builtinPersonasOnly` visibility semantics exactly — no permission is
+ * widened.
+ */
+function routeItemsFromManifest(): readonly CommandRouteItem[] {
+  return DESK_ROUTES.map((entry) => routeEntryToCommandItem(entry));
+}
+
+function routeEntryToCommandItem(entry: DeskRouteEntry): CommandRouteItem {
+  return {
+    allowedBuiltinPersonas: entry.allowedBuiltinPersonas,
+    builtinPersonasOnly: entry.builtinPersonasOnly,
+    description: entry.commandDescription,
+    gateRoute: entry.gateRoute,
+    group: AREA_TO_COMMAND_GROUP[entry.area],
+    href: entry.path,
+    icon: entry.icon,
+    id: entry.path.replace(/^\/app\//, "").replace(/-/g, "_"),
+    keywords: entry.keywords,
     kind: "route",
-    label: "打开每日工作台",
-  },
+    label: entry.commandLabel,
+  };
+}
+
+const OPERATIONAL_ITEMS: readonly CommandActionItem[] = [
   {
-    description: "把目标拆成阶段和下一步",
-    gateRoute: "/app/planning",
-    group: "学习",
-    href: "/app/planning",
-    icon: "calendar",
-    id: "planning",
-    keywords: ["目标", "路线", "计划"],
-    kind: "route",
-    label: "打开路线与计划",
-  },
-  {
-    description: "处理到期回忆、掌握确认与错因",
-    gateRoute: "/app/review",
-    group: "学习",
-    href: "/app/review",
-    icon: "refresh",
-    id: "review",
-    keywords: ["记忆", "复习", "知识图谱"],
-    kind: "route",
-    label: "开始记忆与复习",
-  },
-  {
-    description: "管理考试、大纲、模考和成绩",
-    gateRoute: "/app/exam",
-    group: "学习",
-    href: "/app/exam",
-    icon: "target",
-    id: "exam",
-    keywords: ["备考", "模考", "大纲"],
-    kind: "route",
-    label: "进入备考驾驶舱",
-  },
-  {
-    description: "整理 Markdown 笔记和资料索引",
-    gateRoute: "/app/records",
-    group: "学习",
-    href: "/app/records",
-    icon: "files",
-    id: "records",
-    keywords: ["资料", "笔记", "阅读"],
-    kind: "route",
-    label: "打开资料与笔记",
-  },
-  {
-    description: "推进路线、项目、收件箱和成果",
-    gateRoute: "/app/self-study",
-    group: "学习",
-    href: "/app/self-study",
-    icon: "book-open",
-    id: "self-study",
-    keywords: ["自学", "项目", "成果"],
-    kind: "route",
-    label: "打开自主学习工作台",
-  },
-  {
-    allowedBuiltinPersonas: ["research", "mentor"],
-    description: "处理论文、声明、实验和指标",
-    gateRoute: "/app/self-study",
-    group: "研究",
-    href: "/app/research",
-    icon: "flask",
-    id: "research",
-    keywords: ["论文", "声明", "实验", "研究"],
-    kind: "route",
-    label: "打开研究工作台",
-  },
-  {
-    allowedBuiltinPersonas: ["research", "mentor"],
-    description: "基于共享对象发起审阅和反馈",
-    gateRoute: "/app/self-study",
-    group: "研究",
-    href: "/app/collaboration",
-    icon: "users",
-    id: "collaboration",
-    keywords: ["协作", "审阅", "反馈"],
-    kind: "route",
-    label: "打开审查与协作",
-  },
-  {
-    description: "查看授权范围内的事件和决定",
-    gateRoute: "/app/audit",
-    group: "研究",
-    href: "/app/audit",
-    icon: "clipboard",
-    id: "audit",
-    keywords: ["审计", "证据", "事件"],
-    kind: "route",
-    label: "打开证据与审计",
-  },
-  {
-    allowedBuiltinPersonas: INTEGRATION_ENTRY_PERSONAS,
-    description: "管理可审查草稿、模型和任务路由",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/ai",
-    icon: "ai",
-    id: "ai",
-    keywords: ["AI", "模型", "Provider", "路由"],
-    kind: "route",
-    label: "打开 AI 路由中心",
-  },
-  {
-    description: "检查本地队列、设备和显式冲突",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/sync",
-    icon: "refresh",
-    id: "sync",
-    keywords: ["同步", "离线", "冲突", "设备"],
-    kind: "route",
-    label: "打开同步与设备",
-  },
-  {
-    description: "管理 Passkey、TOTP 和登录设备",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/security",
-    icon: "shield",
-    id: "security",
-    keywords: ["安全", "Passkey", "TOTP", "登录"],
-    kind: "route",
-    label: "打开安全中心",
-  },
-  {
-    description: "导出、导入、迁移和删除均显式确认",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/data",
-    icon: "download",
-    id: "data",
-    keywords: ["数据", "导出", "导入", "删除"],
-    kind: "route",
-    label: "打开数据主权中心",
-  },
-  {
-    allowedBuiltinPersonas: ["self", "research", "mentor"],
-    builtinPersonasOnly: true,
-    description: "汇总只读日历与开放格式迁移能力",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/integrations",
-    icon: "refresh",
-    id: "integrations",
-    keywords: ["互操作", "集成", "日历", "导入", "导出"],
-    kind: "route",
-    label: "打开互操作中心",
-  },
-  {
-    description: "搜索内容并处理真实通知与日历",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/search",
-    icon: "search",
-    id: "search",
-    keywords: ["搜索", "通知", "日历"],
-    kind: "route",
-    label: "打开搜索与通知",
-  },
-  {
-    description: "管理 Workspace、Space、成员和邀请",
-    gateRoute: "/app/settings",
-    group: "系统",
-    href: "/app/workspaces",
-    icon: "folder",
-    id: "workspaces",
-    keywords: ["工作区", "空间", "成员", "邀请"],
-    kind: "route",
-    label: "打开工作区管理",
-  },
-  {
-    description: "加密保存到学习收件箱或笔记库",
     action: "capture",
+    description: "加密保存到学习收件箱或笔记库",
     group: "创建",
     icon: "plus",
     id: "capture",
@@ -275,8 +166,8 @@ export const COMMAND_ITEMS: readonly AppCommandItem[] = [
     label: "快速捕获",
   },
   {
-    description: "从真实任务开始或继续专注会话",
     action: "focus",
+    description: "从真实任务开始或继续专注会话",
     group: "创建",
     icon: "timer",
     id: "focus",
@@ -284,6 +175,15 @@ export const COMMAND_ITEMS: readonly AppCommandItem[] = [
     kind: "action",
     label: "开始专注会话",
   },
+];
+
+/**
+ * All command-palette items: 21 manifest routes (including `/app/search`) +
+ * 2 operational actions. The command palette covers every formal route.
+ */
+export const COMMAND_ITEMS: readonly AppCommandItem[] = [
+  ...routeItemsFromManifest(),
+  ...OPERATIONAL_ITEMS,
 ];
 
 export function isCommandItemVisible(
