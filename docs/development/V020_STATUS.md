@@ -711,5 +711,6 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 8180 standalone 曾因本机静态文件复制层级错误出现 chunk 404；修复目录层级并重启后静态资源、登录页和 health 均恢复 200。该问题不是产品回归，8080 上的无关 `sub2api` 始终未触碰。
 - 安全扫描未发现硬编码密钥、令牌、真实密码、连接串、新的 SessionBoundary 绕过或生产敏感能力启用。Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1 与 AI Acceptance 继续关闭。
 - 当前 I0 技术审查结论为通过。用户已于 2026-08-13 批准创建并推送 I0 分支；主实现提交
-  `0aeacb405eb61870a05efa7424ef528763a278e1` 已创建，包含 85 个已复核文件。当前仍未 merge 或 deploy，也不等于 v0.2.0 已发布。`.tmp-v020-rc2/`、`.tmp-v020-rc4/` 与 `.zcode/` 未进入提交。
+  `0aeacb405eb61870a05efa7424ef528763a278e1` 已创建，包含 85 个已复核文件；分支
+  `codex/logion-redesign-i0` 已成功推送到 `origin` 并建立跟踪关系。当前仍未 merge 或 deploy，也不等于 v0.2.0 已发布。`.tmp-v020-rc2/`、`.tmp-v020-rc4/` 与 `.zcode/` 未进入提交。
 - 唯一独立未绿项仍为历史协调 Run：`graph.json` 与 `tasks.jsonl` encoded content 超出 safe scan budget。工具和 fixture 测试通过，但当前 Run 不得记为全绿，也不得改写历史事件。详细记录见 [`I0_FINAL_SECURITY_REVIEW_2026-08-12.md`](./I0_FINAL_SECURITY_REVIEW_2026-08-12.md)。

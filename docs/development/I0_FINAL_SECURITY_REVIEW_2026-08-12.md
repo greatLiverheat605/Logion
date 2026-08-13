@@ -73,7 +73,8 @@ I0-A 至 I0-E 的代码、合同、权限边界和真实浏览器回归已经完
 
 - 用户已于 2026-08-13 批准创建并推送 I0 分支。主实现提交已经创建：
   `0aeacb405eb61870a05efa7424ef528763a278e1`（`feat(web): implement adaptive desk redesign`）。
-- 当前仍未 merge 或 deploy；推送状态以本次 Git 收口的实际结果为准。
+- `codex/logion-redesign-i0` 已成功推送至 `origin` 并建立跟踪关系；首次文档收口提交为
+  `fdad1909b8c13588d79ff50bbcce0bb85f9bba83`。当前仍未 merge 或 deploy。
 - `.tmp-v020-rc2/`、`.tmp-v020-rc4/` 与 `.zcode/` 不得进入提交。
 - 主实现提交包含 85 个已复核文件；提交后仍需单独执行远端 CI、集成和发布审批。
 - 未获得新的生产授权前，不启用任何默认关闭能力，不进行流量切换。
