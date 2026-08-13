@@ -1,6 +1,6 @@
 # 当前状态（主线接手时点）
 
-> 更新时间：2026-08-10（Asia/Shanghai）。
+> 更新时间：2026-08-13（Asia/Shanghai）。
 
 ## 1. Git 与发布身份
 
@@ -8,13 +8,13 @@
 | -------------------- | ---------------------------------------------------------------------------- |
 | 仓库                 | `greatLiverheat605/Logion`                                                   |
 | 正式集成工作树       | `v020-integration`                                                           |
-| 交接分支             | `codex/v020-rc6-closeout`                                                    |
-| 远端产品主线         | `origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`                       |
-| RC6 产品源码         | `c47aa376d95b179200d59986c20289b796740959`                                   |
-| RC6 manifest SHA-256 | `12280604e31621ef3cad437ec712a1b9e80dfccb64c2d7326509c0354f1624e7`           |
-| RC6 workflow         | Main `31337611805`、Capacity `31338032379`、Release `31338128822` 均 success |
+| 交接分支             | `codex/i0-rc7-closeout`                                                      |
+| 远端产品主线         | `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`                       |
+| RC7 产品源码         | `480adc721600243308fa7b5a32200044efd88f07`                                   |
+| RC7 manifest SHA-256 | `0dbe60ce2d8044867dc85b8ffb0ca61006bdc96a3654b3842f8cf68c9f7d05b5`           |
+| RC7 workflow         | Main `31672956241`、Capacity `31673689291`、Release `31673881951` 均 success |
 
-`origin/main` 的 `62ddd525…` 是 RC6 验收文档提交；其产品代码仍对应 `c47aa376…`。接手时必须重新
+`origin/main` 的 `0bc104c1…` 是 RC7 验收收口文档提交；RC7 运行产品对应 `480adc721…`。接手时必须重新
 运行 `git status --short --branch`、`git rev-parse HEAD`、`git rev-parse origin/main`，不能只信本文。
 
 工作树允许保留两个未跟踪证据目录 `.tmp-v020-rc2/` 与 `.tmp-v020-rc4/`。它们不是待提交源码，
@@ -22,23 +22,25 @@
 
 ## 2. 受控 prerelease 状态
 
-- RC6 已完成原子切换；API ready、迁移头和四个运行应用镜像均与候选 manifest 一致。
-- API、Worker、Web、Reverse Proxy、Backup、PostgreSQL、Redis 运行正常；OOMKilled 为 `false`，
-  RestartCount 为 0，切换后首轮严重日志关键字计数为 0。
+- RC7 已完成原子切换；活动源码为 `480adc721600243308fa7b5a32200044efd88f07`，迁移头为
+  `0038_local_worker_protocol`，四个运行应用镜像与候选 manifest 一致。旧目录
+  `/opt/logion.before-rc7-20260813T130605Z` 保留用于回滚。
+- API、Worker、Web、Reverse Proxy、Backup、PostgreSQL、Redis 当前运行；Backup 密钥权限已修正为
+  `root:10001 0640` 后稳定运行。切换后累计重启计数包含修复前权限错误的 19 次，修复后未继续增加。
 - 公网 `/health` 为 HTTP 200，HSTS、nonce CSP、Frame、MIME sniffing 和 Referrer Policy 头存在。
-- 发布后加密备份 `logion-20260809T225859Z-beta-v1.backup` 已通过服务器校验、BitLocker 异机
-  SHA-256 复核和 ECS 隔离恢复；恢复头为 `0038_local_worker_protocol`，Workspace 2 个，空
-  `sync_epoch` 0 个，临时数据库和附件目录已清理。
-- RC2 回滚源码、旧镜像、部署前后备份和全部数据卷继续保留。观察期起点为
-  `2026-08-09T22:59:03Z`。
+- 发布后加密备份 `logion-20260813T130618Z-beta-v1.backup` 已通过服务器校验，SHA-256
+  `76bd5d7b441fefb0999b08d460042fb3cd6fe37cb3a20c00ac454de86076022f` 已在 BitLocker 异机
+  `J:\LogionBackups\encrypted` 复核；迁移头为 `0038_local_worker_protocol`，旧目录与数据卷继续保留用于回滚。
+- RC6 回滚源码、旧镜像、部署前后备份和全部数据卷继续保留。RC7 观察期起点为
+  `2026-08-13T13:06:05Z`（UTC）。
 
-详细证据见 `docs/development/V020_V15_PRERELEASE_RC6_EVIDENCE.md`。
+详细证据见 `docs/development/V020_V15_PRERELEASE_RC7_EVIDENCE.md`。
 
 ## 3. 未完成门禁
 
 1. 用户已报告当前浏览器会话登录，但认证 UX 人工回归尚未由协调方在该会话内真实执行；21 个受保护路由、按钮反馈、
    loading/disabled、防重复提交、邀请 409、搜索、知识图谱、主题持久化和控制台错误保持 `not_run`。
-2. RC6 至少 24 小时观察尚未收口；到点后需重新检查 health、日志、OOM/restart、磁盘、内存、
+2. RC7 至少 24 小时观察尚未收口；到点后需重新检查 health、日志、OOM/restart、磁盘、内存、
    Swap、备份新鲜度和告警。
 3. 真实受邀邮件和实体移动设备验收需要用户单独批准，当前不得发送或伪造通过。
 4. Production 发布、流量切换和敏感能力启用均未授权。

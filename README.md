@@ -7,7 +7,7 @@
 
 Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前状态：仓库清单版本仍为 `0.1.0`；`v0.2.0-rc6` 仍运行在受控 prerelease，尚未进入 Production。I0 Adaptive Desk 已通过 PR #208 合入 `main`；产品提交 `480adc721600243308fa7b5a32200044efd88f07` 的 Main candidate、Full capacity 与 `0.2.0-rc7` Release Candidate 均已通过，但 RC7 尚未部署。真实邮件、实体设备、观察期与生产流量切换仍未完成。
+> 当前状态：仓库清单版本仍为 `0.1.0`；`0.2.0-rc7` 已按固定产品提交 `480adc721600243308fa7b5a32200044efd88f07` 部署到受控 prerelease，尚未进入 Production。真实邮件、实体设备、观察期与生产流量切换仍未完成。
 
 ## 为什么是 Logion
 
@@ -271,7 +271,7 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 ## 近期方向
 
-当前主线是审查 `0.2.0-rc7` 的受控 prerelease 部署条件；RC7 已完成同一产品提交的 Main candidate、Full capacity、不可变镜像 smoke、空环境恢复、真实浏览器/WCAG 和 rollout rehearsal。是否替换当前 RC6 必须单独审批，Production 发布和流量切换仍需更高一级审批。
+当前主线是观察 `0.2.0-rc7` 的受控 prerelease；RC7 已完成同一产品提交的 Main candidate、Full capacity、不可变镜像 smoke、空环境恢复、真实浏览器/WCAG 和 rollout rehearsal。Production 发布和流量切换仍需更高一级审批。
 
 后续产品迭代优先处理 Today/Review/Sync 大型模块拆分、页面级离线能力说明、实体设备验收和认知工作台的真实用户验证。Connector/Automation v2、共享写入、附件、本地 Worker 和 AI Acceptance 仍需独立设计与生产准入。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 

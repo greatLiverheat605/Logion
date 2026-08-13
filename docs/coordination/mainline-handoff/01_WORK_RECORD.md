@@ -103,5 +103,13 @@
 - PR #208 已经用户批准并 Squash 合入 `main`。保护分支拒绝包含历史 merge commit 的直接快进推送，因此未绕过规则；README 的合并后状态与路线说明分别通过 PR #209、#210 更新，两个文档 PR 的 `fast/integration/browser` 均成功。
 - 产品候选固定为 `480adc721600243308fa7b5a32200044efd88f07`：Main candidate run `31672956241`、Full capacity run `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 全部成功并绑定该 SHA。
 - RC7 真实执行了不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、107 项 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据上传与隔离卷清理。唯一 warning 是 `docker/login-action@v3` 的 Node.js 20 上游弃用提醒，不改变 success 结论。
-- 当前 ECS 受控 prerelease 仍为 RC6。RC7 未部署，Production 未授权；所有敏感生产开关继续关闭。下一审批节点仅是“是否用已验收 RC7 更新受控 prerelease”，不能解释为 Production 或流量切换授权。
+- 当时 ECS 受控 prerelease 仍为 RC6；随后已按用户批准完成 RC7 更新。Production 未授权，所有敏感生产开关继续关闭。
 - 后续仅文档收口不会改变 RC7 产品候选 SHA；历史协调 Run 的 safe-scan budget 限制继续独立保留。
+
+## RC7 受控 prerelease 部署（2026-08-13）
+
+- 用户批准使用已验收 RC7 更新受控 prerelease；ECS 已完成原子切换，活动源码为 `480adc721600243308fa7b5a32200044efd88f07`，旧目录 `/opt/logion.before-rc7-20260813T130605Z` 保留。
+- 切换前最终备份为 `logion-20260813T130618Z-beta-v1.backup`，服务器与 BitLocker `J:\LogionBackups\encrypted` 副本 SHA-256 均为 `76bd5d7b441fefb0999b08d460042fb3cd6fe37cb3a20c00ac454de86076022f`；未删除或替换数据库、附件或数据卷。
+- 迁移头为 `0038_local_worker_protocol`；API、Worker、Web、Reverse Proxy、Backup、PostgreSQL、Redis 均运行，公网 `/health` 返回 HTTP 200，四个 RC7 应用 digest 与 manifest 一致，8080 仍仅绑定 `127.0.0.1`。
+- 切换后发现 Backup secret 权限错误（`root:root 0600`）导致启动失败；已恢复为 `root:10001 0640`，Backup 当前稳定运行。该修复未更换密钥内容。
+- 当前仅为受控 prerelease 更新；Production 发布、流量切换、真实受邀邮件、实体设备验收及 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 仍未授权。

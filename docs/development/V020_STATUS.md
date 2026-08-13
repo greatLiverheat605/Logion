@@ -1,12 +1,12 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-08-13（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收并部署到受控 prerelease。部署、加密备份、异机校验、隔离恢复和首轮运行时检查通过；用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC7 已完成同 SHA 全链路验收并部署到受控 prerelease。部署、加密备份、异机校验、隔离恢复和首轮运行时检查通过；用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前文档主线：`origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`。RC6 实际产品源码仍为
-> `c47aa376d95b179200d59986c20289b796740959`；Main candidate run `31337611805`、Full capacity run
-> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功并绑定该产品 SHA。文档主线 SHA
-> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC6；该状态不等于 Production 发布。
+> 当前文档主线：`origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`。RC7 实际产品源码为
+> `480adc721600243308fa7b5a32200044efd88f07`；Main candidate run `31672956241`、Full capacity run
+> `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 均成功并绑定该产品 SHA。文档主线 SHA
+> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC7；该状态不等于 Production 发布。
 
 ## V20-15 RC6 受控 prerelease 部署断点（2026-08-10）
 
@@ -32,7 +32,7 @@
   `2026-08-09T22:59:03Z` 起算；认证 UX、真实受邀邮件、实体移动设备和至少 24 小时观察未完成前，
   不宣称 Production，不清理回滚点，不开启任何敏感生产能力。
 
-完整部署证据见 [`V020_V15_PRERELEASE_RC6_EVIDENCE.md`](./V020_V15_PRERELEASE_RC6_EVIDENCE.md)。
+完整 RC6 部署证据见 [`V020_V15_PRERELEASE_RC6_EVIDENCE.md`](./V020_V15_PRERELEASE_RC6_EVIDENCE.md)。
 
 ## 主线交接与系统操作体验重设计断点（2026-08-10）
 
@@ -733,5 +733,15 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - RC7 产品候选源码固定为 `480adc721600243308fa7b5a32200044efd88f07`。Main candidate [`31672956241`](https://github.com/greatLiverheat605/Logion/actions/runs/31672956241) 成功并生成候选清单、digest-pinned 镜像、provenance 与安全证据；Full capacity [`31673689291`](https://github.com/greatLiverheat605/Logion/actions/runs/31673689291) 成功并生成同 SHA 的容量报告。
 - Release candidate `0.2.0-rc7` run [`31673881951`](https://github.com/greatLiverheat605/Logion/actions/runs/31673881951) 成功：可信 Main/Capacity 证据、`pnpm ci:fast`、容量报告、候选 manifest、不可变镜像 smoke、空环境恢复、旧客户端与恢复 epoch 兼容、107 项真实 Browser/PWA/WCAG 矩阵、5%/25%/100% rollout rehearsal、证据捕获及 Compose 卷清理均实际完成。
 - RC7 唯一注释是 `docker/login-action@v3` 目标 Node.js 20 的上游弃用 warning；GitHub 已强制其在 Node.js 24 运行，job 结论仍为 success。该 warning 不等于产品门禁失败，后续依赖维护应单独升级 Action。
-- 当前受控 prerelease 仍运行 RC6；RC7 只完成候选验收，尚未部署。是否更新受控 prerelease 需要用户单独批准；Production 发布、流量切换和 Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1、AI Acceptance 继续未授权且保持关闭。
+- 部署前受控 prerelease 仍运行 RC6；该历史状态随后在用户批准后由 RC7 原子切换替换。Production 发布、流量切换和 Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1、AI Acceptance 继续未授权且保持关闭。
 - 本节后的文档提交只记录既成事实，不重建或替换 RC7 产品候选，也不得把文档提交 SHA 冒充 `480adc721600243308fa7b5a32200044efd88f07` 的候选证据。历史协调 Run 的 encoded-content safe-scan budget 超限仍单独未绿，未改写为通过。
+
+## RC7 受控 prerelease 部署收口（2026-08-13）
+
+- 用户批准使用已验收 RC7 更新受控 prerelease。ECS `120.26.101.76` 已在受控维护窗口完成原子目录切换；活动目录 `/opt/logion` 的源码精确为 `480adc721600243308fa7b5a32200044efd88f07`，旧目录 `/opt/logion.before-rc7-20260813T130605Z` 保留用于回滚。
+- 切换前最终备份 `logion-20260813T130618Z-beta-v1.backup` 已由 Backup 服务生成并通过 `logion-verify-backup` 校验；服务器 SHA-256 与 BitLocker `J:\LogionBackups\encrypted` 异机副本一致，值为 `76bd5d7b441fefb0999b08d460042fb3cd6fe37cb3a20c00ac454de86076022f`。数据库、附件、PostgreSQL、Redis 数据卷未删除或替换。
+- Alembic 迁移头核对为 `0038_local_worker_protocol`。API、Worker、Web、Reverse Proxy、Backup、PostgreSQL 与 Redis 均运行；RC7 四个应用镜像精确匹配候选 manifest：API `baa67d44…5acaa`、Backup `898dd722…82528`、Web `489e8e6…670d3`、Worker `786bccd…1175e4`。公网 `https://logion.work/health` 返回 HTTP 200。
+- 切换后发现 Backup 密钥文件权限在 staging 中为 `root:root 0600`，导致容器启动检查失败并累计 19 次重启；未读取或更换密钥内容。已恢复为 `root:10001 0640`，Backup 当前稳定运行且新启动退出码为 0，问题已收口。
+- 反向代理仍只将 Compose `8080` 绑定到 `127.0.0.1`；公网仅通过 80/443 访问。`LOGION_REGISTRATION_MODE=invite`，Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 和 Production 流量切换继续关闭。
+- 本次部署只代表受控 prerelease 更新，不代表 Production 发布授权。旧目录、旧镜像、数据卷、部署前后备份继续保留；至少 24 小时观察、真实受邀邮件、实体移动设备验收和 Production 授权仍是后续门禁。
+- 详细 RC7 部署证据见 [`V020_V15_PRERELEASE_RC7_EVIDENCE.md`](./V020_V15_PRERELEASE_RC7_EVIDENCE.md)。
