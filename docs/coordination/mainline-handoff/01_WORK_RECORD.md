@@ -120,3 +120,9 @@
 - GitHub run `31869105696` 的 `fast` 门禁真实失败于 JavaScript dependency audit：锁定的 `nanoid@3.3.17` 已低于公告修复版本 `3.3.18`。已修改 `pnpm-workspace.yaml` 与 `pnpm-lock.yaml`，并保留最小 diff。
 - 本地审计与完整门禁均已重新执行并通过：`pnpm audit --audit-level high` 无已知漏洞；`pnpm ci:fast` 返回 0，包含 118 状态测试、402 Python、449 Web、55 offline、12 contracts、4 mobile 测试及构建/合同生成。
 - 依赖修复提交 `f2f5eb942db644f2c6b43059330f3ed1a4300905` 已推送；该最终 head 的 `fast`、`integration`、`browser` 与 `android-debug` 均真实成功。不得把旧 head 的运行结果复用于新 head；PR 仍等待用户合并批准，不自动部署或打开默认关闭能力。
+
+## RC7 观察复核（2026-08-15）
+
+- 观察起点 `2026-08-13T13:06:05Z` 已超过 24 小时；公网健康连续 3 次 HTTP 200，安全响应头存在。
+- 受控 SSH `120.26.101.76:22` 两次连接及 `Test-NetConnection` 均超时，未读取或输出任何服务器密钥、环境变量或完整日志。ECS 侧 OOM/restart、资源、备份新鲜度和告警检查因此未执行。
+- 当前仍是“等待受控 SSH 恢复”的断点；PR 不合并、不部署，不清理回滚目录/镜像/数据卷，不开启默认关闭能力。

@@ -753,3 +753,9 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 新 head 的 `fast` 首次真实执行于 run `31869105696`，在 JavaScript dependency audit 阶段因 `nanoid@3.3.17`（公告要求 `>=3.3.18`）失败；不是代码测试或部署失败。已将 workspace override 与锁文件精确升级到 `nanoid@3.3.18`，未引入其它依赖重排。
 - 本地 `corepack pnpm audit --audit-level high` 返回 `No known vulnerabilities found`；随后 `corepack pnpm ci:fast` 返回 0：状态模型 118、Web 449、Python 402、离线 55、合同 12、移动 4，构建与合同生成均通过。
 - 依赖修复提交 `f2f5eb942db644f2c6b43059330f3ed1a4300905` 已推送；同一 head 的 GitHub `fast`、`integration`、`browser` 与 `android-debug` 均真实完成并成功。该 PR 仍未合并或部署；历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而无法验证，继续单独保留为未通过项。
+
+## RC7 24 小时观察复核（2026-08-15）
+
+- 观察起点为 `2026-08-13T13:06:05Z`；截至本次复核已超过 24 小时。公网 `https://logion.work/health` 连续 3 次返回 HTTP 200，响应体为 Web 健康状态；HSTS、CSP、X-Frame-Options、X-Content-Type-Options 与 Referrer-Policy 均存在。
+- 受控 SSH `120.26.101.76:22` 在本次及复核重试中均连接超时，Windows `Test-NetConnection` 也报告 TCP connect failed。因此尚未真实复核 ECS 容器 OOM/restart、严重日志、磁盘、内存、Swap、备份新鲜度与告警。
+- 结论保持为“公网健康通过、完整观察未收口”；不将观察期记为通过，不合并 PR、不部署、不清理回滚点，也不启用任何默认关闭生产能力。下一步先恢复受控 SSH 可达性，再执行服务器侧只读复核。
