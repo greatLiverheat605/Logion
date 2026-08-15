@@ -22,11 +22,11 @@
 
 ## 运行时核验
 
-| 服务 | 固定 digest | 结果 |
-| --- | --- | --- |
-| API | `sha256:baa67d44c2982b9312934a0b2aed8cc215ef130eb0f72550a7057b1a8ad5acaa` | running/healthy |
-| Backup | `sha256:898dd72251a95a4123fcb4a3b5c89b0f34ba95cf8d72e9bdbb91699cdff82528` | running |
-| Web | `sha256:489e8e6eab7b19e069a2d92a959aef55946dd63fcfd1ea2a5c049fbe17c670d3` | running/healthy |
+| 服务   | 固定 digest                                                               | 结果            |
+| ------ | ------------------------------------------------------------------------- | --------------- |
+| API    | `sha256:baa67d44c2982b9312934a0b2aed8cc215ef130eb0f72550a7057b1a8ad5acaa` | running/healthy |
+| Backup | `sha256:898dd72251a95a4123fcb4a3b5c89b0f34ba95cf8d72e9bdbb91699cdff82528` | running         |
+| Web    | `sha256:489e8e6eab7b19e069a2d92a959aef55946dd63fcfd1ea2a5c049fbe17c670d3` | running/healthy |
 | Worker | `sha256:786bccd8d76a9b0169ca96d6ebfc437c2a7efb1de4a9e7faaffe5b87171175e4` | running/healthy |
 
 - 公网 `https://logion.work/health` 返回 HTTP 200。

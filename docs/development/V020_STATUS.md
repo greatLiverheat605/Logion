@@ -745,3 +745,11 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 反向代理仍只将 Compose `8080` 绑定到 `127.0.0.1`；公网仅通过 80/443 访问。`LOGION_REGISTRATION_MODE=invite`，Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 和 Production 流量切换继续关闭。
 - 本次部署只代表受控 prerelease 更新，不代表 Production 发布授权。旧目录、旧镜像、数据卷、部署前后备份继续保留；至少 24 小时观察、真实受邀邮件、实体移动设备验收和 Production 授权仍是后续门禁。
 - 详细 RC7 部署证据见 [`V020_V15_PRERELEASE_RC7_EVIDENCE.md`](./V020_V15_PRERELEASE_RC7_EVIDENCE.md)。
+
+## RC7 PR #212 冲突与依赖门禁修复（2026-08-15）
+
+- PR #212 原分支携带已被 `origin/main` squash 吸收的旧提交历史，GitHub 初始状态为 `mergeable=false / dirty`。已在正式 `v020-integration` 工作区基于 `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84` 变基，并以 `--force-with-lease` 安全更新分支。
+- 新 PR head 为 `7b85116cbcab01624662c50838e08865d30a89f1`，仅保留 RC7 收口文档变更；随后 GitHub 重新启动 `fast`、`integration`、`browser` 门禁。
+- 新 head 的 `fast` 首次真实执行于 run `31869105696`，在 JavaScript dependency audit 阶段因 `nanoid@3.3.17`（公告要求 `>=3.3.18`）失败；不是代码测试或部署失败。已将 workspace override 与锁文件精确升级到 `nanoid@3.3.18`，未引入其它依赖重排。
+- 本地 `corepack pnpm audit --audit-level high` 返回 `No known vulnerabilities found`；随后 `corepack pnpm ci:fast` 返回 0：状态模型 118、Web 449、Python 402、离线 55、合同 12、移动 4，构建与合同生成均通过。
+- 依赖修复尚未合并或部署；需推送修复提交后重新核对 GitHub 新 head 的 `fast/integration/browser`（及适用的 mobile）结果。历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而无法验证，继续单独保留为未通过项。
