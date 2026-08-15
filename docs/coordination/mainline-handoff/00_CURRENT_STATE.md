@@ -63,6 +63,6 @@
 
 ## 6. 当前 PR 收口断点（2026-08-15）
 
-- PR #212 已解决历史分叉冲突；正式集成分支基于 `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`，当前待推送的本地修复包含 RC7 文档格式化和 `nanoid` `3.3.17 -> 3.3.18` 安全升级。
-- 首个新 head 的 `fast` 门禁因 nanoid 高危公告失败；本地审计与完整 `ci:fast` 已通过。下一步是提交并推送该修复，然后只接受同一最终 head 的 GitHub `fast/integration/browser/mobile` 结果。
+- PR #212 已解决历史分叉冲突；正式集成分支基于 `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`，`f2f5eb942db644f2c6b43059330f3ed1a4300905` 已包含 RC7 文档格式化和 `nanoid` `3.3.17 -> 3.3.18` 安全升级并推送。
+- 首个新 head 的 `fast` 门禁因 nanoid 高危公告失败；修复后同一最终 head 的 GitHub `fast/integration/browser/android-debug` 已全部成功。下一步是等待用户合并批准，不自动部署。
 - 24 小时 RC7 观察、真实受邀邮件、实体移动设备验收和 Production 授权仍未完成；所有敏感生产开关继续关闭，不能自动合并或部署。

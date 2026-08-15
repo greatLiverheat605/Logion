@@ -752,4 +752,4 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 新 PR head 为 `7b85116cbcab01624662c50838e08865d30a89f1`，仅保留 RC7 收口文档变更；随后 GitHub 重新启动 `fast`、`integration`、`browser` 门禁。
 - 新 head 的 `fast` 首次真实执行于 run `31869105696`，在 JavaScript dependency audit 阶段因 `nanoid@3.3.17`（公告要求 `>=3.3.18`）失败；不是代码测试或部署失败。已将 workspace override 与锁文件精确升级到 `nanoid@3.3.18`，未引入其它依赖重排。
 - 本地 `corepack pnpm audit --audit-level high` 返回 `No known vulnerabilities found`；随后 `corepack pnpm ci:fast` 返回 0：状态模型 118、Web 449、Python 402、离线 55、合同 12、移动 4，构建与合同生成均通过。
-- 依赖修复尚未合并或部署；需推送修复提交后重新核对 GitHub 新 head 的 `fast/integration/browser`（及适用的 mobile）结果。历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而无法验证，继续单独保留为未通过项。
+- 依赖修复提交 `f2f5eb942db644f2c6b43059330f3ed1a4300905` 已推送；同一 head 的 GitHub `fast`、`integration`、`browser` 与 `android-debug` 均真实完成并成功。该 PR 仍未合并或部署；历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而无法验证，继续单独保留为未通过项。

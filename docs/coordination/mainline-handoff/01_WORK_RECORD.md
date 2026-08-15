@@ -119,4 +119,4 @@
 - 正式集成工作区将 RC7 收口分支变基到最新 `origin/main`，跳过已被 squash 吸收的旧提交，并以 `--force-with-lease` 更新 PR 分支。新 head：`7b85116cbcab01624662c50838e08865d30a89f1`。
 - GitHub run `31869105696` 的 `fast` 门禁真实失败于 JavaScript dependency audit：锁定的 `nanoid@3.3.17` 已低于公告修复版本 `3.3.18`。已修改 `pnpm-workspace.yaml` 与 `pnpm-lock.yaml`，并保留最小 diff。
 - 本地审计与完整门禁均已重新执行并通过：`pnpm audit --audit-level high` 无已知漏洞；`pnpm ci:fast` 返回 0，包含 118 状态测试、402 Python、449 Web、55 offline、12 contracts、4 mobile 测试及构建/合同生成。
-- 依赖修复提交尚未推送；推送后必须以最终 head SHA 重新核对远端门禁。不得把旧 head 的 `integration/browser` 运行结果复用于新 head，也不得自动合并、部署或打开默认关闭能力。
+- 依赖修复提交 `f2f5eb942db644f2c6b43059330f3ed1a4300905` 已推送；该最终 head 的 `fast`、`integration`、`browser` 与 `android-debug` 均真实成功。不得把旧 head 的运行结果复用于新 head；PR 仍等待用户合并批准，不自动部署或打开默认关闭能力。
