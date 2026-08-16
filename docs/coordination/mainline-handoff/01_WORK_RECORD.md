@@ -135,3 +135,11 @@
 - Web 的 7 条 Server Reference ID 格式错误经反向代理日志聚合核对，共 565 个请求、无 5xx，异常请求均以 404 拒绝，因此归类为畸形请求或探测噪声，不构成观察失败。
 - 实际生产边界保持不变：Knowledge API、Shared Write、AI Acceptance、Deletion、Attachment ingest、Local Worker、Attachment scanner 均为 `false`，AI Provider 启用数为 0；注册模式为 invite，legacy registration 为 `false`。邮件 Provider 为 `aliyun_directmail`，本轮没有执行真实邀请邮件。
 - RC7 至少 24 小时技术观察真实通过。PR #212 可以进入用户合并审批，但记录该结论的新文档 head 必须重新取得 `fast/integration/browser/android-debug` 全绿；不自动合并或部署，不清理回滚点，不启用敏感能力。真实受邀邮件、实体移动设备、Production 授权和历史协调 Run safe-scan 限制仍未完成。
+
+## PR #212 合并与主线候选（2026-08-16）
+
+- 用户明确批准合并后，先重新核对 PR #212 为 Open、clean、无冲突，最终 head `ff2b0bf621a5376b68229caee95ed4aa0ca2e9dc` 的 `fast/integration/browser/android-debug` 四项均成功。
+- GitHub 受保护分支流程使用 Squash merge，于 `2026-08-16T14:10:43Z` 将 5 个提交合入 `main`；PR 随后关闭，合并提交为 `11014fb736b1f74085a32a7ad1c00054b0b83d6b`，远端主题分支由 GitHub 删除。
+- 合并后主线 Android run `31951949928` 成功；candidate run `31951949948` 真实完成 `ci:fast`、许可/Compose、四镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传，全部成功且绑定 `11014fb...`。
+- 本轮没有执行部署。受控 prerelease 仍运行 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；Production 流量、真实邮件、回滚点清理及默认关闭能力均未触碰。
+- 下一批准点为真实受邀邮件、实体移动设备验收和 Production 发布范围。历史协调 Run safe-scan 限制仍单独未绿，不影响合并证据，也未被改写为通过。

@@ -3,7 +3,7 @@
 > 更新时间：2026-08-16（Asia/Shanghai）。
 > 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC7 已完成同 SHA 全链路验收并部署到受控 prerelease，至少 24 小时技术观察已通过。用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、真实受邀邮件、实体移动设备验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前文档主线：`origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`。RC7 实际产品源码为
+> 当前文档主线：`origin/main=11014fb736b1f74085a32a7ad1c00054b0b83d6b`。RC7 实际产品源码为
 > `480adc721600243308fa7b5a32200044efd88f07`；Main candidate run `31672956241`、Full capacity run
 > `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 均成功并绑定该产品 SHA。文档主线 SHA
 > 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC7；该状态不等于 Production 发布。
@@ -193,7 +193,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
    `.agents/coordination/runs/run-v020-v11-remediation`。生产开关继续关闭，V20-12 默认关闭任务节点已建立。
 8. V20-13 只读终审已完成：无 High/Medium，5 个 Low/Info 已由 Windows Codex 修复并通过目标测试、整仓门禁、依赖审计、迁移检查及真实附件栈复核；审查工作树已恢复 clean。
 9. V20-14 隔离回滚演练已完成并接受；V20-15 Release candidate、同 SHA 镜像 provenance attestation 与 exact-candidate security scan 已通过，生产发布仍等待用户批准。本次正式首版前端由用户一次性指定前端执行方完成；未来迭代 owner 仍待用户另行指定。
-10. RC7 至少 24 小时技术观察已于 2026-08-16 真实收口：ECS 服务、资源、备份、告警和畸形请求边界均已复核通过。PR #212 记录的新文档 head 仍需重新通过 `fast/integration/browser/android-debug` 后，才请求用户合并批准；不自动合并或部署。
+10. RC7 至少 24 小时技术观察已于 2026-08-16 真实收口；PR #212 随后按用户批准 Squash 合入 `main=11014fb736b1f74085a32a7ad1c00054b0b83d6b`，合并后 `candidate/android-debug` 均成功。当前等待真实受邀邮件、实体移动设备和 Production 发布范围的逐项授权；不自动部署。
 
 ## 模型所有权决定
 
@@ -763,3 +763,11 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - Web 的 7 条 Server Reference ID 格式错误经反向代理日志聚合核对，共 565 个请求且无 5xx；畸形请求均以 404 拒绝，属于探测噪声，不构成观察失败。
 - 实际边界再次核对：Knowledge API、Shared Write、AI Acceptance、Deletion、Attachment ingest、Local Worker、Attachment scanner 均为 `false`，AI Provider 启用数为 0；注册模式为 invite，legacy registration 为 `false`。邮件 Provider 为 `aliyun_directmail`，不得误写为关闭，真实受邀邮件仍未验收。
 - 结论更新为“RC7 至少 24 小时技术观察通过”。PR #212 可以进入用户合并审批；仍不自动合并或部署，不清理 RC6/RC7 回滚点，不启用默认关闭能力。真实受邀邮件、实体移动设备和 Production 授权仍未完成；历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而失败，未改写为通过。
+
+## RC7 PR #212 合并与主线候选复核（2026-08-16）
+
+- 用户明确批准后，PR [#212](https://github.com/greatLiverheat605/Logion/pull/212) 已于 `2026-08-16T14:10:43Z` 使用仓库允许的 Squash merge 合入 `main` 并关闭；最终 PR head 为 `ff2b0bf621a5376b68229caee95ed4aa0ca2e9dc`，合并提交为 `11014fb736b1f74085a32a7ad1c00054b0b83d6b`。
+- 最终 PR head 的 `fast`、`integration`、`browser` 与 `android-debug` 均成功。合并后 `main` 又真实触发 Android run [`31951949928`](https://github.com/greatLiverheat605/Logion/actions/runs/31951949928) 和 candidate run [`31951949948`](https://github.com/greatLiverheat605/Logion/actions/runs/31951949948)，两者均绑定 `11014fb...` 并成功。
+- 合并后 candidate 已完成 `ci:fast`、依赖许可、Compose 校验、四个候选镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传。该结果只是新 `main` 候选证据，不代表已经部署。
+- 受控 prerelease 仍运行已观察通过的 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；没有执行新镜像部署、Production 流量切换、回滚点清理或敏感能力启用。
+- 下一批准点为真实受邀邮件、实体移动设备和 Production 发布范围。历史协调 Run 的 `graph.json`/`tasks.jsonl` safe-scan budget 限制继续独立保留，未改写为通过。
