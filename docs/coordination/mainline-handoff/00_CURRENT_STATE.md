@@ -1,6 +1,6 @@
 # 当前状态（主线接手时点）
 
-> 更新时间：2026-08-13（Asia/Shanghai）。
+> 更新时间：2026-08-16（Asia/Shanghai）。
 
 ## 1. Git 与发布身份
 
@@ -8,7 +8,7 @@
 | -------------------- | ---------------------------------------------------------------------------- |
 | 仓库                 | `greatLiverheat605/Logion`                                                   |
 | 正式集成工作树       | `v020-integration`                                                           |
-| 交接分支             | `codex/i0-rc7-closeout`                                                      |
+| 交接分支             | `codex/v020-rc7-prerelease-closeout`                                         |
 | 远端产品主线         | `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`                       |
 | RC7 产品源码         | `480adc721600243308fa7b5a32200044efd88f07`                                   |
 | RC7 manifest SHA-256 | `0dbe60ce2d8044867dc85b8ffb0ca61006bdc96a3654b3842f8cf68c9f7d05b5`           |
@@ -40,11 +40,9 @@
 
 1. 用户已报告当前浏览器会话登录，但认证 UX 人工回归尚未由协调方在该会话内真实执行；21 个受保护路由、按钮反馈、
    loading/disabled、防重复提交、邀请 409、搜索、知识图谱、主题持久化和控制台错误保持 `not_run`。
-2. RC7 至少 24 小时观察尚未收口；到点后需重新检查 health、日志、OOM/restart、磁盘、内存、
-   Swap、备份新鲜度和告警。
-3. 真实受邀邮件和实体移动设备验收需要用户单独批准，当前不得发送或伪造通过。
-4. Production 发布、流量切换和敏感能力启用均未授权。
-5. 当前协调 Run 验证仍因历史 `graph.json` 与 `tasks.jsonl` encoded-content safe-scan budget 超限失败；
+2. 真实受邀邮件和实体移动设备验收需要用户单独批准，当前不得发送或伪造通过。
+3. Production 发布、流量切换和敏感能力启用均未授权。
+4. 当前协调 Run 验证仍因历史 `graph.json` 与 `tasks.jsonl` encoded-content safe-scan budget 超限失败；
    不改写历史账本、不派发依赖该账本的新并行写任务。
 
 ## 4. 产品设计新决策
@@ -65,10 +63,12 @@
 
 - PR #212 已解决历史分叉冲突；正式集成分支基于 `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`，`f2f5eb942db644f2c6b43059330f3ed1a4300905` 已包含 RC7 文档格式化和 `nanoid` `3.3.17 -> 3.3.18` 安全升级并推送。
 - 首个新 head 的 `fast` 门禁因 nanoid 高危公告失败；修复后同一最终 head 的 GitHub `fast/integration/browser/android-debug` 已全部成功。下一步是等待用户合并批准，不自动部署。
-- 24 小时 RC7 观察、真实受邀邮件、实体移动设备验收和 Production 授权仍未完成；所有敏感生产开关继续关闭，不能自动合并或部署。
+- RC7 至少 24 小时技术观察已于 2026-08-16 通过；真实受邀邮件、实体移动设备验收和 Production 授权仍未完成。所有敏感生产开关继续关闭，不能自动合并或部署。
 
-## 7. RC7 观察阻塞（2026-08-15）
+## 7. RC7 观察收口（2026-08-16）
 
 - 公网 `/health` 已连续 3 次 HTTP 200，安全响应头存在；观察起点 `2026-08-13T13:06:05Z` 已超过 24 小时。
-- 受控 SSH `120.26.101.76:22` 当前连接超时，ECS 侧 OOM/restart、磁盘/内存/Swap、备份新鲜度和告警尚未复核。恢复 SSH 后才可收口观察并请求合并批准。
-- PR #212 最终 head 的四项 GitHub 门禁全绿，但仍保持 Open；不自动合并、部署或打开敏感能力。
+- 用户开放受控 SSH 后，于 `2026-08-16T05:23:17Z` 完成服务器侧只读复核：活动源码与迁移头正确，运行服务健康，全部容器 `OOMKilled=false`、`RestartCount=0`，磁盘/内存/Swap 在可接受范围，最新备份校验通过，过去 24 小时系统 error/alert 为 0。
+- Web 的 7 条 Server Reference ID 格式错误对应畸形请求或探测噪声；565 个聚合请求中无 5xx，异常请求全部 404 拒绝，不构成观察失败。
+- Knowledge API、Shared Write、AI Acceptance、Deletion、Attachment ingest、Local Worker、Attachment scanner 均为 `false`，AI Provider 启用数为 0。邮件 Provider 为 `aliyun_directmail`，真实邀请邮件仍未验收。
+- PR #212 当前 head `301741dad84791947baf44118e796499621999c7` 的 `fast/integration/browser/android-debug` 已全部成功；观察结论允许进入用户合并审批。记录本结论会产生新的文档 head，必须等待新 head 门禁全绿后再请求批准，不自动合并、部署或打开敏感能力。

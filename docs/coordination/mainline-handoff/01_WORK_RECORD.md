@@ -126,3 +126,12 @@
 - 观察起点 `2026-08-13T13:06:05Z` 已超过 24 小时；公网健康连续 3 次 HTTP 200，安全响应头存在。
 - 受控 SSH `120.26.101.76:22` 两次连接及 `Test-NetConnection` 均超时，未读取或输出任何服务器密钥、环境变量或完整日志。ECS 侧 OOM/restart、资源、备份新鲜度和告警检查因此未执行。
 - 当前仍是“等待受控 SSH 恢复”的断点；PR 不合并、不部署，不清理回滚目录/镜像/数据卷，不开启默认关闭能力。
+
+## RC7 观察收口（2026-08-16）
+
+- 用户开放受控 SSH 后，于 `2026-08-16T05:23:17Z` 使用既有专用密钥完成只读复核；未读取或输出私钥、密码、环境变量值或完整日志。活动源码仍为 `480adc721600243308fa7b5a32200044efd88f07`，迁移头为 `0038_local_worker_protocol`。
+- API readiness 的 application/database/redis 均为 `ok`；API、Web、Worker、Reverse Proxy、PostgreSQL、Redis 健康，Backup 正常运行，Attachment init 退出码为 0。全部容器均为 `OOMKilled=false`、`RestartCount=0`。
+- 根磁盘使用 40%，可用内存 933 MiB，Swap 2047 MiB 中使用 395 MiB。最新备份 `logion-20260815T133314Z-beta-v1.backup` 距复核约 15.8 小时，`logion-verify-backup` 返回 OK，备份中的源码与迁移头一致；过去 24 小时系统 error/alert 计数为 0。
+- Web 的 7 条 Server Reference ID 格式错误经反向代理日志聚合核对，共 565 个请求、无 5xx，异常请求均以 404 拒绝，因此归类为畸形请求或探测噪声，不构成观察失败。
+- 实际生产边界保持不变：Knowledge API、Shared Write、AI Acceptance、Deletion、Attachment ingest、Local Worker、Attachment scanner 均为 `false`，AI Provider 启用数为 0；注册模式为 invite，legacy registration 为 `false`。邮件 Provider 为 `aliyun_directmail`，本轮没有执行真实邀请邮件。
+- RC7 至少 24 小时技术观察真实通过。PR #212 可以进入用户合并审批，但记录该结论的新文档 head 必须重新取得 `fast/integration/browser/android-debug` 全绿；不自动合并或部署，不清理回滚点，不启用敏感能力。真实受邀邮件、实体移动设备、Production 授权和历史协调 Run safe-scan 限制仍未完成。
