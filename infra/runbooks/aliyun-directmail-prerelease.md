@@ -2,20 +2,22 @@
 
 > 适用范围：Logion 个人及最多 10 人受邀协作部署。
 >
-> 文档状态：`0.1.0-rc2` 预发布候选操作基线。
+> 文档状态：包含 `0039_workspace_invitation_email` 的候选操作基线。
 >
 > 安全原则：只发送身份事务邮件，不保存长期 AccessKey，不记录邮箱、令牌或正文。
 
 ## 1. 实现边界
 
-邮件 Worker 当前投递三类邮件：
+邮件 Worker 当前投递四类邮件：
 
 - 邮箱验证；
 - 密码找回；
 - 密码找回完成或失败上限触发的安全通知。
+- Workspace 成员邀请。
 
-Workspace 邀请 Token 仍由 Owner 通过可信渠道一次性交付。系统不会声称已经发送邀请邮件；
-受邀者启动注册后，邮箱所有权确认邮件才由阿里云邮件推送发送。
+Workspace 邀请创建与加密 Outbox 入队在同一数据库事务完成。历史版本中已创建、仍有效且没有
+任何关联 Outbox 的 `pending` 邀请，会在 Owner 对同一邮箱再次提交时轮换旧 token 并补入队一次；
+已有投递记录的重复邀请继续返回 409，防止无提示重复发信。
 
 投递链路如下：
 
@@ -32,8 +34,9 @@ API 数据库事务
 邮件链接把一次性 Token 放在 URL fragment：
 
 ```text
-https://<APP_DOMAIN>/auth/verify#<TOKEN>
-https://<APP_DOMAIN>/auth/recover#<TOKEN>
+https://<APP_DOMAIN>/auth/verify#token=<TOKEN>
+https://<APP_DOMAIN>/auth/recover#token=<TOKEN>
+https://<APP_DOMAIN>/invitations/accept#token=<TOKEN>
 ```
 
 Fragment 不会发送给 Web 服务器。确认和找回仍必须由浏览器页面通过可信 Origin 的 POST
@@ -218,14 +221,15 @@ logion-compose logs --since 10m --tail 200 worker \
 ### 6.1 邮箱验证
 
 1. Owner 创建只读或普通成员邀请；
-2. 通过已确认的可信渠道把一次性邀请 Token 交给测试者；
-3. 测试者在 HTTPS 域名启动注册；
+2. 确认受邀邮箱收到 `Logion 工作区邀请`，并检查 From、SPF、DKIM、DMARC；
+3. 未注册测试者按邮件说明进入 HTTPS 注册页，使用同一受邀邮箱启动注册；
 4. 确认收到 `确认您的 Logion 邮箱`；
-5. 检查 From、SPF、DKIM、DMARC 结果；
-6. 点击链接，确认地址栏 Fragment 立即被页面清除；
-7. 设置密码后显式登录；
-8. 重复使用同一链接必须失败；
-9. 邮件扫描器或直接 GET 不得激活账户。
+5. 点击确认链接，确认地址栏 Fragment 立即被页面清除并设置密码；
+6. 显式登录后重新打开原邀请邮件，点击 `接受邀请`；
+7. 确认成功加入目标 Workspace 且角色与 Owner 选择一致；
+8. 重复使用确认链接和邀请链接都必须失败；
+9. 邮件扫描器或直接 GET 不得验证账户或接受邀请；
+10. 撤销或手工过期的邀请不得继续投递，Outbox 密文必须清空。
 
 ### 6.2 密码找回
 
@@ -310,6 +314,8 @@ Worker image digest：
 ECS RAM 角色名：
 长期 AccessKey：未使用
 邮箱验证：通过 / 失败
+Workspace 邀请邮件：通过 / 失败
+邀请接受与角色：通过 / 失败
 重复验证链接：被拒绝 / 未验证
 密码找回：通过 / 失败
 旧会话撤销：通过 / 失败

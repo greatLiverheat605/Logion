@@ -143,3 +143,17 @@
 - 合并后主线 Android run `31951949928` 成功；candidate run `31951949948` 真实完成 `ci:fast`、许可/Compose、四镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传，全部成功且绑定 `11014fb...`。
 - 本轮没有执行部署。受控 prerelease 仍运行 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；Production 流量、真实邮件、回滚点清理及默认关闭能力均未触碰。
 - 下一批准点为真实受邀邮件、实体移动设备验收和 Production 发布范围。历史协调 Run safe-scan 限制仍单独未绿，不影响合并证据，也未被改写为通过。
+
+## 真实邀请未到件诊断与修复施工（2026-08-16）
+
+- 对用户报告的未注册 QQ 邮箱邀请执行只读诊断：生产邀请记录创建成功且为 `pending`，目标账户不存在，关联邮件
+  Outbox 不存在；Worker 同时间窗口没有投递事件。结论为 RC7 功能缺失和前端误导文案，不是 Provider 拒绝。
+- 全程未重发、未改生产配置、未部署、未读取 token/密文/RAM 凭据或环境变量值。
+- 从 `origin/main=0f20fd4f5c301094ce7e88803e24b7d0e86b469c` 建立
+  `codex/v020-workspace-invitation-email`，实现邀请邮件加密 Outbox、迁移、Worker 有效性复核、历史 pending 邀请补入队、
+  终态密文清理、中文模板和前端排队反馈；同时修正验证/找回链接 Fragment 格式。
+- 隔离 PostgreSQL/Redis 已完成迁移 `upgrade -> check -> downgrade -> upgrade`，邀请/Worker 集成 8 项与账户删除撤销
+  集成 1 项通过；最终 `corepack pnpm ci:fast` 返回 0（状态模型 118、Web 450、Python 402、离线 55、合同 12、
+  移动 4），生产构建和合同一致性检查成功，pnpm/pip 审计未发现已知漏洞。
+- 下一节点为提交、推送、创建 PR 并等待最终 head 的 `fast/integration/browser/mobile`；合并、候选部署和对测试邮箱的
+  真实补发仍分别需要用户明确批准。

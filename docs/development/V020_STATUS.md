@@ -771,3 +771,22 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 合并后 candidate 已完成 `ci:fast`、依赖许可、Compose 校验、四个候选镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传。该结果只是新 `main` 候选证据，不代表已经部署。
 - 受控 prerelease 仍运行已观察通过的 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；没有执行新镜像部署、Production 流量切换、回滚点清理或敏感能力启用。
 - 下一批准点为真实受邀邮件、实体移动设备和 Production 发布范围。历史协调 Run 的 `graph.json`/`tasks.jsonl` safe-scan budget 限制继续独立保留，未改写为通过。
+
+## Workspace 邀请邮件真实故障与修复候选（2026-08-16）
+
+- 用户以未注册邮箱执行真实邀请后未收到邮件。只读生产证据显示：邀请在
+  `2026-08-16T14:44:56Z` 创建成功并保持 `pending`，目标账户不存在，最近 30 分钟没有任何 Email Outbox 行；
+  未执行重发、配置更改或敏感数据读取。
+- 根因已确认：线上 RC7 只创建 Workspace invitation 和 token hash，没有邀请邮件 purpose、模板或 Outbox；前端却显示
+  “邮件投递状态由服务端处理”，属于功能缺失叠加误导反馈，不是 QQ 邮箱延迟或 DirectMail 上游错误。
+- 修复候选位于 `codex/v020-workspace-invitation-email`，基于 `origin/main=0f20fd4f5c301094ce7e88803e24b7d0e86b469c`。
+  候选增加 `0039_workspace_invitation_email`、邀请与加密入队同事务、Worker 对邀请者/邀请/Workspace 状态的重新验证、
+  接受/撤销/过期/邀请者账号删除后的密文清理，以及旧版无 Outbox pending 邀请的一次性 token 轮换补入队。
+- 前端成功反馈改为“邀请邮件已进入发送队列”，不声称已送达；邮件模板为未注册受邀者明确给出“注册与验证 → 登录 →
+  返回邮件接受邀请”的顺序。邮箱验证和密码找回链接同时修正为页面实际可读取的 `#token=<TOKEN>`。
+- 本机隔离 PostgreSQL/Redis 已完成迁移 `upgrade -> check -> downgrade -> upgrade`；邀请/API/Worker 集成 8 项、账号删除
+  撤销集成 1 项、邮件与安全单测 25 项、Workspace Web 5 项、候选 manifest 7 项通过，Ruff、Mypy、Web lint/typecheck
+  均通过。最终 `corepack pnpm ci:fast` 返回 0，包含状态模型 118、Web 450、Python 402、离线 55、合同 12、移动 4
+  项测试及生产构建和合同一致性检查；`pnpm audit --audit-level high` 与 `pip-audit` 均未发现已知漏洞。
+- 当前仍未提交、推送、创建 PR、合并、部署或真实补发。下一节点只允许提交并推送修复分支、创建 PR，并等待最终
+  head 的 `fast/integration/browser/mobile` 门禁；远端全绿后另行申请合并和候选部署批准。

@@ -8,8 +8,8 @@
 | -------------------- | ---------------------------------------------------------------------------- |
 | 仓库                 | `greatLiverheat605/Logion`                                                   |
 | 正式集成工作树       | `v020-integration`                                                           |
-| 交接分支             | `codex/v020-rc7-postmerge-record`                                            |
-| 远端产品主线         | `origin/main=11014fb736b1f74085a32a7ad1c00054b0b83d6b`                       |
+| 当前修复分支         | `codex/v020-workspace-invitation-email`                                      |
+| 远端产品主线         | `origin/main=0f20fd4f5c301094ce7e88803e24b7d0e86b469c`                       |
 | RC7 产品源码         | `480adc721600243308fa7b5a32200044efd88f07`                                   |
 | RC7 manifest SHA-256 | `0dbe60ce2d8044867dc85b8ffb0ca61006bdc96a3654b3842f8cf68c9f7d05b5`           |
 | RC7 workflow         | Main `31672956241`、Capacity `31673689291`、Release `31673881951` 均 success |
@@ -40,7 +40,8 @@
 
 1. 用户已报告当前浏览器会话登录，但认证 UX 人工回归尚未由协调方在该会话内真实执行；21 个受保护路由、按钮反馈、
    loading/disabled、防重复提交、邀请 409、搜索、知识图谱、主题持久化和控制台错误保持 `not_run`。
-2. 真实受邀邮件和实体移动设备验收需要用户单独批准，当前不得发送或伪造通过。
+2. RC7 实际没有 Workspace 邀请邮件实现。修复分支已增加加密入队和 Worker 投递，但尚未合并、
+   构建候选或部署；不得重发或伪造真实送达通过。实体移动设备验收仍需单独批准。
 3. Production 发布、流量切换和敏感能力启用均未授权。
 4. 当前协调 Run 验证仍因历史 `graph.json` 与 `tasks.jsonl` encoded-content safe-scan budget 超限失败；
    不改写历史账本、不派发依赖该账本的新并行写任务。
@@ -56,8 +57,9 @@
 
 ## 5. 下一动作
 
-主线执行方先完成 PR #212 合并后的证据记录，不立即改业务代码或部署新候选。下一批准点是
-真实受邀邮件、实体移动设备和 Production 发布范围；未获得用户逐项批准前继续保持默认关闭能力。
+先完成 Workspace 邀请邮件修复的本地/远端门禁和代码审查，再申请合并与受控候选部署。部署获批后
+才能对用户指定邮箱补发并完成真实到件、注册、登录和接受闭环；实体移动设备与 Production 发布仍
+是后续独立批准点。
 
 ## 6. PR #212 收口（2026-08-16）
 
@@ -80,3 +82,19 @@
 - candidate 真实完成 `ci:fast`、依赖许可、Compose、四镜像构建、不可变镜像 smoke、provenance、Trivy/SARIF/SBOM 与证据上传，没有失败步骤。
 - 这些镜像只是 `main` 的新候选，未部署到 ECS。受控 prerelease 继续运行 `480adc721...`，RC6/RC7 回滚目录、镜像、备份和数据卷继续保留。
 - 当前等待用户决定真实受邀邮件、实体移动设备及 Production 发布范围；未授权前不执行真实邮件、不部署、不切换流量、不启用默认关闭能力。
+
+## 9. Workspace 邀请邮件事故与修复断点（2026-08-16）
+
+- 用户使用未注册 QQ 邮箱执行真实邀请后，页面显示等待/服务端投递语义但未收到邮件。只读生产核对确认邀请于
+  `2026-08-16T14:44:56Z` 成功创建为 `pending`，账户不存在，同一时间窗口 `email_outbox` 为 0；未读取或输出
+  token、密文、凭据或完整敏感日志，也未重复发送。
+- 根因不是 QQ 邮箱或 DirectMail 上游：RC7 的邀请服务只存 invitation/hash 并返回一次性 token，Outbox purpose
+  不包含 Workspace invitation；前端“邮件投递状态由服务端处理”与实现不符。
+- 修复分支 `codex/v020-workspace-invitation-email` 基于 `origin/main=0f20fd4…`：增加迁移
+  `0039_workspace_invitation_email`、原子加密入队、历史无 Outbox 的 pending 邀请 token 轮换补发、Worker 状态复核、
+  接受/撤销/过期/邀请者账号删除时终止并清空密文，以及只声明“已排队”的前端反馈。
+- 同批修正邮箱验证与密码找回链接缺失 `token=` 的 Fragment 格式错误。隔离迁移往返、专项集成与整仓
+  `corepack pnpm ci:fast` 均通过；后者包含状态模型 118、Web 450、Python 402、离线 55、合同 12、移动 4 项测试，
+  生产构建和合同一致性检查也成功。pnpm/pip 审计未发现已知漏洞。
+- 当前尚未 commit、push、PR、merge、deploy 或真实重发；RC7 线上状态保持不变。下一步只提交并推送修复分支、创建
+  PR，等待最终 head 的 `fast/integration/browser/mobile` 远端门禁，不自动合并或部署。
