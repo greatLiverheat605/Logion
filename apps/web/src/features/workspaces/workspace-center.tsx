@@ -362,7 +362,7 @@ export function WorkspaceCenter({
       return;
     }
     setPendingAction("invite");
-    setInviteFeedback({ message: "正在发送邀请…", tone: "loading" });
+    setInviteFeedback({ message: "正在创建邀请并排队邮件…", tone: "loading" });
     try {
       await browserApiClient.request(`${workspacePath(selected)}/invitations`, {
         body: JSON.stringify({
@@ -374,10 +374,10 @@ export function WorkspaceCenter({
       });
       form.reset();
       setInviteFeedback({
-        message: "邀请已创建，邮件投递状态由服务端处理。",
+        message: "邀请邮件已进入发送队列，通常会在几分钟内送达。",
         tone: "success",
       });
-      setStatus("邀请已创建；投递状态由服务端处理。");
+      setStatus("邀请邮件已排队；未收到时请提醒对方检查垃圾邮件。");
     } catch (error) {
       if (isInvitationConflict(error)) {
         setInviteConflict(error);

@@ -204,6 +204,44 @@ describe("WorkspaceCenter request boundaries", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("reports a successful invitation as queued for email delivery", async () => {
+    mockRequest.mockImplementation((path: string) => {
+      if (path === "/api/v1/workspaces") {
+        return Promise.resolve({
+          workspaces: [workspace("workspace-a", "工作区 A")],
+        });
+      }
+      if (path.endsWith("/spaces")) return Promise.resolve({ spaces: [] });
+      if (path.endsWith("/members")) return Promise.resolve({ members: [] });
+      if (path.endsWith("/invitations")) {
+        return Promise.resolve({
+          id: "invitation-a",
+          status: "pending",
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    const { container } = render(<WorkspaceCenter />);
+    const submit = await screen.findByRole("button", { name: "发送邀请" });
+    const email = container.querySelector<HTMLInputElement>("#invite-email");
+    const role = container.querySelector<HTMLSelectElement>("#invite-role");
+    expect(email).not.toBeNull();
+    expect(role).not.toBeNull();
+
+    fireEvent.change(email!, { target: { value: "person@example.com" } });
+    fireEvent.change(role!, { target: { value: "viewer" } });
+    fireEvent.click(submit);
+
+    expect(
+      await screen.findByText("邀请邮件已进入发送队列，通常会在几分钟内送达。"),
+    ).toBeTruthy();
+    expect(mockRequest).toHaveBeenCalledWith(
+      "/api/v1/workspaces/workspace-a/invitations",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("rejects a tampered member role without sending a request", async () => {
     mockRequest.mockImplementation((path: string) => {
       if (path === "/api/v1/workspaces") {

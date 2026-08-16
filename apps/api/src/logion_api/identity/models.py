@@ -309,8 +309,15 @@ class EmailOutbox(Base):
     __tablename__ = "email_outbox"
     __table_args__ = (
         CheckConstraint(
-            "purpose IN ('email_verification', 'password_recovery', 'security_notification')",
+            "purpose IN ('email_verification', 'password_recovery', "
+            "'security_notification', 'workspace_invitation')",
             name="ck_email_outbox_purpose",
+        ),
+        CheckConstraint(
+            "(purpose = 'workspace_invitation' AND workspace_invitation_id IS NOT NULL "
+            "AND action_token_id IS NULL) OR "
+            "(purpose <> 'workspace_invitation' AND workspace_invitation_id IS NULL)",
+            name="ck_email_outbox_workspace_invitation",
         ),
         CheckConstraint(
             "status IN ('pending', 'leased', 'sent', 'failed', 'dead')",
@@ -329,6 +336,11 @@ class EmailOutbox(Base):
     action_token_id: Mapped[UUID | None] = mapped_column(
         Uuid,
         ForeignKey("identity_action_tokens.id", ondelete="SET NULL"),
+        index=True,
+    )
+    workspace_invitation_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("workspace_invitations.id", ondelete="CASCADE"),
         index=True,
     )
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)

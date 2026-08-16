@@ -277,6 +277,24 @@ class AccountDeletionService:
             .where(CalendarFeed.user_id == user_id, CalendarFeed.status == "active")
             .values(status="revoked", revoked_at=now, version=CalendarFeed.version + 1)
         )
+        pending_invitation_ids = select(WorkspaceInvitation.id).where(
+            WorkspaceInvitation.invited_by == user_id,
+            WorkspaceInvitation.status == "pending",
+        )
+        await db.execute(
+            update(EmailOutbox)
+            .where(
+                EmailOutbox.workspace_invitation_id.in_(pending_invitation_ids),
+                EmailOutbox.status.in_(("pending", "leased")),
+            )
+            .values(
+                status="dead",
+                payload_ciphertext=b"",
+                payload_nonce=b"",
+                lease_expires_at=None,
+                terminal_at=now,
+            )
+        )
         await db.execute(
             update(WorkspaceInvitation)
             .where(

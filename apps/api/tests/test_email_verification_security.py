@@ -241,6 +241,7 @@ def test_email_verification_tables_have_delivery_and_active_indexes() -> None:
     assert "ix_identity_action_tokens_user_purpose_active" in action_indexes
     assert "ix_identity_action_tokens_expiry" in action_indexes
     assert "ix_email_outbox_delivery" in outbox_indexes
+    assert "ix_email_outbox_workspace_invitation_id" in outbox_indexes
 
 
 def test_unverified_accounts_cannot_enroll_or_authenticate_with_passkeys() -> None:

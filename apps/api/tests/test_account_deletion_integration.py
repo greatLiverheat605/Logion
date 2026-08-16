@@ -14,7 +14,7 @@ from logion_api.content.attachment_dependencies import get_attachment_scanner
 from logion_api.content.attachment_scanner import AttachmentScanResult
 from logion_api.content.models import Attachment
 from logion_api.db import session_factory
-from logion_api.identity.models import AuthSession, PasswordCredential, User
+from logion_api.identity.models import AuthSession, EmailOutbox, PasswordCredential, User
 from logion_api.main import app
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest
@@ -176,6 +176,15 @@ async def test_account_deletion_revokes_pending_workspace_invitations() -> None:
             json={"confirmation": "DELETE MY ACCOUNT"},
         )
         assert requested.status_code == 202, requested.text
+        async with session_factory() as db:
+            outbox = await db.scalar(
+                select(EmailOutbox).where(
+                    EmailOutbox.workspace_invitation_id == UUID(invitation.json()["id"])
+                )
+            )
+            assert outbox is not None
+            assert outbox.status == "dead"
+            assert outbox.payload_ciphertext == b""
 
         accepted = await recipient.post(
             "/api/v1/invitations/accept",

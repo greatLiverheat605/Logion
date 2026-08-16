@@ -4,8 +4,10 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.config import get_settings
 from logion_api.db import session_factory
-from logion_api.identity.models import AuditEvent
+from logion_api.identity.email_verification import EmailDeliveryCipher
+from logion_api.identity.models import AuditEvent, EmailOutbox
 from logion_api.main import app
 from logion_api.workspaces.models import WorkspaceInvitation, WorkspaceMembership
 from sqlalchemy import select
@@ -37,6 +39,7 @@ async def test_workspace_invitation_is_email_bound_one_time_revocable_and_expiri
             },
         )
         assert owner_registration.status_code == 201, owner_registration.text
+        owner_id = UUID(owner_registration.json()["user"]["id"])
         owner_csrf = owner.cookies["logion_csrf"]
         workspace_id = UUID((await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"])
 
@@ -99,6 +102,30 @@ async def test_workspace_invitation_is_email_bound_one_time_revocable_and_expiri
             assert created_audit is not None
             assert invitee_email.casefold() not in str(created_audit.event_metadata)
             assert token not in str(created_audit.event_metadata)
+            outbox = await db.scalar(
+                select(EmailOutbox).where(EmailOutbox.workspace_invitation_id == invitation_id)
+            )
+            assert outbox is not None
+            assert outbox.user_id == owner_id
+            assert outbox.action_token_id is None
+            assert outbox.purpose == "workspace_invitation"
+            assert outbox.status == "pending"
+            assert invitee_email.encode() not in outbox.payload_ciphertext
+            assert token.encode() not in outbox.payload_ciphertext
+            assert EmailDeliveryCipher(get_settings()).decrypt(outbox) == {
+                "recipient": invitee_email,
+                "role": "viewer",
+                "token": token,
+                "workspace_name": "Personal workspace",
+            }
+
+        duplicate = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/invitations",
+            headers={"X-CSRF-Token": owner_csrf},
+            json={"email": invitee_email, "role": "viewer"},
+        )
+        assert duplicate.status_code == 409
+        assert duplicate.json()["code"] == "INVITATION_CONFLICT"
 
         wrong_account = await other.post(
             "/api/v1/invitations/accept",
@@ -138,6 +165,12 @@ async def test_workspace_invitation_is_email_bound_one_time_revocable_and_expiri
             assert len(memberships) == 1
             assert memberships[0].status == "active"
             assert memberships[0].role == "viewer"
+            accepted_outbox = await db.scalar(
+                select(EmailOutbox).where(EmailOutbox.workspace_invitation_id == invitation_id)
+            )
+            assert accepted_outbox is not None
+            assert accepted_outbox.status == "dead"
+            assert accepted_outbox.payload_ciphertext == b""
 
         denied_inviter = await invitee_primary.post(
             f"/api/v1/workspaces/{workspace_id}/invitations",
@@ -159,6 +192,15 @@ async def test_workspace_invitation_is_email_bound_one_time_revocable_and_expiri
         )
         assert revoke.status_code == 200
         assert revoke.json()["status"] == "revoked"
+        async with session_factory() as db:
+            revoked_outbox = await db.scalar(
+                select(EmailOutbox).where(
+                    EmailOutbox.workspace_invitation_id == UUID(revocable.json()["id"])
+                )
+            )
+            assert revoked_outbox is not None
+            assert revoked_outbox.status == "dead"
+            assert revoked_outbox.payload_ciphertext == b""
         revoked_accept = await other.post(
             "/api/v1/invitations/accept",
             headers={"X-CSRF-Token": other_csrf},
@@ -188,6 +230,87 @@ async def test_workspace_invitation_is_email_bound_one_time_revocable_and_expiri
             expired = await db.get(WorkspaceInvitation, expiring_id)
             assert expired is not None
             assert expired.status == "expired"
+            expired_outbox = await db.scalar(
+                select(EmailOutbox).where(EmailOutbox.workspace_invitation_id == expiring_id)
+            )
+            assert expired_outbox is not None
+            assert expired_outbox.status == "dead"
+            assert expired_outbox.payload_ciphertext == b""
     finally:
         for client in clients:
             await client.aclose()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_legacy_pending_invitation_is_rotated_and_queued_once() -> None:
+    origin = "http://test"
+    owner_email = f"legacy-invite-owner-{uuid4()}@example.com"
+    invitee_email = f"legacy-invite-member-{uuid4()}@example.com"
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("192.0.2.55", 45500)),
+        base_url=origin,
+        headers={"Origin": origin},
+    ) as owner:
+        owner_registration = await owner.post(
+            "/api/v1/auth/register",
+            json={
+                "email": owner_email,
+                "password": "a-strong-password-123",
+                "device_name": "Legacy invitation owner",
+            },
+        )
+        assert owner_registration.status_code == 201, owner_registration.text
+        owner_id = UUID(owner_registration.json()["user"]["id"])
+        workspace_id = UUID((await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"])
+        invitation_id = uuid4()
+        original_hash = uuid4().hex + uuid4().hex
+        async with session_factory() as db:
+            db.add(
+                WorkspaceInvitation(
+                    id=invitation_id,
+                    workspace_id=workspace_id,
+                    email_normalized=invitee_email,
+                    role="viewer",
+                    token_hash=original_hash,
+                    invited_by=owner_id,
+                    expires_at=datetime.now(UTC) + timedelta(days=1),
+                )
+            )
+            await db.commit()
+
+        backfilled = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/invitations",
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={"email": invitee_email, "role": "reviewer"},
+        )
+        assert backfilled.status_code == 201, backfilled.text
+        assert UUID(backfilled.json()["id"]) == invitation_id
+        assert backfilled.json()["role"] == "reviewer"
+
+        async with session_factory() as db:
+            invitation = await db.get(WorkspaceInvitation, invitation_id)
+            outboxes = list(
+                (
+                    await db.scalars(
+                        select(EmailOutbox).where(
+                            EmailOutbox.workspace_invitation_id == invitation_id
+                        )
+                    )
+                ).all()
+            )
+            assert invitation is not None
+            assert invitation.token_hash != original_hash
+            assert invitation.version == 2
+            assert len(outboxes) == 1
+            assert (
+                EmailDeliveryCipher(get_settings()).decrypt(outboxes[0])["token"]
+                == (backfilled.json()["token"])
+            )
+
+        repeated = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/invitations",
+            headers={"X-CSRF-Token": owner.cookies["logion_csrf"]},
+            json={"email": invitee_email, "role": "reviewer"},
+        )
+        assert repeated.status_code == 409
