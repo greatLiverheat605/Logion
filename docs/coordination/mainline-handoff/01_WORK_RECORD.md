@@ -103,5 +103,35 @@
 - PR #208 已经用户批准并 Squash 合入 `main`。保护分支拒绝包含历史 merge commit 的直接快进推送，因此未绕过规则；README 的合并后状态与路线说明分别通过 PR #209、#210 更新，两个文档 PR 的 `fast/integration/browser` 均成功。
 - 产品候选固定为 `480adc721600243308fa7b5a32200044efd88f07`：Main candidate run `31672956241`、Full capacity run `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 全部成功并绑定该 SHA。
 - RC7 真实执行了不可变镜像 smoke、空环境恢复、旧客户端/恢复 epoch 兼容、107 项 Browser/PWA/WCAG、5%/25%/100% rollout rehearsal、证据上传与隔离卷清理。唯一 warning 是 `docker/login-action@v3` 的 Node.js 20 上游弃用提醒，不改变 success 结论。
-- 当前 ECS 受控 prerelease 仍为 RC6。RC7 未部署，Production 未授权；所有敏感生产开关继续关闭。下一审批节点仅是“是否用已验收 RC7 更新受控 prerelease”，不能解释为 Production 或流量切换授权。
+- 当时 ECS 受控 prerelease 仍为 RC6；随后已按用户批准完成 RC7 更新。Production 未授权，所有敏感生产开关继续关闭。
 - 后续仅文档收口不会改变 RC7 产品候选 SHA；历史协调 Run 的 safe-scan budget 限制继续独立保留。
+
+## RC7 受控 prerelease 部署（2026-08-13）
+
+- 用户批准使用已验收 RC7 更新受控 prerelease；ECS 已完成原子切换，活动源码为 `480adc721600243308fa7b5a32200044efd88f07`，旧目录 `/opt/logion.before-rc7-20260813T130605Z` 保留。
+- 切换前最终备份为 `logion-20260813T130618Z-beta-v1.backup`，服务器与 BitLocker `J:\LogionBackups\encrypted` 副本 SHA-256 均为 `76bd5d7b441fefb0999b08d460042fb3cd6fe37cb3a20c00ac454de86076022f`；未删除或替换数据库、附件或数据卷。
+- 迁移头为 `0038_local_worker_protocol`；API、Worker、Web、Reverse Proxy、Backup、PostgreSQL、Redis 均运行，公网 `/health` 返回 HTTP 200，四个 RC7 应用 digest 与 manifest 一致，8080 仍仅绑定 `127.0.0.1`。
+- 切换后发现 Backup secret 权限错误（`root:root 0600`）导致启动失败；已恢复为 `root:10001 0640`，Backup 当前稳定运行。该修复未更换密钥内容。
+- 当前仅为受控 prerelease 更新；Production 发布、流量切换、真实受邀邮件、实体设备验收及 Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 仍未授权。
+
+## PR #212 冲突与依赖审计修复（2026-08-15）
+
+- 正式集成工作区将 RC7 收口分支变基到最新 `origin/main`，跳过已被 squash 吸收的旧提交，并以 `--force-with-lease` 更新 PR 分支。新 head：`7b85116cbcab01624662c50838e08865d30a89f1`。
+- GitHub run `31869105696` 的 `fast` 门禁真实失败于 JavaScript dependency audit：锁定的 `nanoid@3.3.17` 已低于公告修复版本 `3.3.18`。已修改 `pnpm-workspace.yaml` 与 `pnpm-lock.yaml`，并保留最小 diff。
+- 本地审计与完整门禁均已重新执行并通过：`pnpm audit --audit-level high` 无已知漏洞；`pnpm ci:fast` 返回 0，包含 118 状态测试、402 Python、449 Web、55 offline、12 contracts、4 mobile 测试及构建/合同生成。
+- 依赖修复提交 `f2f5eb942db644f2c6b43059330f3ed1a4300905` 已推送；该最终 head 的 `fast`、`integration`、`browser` 与 `android-debug` 均真实成功。不得把旧 head 的运行结果复用于新 head；PR 仍等待用户合并批准，不自动部署或打开默认关闭能力。
+
+## RC7 观察复核（2026-08-15）
+
+- 观察起点 `2026-08-13T13:06:05Z` 已超过 24 小时；公网健康连续 3 次 HTTP 200，安全响应头存在。
+- 受控 SSH `120.26.101.76:22` 两次连接及 `Test-NetConnection` 均超时，未读取或输出任何服务器密钥、环境变量或完整日志。ECS 侧 OOM/restart、资源、备份新鲜度和告警检查因此未执行。
+- 当前仍是“等待受控 SSH 恢复”的断点；PR 不合并、不部署，不清理回滚目录/镜像/数据卷，不开启默认关闭能力。
+
+## RC7 观察收口（2026-08-16）
+
+- 用户开放受控 SSH 后，于 `2026-08-16T05:23:17Z` 使用既有专用密钥完成只读复核；未读取或输出私钥、密码、环境变量值或完整日志。活动源码仍为 `480adc721600243308fa7b5a32200044efd88f07`，迁移头为 `0038_local_worker_protocol`。
+- API readiness 的 application/database/redis 均为 `ok`；API、Web、Worker、Reverse Proxy、PostgreSQL、Redis 健康，Backup 正常运行，Attachment init 退出码为 0。全部容器均为 `OOMKilled=false`、`RestartCount=0`。
+- 根磁盘使用 40%，可用内存 933 MiB，Swap 2047 MiB 中使用 395 MiB。最新备份 `logion-20260815T133314Z-beta-v1.backup` 距复核约 15.8 小时，`logion-verify-backup` 返回 OK，备份中的源码与迁移头一致；过去 24 小时系统 error/alert 计数为 0。
+- Web 的 7 条 Server Reference ID 格式错误经反向代理日志聚合核对，共 565 个请求、无 5xx，异常请求均以 404 拒绝，因此归类为畸形请求或探测噪声，不构成观察失败。
+- 实际生产边界保持不变：Knowledge API、Shared Write、AI Acceptance、Deletion、Attachment ingest、Local Worker、Attachment scanner 均为 `false`，AI Provider 启用数为 0；注册模式为 invite，legacy registration 为 `false`。邮件 Provider 为 `aliyun_directmail`，本轮没有执行真实邀请邮件。
+- RC7 至少 24 小时技术观察真实通过。PR #212 可以进入用户合并审批，但记录该结论的新文档 head 必须重新取得 `fast/integration/browser/android-debug` 全绿；不自动合并或部署，不清理回滚点，不启用敏感能力。真实受邀邮件、实体移动设备、Production 授权和历史协调 Run safe-scan 限制仍未完成。

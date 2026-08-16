@@ -1,12 +1,12 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-13（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC6 已完成同 SHA 全链路验收并部署到受控 prerelease。部署、加密备份、异机校验、隔离恢复和首轮运行时检查通过；用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、邮件投递验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 更新时间：2026-08-16（Asia/Shanghai）。
+> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC7 已完成同 SHA 全链路验收并部署到受控 prerelease，至少 24 小时技术观察已通过。用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、真实受邀邮件、实体移动设备验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前文档主线：`origin/main=62ddd5251a8ce609dc434b8e6286bd8c7c9d9517`。RC6 实际产品源码仍为
-> `c47aa376d95b179200d59986c20289b796740959`；Main candidate run `31337611805`、Full capacity run
-> `31338032379` 与 Release candidate `0.2.0-rc6` run `31338128822` 均成功并绑定该产品 SHA。文档主线 SHA
-> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC6；该状态不等于 Production 发布。
+> 当前文档主线：`origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84`。RC7 实际产品源码为
+> `480adc721600243308fa7b5a32200044efd88f07`；Main candidate run `31672956241`、Full capacity run
+> `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 均成功并绑定该产品 SHA。文档主线 SHA
+> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC7；该状态不等于 Production 发布。
 
 ## V20-15 RC6 受控 prerelease 部署断点（2026-08-10）
 
@@ -32,7 +32,7 @@
   `2026-08-09T22:59:03Z` 起算；认证 UX、真实受邀邮件、实体移动设备和至少 24 小时观察未完成前，
   不宣称 Production，不清理回滚点，不开启任何敏感生产能力。
 
-完整部署证据见 [`V020_V15_PRERELEASE_RC6_EVIDENCE.md`](./V020_V15_PRERELEASE_RC6_EVIDENCE.md)。
+完整 RC6 部署证据见 [`V020_V15_PRERELEASE_RC6_EVIDENCE.md`](./V020_V15_PRERELEASE_RC6_EVIDENCE.md)。
 
 ## 主线交接与系统操作体验重设计断点（2026-08-10）
 
@@ -160,23 +160,23 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
 
 ## 阶段状态
 
-| 范围                              | 状态                                                                      | 已有证据                                                                                                                                                                                                         | 下一门禁                                                          |
-| --------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| 多 Agent 协调闭环                 | 已完成基础能力                                                            | `AGENTS.md`、协调 Skill/contract、状态 Schema/校验器、可验证 Runs；`codex/v011-coordination` 已推送                                                                                                              | 持续按本 SOP 更新账本和快照                                       |
-| V20-00 / M0 架构基础              | 已批准                                                                    | ADR-0029 Accepted；Orca `task_5f8745a5770e` complete；五项推荐边界已冻结                                                                                                                                         | 执行 V20-01/03/07 设计门，不扩大为实现授权                        |
-| 旧 A/B 原型                       | 技术验收通过、产品方向已否决                                              | 9 个限定原型文件；23/23 Vitest、lint、typecheck、build 通过；A/B 评审包完整                                                                                                                                      | 仅保留历史证据，不进入施工                                        |
-| 整体动态知识空间原型              | 已作为受控演示入口集成                                                    | 原型代码、既有浏览器 QA、正式施工提交 `5d737b7`；生产视图不默认使用 mock                                                                                                                                         | 保留演示边界；未来迭代 owner 仍由用户另行指定                     |
-| V20-06 UI 冻结                    | 第一版方向与首版实现已集成                                                | 用户批准第一版方向，并一次性指定前端执行方施工；Codex 审查修正 `7a93ac9`，Nightly #40 真实浏览器门禁已通过                                                                                                       | 进入 V20-11，前端后续 owner 仍由用户指定                          |
-| bounded graph kernel              | 纯图内核模块候选验收通过                                                  | 42 个 pytest、Ruff lint/format、mypy、空白/范围/秘密检查及四组关键运行时复现均由 Codex 独立通过                                                                                                                  | 保持未提交候选；正式接入须等待设计门及授权、scope、游标和资源治理 |
-| V20-01/02 schema 与迁移           | V20-02 隔离证明已完成                                                     | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`                                                                                                | ORM 登记和 `alembic check` 收口留给 V20-08                        |
-| V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收                                                       | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135`                                                                                     | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
-| V20-07 保留/隐私签核              | 设计与推荐矩阵已批准                                                      | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭                                                                                               | 生产启用前完成独立合规证据与 Owner 门禁                           |
-| V20-08 bounded core               | 已完成并推送                                                              | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                           | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
-| V20-09 AI acceptance              | 已完成并推送                                                              | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                              | 进入 V20-10；Acceptance 生产开关继续关闭                          |
-| V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收                                           | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过     | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
-| V20-11 默认关闭准入               | 已通过，生产能力继续关闭                                                  | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                                | 保持全部生产开关关闭；进入 V20-12 集成门                          |
-| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过；V20-15 候选已部署为 prerelease，生产正式发布仍阻塞 | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；同 SHA provenance、Docker smoke、恢复、认证浏览器/WCAG 与候选 ECS 迁移/健康证据均已记录；真实邮件投递、24 小时观察与最终流量切换仍未完成 | 完成受邀真实邮件/设备验收、观察期和发布授权后再决定是否切换       |
-| 只读终审                          | 已完成并由 Codex 接受                                                     | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；审查目标 `7d50e675be19b2779613ed61ba31dc821afa73dc`；详见只读终审报告                                                                                                  | 不再派发；保留只读报告与清洁工作树证据                            |
+| 范围                              | 状态                                                                                             | 已有证据                                                                                                                                                                                                          | 下一门禁                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 多 Agent 协调闭环                 | 已完成基础能力                                                                                   | `AGENTS.md`、协调 Skill/contract、状态 Schema/校验器、可验证 Runs；`codex/v011-coordination` 已推送                                                                                                               | 持续按本 SOP 更新账本和快照                                       |
+| V20-00 / M0 架构基础              | 已批准                                                                                           | ADR-0029 Accepted；Orca `task_5f8745a5770e` complete；五项推荐边界已冻结                                                                                                                                          | 执行 V20-01/03/07 设计门，不扩大为实现授权                        |
+| 旧 A/B 原型                       | 技术验收通过、产品方向已否决                                                                     | 9 个限定原型文件；23/23 Vitest、lint、typecheck、build 通过；A/B 评审包完整                                                                                                                                       | 仅保留历史证据，不进入施工                                        |
+| 整体动态知识空间原型              | 已作为受控演示入口集成                                                                           | 原型代码、既有浏览器 QA、正式施工提交 `5d737b7`；生产视图不默认使用 mock                                                                                                                                          | 保留演示边界；未来迭代 owner 仍由用户另行指定                     |
+| V20-06 UI 冻结                    | 第一版方向与首版实现已集成                                                                       | 用户批准第一版方向，并一次性指定前端执行方施工；Codex 审查修正 `7a93ac9`，Nightly #40 真实浏览器门禁已通过                                                                                                        | 进入 V20-11，前端后续 owner 仍由用户指定                          |
+| bounded graph kernel              | 纯图内核模块候选验收通过                                                                         | 42 个 pytest、Ruff lint/format、mypy、空白/范围/秘密检查及四组关键运行时复现均由 Codex 独立通过                                                                                                                   | 保持未提交候选；正式接入须等待设计门及授权、scope、游标和资源治理 |
+| V20-01/02 schema 与迁移           | V20-02 隔离证明已完成                                                                            | [`V020_MIGRATION_PROOF.md`](./V020_MIGRATION_PROOF.md)；往返/负测/恢复/规模证据已通过；migration commit `91451bd`                                                                                                 | ORM 登记和 `alembic check` 收口留给 V20-08                        |
+| V20-03/04 permission/API/OpenAPI  | V20-04 已完成并验收                                                                              | 9 Path/11 Operation/26 Schema 纯加法；133 个聚焦测试、264 个 API 测试、合同生成/检查、sync-v1 固定哈希一致；commit `5437135`                                                                                      | 进入 V20-08 前复核硬失败关闭边界；不得直接启用主 Flag             |
+| V20-07 保留/隐私签核              | 设计与推荐矩阵已批准                                                                             | [`V020_RETENTION_THREAT_SIGNOFF.md`](./V020_RETENTION_THREAT_SIGNOFF.md)；用户于 2026-08-05 批准，敏感能力保持关闭                                                                                                | 生产启用前完成独立合规证据与 Owner 门禁                           |
+| V20-08 bounded core               | 已完成并推送                                                                                     | Codex 独立验收；核心 ORM、授权、bounded read、图内核与整仓门禁均有证据                                                                                                                                            | 保持默认关闭；进入 V20-09/V20-10 后续门禁                         |
+| V20-09 AI acceptance              | 已完成并推送                                                                                     | 候选/收据迁移、RFC 8785 幂等 hash、事务锁定、并发/重放/stale 测试、整仓门禁均有证据                                                                                                                               | 进入 V20-10；Acceptance 生产开关继续关闭                          |
+| V20-10 graph/search/rendering     | 已完成并通过 Nightly 真实栈验收                                                                  | Nightly #40：`31147645530`，目标 SHA `64298ec597b6e45dfea9a94cc819c77daf0cda8b`；审计、Compose、迁移/空环境恢复、认证 Playwright、1440/390px、axe、移动节点、桌面图谱键盘导航、持久化主题值 XSS 防护全部通过      | 进入 V20-11 默认关闭准入评审，生产开关继续关闭                    |
+| V20-11 默认关闭准入               | 已通过，生产能力继续关闭                                                                         | 常驻 loopback clamd、加密卷/ACL、附件 clean/malware/fail-closed、Local Worker crash/upload 恢复、worker-offline 核心流、迁移、整仓门禁和依赖审计均有真实证据；协调 Run 已完成接受                                 | 保持全部生产开关关闭；进入 V20-12 集成门                          |
+| V20-12～15 集成、终审、回滚、发布 | V20-12～V20-14 已通过；V20-15 候选已部署为 prerelease，24 小时技术观察已通过，生产正式发布仍阻塞 | [`V020_V15_ACCEPTANCE_MANIFEST.md`](./V020_V15_ACCEPTANCE_MANIFEST.md)；同 SHA provenance、Docker smoke、恢复、认证浏览器/WCAG 与候选 ECS 迁移/健康证据均已记录；真实邮件投递、实体设备验收与最终流量切换仍未完成 | 完成受邀真实邮件/设备验收和发布授权后再决定是否切换               |
+| 只读终审                          | 已完成并由 Codex 接受                                                                            | `task_66a2bdb9ab08` / `ctx_ce22e673e7fd`；审查目标 `7d50e675be19b2779613ed61ba31dc821afa73dc`；详见只读终审报告                                                                                                   | 不再派发；保留只读报告与清洁工作树证据                            |
 
 ## 当前等待点
 
@@ -193,6 +193,7 @@ PostgreSQL 往返、约束负测、孤儿停止、非空降级停止、备份恢
    `.agents/coordination/runs/run-v020-v11-remediation`。生产开关继续关闭，V20-12 默认关闭任务节点已建立。
 8. V20-13 只读终审已完成：无 High/Medium，5 个 Low/Info 已由 Windows Codex 修复并通过目标测试、整仓门禁、依赖审计、迁移检查及真实附件栈复核；审查工作树已恢复 clean。
 9. V20-14 隔离回滚演练已完成并接受；V20-15 Release candidate、同 SHA 镜像 provenance attestation 与 exact-candidate security scan 已通过，生产发布仍等待用户批准。本次正式首版前端由用户一次性指定前端执行方完成；未来迭代 owner 仍待用户另行指定。
+10. RC7 至少 24 小时技术观察已于 2026-08-16 真实收口：ECS 服务、资源、备份、告警和畸形请求边界均已复核通过。PR #212 记录的新文档 head 仍需重新通过 `fast/integration/browser/android-debug` 后，才请求用户合并批准；不自动合并或部署。
 
 ## 模型所有权决定
 
@@ -733,5 +734,32 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - RC7 产品候选源码固定为 `480adc721600243308fa7b5a32200044efd88f07`。Main candidate [`31672956241`](https://github.com/greatLiverheat605/Logion/actions/runs/31672956241) 成功并生成候选清单、digest-pinned 镜像、provenance 与安全证据；Full capacity [`31673689291`](https://github.com/greatLiverheat605/Logion/actions/runs/31673689291) 成功并生成同 SHA 的容量报告。
 - Release candidate `0.2.0-rc7` run [`31673881951`](https://github.com/greatLiverheat605/Logion/actions/runs/31673881951) 成功：可信 Main/Capacity 证据、`pnpm ci:fast`、容量报告、候选 manifest、不可变镜像 smoke、空环境恢复、旧客户端与恢复 epoch 兼容、107 项真实 Browser/PWA/WCAG 矩阵、5%/25%/100% rollout rehearsal、证据捕获及 Compose 卷清理均实际完成。
 - RC7 唯一注释是 `docker/login-action@v3` 目标 Node.js 20 的上游弃用 warning；GitHub 已强制其在 Node.js 24 运行，job 结论仍为 success。该 warning 不等于产品门禁失败，后续依赖维护应单独升级 Action。
-- 当前受控 prerelease 仍运行 RC6；RC7 只完成候选验收，尚未部署。是否更新受控 prerelease 需要用户单独批准；Production 发布、流量切换和 Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1、AI Acceptance 继续未授权且保持关闭。
+- 部署前受控 prerelease 仍运行 RC6；该历史状态随后在用户批准后由 RC7 原子切换替换。Production 发布、流量切换和 Shared Write、Deletion、Attachment、知识空间 Local Worker、Provider、sync-v1、AI Acceptance 继续未授权且保持关闭。
 - 本节后的文档提交只记录既成事实，不重建或替换 RC7 产品候选，也不得把文档提交 SHA 冒充 `480adc721600243308fa7b5a32200044efd88f07` 的候选证据。历史协调 Run 的 encoded-content safe-scan budget 超限仍单独未绿，未改写为通过。
+
+## RC7 受控 prerelease 部署收口（2026-08-13）
+
+- 用户批准使用已验收 RC7 更新受控 prerelease。ECS `120.26.101.76` 已在受控维护窗口完成原子目录切换；活动目录 `/opt/logion` 的源码精确为 `480adc721600243308fa7b5a32200044efd88f07`，旧目录 `/opt/logion.before-rc7-20260813T130605Z` 保留用于回滚。
+- 切换前最终备份 `logion-20260813T130618Z-beta-v1.backup` 已由 Backup 服务生成并通过 `logion-verify-backup` 校验；服务器 SHA-256 与 BitLocker `J:\LogionBackups\encrypted` 异机副本一致，值为 `76bd5d7b441fefb0999b08d460042fb3cd6fe37cb3a20c00ac454de86076022f`。数据库、附件、PostgreSQL、Redis 数据卷未删除或替换。
+- Alembic 迁移头核对为 `0038_local_worker_protocol`。API、Worker、Web、Reverse Proxy、Backup、PostgreSQL 与 Redis 均运行；RC7 四个应用镜像精确匹配候选 manifest：API `baa67d44…5acaa`、Backup `898dd722…82528`、Web `489e8e6…670d3`、Worker `786bccd…1175e4`。公网 `https://logion.work/health` 返回 HTTP 200。
+- 切换后发现 Backup 密钥文件权限在 staging 中为 `root:root 0600`，导致容器启动检查失败并累计 19 次重启；未读取或更换密钥内容。已恢复为 `root:10001 0640`，Backup 当前稳定运行且新启动退出码为 0，问题已收口。
+- 反向代理仍只将 Compose `8080` 绑定到 `127.0.0.1`；公网仅通过 80/443 访问。`LOGION_REGISTRATION_MODE=invite`，Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1、AI Acceptance 和 Production 流量切换继续关闭。
+- 本次部署只代表受控 prerelease 更新，不代表 Production 发布授权。旧目录、旧镜像、数据卷、部署前后备份继续保留；至少 24 小时观察、真实受邀邮件、实体移动设备验收和 Production 授权仍是后续门禁。
+- 详细 RC7 部署证据见 [`V020_V15_PRERELEASE_RC7_EVIDENCE.md`](./V020_V15_PRERELEASE_RC7_EVIDENCE.md)。
+
+## RC7 PR #212 冲突与依赖门禁修复（2026-08-15）
+
+- PR #212 原分支携带已被 `origin/main` squash 吸收的旧提交历史，GitHub 初始状态为 `mergeable=false / dirty`。已在正式 `v020-integration` 工作区基于 `origin/main=0bc104c1d6458dbdbfc4efccebff3b481f042b84` 变基，并以 `--force-with-lease` 安全更新分支。
+- 新 PR head 为 `7b85116cbcab01624662c50838e08865d30a89f1`，仅保留 RC7 收口文档变更；随后 GitHub 重新启动 `fast`、`integration`、`browser` 门禁。
+- 新 head 的 `fast` 首次真实执行于 run `31869105696`，在 JavaScript dependency audit 阶段因 `nanoid@3.3.17`（公告要求 `>=3.3.18`）失败；不是代码测试或部署失败。已将 workspace override 与锁文件精确升级到 `nanoid@3.3.18`，未引入其它依赖重排。
+- 本地 `corepack pnpm audit --audit-level high` 返回 `No known vulnerabilities found`；随后 `corepack pnpm ci:fast` 返回 0：状态模型 118、Web 449、Python 402、离线 55、合同 12、移动 4，构建与合同生成均通过。
+- 依赖修复提交 `f2f5eb942db644f2c6b43059330f3ed1a4300905` 已推送；同一 head 的 GitHub `fast`、`integration`、`browser` 与 `android-debug` 均真实完成并成功。该 PR 仍未合并或部署；历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而无法验证，继续单独保留为未通过项。
+
+## RC7 24 小时观察复核（2026-08-15）
+
+- 观察起点为 `2026-08-13T13:06:05Z`；截至本次复核已超过 24 小时。公网 `https://logion.work/health` 连续 3 次返回 HTTP 200，响应体为 Web 健康状态；HSTS、CSP、X-Frame-Options、X-Content-Type-Options 与 Referrer-Policy 均存在。
+- SSH 首轮复核曾因端口不可达而中断；用户开放受控入口后，已于 `2026-08-16T05:23:17Z` 使用既有专用密钥完成只读复核。活动源码仍为 `480adc721600243308fa7b5a32200044efd88f07`，Alembic 为 `0038_local_worker_protocol`；API readiness 的 application/database/redis 均为 `ok`，API、Web、Worker、Reverse Proxy、PostgreSQL、Redis 健康，Backup 正常运行，Attachment init 退出码为 0。
+- 所有容器均为 `OOMKilled=false`、`RestartCount=0`；根磁盘使用 40%，可用内存 933 MiB，Swap 2047 MiB 中使用 395 MiB。最新备份 `logion-20260815T133314Z-beta-v1.backup` 距复核约 15.8 小时，`logion-verify-backup` 返回 OK，备份中的源码与迁移头正确；过去 24 小时系统 error/alert 计数为 0。
+- Web 的 7 条 Server Reference ID 格式错误经反向代理日志聚合核对，共 565 个请求且无 5xx；畸形请求均以 404 拒绝，属于探测噪声，不构成观察失败。
+- 实际边界再次核对：Knowledge API、Shared Write、AI Acceptance、Deletion、Attachment ingest、Local Worker、Attachment scanner 均为 `false`，AI Provider 启用数为 0；注册模式为 invite，legacy registration 为 `false`。邮件 Provider 为 `aliyun_directmail`，不得误写为关闭，真实受邀邮件仍未验收。
+- 结论更新为“RC7 至少 24 小时技术观察通过”。PR #212 可以进入用户合并审批；仍不自动合并或部署，不清理 RC6/RC7 回滚点，不启用默认关闭能力。真实受邀邮件、实体移动设备和 Production 授权仍未完成；历史协调 Run 仍因 `graph.json`/`tasks.jsonl` encoded-content safe-scan budget 超限而失败，未改写为通过。
