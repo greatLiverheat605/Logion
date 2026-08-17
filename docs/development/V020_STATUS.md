@@ -771,3 +771,34 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 合并后 candidate 已完成 `ci:fast`、依赖许可、Compose 校验、四个候选镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传。该结果只是新 `main` 候选证据，不代表已经部署。
 - 受控 prerelease 仍运行已观察通过的 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；没有执行新镜像部署、Production 流量切换、回滚点清理或敏感能力启用。
 - 下一批准点为真实受邀邮件、实体移动设备和 Production 发布范围。历史协调 Run 的 `graph.json`/`tasks.jsonl` safe-scan budget 限制继续独立保留，未改写为通过。
+
+## Workbench v1 产品基线批准（2026-08-17）
+
+- 产品 Owner 已批准将现有 Persona 逐步演进为 Workbench：统一 Today，学习/研究/考试/导师四个固定领域工作台，另提供受控自定义工作台。
+- 固定工作台各保留一个系统入口；多个课题、考试和目标由工作台内项目承载。自定义工作台可复制固定模板或从空白创建，有限属性只属于工作台上下文，不覆盖正式对象、权限或同步语义。
+- 一个工作台可以设置默认 Knowledge Base，并引用其他已授权 Space；切换工作台不得改变 Workspace Role、Space 权限、正式对象数量或服务端鉴权。
+- 旧路线图中“Today 允许四画像明显不同布局”的表述已被替代：Today 始终维持同一“行动—原因—证据—验收”闭环，领域深度布局进入 Workbench。
+- 已建立 [`WORKBENCH_V1_PRODUCT_SPEC.md`](../product/WORKBENCH_V1_PRODUCT_SPEC.md) 和 [ADR-0030](../adr/0030-workbench-v1.md) 提案。当前只进入合同与隔离原型阶段，未修改正式 Web/API/迁移/OpenAPI、未启用生产开关、未部署。
+
+## Workbench v1 Q21-Q27 冻结与隔离原型验收（2026-08-17）
+
+- 产品 Owner 已冻结 Q21-Q27：严格 CSP 不放宽；“论证边注”只投影已有、已授权的正式来源，AI Draft 不得伪装为正式结果；通知中心只沉淀待处理失败、不确定状态和冲突；区块与 Inspector 动效限定为 180-280ms，控件不得位移并支持 reduced-motion；空状态只说明状态、原因和一个下一步动作；Sources/Audit/History 使用桌面语义表格与移动等价列表；图谱只用于 Knowledge，移动端必须提供同源节点列表。
+- Q23 的目标切换方式为非生产环境逐批接入新 Token，整体完成后再切换生产。产品 Owner 另提出旧线上停止服务，但该生产动作尚未执行，也不由原型审批自动授权；维护方式、回滚条件和恢复检查必须形成独立生产变更并再次审批。
+- 隔离原型 [`logion-workbench-v1-prototype.html`](../design/workbench-v1/logion-workbench-v1-prototype.html) 已完成。原型覆盖统一 Today、学习/研究/考试/导师/自定义工作台、Knowledge、Collaboration、System Center、Inspector、Light/Dark、reduced-motion、完整状态矩阵和 1440/1024/390/320 响应式模式；所有数据均为合成数据，不请求 API、不发送邮件、不执行正式删除。
+- 浏览器实测通过：自定义文本按不可信输入转义；保存真实经过 `saving -> success receipt`；403/Vault locked 不泄露对象、引用、历史或存在性；移动 Inspector 具备模态语义、背景 inert、焦点环和 Escape 焦点返回；桌面研究图谱方向键、Enter、选中路径和焦点返回可用；跨工作台 Source 只增删引用、不复制或删除正式对象；409 只允许比较并生成合并版本；Light/Dark 刷新持久化、reduced-motion、状态矩阵、移动图谱节点列表和正式删除影响预览均通过。
+- 320px 最终逐页矩阵已覆盖五个区域和学习/研究/考试/导师/自定义五类工作台；文档、设备和 `.page-scroll` 均无横向溢出。1440px 研究证据实验台、390px Knowledge 移动列表和 320px Today 已完成视觉复核，未发现控件重叠或漂移；浏览器控制台 `error/warn` 为 0。
+- 对抗复审发现的三项 P0 已收口：AI Draft 使用独立对象；权限不足时页面与 Inspector 均失败关闭；对象归属 Space 固定在对象数据上。来源列表使用独立对象 ID，能力关闭具有禁用入口和命令二次守卫。
+- 仓库内 `axe-core@4.12.1` 已在真实浏览器执行 1440/390 × Light/Dark 四组 WCAG 2 A/AA 与 2.1 A/AA 审计；修复设备容器误带 `aria-pressed` 和深色三级文字对比度后，四组均为 0 violations。临时审计标签与本地静态服务已移除/停止，最终原型仍为自包含文件。
+- 最终静态门禁为 Prettier、内联 JavaScript `node --check` 和 `git diff --check`。本轮只修改文档与隔离原型，未触碰正式 Web/API/数据库/OpenAPI/迁移或生产开关。
+- 隔离原型和 I1 覆盖合同现已获产品 Owner 批准；本次授权仅包括脱敏的 Workbench 文档基线提交。正式施工批次仍未授权，继续禁止修改 `apps/web/src/**`、API、数据库、OpenAPI、迁移、生产配置或 Feature Flag，也不 push、merge、deploy 或关闭线上服务。
+
+## Workbench v1 施工任务包与 TencentDB Agent Memory 边界（2026-08-17）
+
+- 用户已批准进入 Workbench v1 施工任务包整理；I1 全站覆盖矩阵已完成，未开始修改 `apps/web/src/**`。
+- 固定工作台为学习、研究、考试、导师，Today 统一，自定义工作台仅为受控界面组合，不改变 Workspace Role、Space ACL、SessionBoundary、正式对象归属或生产能力。
+- 施工包位于 `docs/coordination/mainline-handoff/08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md`；I1 已覆盖 34 个 `page.tsx`、21 条正式路由和 73 个唯一逐操作状态合同，并通过独立对抗终审。
+- 已新增 `docs/development/TENCENTDB_AGENT_MEMORY_HANDOFF.md`。TencentDB Agent Memory 只能作为脱敏辅助记忆层，Git/AGENTS/协调账本仍是权威；Codex 桌面新窗口不会自动获得外部记忆注入。
+- 当前运行环境没有提供 `MEMORY_ENDPOINT`，没有执行健康检查；实际部署仍需完成健康、隔离、持久化、负向权限和新窗口恢复演练，状态只能记为“部署待验收”。
+- 一次辅助源码测试在依赖获取阶段超时，测试主体未执行；该结果未记为通过，也不能替代实际端点验收。
+- 产品 Owner 于 2026-08-18 批准 I1，并授权完成 Workbench 文档脱敏和基线提交；不授权 push、merge、deploy、I2 或正式前端施工。
+- 共享写入、删除、附件、Local Worker、Provider、sync-v1 与 AI Acceptance 等敏感生产能力继续关闭。

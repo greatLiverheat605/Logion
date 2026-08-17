@@ -26,3 +26,10 @@
 - [NEXT_VERSION_ROADMAP.md](../../product/NEXT_VERSION_ROADMAP.md)
 
 本交接包是面向主线执行方的可读索引，不替代上述权威源。若交接包与实际 Git、CI 或用户当前指令冲突，以用户当前指令、实际检查结果、Git 和 `AGENTS.md` 为准，并在本目录追加修订记录。
+
+## 当前新增任务包
+
+- [08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md](./08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md)：Workbench v1 正式施工顺序、验收门槛和停止条件。
+- [TENCENTDB_AGENT_MEMORY_HANDOFF.md](../../development/TENCENTDB_AGENT_MEMORY_HANDOFF.md)：TencentDB Agent Memory 的接入边界、验收和新窗口恢复规则。
+
+当前状态：原型和 I1 全站覆盖矩阵均已完成独立复审，I1 于 2026-08-18 获产品 Owner 批准；当前只形成脱敏文档基线，正式前端施工仍待单独授权。记忆服务部署继续单独待验收。

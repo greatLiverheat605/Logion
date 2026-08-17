@@ -143,3 +143,18 @@
 - 合并后主线 Android run `31951949928` 成功；candidate run `31951949948` 真实完成 `ci:fast`、许可/Compose、四镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传，全部成功且绑定 `11014fb...`。
 - 本轮没有执行部署。受控 prerelease 仍运行 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；Production 流量、真实邮件、回滚点清理及默认关闭能力均未触碰。
 - 下一批准点为真实受邀邮件、实体移动设备验收和 Production 发布范围。历史协调 Run safe-scan 限制仍单独未绿，不影响合并证据，也未被改写为通过。
+
+## Workbench v1 施工任务包与记忆层核验（2026-08-17）
+
+- 用户批准开始归纳 Workbench v1 施工任务包，并计划在新窗口继续施工。
+- 已建立 `08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md`，冻结 I1→I4 顺序、权限/对象不变量、每轮对抗复审和用户审批门。
+- 已建立 `TENCENTDB_AGENT_MEMORY_HANDOFF.md`。TencentDB Agent Memory 可保存脱敏的 L0/L1/L2/L3 工作摘要，但不能替代 Git/协调账本，也不能假定 Codex 桌面会话自动接入。
+- 当前运行环境没有提供 `MEMORY_ENDPOINT`，因此没有执行健康检查；实际部署仍需完成健康、隔离、持久化和恢复演练，状态只能记为“部署待验收”。
+- 一次辅助源码测试在依赖获取阶段超时，未执行测试主体；该结果未记为通过，也不能代替实际端点验收。
+- 本次只更新文档，不修改正式前端、API、数据库、OpenAPI、迁移或生产配置；未 commit/push/merge/deploy。
+
+## Workbench v1 I1 批准与文档基线授权（2026-08-18）
+
+- I1 已覆盖 34 个 `page.tsx`、21 条正式路由和 73 个唯一逐操作状态合同；独立对抗终审无剩余 P1/P2。
+- 产品 Owner 已批准 I1，并授权完成 Workbench 文档脱敏和基线提交；该授权不包含 push、merge、deploy 或正式前端施工。
+- `apps/web/src/**`、API、数据库、迁移、OpenAPI 和生产配置继续保持不变；I2 必须等待新的明确施工范围与写入授权。
