@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { BUILTIN_PERSONAS } from "@/features/personas/persona-definitions";
+import {
+  BUILTIN_PERSONAS,
+  type PersonaDefinition,
+} from "@/features/personas/persona-definitions";
 
 import {
   type DeskAreaId,
@@ -117,8 +120,8 @@ describe("routeArea: deep-link → area reverse-lookup", () => {
     ["/app/records", "knowledge"],
     ["/app/review", "knowledge"],
     ["/app/spaces", "knowledge"],
+    ["/app/collaboration", "workbench"],
     // 协作空间
-    ["/app/collaboration", "collaboration"],
     ["/app/workspaces", "collaboration"],
     // 系统中心
     ["/app/audit", "system"],
@@ -171,14 +174,49 @@ describe("defaultRouteForArea: persona-aware defaults", () => {
     );
   });
 
-  it("工作台 defaults to /app/exam for exam persona, /app/self-study otherwise", () => {
-    const examPersona = BUILTIN_PERSONAS.find((p) => p.id === "exam")!;
-    const selfPersona = BUILTIN_PERSONAS.find((p) => p.id === "self")!;
-    expect(defaultRouteForArea("workbench", examPersona)).toBe("/app/exam");
-    expect(defaultRouteForArea("workbench", selfPersona)).toBe(
-      "/app/self-study",
-    );
-    expect(defaultRouteForArea("workbench", null)).toBe("/app/self-study");
+  it("工作台 defaults follow the read-only fixed Workbench projection", () => {
+    const expected: Record<string, string> = {
+      self: "/app/self-study",
+      research: "/app/research",
+      exam: "/app/exam",
+      mentor: "/app/collaboration",
+    };
+    for (const persona of BUILTIN_PERSONAS) {
+      expect(defaultRouteForArea("workbench", persona)).toBe(
+        expected[persona.id],
+      );
+    }
+    expect(defaultRouteForArea("workbench", null)).toBe("/app/today");
+  });
+
+  it("keeps a legacy Workbench entry within its existing routes", () => {
+    const legacy: PersonaDefinition = {
+      description: "legacy",
+      icon: "C",
+      id: "custom-legacy",
+      isBuiltin: false,
+      name: "Legacy",
+      routes: ["/app/today", "/app/research"],
+    };
+    expect(defaultRouteForArea("workbench", legacy)).toBe("/app/research");
+  });
+
+  it("fails closed to Today when a loaded persona has no Workbench entry", () => {
+    const legacy: PersonaDefinition = {
+      description: "legacy",
+      icon: "C",
+      id: "custom-minimal",
+      isBuiltin: false,
+      name: "Minimal",
+      routes: ["/app/today", "/app/settings"],
+    };
+    const invalidFixed: PersonaDefinition = {
+      ...BUILTIN_PERSONAS.find((persona) => persona.id === "research")!,
+      routes: ["/app/today"],
+    };
+
+    expect(defaultRouteForArea("workbench", legacy)).toBe("/app/today");
+    expect(defaultRouteForArea("workbench", invalidFixed)).toBe("/app/today");
   });
 
   it("知识库 defaults to first persona-visible of records → review → spaces", () => {
@@ -252,6 +290,17 @@ describe("contextBarDescriptor: Context Bar semantics", () => {
     const desc = contextBarDescriptor("/app/exam");
     expect(desc.areaLabel).toBe("工作台");
     expect(desc.subView).toBe("考试");
+  });
+
+  it("keeps mentor review under Workbench while workspace governance stays collaboration", () => {
+    expect(contextBarDescriptor("/app/collaboration")).toEqual({
+      areaLabel: "工作台",
+      subView: "导师",
+    });
+    expect(contextBarDescriptor("/app/workspaces")).toEqual({
+      areaLabel: "协作空间",
+      subView: "Workspace 管理",
+    });
   });
 
   it("every formal route produces a non-null areaLabel", () => {

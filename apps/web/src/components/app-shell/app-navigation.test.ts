@@ -154,6 +154,11 @@ describe("navGroupsForPersona: persona-aware sidebar defaults", () => {
   it("shows 5 areas for null persona (no crash)", () => {
     const groups = navGroupsForPersona(null);
     expect(flatAreas(groups)).toHaveLength(5);
+    expect(
+      groups
+        .flatMap((group) => [...group.items])
+        .find((item) => item.area === "workbench")?.href,
+    ).toBe("/app/today");
   });
 
   it("exam persona workbench href is /app/exam", () => {
@@ -164,13 +169,19 @@ describe("navGroupsForPersona: persona-aware sidebar defaults", () => {
     expect(workbench?.href).toBe("/app/exam");
   });
 
-  it("non-exam personas workbench href is /app/self-study", () => {
-    for (const id of ["self", "research", "mentor"] as const) {
+  it("fixed personas keep their Workbench-specific entries", () => {
+    const expected = {
+      self: "/app/self-study",
+      research: "/app/research",
+      exam: "/app/exam",
+      mentor: "/app/collaboration",
+    } as const;
+    for (const id of Object.keys(expected) as Array<keyof typeof expected>) {
       const groups = navGroupsForPersona(builtinPersona(id));
       const workbench = groups
         .flatMap((g) => [...g.items])
         .find((item) => item.area === "workbench");
-      expect(workbench?.href).toBe("/app/self-study");
+      expect(workbench?.href).toBe(expected[id]);
     }
   });
 

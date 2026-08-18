@@ -29,47 +29,18 @@ import {
   ProductTaskRow,
   ProductWorkflowStage,
 } from "@/components/product/product-ui";
+import {
+  deriveProductWorkbenchState,
+  ProductWorkbenchStateNotice,
+} from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
-import {
-  type PersonaDashboardRecord,
-  type PersonaDashboardSource,
-} from "@/features/personas/dashboard/persona-dashboard-model";
-import {
-  PersonaTodayOverview,
-  type PersonaDashboardViewState,
-} from "@/features/personas/persona-today-overview";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
-type Member = components["schemas"]["WorkspaceMemberResponse"];
-
-const DASHBOARD_ENTITY_TYPES = [
-  "exam",
-  "exam_subject",
-  "syllabus_node",
-  "mock_exam",
-  "score_record",
-  "review_schedule",
-  "mastery",
-  "learning_goal",
-  "learning_track",
-  "study_project",
-  "deliverable",
-  "research_question",
-  "paper_record",
-  "research_claim",
-  "experiment_run",
-  "research_feedback",
-  "rubric",
-  "group_review",
-  "group_feedback",
-  "review_finding",
-] as const;
-
 type TaskStatus =
   | "backlog"
   | "blocked"
@@ -191,8 +162,6 @@ export function TodayCenter() {
   } = useVaultSession();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [membersAvailable, setMembersAvailable] = useState(false);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
@@ -201,7 +170,7 @@ export function TodayCenter() {
   const [contextPhase, setContextPhase] = useState<
     "error" | "loading" | "ready"
   >("loading");
-  const [dashboardPhase, setDashboardPhase] = useState<
+  const [dataPhase, setDataPhase] = useState<
     "error" | "idle" | "loading" | "ready"
   >("idle");
   const [tasks, setTasks] = useState<LocalView<TaskPayload>[]>([]);
@@ -216,9 +185,6 @@ export function TodayCenter() {
     LocalView<ContentReferencePayload>[]
   >([]);
   const [conflictCount, setConflictCount] = useState(0);
-  const [dashboardRecords, setDashboardRecords] = useState<
-    PersonaDashboardRecord[]
-  >([]);
 
   const loadContext = useCallback(async () => {
     setContextPhase("loading");
@@ -246,25 +212,12 @@ export function TodayCenter() {
   }, []);
 
   const loadSpaces = useCallback(async (selectedWorkspace: string) => {
+    setContextPhase("loading");
     try {
-      const [spaceResult, memberResult] = await Promise.all([
-        browserApiClient.request<{ spaces: Space[] }>(
-          `/api/v1/workspaces/${selectedWorkspace}/spaces`,
-        ),
-        browserApiClient
-          .request<{
-            members: Member[];
-          }>(`/api/v1/workspaces/${selectedWorkspace}/members`)
-          .catch((error: unknown) => {
-            if (error instanceof LogionApiError && error.status === 403) {
-              return null;
-            }
-            throw error;
-          }),
-      ]);
+      const spaceResult = await browserApiClient.request<{ spaces: Space[] }>(
+        `/api/v1/workspaces/${selectedWorkspace}/spaces`,
+      );
       setSpaces(spaceResult.spaces);
-      setMembers(memberResult?.members ?? []);
-      setMembersAvailable(memberResult !== null);
       setSpaceId((current) =>
         spaceResult.spaces.some((item) => item.id === current)
           ? current
@@ -273,8 +226,6 @@ export function TodayCenter() {
       setContextPhase("ready");
     } catch (error) {
       setSpaces([]);
-      setMembers([]);
-      setMembersAvailable(false);
       setSpaceId("");
       setStatus(errorMessage(error));
       setContextPhase("error");
@@ -347,12 +298,10 @@ export function TodayCenter() {
     }
   }
 
-  async function refresh(
-    db = database.current,
-    localVault = vault.current,
+  async function readTodayData(
+    db: LogionOfflineDatabase,
+    localVault: OfflineVault,
   ): Promise<void> {
-    if (db === null || localVault === null || !workspaceId) return;
-    setDashboardPhase("loading");
     const [
       taskRows,
       sessionRows,
@@ -362,7 +311,6 @@ export function TodayCenter() {
       noteRows,
       resourceRows,
       openConflicts,
-      dashboardRowsByType,
     ] = await Promise.all([
       db.entities
         .where("[workspace_id+entity_type]")
@@ -396,14 +344,6 @@ export function TodayCenter() {
         .where("[workspace_id+status]")
         .equals([workspaceId, "open"])
         .count(),
-      Promise.all(
-        DASHBOARD_ENTITY_TYPES.map((entityType) =>
-          db.entities
-            .where("[workspace_id+entity_type]")
-            .equals([workspaceId, entityType])
-            .toArray(),
-        ),
-      ),
     ]);
     const [
       nextTasks,
@@ -413,7 +353,6 @@ export function TodayCenter() {
       nextVerifications,
       nextNotes,
       nextResources,
-      nextDashboardViews,
     ] = await Promise.all([
       Promise.all(
         taskRows.map((item) => decrypted<TaskPayload>(localVault, item)),
@@ -444,11 +383,6 @@ export function TodayCenter() {
           decrypted<ContentReferencePayload>(localVault, item),
         ),
       ),
-      Promise.all(
-        dashboardRowsByType
-          .flat()
-          .map((item) => decrypted<JsonObject>(localVault, item)),
-      ),
     ]);
     setTasks(nextTasks);
     setSessions(nextSessions);
@@ -458,25 +392,21 @@ export function TodayCenter() {
     setNotes(nextNotes);
     setResources(nextResources);
     setConflictCount(openConflicts);
-    setDashboardRecords(
-      nextDashboardViews.flatMap(({ entity, payload }) => {
-        const dashboardSpaceId = payload.space_id;
-        return typeof dashboardSpaceId === "string"
-          ? [
-              {
-                createdAt: entity.created_at,
-                entityType: entity.entity_type,
-                id: entity.entity_id,
-                payload,
-                spaceId: dashboardSpaceId,
-                syncStatus: entity.sync_status,
-                updatedAt: entity.updated_at,
-              },
-            ]
-          : [];
-      }),
-    );
-    setDashboardPhase("ready");
+  }
+
+  async function refresh(
+    db = database.current,
+    localVault = vault.current,
+  ): Promise<void> {
+    if (db === null || localVault === null || !workspaceId) return;
+    setDataPhase("loading");
+    try {
+      await readTodayData(db, localVault);
+      setDataPhase("ready");
+    } catch (error) {
+      setDataPhase("error");
+      throw error;
+    }
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -495,7 +425,6 @@ export function TodayCenter() {
       event.currentTarget.reset();
     } catch (error) {
       setStatus(offlineUnlockMessage(error) ?? errorMessage(error));
-      setDashboardPhase("error");
     }
   }
 
@@ -510,7 +439,6 @@ export function TodayCenter() {
             setStatus("本地资料已在应用内解锁；完成会话不会自动验收任务。"),
           )
           .catch((error: unknown) => {
-            setDashboardPhase("error");
             setStatus(errorMessage(error));
           }),
     );
@@ -653,6 +581,11 @@ export function TodayCenter() {
 
   async function startSession(task: LocalView<TaskPayload>) {
     try {
+      const currentStatus = task.payload.status;
+      if (currentStatus !== "planned" && currentStatus !== "in_progress") {
+        setStatus("只有计划中或进行中的任务可以开始会话。");
+        return;
+      }
       if (
         sessions.some((item) => (item.payload.status ?? "active") === "active")
       ) {
@@ -661,7 +594,6 @@ export function TodayCenter() {
       }
       let current = task.entity;
       let dependency: string[] = [];
-      const currentStatus = task.payload.status ?? "planned";
       if (currentStatus === "planned") {
         const transitioned = await commit(
           "task",
@@ -671,10 +603,6 @@ export function TodayCenter() {
         );
         current = transitioned.entity;
         dependency = [transitioned.operation.operation_id];
-      }
-      if ((task.payload.status ?? "planned") === "backlog") {
-        setStatus("请先将任务安排为计划中，再开始学习会话。");
-        return;
       }
       const now = new Date().toISOString();
       await commit(
@@ -693,7 +621,7 @@ export function TodayCenter() {
         undefined,
         dependency,
       );
-      setStatus("学习会话已在本地开始。");
+      setStatus("专注会话已在本地开始。");
       await synchronize();
     } catch (error) {
       setStatus(errorMessage(error));
@@ -864,9 +792,11 @@ export function TodayCenter() {
   const visibleTasks = tasks.filter(
     (item) => item.payload.space_id === spaceId,
   );
-  const activeSession = sessions.find(
-    (item) =>
-      item.payload.space_id === spaceId && item.payload.status === "active",
+  const visibleSessions = sessions.filter(
+    (item) => item.payload.space_id === spaceId,
+  );
+  const activeSession = visibleSessions.find(
+    (item) => item.payload.status === "active",
   );
   const visibleEvidence = evidence.filter(
     (item) => item.payload.space_id === spaceId,
@@ -892,12 +822,8 @@ export function TodayCenter() {
   const pendingVerifications = visibleVerifications.filter(
     (item) => item.payload.verdict === "pending",
   ).length;
-  const completedMinutes = sessions
-    .filter(
-      (item) =>
-        item.payload.space_id === spaceId &&
-        item.payload.status === "completed",
-    )
+  const completedMinutes = visibleSessions
+    .filter((item) => item.payload.status === "completed")
     .reduce((total, item) => total + (item.payload.manual_minutes ?? 0), 0);
   const completionRate = visibleTasks.length
     ? (completedTasks / visibleTasks.length) * 100
@@ -959,107 +885,163 @@ export function TodayCenter() {
         (item) => item.payload.task_id === nextTask.entity.entity_id,
       )
     : [];
-  const nextTaskPendingVerification = nextTask
+  const nextTaskVerifications = nextTask
     ? visibleVerifications.filter(
-        (item) =>
-          item.payload.task_id === nextTask.entity.entity_id &&
-          item.payload.verdict === "pending",
-      ).length
-    : 0;
-  const dashboardSource: PersonaDashboardSource = {
-    members: members.map((member) => ({
-      id: member.id,
-      status: member.status,
-    })),
-    membersAvailable,
-    now: new Date(),
-    records: dashboardRecords,
-    selectedSpaceId: spaceId,
-    sessions: sessions.map((item) => ({
-      manualMinutes: item.payload.manual_minutes,
-      spaceId: item.payload.space_id,
-      startedAt: item.payload.started_at,
-      status: item.payload.status,
-    })),
-    spaces: spaces.map((space) => ({
-      id: space.id,
-      visibility: space.visibility,
-    })),
-    tasks: tasks.map((item) => ({
-      dueAt: item.payload.due_at,
-      estimatedMinutes: item.payload.estimated_minutes,
-      plannedAt: item.payload.planned_at,
-      spaceId: item.payload.space_id,
-      status: item.payload.status,
-      title: item.payload.title,
-    })),
-  };
-  const hasPendingDashboardData =
-    conflictCount > 0 ||
-    dashboardRecords.some((record) => record.syncStatus !== "clean") ||
-    [...tasks, ...sessions].some((item) => item.entity.sync_status !== "clean");
-  const dashboardState: PersonaDashboardViewState =
-    contextPhase === "error"
-      ? "error"
-      : contextPhase === "loading"
-        ? "loading"
-        : !workspaceId || !spaceId
-          ? "needs-context"
-          : !unlocked
-            ? "locked"
-            : dashboardPhase === "error"
-              ? "error"
-              : dashboardPhase !== "ready"
-                ? "loading"
-                : hasPendingDashboardData
-                  ? "offline-stale"
-                  : dashboardRecords.length + tasks.length + sessions.length ===
-                      0
-                    ? "empty"
-                    : "ready";
+        (item) => item.payload.task_id === nextTask.entity.entity_id,
+      )
+    : [];
+  const nextTaskPendingVerification = nextTaskVerifications.filter(
+    (item) => item.payload.verdict === "pending",
+  ).length;
+  const hasTodayData =
+    visibleTasks.length +
+      visibleSessions.length +
+      visibleGoals.length +
+      visibleEvidence.length +
+      visibleVerifications.length >
+    0;
+  const hasStaleData =
+    visibleTasks.some((item) => item.entity.sync_status !== "clean") ||
+    visibleSessions.some((item) => item.entity.sync_status !== "clean") ||
+    visibleGoals.some((item) => item.entity.sync_status !== "clean") ||
+    visibleEvidence.some((item) => item.entity.sync_status !== "clean") ||
+    visibleVerifications.some((item) => item.entity.sync_status !== "clean") ||
+    visibleNotes.some((item) => item.entity.sync_status !== "clean") ||
+    visibleResources.some((item) => item.entity.sync_status !== "clean");
+  const todayState = deriveProductWorkbenchState({
+    contextPhase,
+    dataPhase,
+    hasContext: Boolean(workspaceId && spaceId),
+    hasData: hasTodayData,
+    stale: hasStaleData,
+    unlocked,
+  });
+  const showTodayData =
+    todayState === "empty" ||
+    todayState === "offline-stale" ||
+    todayState === "ready";
+  const pageHeader = (
+    <ProductPageHeader
+      eyebrow="TODAY · EXECUTION COCKPIT"
+      title="今天先推进最重要的一步"
+      description={
+        <>
+          <p>
+            把任务、专注、复习与证据汇成一条可执行时间线；首屏直接告诉你下一步是什么。
+          </p>
+          <p className="product-page-status" aria-live="polite">
+            {status}
+          </p>
+        </>
+      }
+      actions={
+        <>
+          {!unlocked ? (
+            <a className="product-action-link" href="#today-vault">
+              解锁本地资料
+            </a>
+          ) : null}
+          <button
+            type="button"
+            disabled={!unlocked}
+            onClick={() => void synchronize()}
+          >
+            立即同步
+          </button>
+        </>
+      }
+    />
+  );
+  const workbenchStateNotice = (
+    <ProductWorkbenchStateNotice
+      action={
+        todayState === "locked" ? (
+          <a className="product-action-link" href="#today-vault">
+            解锁本地资料
+          </a>
+        ) : undefined
+      }
+      emptyDescription="当前范围没有任务、会话、目标、证据或验收记录；可以从统一行动入口开始。"
+      emptyTitle="今天还没有行动记录"
+      onRetry={() => {
+        if (contextPhase === "error") {
+          if (workspaceId) void loadSpaces(workspaceId);
+          else void loadContext();
+        } else {
+          void refresh();
+        }
+      }}
+      state={todayState}
+    />
+  );
+  const vaultControls = (
+    <ProductDisclosure
+      id="today-vault"
+      summary="行动空间与本地资料"
+      description="选择工作区、空间并解锁端侧加密资料"
+      defaultOpen={!unlocked}
+    >
+      <div className="inline-form">
+        <label htmlFor="today-workspace">工作区</label>
+        <select
+          id="today-workspace"
+          value={workspaceId}
+          onChange={(event) => setWorkspaceId(event.target.value)}
+        >
+          {workspaces.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="today-space">空间</label>
+        <select
+          id="today-space"
+          value={spaceId}
+          onChange={(event) => setSpaceId(event.target.value)}
+        >
+          {spaces.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} · {item.visibility === "private" ? "私有" : "共享"}
+            </option>
+          ))}
+        </select>
+      </div>
+      <form className="inline-form" onSubmit={unlock}>
+        <label htmlFor="today-passphrase">本地口令</label>
+        <input
+          id="today-passphrase"
+          name="passphrase"
+          type="password"
+          minLength={10}
+          autoComplete="current-password"
+          required
+        />
+        <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
+      </form>
+    </ProductDisclosure>
+  );
+
+  if (!showTodayData) {
+    return (
+      <main id="main-content" className="settings-page today-page">
+        {pageHeader}
+        {workbenchStateNotice}
+        {vaultControls}
+      </main>
+    );
+  }
 
   return (
     <main id="main-content" className="settings-page today-page">
-      <ProductPageHeader
-        eyebrow="TODAY · EXECUTION COCKPIT"
-        title="今天先推进最重要的一步"
-        description={
-          <>
-            <p>
-              把任务、专注、复习与证据汇成一条可执行时间线；首屏直接告诉你下一步是什么。
-            </p>
-            <p className="product-page-status" aria-live="polite">
-              {status}
-            </p>
-          </>
-        }
-        actions={
-          <>
-            {!unlocked ? (
-              <a className="product-action-link" href="#today-vault">
-                解锁本地资料
-              </a>
-            ) : null}
-            <button
-              type="button"
-              disabled={!unlocked}
-              onClick={() => void synchronize()}
-            >
-              立即同步
-            </button>
-          </>
-        }
-      />
-
-      <PersonaTodayOverview
-        onRetry={() => void loadContext()}
-        source={dashboardSource}
-        state={dashboardState}
-      />
+      {pageHeader}
+      {workbenchStateNotice}
 
       {conflictCount > 0 ? (
         <p className="residual-data-warning" role="alert">
-          有 {conflictCount} 项同步冲突等待处理，系统没有静默覆盖任何一方。
+          Workspace 级告警：有 {conflictCount}
+          项同步冲突等待处理；冲突归属尚不能证明属于当前
+          Space，系统没有静默覆盖任何一方。
         </p>
       ) : null}
 
@@ -1070,12 +1052,14 @@ export function TodayCenter() {
               <ProductTag tone={activeSession ? "good" : "info"}>
                 {activeSession
                   ? "FOCUS SESSION · 进行中"
-                  : nextTask
-                    ? `NEXT ACTION · ${nextTask.payload.estimated_minutes} MIN`
-                    : "NEXT ACTION · 待安排"}
+                  : nextTaskPendingVerification
+                    ? `ACCEPTANCE · ${nextTaskPendingVerification} WAITING`
+                    : nextTask
+                      ? `NEXT ACTION · ${nextTask.payload.estimated_minutes} MIN`
+                      : "NEXT ACTION · 待安排"}
               </ProductTag>
             }
-            title={nextTask?.payload.title ?? "建立今天的第一项学习任务"}
+            title={nextTask?.payload.title ?? "建立今天的第一项任务"}
             stepsLabel="今日执行流程"
             steps={[
               {
@@ -1092,18 +1076,31 @@ export function TodayCenter() {
                   : "选择任务后开始记录真实投入",
                 state: activeSession
                   ? "current"
-                  : nextTask
-                    ? "current"
-                    : "pending",
+                  : nextTaskPendingVerification
+                    ? "complete"
+                    : nextTask
+                      ? "current"
+                      : "pending",
               },
               {
                 label: "提交成果证据",
-                detail: pendingVerifications
-                  ? `${pendingVerifications} 项等待人工验收`
+                detail: nextTaskPendingVerification
+                  ? `${nextTaskPendingVerification} 项等待人工验收`
                   : "用笔记、链接或资料证明产出",
-                state: pendingVerifications
+                state: nextTaskPendingVerification
                   ? "attention"
-                  : visibleEvidence.length
+                  : nextTaskEvidence.length
+                    ? "complete"
+                    : "pending",
+              },
+              {
+                label: "人工验收",
+                detail: nextTaskPendingVerification
+                  ? `${nextTaskPendingVerification} 项等待人工决定`
+                  : "完成会话或提交证据不会自动通过",
+                state: nextTaskPendingVerification
+                  ? "attention"
+                  : nextTaskVerifications.length
                     ? "complete"
                     : "pending",
               },
@@ -1115,6 +1112,13 @@ export function TodayCenter() {
                   href="#focus-session"
                 >
                   继续本次专注
+                </a>
+              ) : nextTaskPendingVerification ? (
+                <a
+                  className="product-action-link primary"
+                  href="#today-acceptance"
+                >
+                  处理人工验收
                 </a>
               ) : nextTask ? (
                 <button
@@ -1128,12 +1132,12 @@ export function TodayCenter() {
                   className="product-action-link primary"
                   href="/app/planning"
                 >
-                  建立学习计划
+                  建立行动计划
                 </Link>
               )
             }
           >
-            <div className="today-action-brief">
+            <div className="today-action-brief product-grid cols-4">
               <div>
                 <span>WHY</span>
                 <strong>
@@ -1160,18 +1164,33 @@ export function TodayCenter() {
                 </small>
               </div>
               <div>
+                <span>ACCEPTANCE</span>
+                <strong>
+                  {nextTaskPendingVerification
+                    ? `${nextTaskPendingVerification} 项等待人工验收决定`
+                    : nextTask
+                      ? "提交证据后由人工验收"
+                      : "先建立一项可验收任务"}
+                </strong>
+                <small>完成会话或提交证据都不会自动通过</small>
+              </div>
+              <div>
                 <span>NEXT</span>
                 <strong>
                   {activeSession
                     ? "结束专注并提交成果"
-                    : nextTask
-                      ? "开始一次专注"
-                      : "打开计划建立动作"}
+                    : nextTaskPendingVerification
+                      ? "确认人工验收决定"
+                      : nextTask
+                        ? "开始一次专注"
+                        : "打开计划建立动作"}
                 </strong>
                 <small>
-                  {nextTask
-                    ? `预计 ${nextTask.payload.estimated_minutes} 分钟`
-                    : "完成后会回到今天的行动线"}
+                  {nextTaskPendingVerification
+                    ? "验收决定始终由你明确确认"
+                    : nextTask
+                      ? `预计 ${nextTask.payload.estimated_minutes} 分钟`
+                      : "完成后会回到今天的行动线"}
                 </small>
               </div>
             </div>
@@ -1241,7 +1260,7 @@ export function TodayCenter() {
                 <ProductEmptyState
                   icon="＋"
                   title="今天还没有执行序列"
-                  description="从学习目标拆出一个 25–90 分钟可完成的动作，今日页会自动把它放到下一步。"
+                  description="从行动目标拆出一个 25–90 分钟可完成的动作，今日页会自动把它放到下一步。"
                   action={
                     <Link className="product-action-link" href="/app/planning">
                       打开计划
@@ -1278,7 +1297,7 @@ export function TodayCenter() {
                         {
                           description: "需要人工选择保留或合并的版本",
                           id: "sync-conflicts",
-                          title: `${conflictCount} 项同步冲突`,
+                          title: `${conflictCount} 项 Workspace 级同步冲突`,
                           tone: "bad" as const,
                         },
                       ]
@@ -1345,10 +1364,10 @@ export function TodayCenter() {
           >
             <div className="product-quick-links">
               <Link className="product-action-link" href="/app/planning">
-                ▦ 建立学习路线
+                ▦ 建立行动路线
               </Link>
               <Link className="product-action-link" href="/app/records">
-                ▦ 新建学习笔记
+                ▦ 新建笔记
               </Link>
               <Link className="product-action-link" href="/app/templates">
                 ▦ 浏览工作流模板
@@ -1358,51 +1377,7 @@ export function TodayCenter() {
         </aside>
       </div>
 
-      <ProductDisclosure
-        id="today-vault"
-        summary="学习空间与本地资料"
-        description="选择工作区、空间并解锁端侧加密资料"
-        defaultOpen={!unlocked}
-      >
-        <div className="inline-form">
-          <label htmlFor="today-workspace">工作区</label>
-          <select
-            id="today-workspace"
-            value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
-          >
-            {workspaces.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="today-space">空间</label>
-          <select
-            id="today-space"
-            value={spaceId}
-            onChange={(event) => setSpaceId(event.target.value)}
-          >
-            {spaces.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} · {item.visibility === "private" ? "私有" : "共享"}
-              </option>
-            ))}
-          </select>
-        </div>
-        <form className="inline-form" onSubmit={unlock}>
-          <label htmlFor="today-passphrase">本地口令</label>
-          <input
-            id="today-passphrase"
-            name="passphrase"
-            type="password"
-            minLength={10}
-            autoComplete="current-password"
-            required
-          />
-          <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
-        </form>
-      </ProductDisclosure>
+      {vaultControls}
 
       <ProductDisclosure
         summary="安排一项今日任务"
@@ -1411,7 +1386,7 @@ export function TodayCenter() {
         {visibleGoals.length === 0 ? (
           <ProductEmptyState
             icon="＋"
-            title="先建立一个学习目标"
+            title="先建立一个行动目标"
             description="当前空间还没有本地目标。前往“计划”创建并同步目标后，即可把下一步安排到今天。"
           />
         ) : (
@@ -1487,11 +1462,11 @@ export function TodayCenter() {
           )}
         </ProductPanel>
         <ProductPanel
-          title="学习活跃度"
-          description="当前空间已形成的真实学习记录。"
+          title="执行活跃度"
+          description="当前空间已形成的真实行动记录。"
         >
           <ProductSignalGrid
-            label="学习活跃度指标"
+            label="执行活跃度指标"
             items={[
               { id: "tasks", label: "任务", value: visibleTasks.length },
               {
@@ -1517,7 +1492,7 @@ export function TodayCenter() {
       <ProductPanel
         className="sync-wide-card"
         title="完整任务队列"
-        description="开始专注、更新状态，并用证据连接学习投入与实际产出。"
+        description="开始专注、更新状态，并用证据连接实际投入与产出。"
         aside={<ProductTag>{visibleTasks.length} 项</ProductTag>}
       >
         <div className="task-grid">
@@ -1657,6 +1632,7 @@ export function TodayCenter() {
 
       <ProductPanel
         className="sync-wide-card"
+        id="today-acceptance"
         title="证据与人工验收"
         description="把成果、资料或笔记关联到任务；所有验收决定都需要你明确确认。"
         aside={
