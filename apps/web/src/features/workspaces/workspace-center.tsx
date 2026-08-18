@@ -35,13 +35,16 @@ import {
 import {
   detailStatusMessage,
   type DetailLoadResult,
+  isMemberReadUsable,
   type Member,
   MEMBER_READ_DENIED_NOTICE,
   MEMBER_READ_SKIPPED_NOTICE,
+  memberReadForSelected,
   type MemberReadState,
   memberReadStateFrom,
   type MemberRequestOutcome,
   type Space,
+  spaceReadForSelected,
   type SpaceReadState,
   spaceReadStateFrom,
   type SpaceRequestOutcome,
@@ -181,9 +184,11 @@ export function WorkspaceCenter({
       detailsRequestRef.current = controller;
       const basePath = workspacePath(workspaceId);
       const includeMembers = shouldReadMembers(view);
-      setSpaceRead({ phase: "loading" });
+      setSpaceRead({ phase: "loading", workspaceId: workspaceId });
       setMemberRead(
-        includeMembers ? { phase: "loading" } : { phase: "skipped" },
+        includeMembers
+          ? { phase: "loading", workspaceId: workspaceId }
+          : { phase: "skipped", workspaceId: workspaceId },
       );
       const spaceTask = (async (): Promise<SpaceRequestOutcome> => {
         try {
@@ -219,8 +224,12 @@ export function WorkspaceCenter({
         ) {
           return { applied: false, spacesLoaded: false, membersLoaded: null };
         }
-        const nextSpaceRead = spaceReadStateFrom(spaceOutcome);
-        const nextMemberRead = memberReadStateFrom(view, memberOutcome);
+        const nextSpaceRead = spaceReadStateFrom(workspaceId, spaceOutcome);
+        const nextMemberRead = memberReadStateFrom(
+          view,
+          workspaceId,
+          memberOutcome,
+        );
         setSpaceRead(nextSpaceRead);
         setMemberRead(nextMemberRead);
         setStatus(detailStatusMessage(nextSpaceRead, nextMemberRead));
@@ -258,12 +267,6 @@ export function WorkspaceCenter({
       });
     } else {
       detailsRequestRef.current?.abort();
-      queueMicrotask(() => {
-        if (active) {
-          setSpaceRead({ phase: "idle" });
-          setMemberRead({ phase: "idle" });
-        }
-      });
     }
     return () => {
       active = false;
@@ -273,15 +276,21 @@ export function WorkspaceCenter({
 
   const anyPending = pendingAction !== null || pendingMemberId !== null;
   const selectedWorkspace = workspaces.find((item) => item.id === selected);
-  const spaces = spaceRead.phase === "ready" ? spaceRead.spaces : [];
-  const members = memberRead.phase === "ready" ? memberRead.members : [];
-  const spacesReady = spaceRead.phase === "ready";
+  const currentSpaceRead = spaceReadForSelected(spaceRead, selected);
+  const currentMemberRead = memberReadForSelected(memberRead, selected);
+  const membersReadable = isMemberReadUsable(view, memberRead, selected);
+  const spaces =
+    currentSpaceRead.phase === "ready" ? currentSpaceRead.spaces : [];
+  const members =
+    currentMemberRead.phase === "ready" ? currentMemberRead.members : [];
+  const spacesReady = currentSpaceRead.phase === "ready";
   const privateSpaceCount = spaces.filter(
     (item) => item.visibility === "private",
   ).length;
   const sharedSpaceCount = spaces.length - privateSpaceCount;
-  const memberCapacityLabel =
-    memberRead.phase === "ready" ? `${members.length} / 10` : "— / 10";
+  const memberCapacityLabel = membersReadable
+    ? `${members.length} / 10`
+    : "— / 10";
 
   function selectWorkspace(workspaceId: string) {
     setSelected(workspaceId);
@@ -289,9 +298,11 @@ export function WorkspaceCenter({
     setSpaceFeedback(null);
     setInviteFeedback(null);
     setInviteConflict(null);
-    setSpaceRead({ phase: "loading" });
+    setSpaceRead({ phase: "loading", workspaceId: workspaceId });
     setMemberRead(
-      shouldReadMembers(view) ? { phase: "loading" } : { phase: "skipped" },
+      shouldReadMembers(view)
+        ? { phase: "loading", workspaceId: workspaceId }
+        : { phase: "skipped", workspaceId: workspaceId },
     );
     setStatus("正在读取工作区内容…");
   }
@@ -387,7 +398,7 @@ export function WorkspaceCenter({
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || anyPending) return;
-    if (!shouldReadMembers(view) || memberRead.phase !== "ready") {
+    if (!membersReadable) {
       setStatus("当前状态无法发送邀请；请刷新成员状态后重试。");
       return;
     }
@@ -650,9 +661,9 @@ export function WorkspaceCenter({
                 <strong>Space</strong>
                 <span>{spacesReady ? `${spaces.length} 个` : "—"}</span>
               </header>
-              {spaceRead.phase === "error" ? (
+              {currentSpaceRead.phase === "error" ? (
                 <ProductEmptyState
-                  description={spaceRead.message}
+                  description={currentSpaceRead.message}
                   icon="□"
                   title="空间列表暂不可用"
                 />
@@ -745,7 +756,7 @@ export function WorkspaceCenter({
 
         <ProductPanel
           aside={
-            memberRead.phase === "ready" ? (
+            membersReadable ? (
               <ProductTag tone="info">{members.length} / 10</ProductTag>
             ) : null
           }
@@ -755,7 +766,7 @@ export function WorkspaceCenter({
         >
           {selected ? (
             <>
-              {memberRead.phase === "ready" ? (
+              {membersReadable ? (
                 <>
                   <form
                     aria-busy={pendingAction === "invite"}
@@ -848,7 +859,7 @@ export function WorkspaceCenter({
                 </>
               ) : null}
 
-              {memberRead.phase === "ready" ? (
+              {membersReadable ? (
                 <>
                   <ul className="workspace-member-list">
                     {members.map((member) => (
@@ -900,23 +911,25 @@ export function WorkspaceCenter({
                   ) : null}
                 </>
               ) : null}
-              {memberRead.phase === "denied" ? (
-                <ProductEmptyState
-                  description={MEMBER_READ_DENIED_NOTICE}
-                  icon="◎"
-                  title="成员列表不可见"
-                />
-              ) : null}
-              {memberRead.phase === "skipped" ? (
+              {view === "knowledge" ? (
                 <ProductEmptyState
                   description={MEMBER_READ_SKIPPED_NOTICE}
                   icon="◎"
                   title="成员信息未读取"
                 />
               ) : null}
-              {memberRead.phase === "error" ? (
+              {view === "collaboration" &&
+              currentMemberRead.phase === "denied" ? (
                 <ProductEmptyState
-                  description={memberRead.message}
+                  description={MEMBER_READ_DENIED_NOTICE}
+                  icon="◎"
+                  title="成员列表不可见"
+                />
+              ) : null}
+              {view === "collaboration" &&
+              currentMemberRead.phase === "error" ? (
+                <ProductEmptyState
+                  description={currentMemberRead.message}
                   icon="◎"
                   title="成员列表读取失败"
                 />

@@ -584,4 +584,167 @@ describe("WorkspaceCenter member read boundary", () => {
     expect(screen.getByText("— / 10")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "发送邀请" })).toBeNull();
   });
+
+  it("hides members and invites immediately when rerendered as knowledge", async () => {
+    mockRequest.mockImplementation((path: string) => {
+      if (path === "/api/v1/workspaces") {
+        return Promise.resolve({
+          workspaces: [workspace("workspace-a", "工作区 A")],
+        });
+      }
+      if (path.endsWith("/spaces")) {
+        return Promise.resolve({
+          spaces: [space("workspace-a", "space-a", "视图切换空间")],
+        });
+      }
+      if (path.endsWith("/members")) {
+        return Promise.resolve({
+          members: [member("member-a", "switch-view@example.com")],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    const { rerender } = render(<WorkspaceCenter />);
+    expect(await screen.findByText("switch-view@example.com")).toBeTruthy();
+    expect(
+      await screen.findByRole("button", { name: "发送邀请" }),
+    ).toBeTruthy();
+
+    rerender(<WorkspaceCenter view="knowledge" />);
+
+    expect(screen.queryByText("switch-view@example.com")).toBeNull();
+    expect(screen.queryByRole("button", { name: "发送邀请" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /受邀邮箱/ })).toBeNull();
+    expect(screen.getByText("— / 10")).toBeTruthy();
+    expect(await screen.findByText("成员信息未读取")).toBeTruthy();
+    expect(screen.getByText("视图切换空间")).toBeTruthy();
+
+    const invitationCalls = mockRequest.mock.calls.filter(
+      ([path]) => typeof path === "string" && path.includes("/invitations"),
+    );
+    expect(invitationCalls).toHaveLength(0);
+  });
+
+  it("hides the previous workspace details while the next request is pending", async () => {
+    const bSpaces = deferred<{ spaces: Space[] }>();
+    const bMembers = deferred<{ members: Member[] }>();
+    mockRequest.mockImplementation((path: string) => {
+      if (path === "/api/v1/workspaces") {
+        return Promise.resolve({
+          workspaces: [
+            workspace("workspace-a", "工作区 A"),
+            workspace("workspace-b", "工作区 B"),
+          ],
+        });
+      }
+      if (path === "/api/v1/workspaces/workspace-a/spaces") {
+        return Promise.resolve({
+          spaces: [space("workspace-a", "space-a", "A 空间")],
+        });
+      }
+      if (path === "/api/v1/workspaces/workspace-a/members") {
+        return Promise.resolve({
+          members: [member("member-a", "a@example.com")],
+        });
+      }
+      if (path === "/api/v1/workspaces/workspace-b/spaces") {
+        return bSpaces.promise;
+      }
+      if (path === "/api/v1/workspaces/workspace-b/members") {
+        return bMembers.promise;
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(<WorkspaceCenter />);
+    expect(await screen.findByText("A 空间")).toBeTruthy();
+    expect(await screen.findByText("a@example.com")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /工作区 B/ }));
+
+    expect(screen.queryByText("A 空间")).toBeNull();
+    expect(screen.queryByText("a@example.com")).toBeNull();
+    expect(screen.queryByRole("button", { name: "发送邀请" })).toBeNull();
+    expect(screen.getByText("— / 10")).toBeTruthy();
+
+    await act(async () => {
+      bSpaces.resolve({
+        spaces: [space("workspace-b", "space-b", "B 空间")],
+      });
+      bMembers.resolve({
+        members: [member("member-b", "b@example.com")],
+      });
+      await Promise.all([bSpaces.promise, bMembers.promise]);
+    });
+
+    expect(await screen.findByText("B 空间")).toBeTruthy();
+    expect(screen.getByText("b@example.com")).toBeTruthy();
+  });
+
+  it("does not reuse the removed workspace data on the first refreshed render", async () => {
+    let listCalls = 0;
+    const cSpaces = deferred<{ spaces: Space[] }>();
+    const cMembers = deferred<{ members: Member[] }>();
+    mockRequest.mockImplementation(
+      (path: string, options?: { method?: string }) => {
+        if (path === "/api/v1/workspaces") {
+          if (options?.method === "POST") {
+            return Promise.resolve(workspace("workspace-c", "工作区 C"));
+          }
+          listCalls += 1;
+          return Promise.resolve({
+            workspaces:
+              listCalls === 1
+                ? [workspace("workspace-a", "工作区 A")]
+                : [workspace("workspace-c", "工作区 C")],
+          });
+        }
+        if (path === "/api/v1/workspaces/workspace-a/spaces") {
+          return Promise.resolve({
+            spaces: [space("workspace-a", "space-a", "A 空间")],
+          });
+        }
+        if (path === "/api/v1/workspaces/workspace-a/members") {
+          return Promise.resolve({
+            members: [member("member-a", "a@example.com")],
+          });
+        }
+        if (path === "/api/v1/workspaces/workspace-c/spaces") {
+          return cSpaces.promise;
+        }
+        if (path === "/api/v1/workspaces/workspace-c/members") {
+          return cMembers.promise;
+        }
+        throw new Error(`Unexpected request: ${path}`);
+      },
+    );
+
+    render(<WorkspaceCenter />);
+    expect(await screen.findByText("A 空间")).toBeTruthy();
+    expect(await screen.findByText("a@example.com")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/工作区名称/), {
+      target: { value: "工作区 C" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "创建工作区" }));
+    });
+
+    expect(screen.getByRole("button", { name: /工作区 C/ })).toBeTruthy();
+    expect(screen.queryByText("A 空间")).toBeNull();
+    expect(screen.queryByText("a@example.com")).toBeNull();
+    expect(screen.queryByRole("button", { name: "发送邀请" })).toBeNull();
+    expect(screen.getByText("— / 10")).toBeTruthy();
+    expect(screen.queryByText("0 / 10")).toBeNull();
+
+    await act(async () => {
+      cSpaces.resolve({ spaces: [space("workspace-c", "space-c", "C 空间")] });
+      cMembers.resolve({ members: [member("member-c", "c@example.com")] });
+      await Promise.all([cSpaces.promise, cMembers.promise]);
+    });
+
+    expect(await screen.findByText("C 空间")).toBeTruthy();
+    expect(screen.getByText("c@example.com")).toBeTruthy();
+  });
 });

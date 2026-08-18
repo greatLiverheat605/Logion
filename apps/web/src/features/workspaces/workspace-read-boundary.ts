@@ -11,17 +11,17 @@ export type WorkspaceCenterView = "collaboration" | "knowledge";
 
 export type SpaceReadState =
   | { phase: "idle" }
-  | { phase: "loading" }
-  | { phase: "ready"; spaces: Space[] }
-  | { phase: "error"; message: string };
+  | { phase: "loading"; workspaceId: string }
+  | { phase: "ready"; workspaceId: string; spaces: Space[] }
+  | { phase: "error"; workspaceId: string; message: string };
 
 export type MemberReadState =
   | { phase: "idle" }
-  | { phase: "loading" }
-  | { phase: "skipped" }
-  | { phase: "ready"; members: Member[] }
-  | { phase: "denied" }
-  | { phase: "error"; message: string };
+  | { phase: "loading"; workspaceId: string }
+  | { phase: "skipped"; workspaceId: string }
+  | { phase: "ready"; workspaceId: string; members: Member[] }
+  | { phase: "denied"; workspaceId: string }
+  | { phase: "error"; workspaceId: string; message: string };
 
 export type DetailRequestOutcome<T> =
   | { ok: true; data: T }
@@ -52,40 +52,78 @@ export function isMemberReadDenied(error: unknown): boolean {
 }
 
 export function spaceReadStateFrom(
+  workspaceId: string,
   outcome: SpaceRequestOutcome,
 ): SpaceReadState {
   if (outcome.ok) {
     return {
       phase: "ready",
+      workspaceId,
       spaces: Array.isArray(outcome.data.spaces) ? outcome.data.spaces : [],
     };
   }
   return {
     phase: "error",
+    workspaceId,
     message: workspaceActionError(outcome.error, "space"),
   };
 }
 
 export function memberReadStateFrom(
   view: WorkspaceCenterView,
+  workspaceId: string,
   outcome: MemberRequestOutcome | null,
 ): MemberReadState {
   if (!shouldReadMembers(view) || outcome === null) {
-    return { phase: "skipped" };
+    return { phase: "skipped", workspaceId };
   }
   if (outcome.ok) {
     return {
       phase: "ready",
+      workspaceId,
       members: Array.isArray(outcome.data.members) ? outcome.data.members : [],
     };
   }
   if (isMemberReadDenied(outcome.error)) {
-    return { phase: "denied" };
+    return { phase: "denied", workspaceId };
   }
   return {
     phase: "error",
+    workspaceId,
     message: workspaceActionError(outcome.error, "member"),
   };
+}
+
+export function spaceReadForSelected(
+  state: SpaceReadState,
+  selected: string | null,
+): SpaceReadState {
+  if (state.phase === "idle" || state.workspaceId === selected) {
+    return state;
+  }
+  return { phase: "idle" };
+}
+
+export function memberReadForSelected(
+  state: MemberReadState,
+  selected: string | null,
+): MemberReadState {
+  if (state.phase === "idle" || state.workspaceId === selected) {
+    return state;
+  }
+  return { phase: "idle" };
+}
+
+export function isMemberReadUsable(
+  view: WorkspaceCenterView,
+  state: MemberReadState,
+  selected: string | null,
+): boolean {
+  return (
+    view === "collaboration" &&
+    state.phase === "ready" &&
+    state.workspaceId === selected
+  );
 }
 
 export function detailStatusMessage(
