@@ -32,17 +32,30 @@ import {
   workspaceActionError,
   workspaceInvitationConflictDetail,
 } from "./workspace-feedback";
+import {
+  detailStatusMessage,
+  type DetailLoadResult,
+  type Member,
+  MEMBER_READ_DENIED_NOTICE,
+  MEMBER_READ_SKIPPED_NOTICE,
+  type MemberReadState,
+  memberReadStateFrom,
+  type MemberRequestOutcome,
+  type Space,
+  type SpaceReadState,
+  spaceReadStateFrom,
+  type SpaceRequestOutcome,
+  shouldReadMembers,
+  type WorkspaceCenterView,
+} from "./workspace-read-boundary";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
-type Space = components["schemas"]["SpaceResponse"];
-type Member = components["schemas"]["WorkspaceMemberResponse"];
 
 type PendingAction = WorkspaceAction | null;
 type FormFeedback = {
   message: string;
   tone: "error" | "loading" | "success";
 };
-type WorkspaceCenterView = "collaboration" | "knowledge";
 
 const MEMBER_ROLES = [
   ["viewer", "查看者"],
@@ -95,8 +108,12 @@ export function WorkspaceCenter({
 }: Readonly<{ view?: WorkspaceCenterView }>) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [spaces, setSpaces] = useState<Space[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [spaceRead, setSpaceRead] = useState<SpaceReadState>({
+    phase: "idle",
+  });
+  const [memberRead, setMemberRead] = useState<MemberReadState>({
+    phase: "idle",
+  });
   const [status, setStatus] = useState("正在读取工作区…");
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
@@ -129,8 +146,8 @@ export function WorkspaceCenter({
       const next = Array.isArray(result.workspaces) ? result.workspaces : [];
       setWorkspaces(next);
       if (next.length === 0) {
-        setSpaces([]);
-        setMembers([]);
+        setSpaceRead({ phase: "idle" });
+        setMemberRead({ phase: "idle" });
       }
       setSelected((current) =>
         current && next.some((workspace) => workspace.id === current)
@@ -158,51 +175,68 @@ export function WorkspaceCenter({
   }, []);
 
   const loadDetails = useCallback(
-    async (workspaceId: string): Promise<boolean> => {
+    async (workspaceId: string): Promise<DetailLoadResult> => {
       detailsRequestRef.current?.abort();
       const controller = new AbortController();
       detailsRequestRef.current = controller;
       const basePath = workspacePath(workspaceId);
-      try {
-        const [spaceResult, memberResult] = await Promise.all([
-          browserApiClient.request<{ spaces: Space[] }>(`${basePath}/spaces`, {
-            signal: controller.signal,
-          }),
-          browserApiClient.request<{ members: Member[] }>(
-            `${basePath}/members`,
+      const includeMembers = shouldReadMembers(view);
+      setSpaceRead({ phase: "loading" });
+      setMemberRead(
+        includeMembers ? { phase: "loading" } : { phase: "skipped" },
+      );
+      const spaceTask = (async (): Promise<SpaceRequestOutcome> => {
+        try {
+          const payload = await browserApiClient.request<{ spaces: Space[] }>(
+            `${basePath}/spaces`,
             { signal: controller.signal },
-          ),
-        ]);
+          );
+          return { ok: true, data: payload };
+        } catch (error) {
+          return { ok: false, error };
+        }
+      })();
+      const memberTask: Promise<MemberRequestOutcome | null> = includeMembers
+        ? (async (): Promise<MemberRequestOutcome> => {
+            try {
+              const payload = await browserApiClient.request<{
+                members: Member[];
+              }>(`${basePath}/members`, { signal: controller.signal });
+              return { ok: true, data: payload };
+            } catch (error) {
+              return { ok: false, error };
+            }
+          })()
+        : Promise.resolve(null);
+      const [spaceOutcome, memberOutcome] = await Promise.all([
+        spaceTask,
+        memberTask,
+      ]);
+      try {
         if (
           controller.signal.aborted ||
           detailsRequestRef.current !== controller
         ) {
-          return false;
+          return { applied: false, spacesLoaded: false, membersLoaded: null };
         }
-        setSpaces(Array.isArray(spaceResult.spaces) ? spaceResult.spaces : []);
-        setMembers(
-          Array.isArray(memberResult.members) ? memberResult.members : [],
-        );
-        setStatus("工作区内容已更新。");
-        return true;
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          detailsRequestRef.current !== controller
-        ) {
-          return false;
-        }
-        setSpaces([]);
-        setMembers([]);
-        setStatus(workspaceActionError(error, "space"));
-        return false;
+        const nextSpaceRead = spaceReadStateFrom(spaceOutcome);
+        const nextMemberRead = memberReadStateFrom(view, memberOutcome);
+        setSpaceRead(nextSpaceRead);
+        setMemberRead(nextMemberRead);
+        setStatus(detailStatusMessage(nextSpaceRead, nextMemberRead));
+        return {
+          applied: true,
+          spacesLoaded: nextSpaceRead.phase === "ready",
+          membersLoaded:
+            memberOutcome === null ? null : nextMemberRead.phase === "ready",
+        };
       } finally {
         if (detailsRequestRef.current === controller) {
           detailsRequestRef.current = null;
         }
       }
     },
-    [],
+    [view],
   );
 
   useEffect(() => {
@@ -224,6 +258,12 @@ export function WorkspaceCenter({
       });
     } else {
       detailsRequestRef.current?.abort();
+      queueMicrotask(() => {
+        if (active) {
+          setSpaceRead({ phase: "idle" });
+          setMemberRead({ phase: "idle" });
+        }
+      });
     }
     return () => {
       active = false;
@@ -233,10 +273,15 @@ export function WorkspaceCenter({
 
   const anyPending = pendingAction !== null || pendingMemberId !== null;
   const selectedWorkspace = workspaces.find((item) => item.id === selected);
+  const spaces = spaceRead.phase === "ready" ? spaceRead.spaces : [];
+  const members = memberRead.phase === "ready" ? memberRead.members : [];
+  const spacesReady = spaceRead.phase === "ready";
   const privateSpaceCount = spaces.filter(
     (item) => item.visibility === "private",
   ).length;
   const sharedSpaceCount = spaces.length - privateSpaceCount;
+  const memberCapacityLabel =
+    memberRead.phase === "ready" ? `${members.length} / 10` : "— / 10";
 
   function selectWorkspace(workspaceId: string) {
     setSelected(workspaceId);
@@ -244,6 +289,10 @@ export function WorkspaceCenter({
     setSpaceFeedback(null);
     setInviteFeedback(null);
     setInviteConflict(null);
+    setSpaceRead({ phase: "loading" });
+    setMemberRead(
+      shouldReadMembers(view) ? { phase: "loading" } : { phase: "skipped" },
+    );
     setStatus("正在读取工作区内容…");
   }
 
@@ -318,13 +367,14 @@ export function WorkspaceCenter({
       });
       form.reset();
       const refreshed = await loadDetails(selected);
+      const spacesRefreshed = refreshed.applied && refreshed.spacesLoaded;
       setSpaceFeedback({
-        message: refreshed
+        message: spacesRefreshed
           ? "空间已创建。"
           : "空间已创建，但列表刷新失败，请稍后重试。",
-        tone: refreshed ? "success" : "error",
+        tone: spacesRefreshed ? "success" : "error",
       });
-      if (refreshed) setStatus("空间已创建。");
+      if (spacesRefreshed) setStatus("空间已创建。");
     } catch (error) {
       const message = workspaceActionError(error, "space");
       setSpaceFeedback({ message, tone: "error" });
@@ -337,6 +387,10 @@ export function WorkspaceCenter({
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || anyPending) return;
+    if (!shouldReadMembers(view) || memberRead.phase !== "ready") {
+      setStatus("当前状态无法发送邀请；请刷新成员状态后重试。");
+      return;
+    }
     const form = event.currentTarget;
     setInviteFeedback(null);
     setInviteConflict(null);
@@ -411,8 +465,10 @@ export function WorkspaceCenter({
         },
       );
       const refreshed = await loadDetails(selected);
+      const membersRefreshed =
+        refreshed.applied && refreshed.membersLoaded !== false;
       setStatus(
-        refreshed
+        membersRefreshed
           ? `${member.email} 的角色已更新。`
           : "角色已更新，但成员列表刷新失败，请稍后重试。",
       );
@@ -480,15 +536,15 @@ export function WorkspaceCenter({
           <span>工作区</span>
         </div>
         <div role="listitem">
-          <strong>{privateSpaceCount}</strong>
+          <strong>{spacesReady ? privateSpaceCount : "—"}</strong>
           <span>私有空间</span>
         </div>
         <div role="listitem">
-          <strong>{sharedSpaceCount}</strong>
+          <strong>{spacesReady ? sharedSpaceCount : "—"}</strong>
           <span>共享空间</span>
         </div>
         <div role="listitem">
-          <strong>{members.length} / 10</strong>
+          <strong>{memberCapacityLabel}</strong>
           <span>成员容量</span>
         </div>
       </div>
@@ -592,30 +648,42 @@ export function WorkspaceCenter({
             <div className="workspace-space-section">
               <header>
                 <strong>Space</strong>
-                <span>{spaces.length} 个</span>
+                <span>{spacesReady ? `${spaces.length} 个` : "—"}</span>
               </header>
-              <ul className="workspace-space-list">
-                {spaces.map((space) => (
-                  <li key={space.id}>
-                    <span>
-                      <strong>{space.name}</strong>
-                      <small>{space.status}</small>
-                    </span>
-                    <ProductTag
-                      tone={space.visibility === "shared" ? "info" : "default"}
-                    >
-                      {space.visibility === "private" ? "私有" : "共享"}
-                    </ProductTag>
-                  </li>
-                ))}
-              </ul>
-              {spaces.length === 0 ? (
+              {spaceRead.phase === "error" ? (
                 <ProductEmptyState
-                  description="创建私有空间开始个人资料管理，或创建共享空间开展小组协作。"
+                  description={spaceRead.message}
                   icon="□"
-                  title="当前工作区还没有空间"
+                  title="空间列表暂不可用"
                 />
-              ) : null}
+              ) : (
+                <>
+                  <ul className="workspace-space-list">
+                    {spaces.map((space) => (
+                      <li key={space.id}>
+                        <span>
+                          <strong>{space.name}</strong>
+                          <small>{space.status}</small>
+                        </span>
+                        <ProductTag
+                          tone={
+                            space.visibility === "shared" ? "info" : "default"
+                          }
+                        >
+                          {space.visibility === "private" ? "私有" : "共享"}
+                        </ProductTag>
+                      </li>
+                    ))}
+                  </ul>
+                  {spacesReady && spaces.length === 0 ? (
+                    <ProductEmptyState
+                      description="创建私有空间开始个人资料管理，或创建共享空间开展小组协作。"
+                      icon="□"
+                      title="当前工作区还没有空间"
+                    />
+                  ) : null}
+                </>
+              )}
               <details className="workspace-inline-disclosure">
                 <summary>新建 Space</summary>
                 <form
@@ -676,145 +744,181 @@ export function WorkspaceCenter({
         </ProductPanel>
 
         <ProductPanel
-          aside={<ProductTag tone="info">{members.length} / 10</ProductTag>}
+          aside={
+            memberRead.phase === "ready" ? (
+              <ProductTag tone="info">{members.length} / 10</ProductTag>
+            ) : null
+          }
           className="workspace-console-panel"
           description="邀请保留最小必要角色；角色更新使用服务端版本检查。"
           title="成员与邀请"
         >
           {selected ? (
             <>
-              <form
-                aria-busy={pendingAction === "invite"}
-                className="workspace-command-form workspace-invite-form"
-                noValidate
-                onSubmit={invite}
-              >
-                <DeskField
-                  errorId="invite-feedback"
-                  errorMessage={
-                    inviteFeedback?.tone === "error"
-                      ? inviteFeedback.message
-                      : undefined
-                  }
-                  htmlFor="invite-email"
-                  label="受邀邮箱"
-                  required
-                >
-                  <DeskInput
-                    aria-describedby={
-                      inviteFeedback?.tone === "error"
-                        ? "invite-feedback"
-                        : undefined
-                    }
-                    id="invite-email"
-                    invalid={inviteFeedback?.tone === "error"}
-                    name="email"
-                    required
-                    type="email"
-                  />
-                </DeskField>
-                <DeskField htmlFor="invite-role" label="角色">
-                  <DeskSelect id="invite-role" name="role">
-                    {MEMBER_ROLES.map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </DeskSelect>
-                </DeskField>
-                <DeskButton
-                  disabled={anyPending}
-                  loading={pendingAction === "invite"}
-                  type="submit"
-                >
-                  发送邀请
-                </DeskButton>
-                {inviteFeedback && inviteFeedback.tone !== "error" ? (
-                  <InlineFormFeedback
-                    id="invite-feedback"
-                    tone={inviteFeedback.tone}
+              {memberRead.phase === "ready" ? (
+                <>
+                  <form
+                    aria-busy={pendingAction === "invite"}
+                    className="workspace-command-form workspace-invite-form"
+                    noValidate
+                    onSubmit={invite}
                   >
-                    {inviteFeedback.message}
-                  </InlineFormFeedback>
-                ) : null}
-              </form>
-
-              {inviteConflict ? (
-                <DeskConflictResolver
-                  actions={[
-                    {
-                      kind: "reload",
-                      label: "刷新并比较",
-                      onClick: () => {
-                        setInviteConflict(null);
-                        void loadDetails(selected);
-                      },
-                    },
-                    {
-                      kind: "merge",
-                      label: "调整角色",
-                      onClick: () => {
-                        setInviteConflict(null);
-                        document
-                          .querySelector<HTMLSelectElement>("#invite-role")
-                          ?.focus();
-                      },
-                    },
-                    {
-                      kind: "cancel",
-                      label: "关闭",
-                      onClick: () => setInviteConflict(null),
-                    },
-                  ]}
-                  detail={workspaceInvitationConflictDetail(inviteConflict)}
-                  error={inviteConflict}
-                  title="邀请未重复发送"
-                />
-              ) : null}
-
-              <ul className="workspace-member-list">
-                {members.map((member) => (
-                  <li key={member.id}>
-                    <span>
-                      <strong>{member.email}</strong>
-                      <small>
-                        {member.status} · 版本 {member.version}
-                      </small>
-                    </span>
-                    {member.role === "owner" ? (
-                      <ProductTag tone="good">所有者</ProductTag>
-                    ) : (
-                      <DeskSelect
-                        aria-label={`修改 ${member.email} 的角色`}
-                        disabled={anyPending}
-                        value={member.role}
-                        onChange={(event) =>
-                          void updateMember(member, event.currentTarget.value)
+                    <DeskField
+                      errorId="invite-feedback"
+                      errorMessage={
+                        inviteFeedback?.tone === "error"
+                          ? inviteFeedback.message
+                          : undefined
+                      }
+                      htmlFor="invite-email"
+                      label="受邀邮箱"
+                      required
+                    >
+                      <DeskInput
+                        aria-describedby={
+                          inviteFeedback?.tone === "error"
+                            ? "invite-feedback"
+                            : undefined
                         }
-                      >
+                        id="invite-email"
+                        invalid={inviteFeedback?.tone === "error"}
+                        name="email"
+                        required
+                        type="email"
+                      />
+                    </DeskField>
+                    <DeskField htmlFor="invite-role" label="角色">
+                      <DeskSelect id="invite-role" name="role">
                         {MEMBER_ROLES.map(([value, label]) => (
                           <option key={value} value={value}>
                             {label}
                           </option>
                         ))}
                       </DeskSelect>
-                    )}
-                    {pendingMemberId === member.id ? (
-                      <span
-                        aria-live="polite"
-                        className="workspace-row-pending"
+                    </DeskField>
+                    <DeskButton
+                      disabled={anyPending}
+                      loading={pendingAction === "invite"}
+                      type="submit"
+                    >
+                      发送邀请
+                    </DeskButton>
+                    {inviteFeedback && inviteFeedback.tone !== "error" ? (
+                      <InlineFormFeedback
+                        id="invite-feedback"
+                        tone={inviteFeedback.tone}
                       >
-                        正在保存…
-                      </span>
+                        {inviteFeedback.message}
+                      </InlineFormFeedback>
                     ) : null}
-                  </li>
-                ))}
-              </ul>
-              {members.length === 0 ? (
+                  </form>
+
+                  {inviteConflict ? (
+                    <DeskConflictResolver
+                      actions={[
+                        {
+                          kind: "reload",
+                          label: "刷新并比较",
+                          onClick: () => {
+                            setInviteConflict(null);
+                            void loadDetails(selected);
+                          },
+                        },
+                        {
+                          kind: "merge",
+                          label: "调整角色",
+                          onClick: () => {
+                            setInviteConflict(null);
+                            document
+                              .querySelector<HTMLSelectElement>("#invite-role")
+                              ?.focus();
+                          },
+                        },
+                        {
+                          kind: "cancel",
+                          label: "关闭",
+                          onClick: () => setInviteConflict(null),
+                        },
+                      ]}
+                      detail={workspaceInvitationConflictDetail(inviteConflict)}
+                      error={inviteConflict}
+                      title="邀请未重复发送"
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              {memberRead.phase === "ready" ? (
+                <>
+                  <ul className="workspace-member-list">
+                    {members.map((member) => (
+                      <li key={member.id}>
+                        <span>
+                          <strong>{member.email}</strong>
+                          <small>
+                            {member.status} · 版本 {member.version}
+                          </small>
+                        </span>
+                        {member.role === "owner" ? (
+                          <ProductTag tone="good">所有者</ProductTag>
+                        ) : (
+                          <DeskSelect
+                            aria-label={`修改 ${member.email} 的角色`}
+                            disabled={anyPending}
+                            value={member.role}
+                            onChange={(event) =>
+                              void updateMember(
+                                member,
+                                event.currentTarget.value,
+                              )
+                            }
+                          >
+                            {MEMBER_ROLES.map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </DeskSelect>
+                        )}
+                        {pendingMemberId === member.id ? (
+                          <span
+                            aria-live="polite"
+                            className="workspace-row-pending"
+                          >
+                            正在保存…
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                  {members.length === 0 ? (
+                    <ProductEmptyState
+                      description="输入受邀邮箱并选择最小必要角色。"
+                      icon="＋"
+                      title="尚无成员记录"
+                    />
+                  ) : null}
+                </>
+              ) : null}
+              {memberRead.phase === "denied" ? (
                 <ProductEmptyState
-                  description="输入受邀邮箱并选择最小必要角色。"
-                  icon="＋"
-                  title="尚无成员记录"
+                  description={MEMBER_READ_DENIED_NOTICE}
+                  icon="◎"
+                  title="成员列表不可见"
+                />
+              ) : null}
+              {memberRead.phase === "skipped" ? (
+                <ProductEmptyState
+                  description={MEMBER_READ_SKIPPED_NOTICE}
+                  icon="◎"
+                  title="成员信息未读取"
+                />
+              ) : null}
+              {memberRead.phase === "error" ? (
+                <ProductEmptyState
+                  description={memberRead.message}
+                  icon="◎"
+                  title="成员列表读取失败"
                 />
               ) : null}
             </>
