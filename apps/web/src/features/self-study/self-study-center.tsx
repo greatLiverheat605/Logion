@@ -12,7 +12,13 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   ProductBarChart,
@@ -27,15 +33,22 @@ import {
   ProductTaskRow,
 } from "@/components/product/product-ui";
 import {
+  projectWorkbenchInspectorObject,
+  WorkbenchObjectInspector,
+  workbenchInspectorContextKey,
+} from "@/components/product/workbench-object-inspector";
+import {
   deriveProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { CollaborationSubviewNav } from "@/components/desk/collaboration-subview-nav";
 import { DeskSubviewNav } from "@/components/desk/desk-subview-nav";
+import { useInspector } from "@/features/desk/command-feedback-context";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import { eligibleCollaborationSpaces } from "./collaboration-workbench-model";
@@ -64,9 +77,41 @@ type Kind =
   | "group_review"
   | "group_feedback"
   | "report_snapshot";
+
+const INSPECTOR_KINDS = {
+  collaboration: [
+    "rubric",
+    "group_review",
+    "group_feedback",
+    "report_snapshot",
+  ],
+  research: [
+    "paper_record",
+    "research_claim",
+    "research_question",
+    "experiment_run",
+    "metric_record",
+    "research_feedback",
+  ],
+  "self-study": [
+    "learning_track",
+    "study_project",
+    "inbox_item",
+    "deliverable",
+  ],
+} as const satisfies Record<
+  "collaboration" | "research" | "self-study",
+  readonly Kind[]
+>;
 interface View {
   entity: LocalEntity;
   payload: JsonObject;
+}
+
+interface InspectorSelection {
+  contextKey: string;
+  kind: Kind;
+  id: string;
 }
 
 function transport(workspaceId: string): SyncTransport {
@@ -117,6 +162,8 @@ function OfflineLearningCenter({
 }: {
   mode: "self-study" | "research" | "collaboration";
 }) {
+  const { closeInspector, openInspector } = useInspector();
+  const { activePersona } = usePersona();
   const { state: session } = useSession();
   const {
     database,
@@ -130,7 +177,10 @@ function OfflineLearningCenter({
   const [workspaceId, setWorkspaceId] = useState(""),
     [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
+  const [inspectorSelection, setInspectorSelection] =
+    useState<InspectorSelection | null>(null);
   const unlocked = vaultPhase === "unlocked";
+  useEffect(() => () => closeInspector(), [closeInspector]);
   const [status, setStatus] = useState(() =>
     mode === "collaboration"
       ? "正在准备共享审阅空间……"
@@ -604,6 +654,78 @@ function OfflineLearningCenter({
   }
   const visible = (kind: Kind) =>
     records[kind].filter((x) => x.payload.space_id === spaceId);
+  const inspectorContextKey = workbenchInspectorContextKey({
+    personaId: activePersona?.id ?? null,
+    spaceId,
+    unlocked,
+    vaultRevision,
+    workbench: mode,
+    workspaceId,
+  });
+  const selectedInspectorObject = useMemo(
+    () =>
+      projectWorkbenchInspectorObject({
+        allowedKinds: INSPECTOR_KINDS[mode],
+        contextAllowed:
+          unlocked &&
+          inspectorSelection?.contextKey === inspectorContextKey &&
+          (mode !== "collaboration" ||
+            spaces.find((space) => space.id === spaceId)?.visibility ===
+              "shared"),
+        records: Object.values(records).flat(),
+        selection: inspectorSelection,
+        spaceId,
+        workspaceId,
+      }),
+    [
+      inspectorContextKey,
+      inspectorSelection,
+      mode,
+      records,
+      spaceId,
+      spaces,
+      unlocked,
+      workspaceId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!inspectorSelection) {
+      closeInspector();
+      return;
+    }
+    if (!selectedInspectorObject) {
+      closeInspector();
+      const invalidSelection = inspectorSelection;
+      const timeout = window.setTimeout(
+        () =>
+          setInspectorSelection((current) =>
+            current === invalidSelection ? null : current,
+          ),
+        0,
+      );
+      return () => window.clearTimeout(timeout);
+    }
+    openInspector({
+      body: <WorkbenchObjectInspector object={selectedInspectorObject} />,
+      title: selectedInspectorObject.title,
+    });
+  }, [
+    closeInspector,
+    inspectorSelection,
+    openInspector,
+    selectedInspectorObject,
+  ]);
+
+  function resetInspectorSelection() {
+    setInspectorSelection(null);
+    closeInspector();
+  }
+
+  function selectInspector(kind: Kind, id: string) {
+    setInspectorSelection({ contextKey: inspectorContextKey, id, kind });
+  }
+
   const researchPapers = visible("paper_record");
   const normalizedResearchQuery = researchQuery.trim().toLocaleLowerCase();
   const filteredResearchPapers = researchPapers.filter((paper) =>
@@ -727,7 +849,10 @@ function OfflineLearningCenter({
           <select
             aria-label="工作区"
             value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
+            onChange={(event) => {
+              resetInspectorSelection();
+              setWorkspaceId(event.target.value);
+            }}
           >
             {workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
@@ -741,7 +866,10 @@ function OfflineLearningCenter({
           <select
             aria-label={mode === "collaboration" ? "共享空间" : "空间"}
             value={spaceId}
-            onChange={(event) => setSpaceId(event.target.value)}
+            onChange={(event) => {
+              resetInspectorSelection();
+              setSpaceId(event.target.value);
+            }}
           >
             {mode === "collaboration" &&
             spaces.every((space) => space.visibility !== "shared") ? (
@@ -786,6 +914,15 @@ function OfflineLearningCenter({
     return (
       <main id="main-content" className="settings-page today-page">
         <ProductPageHeader
+          actions={
+            <>
+              <ProductTag tone="info">
+                Shared Space:{" "}
+                {spaces.find((space) => space.id === spaceId)?.name ?? "未选择"}
+              </ProductTag>
+              <ProductTag>Role: {selectedRole ?? "unavailable"}</ProductTag>
+            </>
+          }
           eyebrow="COLLABORATION · SMALL GROUP REVIEW"
           title="让反馈落到共享对象和下一步行动"
           description={
@@ -958,6 +1095,15 @@ function OfflineLearningCenter({
             {visible("group_review").map((review) => (
               <article className="task-card" key={review.entity.entity_id}>
                 <h3>{String(review.payload.subject_title)}</h3>
+                <button
+                  className="product-action-link"
+                  type="button"
+                  onClick={() =>
+                    selectInspector("group_review", review.entity.entity_id)
+                  }
+                >
+                  查看审阅详情
+                </button>
                 {visible("group_feedback")
                   .filter(
                     (x) => x.payload.review_id === review.entity.entity_id,
@@ -1091,7 +1237,10 @@ function OfflineLearningCenter({
                   }
                   key={paper.entity.entity_id}
                   type="button"
-                  onClick={() => setSelectedPaperId(paper.entity.entity_id)}
+                  onClick={() => {
+                    setSelectedPaperId(paper.entity.entity_id);
+                    selectInspector("paper_record", paper.entity.entity_id);
+                  }}
                 >
                   <AppIcon name="files" size={17} />
                   <span>
@@ -1374,6 +1523,15 @@ function OfflineLearningCenter({
             {visible("experiment_run").map((run) => (
               <article className="task-card" key={run.entity.entity_id}>
                 <h3>{String(run.payload.title)}</h3>
+                <button
+                  className="product-action-link"
+                  type="button"
+                  onClick={() =>
+                    selectInspector("experiment_run", run.entity.entity_id)
+                  }
+                >
+                  查看实验详情
+                </button>
                 {visible("metric_record")
                   .filter((m) => m.payload.run_id === run.entity.entity_id)
                   .map((m) => (
@@ -1599,22 +1757,52 @@ function OfflineLearningCenter({
         <div className="task-grid">
           {visible("learning_track").map((track) => (
             <article className="task-card" key={track.entity.entity_id}>
-              <h3>{String(track.payload.title)}</h3>
+              <h3>
+                <button
+                  className="product-action-link"
+                  type="button"
+                  onClick={() =>
+                    selectInspector("learning_track", track.entity.entity_id)
+                  }
+                >
+                  {String(track.payload.title)}
+                </button>
+              </h3>
               <p>{String(track.payload.objective)}</p>
               {visible("study_project")
                 .filter((p) => p.payload.track_id === track.entity.entity_id)
                 .map((project) => (
                   <section key={project.entity.entity_id}>
-                    <h4>{String(project.payload.title)}</h4>
+                    <h4>
+                      <button
+                        className="product-action-link"
+                        type="button"
+                        onClick={() =>
+                          selectInspector(
+                            "study_project",
+                            project.entity.entity_id,
+                          )
+                        }
+                      >
+                        {String(project.payload.title)}
+                      </button>
+                    </h4>
                     {visible("deliverable")
                       .filter(
                         (d) =>
                           d.payload.project_id === project.entity.entity_id,
                       )
                       .map((d) => (
-                        <p key={d.entity.entity_id}>
+                        <button
+                          className="product-action-link"
+                          key={d.entity.entity_id}
+                          type="button"
+                          onClick={() =>
+                            selectInspector("deliverable", d.entity.entity_id)
+                          }
+                        >
                           ✓ {String(d.payload.title)}
-                        </p>
+                        </button>
                       ))}
                   </section>
                 ))}

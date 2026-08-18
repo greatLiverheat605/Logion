@@ -12,7 +12,13 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   ProductBarChart,
@@ -30,9 +36,16 @@ import {
   deriveProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
+import {
+  projectWorkbenchInspectorObject,
+  WorkbenchObjectInspector,
+  workbenchInspectorContextKey,
+} from "@/components/product/workbench-object-inspector";
+import { useInspector } from "@/features/desk/command-feedback-context";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import { examCoverageRate, normalizeExamScores } from "./exam-workbench-model";
@@ -94,6 +107,27 @@ interface ProtectedView<T extends JsonObject> {
   entity: LocalEntity;
   payload: T;
 }
+
+type InspectorKind =
+  | "exam"
+  | "exam_subject"
+  | "syllabus_node"
+  | "mock_exam"
+  | "score_record";
+
+interface InspectorSelection {
+  contextKey: string;
+  kind: InspectorKind;
+  id: string;
+}
+
+const EXAM_INSPECTOR_KINDS = [
+  "exam",
+  "exam_subject",
+  "syllabus_node",
+  "mock_exam",
+  "score_record",
+] as const satisfies readonly InspectorKind[];
 
 function SyllabusTree({
   nodes,
@@ -160,6 +194,8 @@ function countdown(examAt: string | null): string {
 }
 
 export function ExamCenter() {
+  const { closeInspector, openInspector } = useInspector();
+  const { activePersona } = usePersona();
   const { state: session } = useSession();
   const {
     database,
@@ -190,6 +226,9 @@ export function ExamCenter() {
   const [scoreRecords, setScoreRecords] = useState<
     ProtectedView<ScoreRecordPayload>[]
   >([]);
+  const [inspectorSelection, setInspectorSelection] =
+    useState<InspectorSelection | null>(null);
+  useEffect(() => () => closeInspector(), [closeInspector]);
   const [contextPhase, setContextPhase] = useState<
     "error" | "loading" | "ready"
   >("loading");
@@ -697,6 +736,82 @@ export function ExamCenter() {
         (mock) => mock.entity.entity_id === item.payload.mock_exam_id,
       ),
   );
+  const inspectorContextKey = workbenchInspectorContextKey({
+    personaId: activePersona?.id ?? null,
+    spaceId,
+    unlocked,
+    vaultRevision,
+    workbench: "exam",
+    workspaceId,
+  });
+  const selectedInspectorObject = useMemo(
+    () =>
+      projectWorkbenchInspectorObject({
+        allowedKinds: EXAM_INSPECTOR_KINDS,
+        contextAllowed:
+          unlocked && inspectorSelection?.contextKey === inspectorContextKey,
+        records: [
+          ...exams,
+          ...subjects,
+          ...syllabusNodes,
+          ...mockExams,
+          ...scoreRecords,
+        ],
+        selection: inspectorSelection,
+        spaceId,
+        workspaceId,
+      }),
+    [
+      exams,
+      inspectorContextKey,
+      inspectorSelection,
+      mockExams,
+      scoreRecords,
+      spaceId,
+      subjects,
+      syllabusNodes,
+      unlocked,
+      workspaceId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!inspectorSelection) {
+      closeInspector();
+      return;
+    }
+    if (!selectedInspectorObject) {
+      closeInspector();
+      const invalidSelection = inspectorSelection;
+      const timeout = window.setTimeout(
+        () =>
+          setInspectorSelection((current) =>
+            current === invalidSelection ? null : current,
+          ),
+        0,
+      );
+      return () => window.clearTimeout(timeout);
+    }
+    openInspector({
+      body: <WorkbenchObjectInspector object={selectedInspectorObject} />,
+      title: selectedInspectorObject.title,
+    });
+  }, [
+    closeInspector,
+    inspectorSelection,
+    openInspector,
+    selectedInspectorObject,
+  ]);
+
+  function resetInspectorSelection() {
+    setInspectorSelection(null);
+    closeInspector();
+  }
+
+  function selectInspector(kind: InspectorKind, id: string) {
+    setInspectorSelection({ contextKey: inspectorContextKey, id, kind });
+  }
+
   const primaryExam =
     visibleExams.find((item) => item.payload.status === "active") ??
     visibleExams.find((item) => item.payload.status === "planning") ??
@@ -894,7 +1009,10 @@ export function ExamCenter() {
           <select
             id="exam-workspace"
             value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
+            onChange={(event) => {
+              resetInspectorSelection();
+              setWorkspaceId(event.target.value);
+            }}
           >
             {workspaces.map((item) => (
               <option key={item.id} value={item.id}>
@@ -906,7 +1024,10 @@ export function ExamCenter() {
           <select
             id="exam-space"
             value={spaceId}
-            onChange={(event) => setSpaceId(event.target.value)}
+            onChange={(event) => {
+              resetInspectorSelection();
+              setSpaceId(event.target.value);
+            }}
           >
             {spaces.map((item) => (
               <option key={item.id} value={item.id}>
@@ -1245,6 +1366,13 @@ export function ExamCenter() {
                 {countdown(exam.payload.exam_at)}
               </span>
               <h3>{exam.payload.title}</h3>
+              <button
+                className="product-action-link"
+                type="button"
+                onClick={() => selectInspector("exam", exam.entity.entity_id)}
+              >
+                查看考试详情
+              </button>
               <p>
                 {exam.payload.exam_at
                   ? EXAM_DATE_FORMATTER.format(new Date(exam.payload.exam_at))
