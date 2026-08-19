@@ -167,3 +167,9 @@
 - 根级 `corepack pnpm ci:fast` 未全绿：在既有 `apps/worker/src/logion_worker/email_delivery.py` 的 `alibabacloud_credentials` 缺少 mypy stub 处失败；未修改该无关 Worker 文件。
 - 当前分支尚未 push、merge 或 deploy；TencentDB Agent Memory 仍为“部署待验收”。
 - 下一阶段为 I2（研究与考试领域流程），包括 Research Question、Source、Claim/Evidence、Experiment Run、版本/证据关系，以及 Exam、覆盖矩阵、复习缺口、模拟考试和成绩轨迹；开始前需要新的施工范围、写入白名单和 Product Owner 批准。
+
+## Workbench v1 I2 任务包批准（2026-08-19）
+
+- Product Owner 已批准进入 I2 任务包准备；新增 `09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md`，冻结研究线、考试线、I2-Q1 集成线、唯一白名单和独立复审门。
+- I2 基线为 `6e448ac01dc78b94f600658f2574a51cce1cca64`。本次只修改交接文档，未开始 I2 正式代码施工，未触碰 API、contracts、数据库、迁移、权限或生产配置。
+- 下一动作是协调方复核 I2 包并单独授权 I2-R1 或 I2-E1；GLM 只能承担独立、不重叠的纯模型/测试子任务，结果仍需主线验收。

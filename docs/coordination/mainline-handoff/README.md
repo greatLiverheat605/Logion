@@ -30,6 +30,7 @@
 ## 当前新增任务包
 
 - [08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md](./08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md)：Workbench v1 正式施工顺序、验收门槛和停止条件。
+- [09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md](./09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md)：I2 研究与考试领域施工范围、白名单和验收门。
 - [TENCENTDB_AGENT_MEMORY_HANDOFF.md](../../development/TENCENTDB_AGENT_MEMORY_HANDOFF.md)：TencentDB Agent Memory 的接入边界、验收和新窗口恢复规则。
 
-当前状态（2026-08-19）：Workbench v1 的 W1（M1-M4 与 S1）已完成并提交于 `22b9e339d1935e81685dda1c043384f914c58d02`；Web 68 文件/525 测试与真实认证浏览器 32/32 通过，独立整批复审第二轮 PASS。根级 `ci:fast` 仍受既有 Worker 第三方 mypy stub 缺失阻塞，未修改该无关文件。当前分支尚未 push、merge 或 deploy，下一阶段为 I2（研究与考试领域流程），仍需 Product Owner 单独批准。TencentDB Agent Memory 继续单独待验收。
+当前状态（2026-08-19）：Workbench v1 的 W1（M1-M4 与 S1）已完成并提交于 `22b9e339d1935e81685dda1c043384f914c58d02`；Web 68 文件/525 测试与真实认证浏览器 32/32 通过，独立整批复审第二轮 PASS。根级 `ci:fast` 仍受既有 Worker 第三方 mypy stub 缺失阻塞，未修改该无关文件。Product Owner 已批准进入 I2 任务包准备，I2 包已建立但正式代码施工尚未开始；当前分支尚未 push、merge 或 deploy。TencentDB Agent Memory 继续单独待验收。

@@ -811,3 +811,9 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 根级 `corepack pnpm ci:fast` 在既有 `apps/worker/src/logion_worker/email_delivery.py` 的 `alibabacloud_credentials` 缺少 mypy stub 处失败；未修改该无关 Worker 文件。
 - 当前分支尚未 push、merge 或 deploy；TencentDB Agent Memory 仍为“部署待验收”。
 - 下一阶段为 I2（研究与考试领域流程），必须先取得新的施工范围、写入白名单和 Product Owner 批准；在批准前不开始 I2 正式代码施工。
+
+## Workbench v1 I2 任务包批准（2026-08-19）
+
+- Product Owner 已批准进入 I2 任务包准备；任务包为 `docs/coordination/mainline-handoff/09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md`。
+- I2 冻结研究证据实验台、考试覆盖指挥台和领域集成回归三条线；基线为 `6e448ac01dc78b94f600658f2574a51cce1cca64`，正式代码施工尚未开始。
+- I2 仍禁止 API、contracts、数据库、迁移、权限、SessionBoundary、生产配置和敏感 Feature Flag 改动；每轮施工必须独立对抗复审。
