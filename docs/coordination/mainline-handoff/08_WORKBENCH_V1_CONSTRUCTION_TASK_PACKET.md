@@ -1,6 +1,6 @@
 # Workbench v1 正式施工任务包
 
-状态：I1 覆盖矩阵已通过独立对抗复审并获产品 Owner 批准；正式前端施工仍待单独授权
+状态：W1（M1-M4 与 S1）已完成并通过独立对抗复审；当前分支 HEAD 为 `22b9e339d1935e81685dda1c043384f914c58d02`，尚未 push、merge 或 deploy；I2 仍待单独施工授权
 日期：2026-08-17
 工作目录：由用户在运行环境中指定，不把本机绝对路径写入仓库
 分支：`codex/product-workbench-v1-spec`
@@ -101,4 +101,4 @@ Suggested next action for the coordinator:
 
 ## 7. 当前下一步
 
-I1 全站覆盖矩阵已完成独立对抗复审并于 2026-08-18 获产品 Owner 批准。当前只允许形成脱敏的 Workbench 文档基线提交；TencentDB Agent Memory 仍单独处于“部署待验收”，I2 和任何正式前端迁移必须等待新的明确授权。
+W1（M1-M4 与 S1）已完成并通过第二轮独立对抗复审。实际验证包括 Web 68 个文件/525 个测试、认证 Playwright 32/32、lint、typecheck、Prettier、build 与 `git diff --check`；根级 `ci:fast` 仅在既有 Worker 的第三方 mypy stub 缺失处失败，未修改该无关文件。当前 HEAD 为 `22b9e339d1935e81685dda1c043384f914c58d02`。分支尚未 push、merge 或 deploy。下一阶段为 I2（研究与考试领域流程），必须先取得新的明确施工范围与写入授权；TencentDB Agent Memory 仍为“部署待验收”。

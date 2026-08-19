@@ -802,3 +802,12 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 一次辅助源码测试在依赖获取阶段超时，测试主体未执行；该结果未记为通过，也不能替代实际端点验收。
 - 产品 Owner 于 2026-08-18 批准 I1，并授权完成 Workbench 文档脱敏和基线提交；不授权 push、merge、deploy、I2 或正式前端施工。
 - 共享写入、删除、附件、Local Worker、Provider、sync-v1 与 AI Acceptance 等敏感生产能力继续关闭。
+
+## Workbench v1 W1 施工收口（2026-08-19）
+
+- W1（M1-M4 与 S1）已完成并通过独立对抗复审，最终 HEAD 为 `22b9e339d1935e81685dda1c043384f914c58d02`。
+- Web 68 个文件/525 个测试、认证 Playwright 32/32、lint、typecheck、Prettier、build 与 `git diff --check` 均通过。
+- 独立整批复审第二轮 Verdict 为 PASS，无 P0/P1；新 Workbench Inspector 的页面级 Escape/焦点回归保留为 I4 集成门的可接受 P2。
+- 根级 `corepack pnpm ci:fast` 在既有 `apps/worker/src/logion_worker/email_delivery.py` 的 `alibabacloud_credentials` 缺少 mypy stub 处失败；未修改该无关 Worker 文件。
+- 当前分支尚未 push、merge 或 deploy；TencentDB Agent Memory 仍为“部署待验收”。
+- 下一阶段为 I2（研究与考试领域流程），必须先取得新的施工范围、写入白名单和 Product Owner 批准；在批准前不开始 I2 正式代码施工。

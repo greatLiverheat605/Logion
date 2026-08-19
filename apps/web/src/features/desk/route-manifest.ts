@@ -473,7 +473,7 @@ function firstVisibleRoute(
 ): string {
   if (!persona) return candidates[0]!;
   const allowed = new Set(persona.routes);
-  return candidates.find((route) => allowed.has(route)) ?? candidates[0]!;
+  return candidates.find((route) => allowed.has(route)) ?? "/app/today";
 }
 
 /**

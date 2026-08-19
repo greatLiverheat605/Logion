@@ -226,6 +226,17 @@ describe("defaultRouteForArea: persona-aware defaults", () => {
     expect(defaultRouteForArea("knowledge", null)).toBe("/app/records");
   });
 
+  it("知识库 fails closed to Today when a Persona has no visible knowledge route", () => {
+    const minimalPersona: PersonaDefinition = {
+      ...BUILTIN_PERSONAS[0]!,
+      id: "custom-minimal",
+      isBuiltin: false,
+      routes: ["/app/today", "/app/settings", "/app/profile", "/app/help"],
+    };
+
+    expect(defaultRouteForArea("knowledge", minimalPersona)).toBe("/app/today");
+  });
+
   it("协作空间 always defaults to /app/workspaces", () => {
     expect(defaultRouteForArea("collaboration")).toBe("/app/workspaces");
   });

@@ -158,3 +158,12 @@
 - I1 已覆盖 34 个 `page.tsx`、21 条正式路由和 73 个唯一逐操作状态合同；独立对抗终审无剩余 P1/P2。
 - 产品 Owner 已批准 I1，并授权完成 Workbench 文档脱敏和基线提交；该授权不包含 push、merge、deploy 或正式前端施工。
 - `apps/web/src/**`、API、数据库、迁移、OpenAPI 和生产配置继续保持不变；I2 必须等待新的明确施工范围与写入授权。
+
+## Workbench v1 W1 施工收口（2026-08-19）
+
+- W1（M1-M4 与 S1）已完成并通过独立对抗复审，最终 HEAD 为 `22b9e339d1935e81685dda1c043384f914c58d02`。
+- 协调方实际复核：Web 68 个文件/525 个测试、认证 Playwright 32/32、lint、typecheck、Prettier、build 与 `git diff --check` 均通过。
+- 独立整批复审第二轮 Verdict 为 PASS，无 P0/P1；新 Workbench Inspector 的页面级 Escape/焦点回归保留为 I4 集成门的可接受 P2。
+- 根级 `corepack pnpm ci:fast` 未全绿：在既有 `apps/worker/src/logion_worker/email_delivery.py` 的 `alibabacloud_credentials` 缺少 mypy stub 处失败；未修改该无关 Worker 文件。
+- 当前分支尚未 push、merge 或 deploy；TencentDB Agent Memory 仍为“部署待验收”。
+- 下一阶段为 I2（研究与考试领域流程），包括 Research Question、Source、Claim/Evidence、Experiment Run、版本/证据关系，以及 Exam、覆盖矩阵、复习缺口、模拟考试和成绩轨迹；开始前需要新的施工范围、写入白名单和 Product Owner 批准。
