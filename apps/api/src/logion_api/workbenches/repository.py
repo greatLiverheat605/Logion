@@ -5,13 +5,15 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.identity.models import User
+from logion_api.users.models import UserSetting
 from logion_api.workbenches.models import (
     WorkbenchDefinition,
     WorkbenchIdempotencyReceipt,
+    WorkbenchLink,
 )
 
 
@@ -32,6 +34,19 @@ class DefinitionCursor:
 class DefinitionPage:
     items: list[WorkbenchDefinition]
     next_cursor: DefinitionCursor | None
+
+
+@dataclass(frozen=True)
+class LinkCursor:
+    snapshot_at: datetime
+    position: int
+    link_id: UUID
+
+
+@dataclass(frozen=True)
+class LinkPage:
+    items: list[WorkbenchLink]
+    next_cursor: LinkCursor | None
 
 
 class WorkbenchRepository:
@@ -88,6 +103,118 @@ class WorkbenchRepository:
         ).one()
         return DefinitionCounts(active=int(row[1] or 0), total=int(row[0] or 0))
 
+    async def get_link(
+        self,
+        db: AsyncSession,
+        owner_user_id: UUID,
+        definition_id: UUID,
+        link_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> WorkbenchLink | None:
+        statement = select(WorkbenchLink).where(
+            WorkbenchLink.id == link_id,
+            WorkbenchLink.workbench_id == definition_id,
+            WorkbenchLink.owner_user_id == owner_user_id,
+        )
+        if for_update:
+            statement = statement.with_for_update(of=WorkbenchLink)
+        return cast(WorkbenchLink | None, await db.scalar(statement))
+
+    async def list_links(
+        self,
+        db: AsyncSession,
+        owner_user_id: UUID,
+        definition_id: UUID,
+        *,
+        limit: int,
+        snapshot_at: datetime,
+        cursor: LinkCursor | None,
+    ) -> LinkPage:
+        filters = [
+            WorkbenchLink.owner_user_id == owner_user_id,
+            WorkbenchLink.workbench_id == definition_id,
+            WorkbenchLink.updated_at <= snapshot_at,
+        ]
+        if cursor is not None:
+            filters.append(
+                or_(
+                    WorkbenchLink.position > cursor.position,
+                    and_(
+                        WorkbenchLink.position == cursor.position,
+                        WorkbenchLink.id > cursor.link_id,
+                    ),
+                )
+            )
+        rows = list(
+            (
+                await db.scalars(
+                    select(WorkbenchLink)
+                    .where(*filters)
+                    .order_by(WorkbenchLink.position.asc(), WorkbenchLink.id.asc())
+                    .limit(limit + 1)
+                )
+            ).all()
+        )
+        items = rows[:limit]
+        next_cursor = None
+        if len(rows) > limit:
+            last = items[-1]
+            next_cursor = LinkCursor(
+                snapshot_at=snapshot_at,
+                position=last.position,
+                link_id=last.id,
+            )
+        return LinkPage(items=items, next_cursor=next_cursor)
+
+    async def all_links(
+        self,
+        db: AsyncSession,
+        owner_user_id: UUID,
+        definition_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> list[WorkbenchLink]:
+        statement = (
+            select(WorkbenchLink)
+            .where(
+                WorkbenchLink.owner_user_id == owner_user_id,
+                WorkbenchLink.workbench_id == definition_id,
+            )
+            .order_by(WorkbenchLink.position.asc(), WorkbenchLink.id.asc())
+        )
+        if for_update:
+            statement = statement.with_for_update(of=WorkbenchLink)
+        return list((await db.scalars(statement)).all())
+
+    async def get_preference(
+        self,
+        db: AsyncSession,
+        owner_user_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> UserSetting | None:
+        statement = select(UserSetting).where(
+            UserSetting.user_id == owner_user_id,
+            UserSetting.key == "workbench.preference",
+        )
+        if for_update:
+            statement = statement.with_for_update(of=UserSetting)
+        return cast(UserSetting | None, await db.scalar(statement))
+
+    async def delete_definition(
+        self,
+        db: AsyncSession,
+        owner_user_id: UUID,
+        definition_id: UUID,
+    ) -> None:
+        await db.execute(
+            delete(WorkbenchDefinition).where(
+                WorkbenchDefinition.id == definition_id,
+                WorkbenchDefinition.owner_user_id == owner_user_id,
+            )
+        )
+
     async def list_definitions(
         self,
         db: AsyncSession,
@@ -141,6 +268,14 @@ class WorkbenchRepository:
     @staticmethod
     def add_definition(db: AsyncSession, definition: WorkbenchDefinition) -> None:
         db.add(definition)
+
+    @staticmethod
+    def add_link(db: AsyncSession, link: WorkbenchLink) -> None:
+        db.add(link)
+
+    @staticmethod
+    async def delete_link(db: AsyncSession, link: WorkbenchLink) -> None:
+        await db.delete(link)
 
     @staticmethod
     def add_receipt(db: AsyncSession, receipt: WorkbenchIdempotencyReceipt) -> None:
