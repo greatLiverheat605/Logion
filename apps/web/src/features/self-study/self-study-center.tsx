@@ -12,7 +12,14 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ProductBarChart,
@@ -27,22 +34,37 @@ import {
   ProductTaskRow,
 } from "@/components/product/product-ui";
 import {
+  projectWorkbenchInspectorObject,
+  WorkbenchObjectInspector,
+  workbenchInspectorContextKey,
+} from "@/components/product/workbench-object-inspector";
+import {
   deriveProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import { CollaborationSubviewNav } from "@/components/desk/collaboration-subview-nav";
 import { DeskSubviewNav } from "@/components/desk/desk-subview-nav";
+import { useInspector } from "@/features/desk/command-feedback-context";
+import { classifyCommandError } from "@/features/desk/command-state";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import { eligibleCollaborationSpaces } from "./collaboration-workbench-model";
-import { ResearchExperimentComparison } from "./research-experiment-comparison";
 import {
+  ResearchEvidenceRelations,
+  ResearchExperimentComparison,
+} from "./research-experiment-comparison";
+import {
+  buildResearchEvidenceProjection,
   buildMetricComparison,
+  finiteMetricValue,
+  researchClaimStatus,
   researchQuestionCoverage,
+  submittedMetricValue,
 } from "./research-workbench-model";
 import { buildSelfStudySummary } from "./self-study-workbench-model";
 
@@ -64,9 +86,41 @@ type Kind =
   | "group_review"
   | "group_feedback"
   | "report_snapshot";
+
+const INSPECTOR_KINDS = {
+  collaboration: [
+    "rubric",
+    "group_review",
+    "group_feedback",
+    "report_snapshot",
+  ],
+  research: [
+    "paper_record",
+    "research_claim",
+    "research_question",
+    "experiment_run",
+    "metric_record",
+    "research_feedback",
+  ],
+  "self-study": [
+    "learning_track",
+    "study_project",
+    "inbox_item",
+    "deliverable",
+  ],
+} as const satisfies Record<
+  "collaboration" | "research" | "self-study",
+  readonly Kind[]
+>;
 interface View {
   entity: LocalEntity;
   payload: JsonObject;
+}
+
+interface InspectorSelection {
+  contextKey: string;
+  kind: Kind;
+  id: string;
 }
 
 function transport(workspaceId: string): SyncTransport {
@@ -85,9 +139,20 @@ function transport(workspaceId: string): SyncTransport {
   };
 }
 function errorMessage(error: unknown) {
+  const state = classifyCommandError(error);
+  const request = state.requestId ? `（请求编号：${state.requestId}）` : "";
+  if (state.kind === "offline") {
+    return "当前离线；只有已经写入 Outbox 的内容才会在恢复网络后同步。";
+  }
+  if (state.kind === "permission_denied") {
+    return `当前账号没有权限完成此操作${request}。`;
+  }
+  if (state.kind === "conflict") {
+    return `数据已发生变化；请重新读取后再试${request}。`;
+  }
   return error instanceof LogionApiError
-    ? `操作未完成（请求编号：${error.requestId}）。`
-    : "网络暂不可用；内容仍保存在本机 Outbox。";
+    ? `操作未完成${request}。`
+    : "操作未完成；请重试。";
 }
 
 function safeResearchUrl(value: unknown): string | null {
@@ -117,6 +182,8 @@ function OfflineLearningCenter({
 }: {
   mode: "self-study" | "research" | "collaboration";
 }) {
+  const { closeInspector, openInspector } = useInspector();
+  const { activePersona } = usePersona();
   const { state: session } = useSession();
   const {
     database,
@@ -130,7 +197,10 @@ function OfflineLearningCenter({
   const [workspaceId, setWorkspaceId] = useState(""),
     [spaceId, setSpaceId] = useState("");
   const [deviceId, setDeviceId] = useState("");
+  const [inspectorSelection, setInspectorSelection] =
+    useState<InspectorSelection | null>(null);
   const unlocked = vaultPhase === "unlocked";
+  useEffect(() => () => closeInspector(), [closeInspector]);
   const [status, setStatus] = useState(() =>
     mode === "collaboration"
       ? "正在准备共享审阅空间……"
@@ -162,19 +232,55 @@ function OfflineLearningCenter({
   const [dataPhase, setDataPhase] = useState<
     "error" | "idle" | "loading" | "ready"
   >("idle");
+  const contextRequestRef = useRef<AbortController | null>(null);
+  const spacesRequestRef = useRef<AbortController | null>(null);
+  const dataRequestIdRef = useRef(0);
+  const currentWorkspaceIdRef = useRef(workspaceId);
+  useEffect(
+    () => () => {
+      dataRequestIdRef.current += 1;
+    },
+    [],
+  );
   const loadContext = useCallback(async () => {
+    contextRequestRef.current?.abort();
+    const controller = new AbortController();
+    contextRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const [w, d] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
           "/api/v1/workspaces",
+          { signal: controller.signal },
         ),
-        browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
+        browserApiClient.request<{ devices: Device[] }>(
+          "/api/v1/auth/devices",
+          { signal: controller.signal },
+        ),
       ]);
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setWorkspaces(w.workspaces);
-      setWorkspaceId((x) =>
-        w.workspaces.some((i) => i.id === x) ? x : (w.workspaces[0]?.id ?? ""),
-      );
+      const nextWorkspaceId = w.workspaces.some(
+        (item) => item.id === currentWorkspaceIdRef.current,
+      )
+        ? currentWorkspaceIdRef.current
+        : (w.workspaces[0]?.id ?? "");
+      if (nextWorkspaceId !== currentWorkspaceIdRef.current) {
+        spacesRequestRef.current?.abort();
+        dataRequestIdRef.current += 1;
+        setInspectorSelection(null);
+        closeInspector();
+        setSpaces([]);
+        setSpaceId("");
+        setDataPhase("idle");
+      }
+      currentWorkspaceIdRef.current = nextWorkspaceId;
+      setWorkspaceId(nextWorkspaceId);
       setDeviceId(d.devices.find((i) => i.current)?.id ?? "");
       setStatus(
         mode === "collaboration"
@@ -185,17 +291,38 @@ function OfflineLearningCenter({
       );
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (contextRequestRef.current === controller) {
+        contextRequestRef.current = null;
+      }
     }
-  }, [mode]);
+  }, [closeInspector, mode]);
   const loadSpaces = useCallback(
     async (id: string) => {
+      spacesRequestRef.current?.abort();
+      const controller = new AbortController();
+      spacesRequestRef.current = controller;
       setContextPhase("loading");
       try {
         const r = await browserApiClient.request<{ spaces: Space[] }>(
-          `/api/v1/workspaces/${id}/spaces`,
+          `/api/v1/workspaces/${encodeURIComponent(id)}/spaces`,
+          { signal: controller.signal },
         );
+        if (
+          controller.signal.aborted ||
+          spacesRequestRef.current !== controller ||
+          currentWorkspaceIdRef.current !== id
+        ) {
+          return;
+        }
         setSpaces(r.spaces);
         const eligible =
           mode === "collaboration"
@@ -208,19 +335,48 @@ function OfflineLearningCenter({
         );
         setContextPhase("ready");
       } catch (error) {
+        if (
+          controller.signal.aborted ||
+          spacesRequestRef.current !== controller ||
+          currentWorkspaceIdRef.current !== id
+        ) {
+          return;
+        }
         setSpaces([]);
         setSpaceId("");
         setStatus(errorMessage(error));
         setContextPhase("error");
+      } finally {
+        if (spacesRequestRef.current === controller) {
+          spacesRequestRef.current = null;
+        }
       }
     },
     [mode],
   );
   useEffect(() => {
-    queueMicrotask(() => void loadContext());
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadContext();
+    });
+    return () => {
+      active = false;
+      contextRequestRef.current?.abort();
+    };
   }, [loadContext]);
   useEffect(() => {
-    if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
+    let active = true;
+    if (workspaceId) {
+      queueMicrotask(() => {
+        if (active) void loadSpaces(workspaceId);
+      });
+    } else {
+      spacesRequestRef.current?.abort();
+    }
+    return () => {
+      active = false;
+      spacesRequestRef.current?.abort();
+    };
   }, [loadSpaces, workspaceId]);
 
   async function bootstrap(
@@ -272,8 +428,13 @@ function OfflineLearningCenter({
         { workspace_id: workspaceId, device_id: deviceId },
       );
   }
-  async function refresh(db = database.current, localVault = vault.current) {
-    if (!db || !localVault || !workspaceId) return;
+  async function refresh(
+    db = database.current,
+    localVault = vault.current,
+  ): Promise<boolean> {
+    const targetWorkspaceId = workspaceId;
+    if (!db || !localVault || !targetWorkspaceId) return false;
+    const requestId = ++dataRequestIdRef.current;
     setDataPhase("loading");
     const activeDb = db,
       activeVault = localVault;
@@ -297,14 +458,14 @@ function OfflineLearningCenter({
       kinds.map(async (kind) => {
         const rows = await activeDb.entities
           .where("[workspace_id+entity_type]")
-          .equals([workspaceId, kind])
+          .equals([targetWorkspaceId, kind])
           .toArray();
         const views = await Promise.all(
           rows.map(async (entity) => {
             const ref = entity.payload.encrypted_payload_ref;
             const payload =
               typeof ref === "string"
-                ? await activeVault.get(ref, workspaceId)
+                ? await activeVault.get(ref, targetWorkspaceId)
                 : entity.payload;
             if (!payload) throw new Error("protected payload unavailable");
             return { entity, payload };
@@ -313,8 +474,15 @@ function OfflineLearningCenter({
         return [kind, views] as const;
       }),
     );
+    if (
+      dataRequestIdRef.current !== requestId ||
+      currentWorkspaceIdRef.current !== targetWorkspaceId
+    ) {
+      return false;
+    }
     setRecords(Object.fromEntries(entries) as Record<Kind, View[]>);
     setDataPhase("ready");
+    return true;
   }
   async function unlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -337,23 +505,31 @@ function OfflineLearningCenter({
     const db = database.current;
     const localVault = vault.current;
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
-    queueMicrotask(
-      () =>
-        void refresh(db, localVault)
-          .then(() =>
-            setStatus(
-              mode === "collaboration"
-                ? "共享审阅资料已在应用内解锁。"
-                : mode === "research"
-                  ? "研究资料已在应用内解锁。"
-                  : "自主学习资料已在应用内解锁。",
-            ),
-          )
-          .catch((error: unknown) => {
-            setDataPhase("error");
-            setStatus(errorMessage(error));
-          }),
-    );
+    queueMicrotask(() => {
+      const requestId = dataRequestIdRef.current + 1;
+      void refresh(db, localVault)
+        .then((applied) =>
+          applied
+            ? setStatus(
+                mode === "collaboration"
+                  ? "共享审阅资料已在应用内解锁。"
+                  : mode === "research"
+                    ? "研究资料已在应用内解锁。"
+                    : "自主学习资料已在应用内解锁。",
+              )
+            : undefined,
+        )
+        .catch((error: unknown) => {
+          if (
+            currentWorkspaceIdRef.current !== workspaceId ||
+            dataRequestIdRef.current !== requestId
+          ) {
+            return;
+          }
+          setDataPhase("error");
+          setStatus(errorMessage(error));
+        });
+    });
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, unlocked, vaultRevision, workspaceId]);
@@ -512,12 +688,17 @@ function OfflineLearningCenter({
       }
       if (kind === "metric_record") {
         const parent = String(data.get("run_id"));
+        const value = submittedMetricValue(data.get("value"));
+        if (value === null) {
+          setStatus("指标数值无效，未保存。");
+          return;
+        }
         await commit(
           kind,
           {
             run_id: parent,
             name: String(data.get("name")),
-            value: Number(data.get("value")),
+            value,
             unit: String(data.get("unit")),
           },
           [parent],
@@ -604,7 +785,148 @@ function OfflineLearningCenter({
   }
   const visible = (kind: Kind) =>
     records[kind].filter((x) => x.payload.space_id === spaceId);
+  const inspectorContextKey = workbenchInspectorContextKey({
+    personaId: activePersona?.id ?? null,
+    spaceId,
+    unlocked,
+    vaultRevision,
+    workbench: mode,
+    workspaceId,
+  });
+  const selectedInspectorObject = useMemo(
+    () =>
+      projectWorkbenchInspectorObject({
+        allowedKinds: INSPECTOR_KINDS[mode],
+        contextAllowed:
+          unlocked &&
+          inspectorSelection?.contextKey === inspectorContextKey &&
+          (mode !== "collaboration" ||
+            spaces.find((space) => space.id === spaceId)?.visibility ===
+              "shared"),
+        records: Object.values(records).flat(),
+        selection: inspectorSelection,
+        spaceId,
+        workspaceId,
+      }),
+    [
+      inspectorContextKey,
+      inspectorSelection,
+      mode,
+      records,
+      spaceId,
+      spaces,
+      unlocked,
+      workspaceId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!inspectorSelection) {
+      closeInspector();
+      return;
+    }
+    if (!selectedInspectorObject) {
+      closeInspector();
+      const invalidSelection = inspectorSelection;
+      const timeout = window.setTimeout(
+        () =>
+          setInspectorSelection((current) =>
+            current === invalidSelection ? null : current,
+          ),
+        0,
+      );
+      return () => window.clearTimeout(timeout);
+    }
+    openInspector({
+      body: <WorkbenchObjectInspector object={selectedInspectorObject} />,
+      title: selectedInspectorObject.title,
+    });
+  }, [
+    closeInspector,
+    inspectorSelection,
+    openInspector,
+    selectedInspectorObject,
+  ]);
+
+  function resetInspectorSelection() {
+    setInspectorSelection(null);
+    closeInspector();
+  }
+
+  function selectInspector(kind: Kind, id: string) {
+    setInspectorSelection({ contextKey: inspectorContextKey, id, kind });
+  }
+
   const researchPapers = visible("paper_record");
+  const researchQuestions = visible("research_question");
+  const researchEvidence = buildResearchEvidenceProjection({
+    paperIds: researchPapers.map((item) => item.entity.entity_id),
+    claimLinks: visible("research_claim").map((item) => ({
+      id: item.entity.entity_id,
+      parentId: item.payload.paper_id,
+    })),
+    questionIds: researchQuestions.map((item) => item.entity.entity_id),
+    runLinks: visible("experiment_run").map((item) => ({
+      id: item.entity.entity_id,
+      parentId: item.payload.question_id,
+    })),
+    metricLinks: visible("metric_record").map((item) => ({
+      id: item.entity.entity_id,
+      parentId: item.payload.run_id,
+    })),
+    feedbackLinks: visible("research_feedback").map((item) => ({
+      id: item.entity.entity_id,
+      parentId: item.payload.claim_id,
+    })),
+  });
+  const researchClaims = visible("research_claim").filter((item) =>
+    researchEvidence.claimIds.includes(item.entity.entity_id),
+  );
+  const researchRuns = visible("experiment_run").filter((item) =>
+    researchEvidence.runIds.includes(item.entity.entity_id),
+  );
+  const researchMetrics = visible("metric_record").filter((item) =>
+    researchEvidence.metricIds.includes(item.entity.entity_id),
+  );
+  const researchFeedback = visible("research_feedback").filter((item) =>
+    researchEvidence.feedbackIds.includes(item.entity.entity_id),
+  );
+  const researchRelationshipItems = [
+    ...researchClaims.map((item) => ({
+      id: item.entity.entity_id,
+      kind: "research_claim" as const,
+      label: String(item.payload.statement),
+      relation: "来源 → 声明",
+      status: researchClaimStatus(item.payload.stance).status,
+    })),
+    ...researchFeedback.map((item) => ({
+      id: item.entity.entity_id,
+      kind: "research_feedback" as const,
+      label: String(item.payload.description),
+      relation: "声明 → 反馈",
+      status: "已记录反馈",
+    })),
+    ...researchRuns.map((item) => ({
+      id: item.entity.entity_id,
+      kind: "experiment_run" as const,
+      label: String(item.payload.title),
+      relation: "问题 → 实验运行",
+      status:
+        typeof item.payload.completed_at === "string"
+          ? "已记录运行"
+          : "运行时间未记录",
+    })),
+    ...researchMetrics.map((item) => ({
+      id: item.entity.entity_id,
+      kind: "metric_record" as const,
+      label: `${String(item.payload.name)}: ${String(item.payload.value)} ${String(item.payload.unit ?? "")}`,
+      relation: "实验运行 → 指标输出",
+      status:
+        finiteMetricValue(item.payload.value) !== null
+          ? "已记录数值"
+          : "数值无效，未纳入比较",
+    })),
+  ];
   const normalizedResearchQuery = researchQuery.trim().toLocaleLowerCase();
   const filteredResearchPapers = researchPapers.filter((paper) =>
     [paper.payload.title, paper.payload.citation_key].some((value) =>
@@ -617,9 +939,6 @@ function OfflineLearningCenter({
     filteredResearchPapers.find(
       (paper) => paper.entity.entity_id === selectedPaperId,
     ) ?? filteredResearchPapers[0];
-  const researchQuestions = visible("research_question");
-  const researchRuns = visible("experiment_run");
-  const researchMetrics = visible("metric_record");
   const researchCoverage = researchQuestionCoverage(
     researchQuestions.map((item) => item.entity.entity_id),
     researchRuns.map((item) => ({
@@ -632,13 +951,20 @@ function OfflineLearningCenter({
       id: item.entity.entity_id,
       title: String(item.payload.title),
     })),
-    researchMetrics.map((item) => ({
-      id: item.entity.entity_id,
-      name: String(item.payload.name),
-      runId: String(item.payload.run_id),
-      unit: String(item.payload.unit ?? ""),
-      value: Number(item.payload.value),
-    })),
+    researchMetrics.flatMap((item) => {
+      const value = finiteMetricValue(item.payload.value);
+      return value === null
+        ? []
+        : [
+            {
+              id: item.entity.entity_id,
+              name: String(item.payload.name),
+              runId: String(item.payload.run_id),
+              unit: String(item.payload.unit ?? ""),
+              value,
+            },
+          ];
+    }),
   );
   const selectedRole = workspaces.find((x) => x.id === workspaceId)?.role;
   const canPlanShared =
@@ -668,11 +994,11 @@ function OfflineLearningCenter({
   });
   const researchRecords = [
     ...researchPapers,
-    ...visible("research_claim"),
+    ...researchClaims,
     ...researchQuestions,
     ...researchRuns,
     ...researchMetrics,
-    ...visible("research_feedback"),
+    ...researchFeedback,
   ];
   const researchState = deriveProductWorkbenchState({
     contextPhase,
@@ -682,6 +1008,10 @@ function OfflineLearningCenter({
     stale: researchRecords.some((item) => item.entity.sync_status !== "clean"),
     unlocked,
   });
+  const showResearchData =
+    researchState === "empty" ||
+    researchState === "offline-stale" ||
+    researchState === "ready";
   const selfStudyRecords = [
     ...visible("learning_track"),
     ...visible("study_project"),
@@ -727,7 +1057,17 @@ function OfflineLearningCenter({
           <select
             aria-label="工作区"
             value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
+            onChange={(event) => {
+              const nextWorkspaceId = event.target.value;
+              resetInspectorSelection();
+              spacesRequestRef.current?.abort();
+              dataRequestIdRef.current += 1;
+              currentWorkspaceIdRef.current = nextWorkspaceId;
+              setSpaces([]);
+              setSpaceId("");
+              setDataPhase("idle");
+              setWorkspaceId(nextWorkspaceId);
+            }}
           >
             {workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
@@ -741,7 +1081,10 @@ function OfflineLearningCenter({
           <select
             aria-label={mode === "collaboration" ? "共享空间" : "空间"}
             value={spaceId}
-            onChange={(event) => setSpaceId(event.target.value)}
+            onChange={(event) => {
+              resetInspectorSelection();
+              setSpaceId(event.target.value);
+            }}
           >
             {mode === "collaboration" &&
             spaces.every((space) => space.visibility !== "shared") ? (
@@ -782,10 +1125,63 @@ function OfflineLearningCenter({
       </form>
     </ProductDisclosure>
   );
+  const researchChrome = (
+    <>
+      <ProductPageHeader
+        eyebrow="RESEARCH · EVIDENCE WORKBENCH"
+        title="论文研读与证据工作台"
+        description={
+          <>
+            <p>把论文、声明、研究问题、实验和指标放进同一条可追溯证据链。</p>
+            <p className="product-page-status" aria-live="polite">
+              {status}
+            </p>
+          </>
+        }
+      />
+      <DeskSubviewNav
+        activePath="/app/research"
+        ariaLabel="工作台视图"
+        items={[
+          { href: "/app/self-study", icon: "book-open", label: "自学" },
+          { href: "/app/research", icon: "flask", label: "研究" },
+          { href: "/app/exam", icon: "target", label: "考试" },
+          { href: "/app/planning", icon: "calendar", label: "规划" },
+        ]}
+      />
+      <ProductWorkbenchStateNotice
+        action={
+          researchState === "locked" ? (
+            <a className="product-action-link" href="#research-context">
+              解锁本地资料
+            </a>
+          ) : (
+            <a className="product-action-link" href="#research-context">
+              选择研究 Space
+            </a>
+          )
+        }
+        emptyDescription="当前 Space 尚无论文、声明、问题或运行；先登记可信来源。"
+        emptyTitle="当前 Space 还没有研究记录"
+        onRetry={() => void loadContext()}
+        state={researchState}
+      />
+      <div id="research-context">{contextControls}</div>
+    </>
+  );
   if (mode === "collaboration")
     return (
       <main id="main-content" className="settings-page today-page">
         <ProductPageHeader
+          actions={
+            <>
+              <ProductTag tone="info">
+                Shared Space:{" "}
+                {spaces.find((space) => space.id === spaceId)?.name ?? "未选择"}
+              </ProductTag>
+              <ProductTag>Role: {selectedRole ?? "unavailable"}</ProductTag>
+            </>
+          }
           eyebrow="COLLABORATION · SMALL GROUP REVIEW"
           title="让反馈落到共享对象和下一步行动"
           description={
@@ -958,6 +1354,15 @@ function OfflineLearningCenter({
             {visible("group_review").map((review) => (
               <article className="task-card" key={review.entity.entity_id}>
                 <h3>{String(review.payload.subject_title)}</h3>
+                <button
+                  className="product-action-link"
+                  type="button"
+                  onClick={() =>
+                    selectInspector("group_review", review.entity.entity_id)
+                  }
+                >
+                  查看审阅详情
+                </button>
                 {visible("group_feedback")
                   .filter(
                     (x) => x.payload.review_id === review.entity.entity_id,
@@ -987,55 +1392,21 @@ function OfflineLearningCenter({
         </ProductPanel>
       </main>
     );
+  if (mode === "research" && !showResearchData)
+    return (
+      <main id="main-content" className="settings-page today-page">
+        {researchChrome}
+      </main>
+    );
   if (mode === "research")
     return (
       <main id="main-content" className="settings-page today-page">
-        <ProductPageHeader
-          eyebrow="RESEARCH · EVIDENCE WORKBENCH"
-          title="论文研读与证据工作台"
-          description={
-            <>
-              <p>把论文、声明、研究问题、实验和指标放进同一条可追溯证据链。</p>
-              <p className="product-page-status" aria-live="polite">
-                {status}
-              </p>
-            </>
-          }
-        />
-        <DeskSubviewNav
-          activePath="/app/research"
-          ariaLabel="工作台视图"
-          items={[
-            { href: "/app/self-study", icon: "book-open", label: "自学" },
-            { href: "/app/research", icon: "flask", label: "研究" },
-            { href: "/app/exam", icon: "target", label: "考试" },
-            { href: "/app/planning", icon: "calendar", label: "规划" },
-          ]}
-        />
-        <ProductWorkbenchStateNotice
-          action={
-            researchState === "locked" ? (
-              <a className="product-action-link" href="#research-context">
-                解锁本地资料
-              </a>
-            ) : (
-              <a className="product-action-link" href="#research-context">
-                选择研究 Space
-              </a>
-            )
-          }
-          emptyDescription="当前 Space 尚无论文、声明、问题或运行；先登记可信来源。"
-          emptyTitle="当前 Space 还没有研究记录"
-          onRetry={() => void loadContext()}
-          state={researchState}
-        />
-        <div id="research-context">{contextControls}</div>
-
+        {researchChrome}
         <section className="product-research-summary" aria-label="研究证据概览">
           <article>
             <span>论文</span>
             <strong>{researchPapers.length}</strong>
-            <small>{visible("research_claim").length} 条声明</small>
+            <small>{researchClaims.length} 条声明</small>
           </article>
           <article>
             <span>问题</span>
@@ -1044,12 +1415,12 @@ function OfflineLearningCenter({
           </article>
           <article>
             <span>实验</span>
-            <strong>{visible("experiment_run").length}</strong>
-            <small>{visible("metric_record").length} 条指标</small>
+            <strong>{researchRuns.length}</strong>
+            <small>{researchMetrics.length} 条指标</small>
           </article>
           <article>
             <span>反馈</span>
-            <strong>{visible("research_feedback").length}</strong>
+            <strong>{researchFeedback.length}</strong>
             <small>声明改进记录</small>
           </article>
         </section>
@@ -1091,7 +1462,10 @@ function OfflineLearningCenter({
                   }
                   key={paper.entity.entity_id}
                   type="button"
-                  onClick={() => setSelectedPaperId(paper.entity.entity_id)}
+                  onClick={() => {
+                    setSelectedPaperId(paper.entity.entity_id);
+                    selectInspector("paper_record", paper.entity.entity_id);
+                  }}
                 >
                   <AppIcon name="files" size={17} />
                   <span>
@@ -1166,7 +1540,7 @@ function OfflineLearningCenter({
                 </section>
                 <div className="product-reader-claims">
                   <h3>关联声明</h3>
-                  {visible("research_claim")
+                  {researchClaims
                     .filter(
                       (claim) =>
                         claim.payload.paper_id ===
@@ -1175,12 +1549,15 @@ function OfflineLearningCenter({
                     .map((claim) => (
                       <article key={claim.entity.entity_id}>
                         <ProductTag>
-                          {String(claim.payload.stance ?? "unknown")}
+                          {researchClaimStatus(claim.payload.stance).relation}
                         </ProductTag>
                         <p>{String(claim.payload.statement)}</p>
+                        <small>
+                          {researchClaimStatus(claim.payload.stance).status}
+                        </small>
                       </article>
                     ))}
-                  {visible("research_claim").every(
+                  {researchClaims.every(
                     (claim) =>
                       claim.payload.paper_id !== selectedPaper.entity.entity_id,
                   ) ? (
@@ -1219,29 +1596,33 @@ function OfflineLearningCenter({
               label="研究证据链数量"
               items={[
                 { label: "论文", value: researchPapers.length },
-                { label: "声明", value: visible("research_claim").length },
-                { label: "问题", value: visible("research_question").length },
-                { label: "实验", value: visible("experiment_run").length },
-                { label: "指标", value: visible("metric_record").length },
+                { label: "声明", value: researchClaims.length },
+                { label: "问题", value: researchQuestions.length },
+                { label: "实验", value: researchRuns.length },
+                { label: "指标", value: researchMetrics.length },
               ]}
             />
             <div className="product-task-list">
               <ProductTaskRow
                 icon="1"
-                title="来源"
-                description={`${researchPapers.length} 篇论文`}
+                title="来源 → 声明"
+                description={`${researchPapers.length} 篇论文，${researchClaims.length} 条关联声明`}
               />
               <ProductTaskRow
                 icon="2"
-                title="声明"
-                description={`${visible("research_claim").length} 条证据`}
+                title="问题 → 运行"
+                description={`${researchQuestions.length} 个问题，${researchRuns.length} 次关联运行`}
               />
               <ProductTaskRow
                 icon="3"
-                title="验证"
-                description={`${visible("experiment_run").length} 次运行`}
+                title="运行 → 指标输出"
+                description={`${researchRuns.length} 次运行，${researchMetrics.length} 条关联指标`}
               />
             </div>
+            <ResearchEvidenceRelations
+              onSelect={selectInspector}
+              relationships={researchRelationshipItems}
+            />
           </ProductPanel>
         </div>
         <ProductDisclosure
@@ -1324,9 +1705,7 @@ function OfflineLearningCenter({
           title="指标与反馈"
           description="为实验追加真实指标，并把反馈关联到研究声明。"
           aside={
-            <ProductTag tone="info">
-              {visible("metric_record").length} 条指标
-            </ProductTag>
+            <ProductTag tone="info">{researchMetrics.length} 条指标</ProductTag>
           }
         >
           <div className="product-config-grid">
@@ -1336,7 +1715,7 @@ function OfflineLearningCenter({
             >
               <select aria-label="选择实验运行" name="run_id" required>
                 <option value="">选择运行</option>
-                {visible("experiment_run").map((x) => (
+                {researchRuns.map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
                     {String(x.payload.title)}
                   </option>
@@ -1359,7 +1738,7 @@ function OfflineLearningCenter({
             >
               <select aria-label="选择研究声明" name="claim_id" required>
                 <option value="">选择声明</option>
-                {visible("research_claim").map((x) => (
+                {researchClaims.map((x) => (
                   <option key={x.entity.entity_id} value={x.entity.entity_id}>
                     {String(x.payload.statement)}
                   </option>
@@ -1371,11 +1750,24 @@ function OfflineLearningCenter({
             </form>
           </div>
           <div className="task-grid">
-            {visible("experiment_run").map((run) => (
+            {researchRuns.map((run) => (
               <article className="task-card" key={run.entity.entity_id}>
                 <h3>{String(run.payload.title)}</h3>
-                {visible("metric_record")
-                  .filter((m) => m.payload.run_id === run.entity.entity_id)
+                <button
+                  className="product-action-link"
+                  type="button"
+                  onClick={() =>
+                    selectInspector("experiment_run", run.entity.entity_id)
+                  }
+                >
+                  查看实验详情
+                </button>
+                {researchMetrics
+                  .filter(
+                    (m) =>
+                      m.payload.run_id === run.entity.entity_id &&
+                      finiteMetricValue(m.payload.value) !== null,
+                  )
                   .map((m) => (
                     <p key={m.entity.entity_id}>
                       {String(m.payload.name)}：{String(m.payload.value)}{" "}
@@ -1384,7 +1776,7 @@ function OfflineLearningCenter({
                   ))}
               </article>
             ))}
-            {visible("experiment_run").length === 0 ? (
+            {researchRuns.length === 0 ? (
               <ProductEmptyState
                 icon="⌁"
                 title="尚无实验运行"
@@ -1599,22 +1991,52 @@ function OfflineLearningCenter({
         <div className="task-grid">
           {visible("learning_track").map((track) => (
             <article className="task-card" key={track.entity.entity_id}>
-              <h3>{String(track.payload.title)}</h3>
+              <h3>
+                <button
+                  className="product-action-link"
+                  type="button"
+                  onClick={() =>
+                    selectInspector("learning_track", track.entity.entity_id)
+                  }
+                >
+                  {String(track.payload.title)}
+                </button>
+              </h3>
               <p>{String(track.payload.objective)}</p>
               {visible("study_project")
                 .filter((p) => p.payload.track_id === track.entity.entity_id)
                 .map((project) => (
                   <section key={project.entity.entity_id}>
-                    <h4>{String(project.payload.title)}</h4>
+                    <h4>
+                      <button
+                        className="product-action-link"
+                        type="button"
+                        onClick={() =>
+                          selectInspector(
+                            "study_project",
+                            project.entity.entity_id,
+                          )
+                        }
+                      >
+                        {String(project.payload.title)}
+                      </button>
+                    </h4>
                     {visible("deliverable")
                       .filter(
                         (d) =>
                           d.payload.project_id === project.entity.entity_id,
                       )
                       .map((d) => (
-                        <p key={d.entity.entity_id}>
+                        <button
+                          className="product-action-link"
+                          key={d.entity.entity_id}
+                          type="button"
+                          onClick={() =>
+                            selectInspector("deliverable", d.entity.entity_id)
+                          }
+                        >
                           ✓ {String(d.payload.title)}
-                        </p>
+                        </button>
                       ))}
                   </section>
                 ))}

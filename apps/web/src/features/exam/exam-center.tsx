@@ -12,7 +12,14 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ProductBarChart,
@@ -30,12 +37,25 @@ import {
   deriveProductWorkbenchState,
   ProductWorkbenchStateNotice,
 } from "@/components/product/product-workbench-state";
+import {
+  projectWorkbenchInspectorObject,
+  WorkbenchObjectInspector,
+  workbenchInspectorContextKey,
+} from "@/components/product/workbench-object-inspector";
+import { useInspector } from "@/features/desk/command-feedback-context";
+import { classifyCommandError } from "@/features/desk/command-state";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineUnlockMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
-import { examCoverageRate, normalizeExamScores } from "./exam-workbench-model";
+import {
+  buildExamCoverageProjection,
+  buildReviewGapProjection,
+  buildScoreTrend,
+  examScheduleDescriptor,
+} from "./exam-workbench-model";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -95,14 +115,40 @@ interface ProtectedView<T extends JsonObject> {
   payload: T;
 }
 
+type InspectorKind =
+  | "exam"
+  | "exam_subject"
+  | "syllabus_node"
+  | "mock_exam"
+  | "score_record";
+
+interface InspectorSelection {
+  contextKey: string;
+  kind: InspectorKind;
+  id: string;
+}
+
+const EXAM_INSPECTOR_KINDS = [
+  "exam",
+  "exam_subject",
+  "syllabus_node",
+  "mock_exam",
+  "score_record",
+] as const satisfies readonly InspectorKind[];
+
 function SyllabusTree({
   nodes,
   parentId = null,
+  trail = new Set<string>(),
 }: {
   nodes: ProtectedView<SyllabusNodePayload>[];
   parentId?: string | null;
+  trail?: ReadonlySet<string>;
 }) {
-  const children = nodes.filter((node) => node.payload.parent_id === parentId);
+  const children = nodes.filter(
+    (node) =>
+      node.payload.parent_id === parentId && !trail.has(node.entity.entity_id),
+  );
   if (children.length === 0) return null;
   return (
     <ul>
@@ -114,7 +160,11 @@ function SyllabusTree({
             : node.payload.coverage_status === "in_progress"
               ? "进行中"
               : "未开始"}
-          <SyllabusTree nodes={nodes} parentId={node.entity.entity_id} />
+          <SyllabusTree
+            nodes={nodes}
+            parentId={node.entity.entity_id}
+            trail={new Set([...trail, node.entity.entity_id])}
+          />
         </li>
       ))}
     </ul>
@@ -144,22 +194,37 @@ function transport(workspaceId: string): SyncTransport {
 }
 
 function message(error: unknown): string {
-  if (error instanceof LogionApiError) {
-    return `操作未完成（请求编号：${error.requestId}）。`;
+  const state = classifyCommandError(error);
+  const request = state.requestId ? `（请求编号：${state.requestId}）` : "";
+  if (state.kind === "offline") {
+    return "当前离线；只有已经写入 Outbox 的考试数据才会在恢复网络后同步。";
   }
-  return "网络暂不可用；考试数据仍保存在本机 Outbox。";
+  if (state.kind === "permission_denied") {
+    return `当前账号没有权限完成此操作${request}。`;
+  }
+  if (state.kind === "conflict") {
+    return `考试数据已发生变化；请重新读取后再试${request}。`;
+  }
+  return error instanceof LogionApiError
+    ? `操作未完成${request}。`
+    : "操作未完成；请重试。";
 }
 
 function countdown(examAt: string | null): string {
-  if (examAt === null) return "日期待定";
-  const difference = new Date(examAt).getTime() - Date.now();
-  if (!Number.isFinite(difference)) return "日期无效";
-  if (difference <= 0) return "考试时间已到或已过去";
-  const days = Math.ceil(difference / 86_400_000);
-  return `剩余 ${days} 天`;
+  return examScheduleDescriptor(examAt).label;
+}
+
+function formatExamDate(value: unknown, fallback: string): string {
+  if (typeof value !== "string" || value.trim() === "") return fallback;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp)
+    ? EXAM_DATE_FORMATTER.format(timestamp)
+    : fallback;
 }
 
 export function ExamCenter() {
+  const { closeInspector, openInspector } = useInspector();
+  const { activePersona } = usePersona();
   const { state: session } = useSession();
   const {
     database,
@@ -190,43 +255,101 @@ export function ExamCenter() {
   const [scoreRecords, setScoreRecords] = useState<
     ProtectedView<ScoreRecordPayload>[]
   >([]);
+  const [inspectorSelection, setInspectorSelection] =
+    useState<InspectorSelection | null>(null);
+  useEffect(() => () => closeInspector(), [closeInspector]);
   const [contextPhase, setContextPhase] = useState<
     "error" | "loading" | "ready"
   >("loading");
   const [dataPhase, setDataPhase] = useState<
     "error" | "idle" | "loading" | "ready"
   >("idle");
+  const contextRequestRef = useRef<AbortController | null>(null);
+  const spacesRequestRef = useRef<AbortController | null>(null);
+  const dataRequestIdRef = useRef(0);
+  const currentWorkspaceIdRef = useRef(workspaceId);
+  useEffect(
+    () => () => {
+      dataRequestIdRef.current += 1;
+    },
+    [],
+  );
 
   const loadContext = useCallback(async () => {
+    contextRequestRef.current?.abort();
+    const controller = new AbortController();
+    contextRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
           "/api/v1/workspaces",
+          { signal: controller.signal },
         ),
-        browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
+        browserApiClient.request<{ devices: Device[] }>(
+          "/api/v1/auth/devices",
+          { signal: controller.signal },
+        ),
       ]);
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setWorkspaces(workspaceResult.workspaces);
-      setWorkspaceId((current) =>
-        workspaceResult.workspaces.some((item) => item.id === current)
-          ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
-      );
+      const nextWorkspaceId = workspaceResult.workspaces.some(
+        (item) => item.id === currentWorkspaceIdRef.current,
+      )
+        ? currentWorkspaceIdRef.current
+        : (workspaceResult.workspaces[0]?.id ?? "");
+      if (nextWorkspaceId !== currentWorkspaceIdRef.current) {
+        spacesRequestRef.current?.abort();
+        dataRequestIdRef.current += 1;
+        setInspectorSelection(null);
+        closeInspector();
+        setSpaces([]);
+        setSpaceId("");
+        setDataPhase("idle");
+      }
+      currentWorkspaceIdRef.current = nextWorkspaceId;
+      setWorkspaceId(nextWorkspaceId);
       setDeviceId(deviceResult.devices.find((item) => item.current)?.id ?? "");
       setStatus("请先解锁本地备考资料。");
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setStatus(message(error));
       setContextPhase("error");
+    } finally {
+      if (contextRequestRef.current === controller) {
+        contextRequestRef.current = null;
+      }
     }
-  }, []);
+  }, [closeInspector]);
 
   const loadSpaces = useCallback(async (selected: string) => {
+    spacesRequestRef.current?.abort();
+    const controller = new AbortController();
+    spacesRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const result = await browserApiClient.request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${selected}/spaces`,
+        `/api/v1/workspaces/${encodeURIComponent(selected)}/spaces`,
+        { signal: controller.signal },
       );
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selected
+      ) {
+        return;
+      }
       setSpaces(result.spaces);
       setSpaceId((current) =>
         result.spaces.some((item) => item.id === current)
@@ -235,19 +358,48 @@ export function ExamCenter() {
       );
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selected
+      ) {
+        return;
+      }
       setSpaces([]);
       setSpaceId("");
       setStatus(message(error));
       setContextPhase("error");
+    } finally {
+      if (spacesRequestRef.current === controller) {
+        spacesRequestRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => void loadContext());
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadContext();
+    });
+    return () => {
+      active = false;
+      contextRequestRef.current?.abort();
+    };
   }, [loadContext]);
 
   useEffect(() => {
-    if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
+    let active = true;
+    if (workspaceId) {
+      queueMicrotask(() => {
+        if (active) void loadSpaces(workspaceId);
+      });
+    } else {
+      spacesRequestRef.current?.abort();
+    }
+    return () => {
+      active = false;
+      spacesRequestRef.current?.abort();
+    };
   }, [loadSpaces, workspaceId]);
 
   async function bootstrap(
@@ -309,22 +461,24 @@ export function ExamCenter() {
   async function refresh(
     db = database.current,
     localVault = vault.current,
-  ): Promise<void> {
-    if (db === null || localVault === null || !workspaceId) return;
+  ): Promise<boolean> {
+    const targetWorkspaceId = workspaceId;
+    if (db === null || localVault === null || !targetWorkspaceId) return false;
+    const requestId = ++dataRequestIdRef.current;
     setDataPhase("loading");
     const activeDatabase = db;
     const activeVault = localVault;
     async function readProtected<T extends JsonObject>(entityType: string) {
       const rows = await activeDatabase.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, entityType])
+        .equals([targetWorkspaceId, entityType])
         .toArray();
       return Promise.all(
         rows.map(async (entity) => {
           const reference = entity.payload.encrypted_payload_ref;
           const payload =
             typeof reference === "string"
-              ? await activeVault.get(reference, workspaceId)
+              ? await activeVault.get(reference, targetWorkspaceId)
               : entity.payload;
           if (payload === null)
             throw new Error("protected payload unavailable");
@@ -340,12 +494,19 @@ export function ExamCenter() {
         readProtected<MockExamPayload>("mock_exam"),
         readProtected<ScoreRecordPayload>("score_record"),
       ]);
+    if (
+      dataRequestIdRef.current !== requestId ||
+      currentWorkspaceIdRef.current !== targetWorkspaceId
+    ) {
+      return false;
+    }
     setExams(nextExams);
     setSubjects(nextSubjects);
     setSyllabusNodes(nextNodes);
     setMockExams(nextMocks);
     setScoreRecords(nextScores);
     setDataPhase("ready");
+    return true;
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -369,15 +530,23 @@ export function ExamCenter() {
     const db = database.current;
     const localVault = vault.current;
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
-    queueMicrotask(
-      () =>
-        void refresh(db, localVault)
-          .then(() => setStatus("备考资料已在应用内解锁。"))
-          .catch((error: unknown) => {
-            setDataPhase("error");
-            setStatus(message(error));
-          }),
-    );
+    queueMicrotask(() => {
+      const requestId = dataRequestIdRef.current + 1;
+      void refresh(db, localVault)
+        .then((applied) =>
+          applied ? setStatus("备考资料已在应用内解锁。") : undefined,
+        )
+        .catch((error: unknown) => {
+          if (
+            currentWorkspaceIdRef.current !== workspaceId ||
+            dataRequestIdRef.current !== requestId
+          ) {
+            return;
+          }
+          setDataPhase("error");
+          setStatus(message(error));
+        });
+    });
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unlocked, vaultRevision, workspaceId]);
@@ -627,7 +796,16 @@ export function ExamCenter() {
     const scoreScale = Number(data.get("score_scale_max") ?? 1);
     const now = new Date().toISOString();
     try {
-      if (score > scoreScale) throw new Error("score exceeds scale");
+      if (
+        !Number.isFinite(score) ||
+        score < 0 ||
+        !Number.isFinite(scoreScale) ||
+        scoreScale <= 0 ||
+        score > scoreScale
+      ) {
+        setStatus("成绩无效：得分必须在 0 到满分之间。");
+        return;
+      }
       await new ProtectedOfflineRepository(
         database.current,
         vault.current,
@@ -697,20 +875,126 @@ export function ExamCenter() {
         (mock) => mock.entity.entity_id === item.payload.mock_exam_id,
       ),
   );
+  const inspectorContextKey = workbenchInspectorContextKey({
+    personaId: activePersona?.id ?? null,
+    spaceId,
+    unlocked,
+    vaultRevision,
+    workbench: "exam",
+    workspaceId,
+  });
+  const selectedInspectorObject = useMemo(
+    () =>
+      projectWorkbenchInspectorObject({
+        allowedKinds: EXAM_INSPECTOR_KINDS,
+        contextAllowed:
+          unlocked && inspectorSelection?.contextKey === inspectorContextKey,
+        records: [
+          ...exams,
+          ...subjects,
+          ...syllabusNodes,
+          ...mockExams,
+          ...scoreRecords,
+        ],
+        selection: inspectorSelection,
+        spaceId,
+        workspaceId,
+      }),
+    [
+      exams,
+      inspectorContextKey,
+      inspectorSelection,
+      mockExams,
+      scoreRecords,
+      spaceId,
+      subjects,
+      syllabusNodes,
+      unlocked,
+      workspaceId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!inspectorSelection) {
+      closeInspector();
+      return;
+    }
+    if (!selectedInspectorObject) {
+      closeInspector();
+      const invalidSelection = inspectorSelection;
+      const timeout = window.setTimeout(
+        () =>
+          setInspectorSelection((current) =>
+            current === invalidSelection ? null : current,
+          ),
+        0,
+      );
+      return () => window.clearTimeout(timeout);
+    }
+    openInspector({
+      body: <WorkbenchObjectInspector object={selectedInspectorObject} />,
+      title: selectedInspectorObject.title,
+    });
+  }, [
+    closeInspector,
+    inspectorSelection,
+    openInspector,
+    selectedInspectorObject,
+  ]);
+
+  function resetInspectorSelection() {
+    setInspectorSelection(null);
+    closeInspector();
+  }
+
+  function selectInspector(kind: InspectorKind, id: string) {
+    setInspectorSelection({ contextKey: inspectorContextKey, id, kind });
+  }
+
   const primaryExam =
     visibleExams.find((item) => item.payload.status === "active") ??
     visibleExams.find((item) => item.payload.status === "planning") ??
     visibleExams[0];
-  const coveredNodes = visibleNodes.filter(
-    (item) => item.payload.coverage_status === "covered",
-  ).length;
-  const coverageRate = examCoverageRate(
-    visibleNodes.map((item) => item.payload),
+  const coverageProjection = buildExamCoverageProjection({
+    examId: primaryExam?.entity.entity_id ?? null,
+    exams: visibleExams,
+    subjects: visibleSubjects,
+    syllabusNodes: visibleNodes,
+  });
+  const scoreTrend = buildScoreTrend({
+    examId: primaryExam?.entity.entity_id ?? null,
+    exams: visibleExams,
+    mockExams: visibleMocks,
+    scoreRecords: visibleScores,
+  });
+  const reviewGapProjection = buildReviewGapProjection({
+    examId: primaryExam?.entity.entity_id ?? null,
+    exams: visibleExams,
+    subjects: visibleSubjects,
+    syllabusNodes: visibleNodes,
+    mockExams: visibleMocks,
+    scoreRecords: visibleScores,
+    reviewSchedules: [],
+  });
+  const coverageRate = coverageProjection?.coverageRate ?? null;
+  const coveredNodes = coverageProjection?.coveredCount ?? 0;
+  const nodeCount = coverageProjection?.nodeCount ?? 0;
+  const normalizedScores =
+    scoreTrend.status === "ok"
+      ? scoreTrend.points.map((point) => point.normalizedPercent)
+      : [];
+  const latestNormalizedScore =
+    scoreTrend.status === "ok"
+      ? (scoreTrend.points.at(-1)?.normalizedPercent ?? null)
+      : null;
+  const validScoreIds = new Set(
+    scoreTrend.status === "ok"
+      ? scoreTrend.points.map((point) => point.scoreId)
+      : [],
   );
-  const normalizedScores = normalizeExamScores(
-    visibleScores.map((item) => item.payload),
+  const primarySchedule = examScheduleDescriptor(
+    primaryExam?.payload.exam_at ?? null,
   );
-  const latestNormalizedScore = normalizedScores.at(-1) ?? 0;
   const subjectWeightChart = visibleSubjects.map((subject) => ({
     label: subject.payload.name,
     value: subject.payload.weight_basis_points / 100,
@@ -732,66 +1016,143 @@ export function ExamCenter() {
     ),
     unlocked,
   });
-
-  return (
-    <main id="main-content" className="settings-page today-page">
-      <ProductPageHeader
-        eyebrow="EXAM · PREPARATION COCKPIT"
-        title="围绕大纲覆盖与错题风险安排备考"
-        description={
-          <>
-            <p>倒计时只是背景，核心是科目覆盖、模考趋势和下一批补救任务。</p>
-            <p className="product-page-status" aria-live="polite">
-              {status}
-            </p>
-          </>
-        }
-        actions={
-          <>
-            {!unlocked ? (
-              <a className="product-action-link" href="#exam-vault">
-                解锁本地资料
-              </a>
-            ) : null}
-            <button
-              type="button"
-              disabled={!unlocked}
-              onClick={() => void synchronize()}
-            >
-              立即同步
-            </button>
-          </>
-        }
-      />
-
-      <ProductWorkbenchStateNotice
-        action={
-          examState === "locked" ? (
+  const showExamData =
+    examState === "empty" ||
+    examState === "offline-stale" ||
+    examState === "ready";
+  const examHeader = (
+    <ProductPageHeader
+      eyebrow="EXAM · PREPARATION COCKPIT"
+      title="围绕大纲覆盖与错题风险安排备考"
+      description={
+        <>
+          <p>倒计时只是背景，核心是科目覆盖、模考趋势和下一批补救任务。</p>
+          <p className="product-page-status" aria-live="polite">
+            {status}
+          </p>
+        </>
+      }
+      actions={
+        <>
+          {!unlocked ? (
             <a className="product-action-link" href="#exam-vault">
               解锁本地资料
             </a>
-          ) : examState === "empty" ? (
-            <a className="product-action-link primary" href="#exam-setup">
-              创建第一项考试
-            </a>
-          ) : (
-            <a className="product-action-link" href="#exam-vault">
-              选择工作区与 Space
-            </a>
-          )
-        }
-        emptyDescription="当前 Space 尚无考试、科目或模考记录；先创建考试再逐步配置大纲。"
-        emptyTitle="当前 Space 还没有备考项目"
-        onRetry={() => void loadContext()}
-        state={examState}
-      />
+          ) : null}
+          <button
+            type="button"
+            disabled={!unlocked}
+            onClick={() => void synchronize()}
+          >
+            立即同步
+          </button>
+        </>
+      }
+    />
+  );
+  const examStateNotice = (
+    <ProductWorkbenchStateNotice
+      action={
+        examState === "locked" ? (
+          <a className="product-action-link" href="#exam-vault">
+            解锁本地资料
+          </a>
+        ) : examState === "empty" ? (
+          <a className="product-action-link primary" href="#exam-setup">
+            创建第一项考试
+          </a>
+        ) : (
+          <a className="product-action-link" href="#exam-vault">
+            选择工作区与 Space
+          </a>
+        )
+      }
+      emptyDescription="当前 Space 尚无考试、科目或模考记录；先创建考试再逐步配置大纲。"
+      emptyTitle="当前 Space 还没有备考项目"
+      onRetry={() => void loadContext()}
+      state={examState}
+    />
+  );
+  const examVaultControls = (
+    <ProductDisclosure
+      id="exam-vault"
+      summary="备考空间与本地资料"
+      description="选择工作区、空间并解锁端侧加密内容"
+      defaultOpen={!unlocked}
+    >
+      <div className="inline-form">
+        <label htmlFor="exam-workspace">工作区</label>
+        <select
+          id="exam-workspace"
+          value={workspaceId}
+          onChange={(event) => {
+            const nextWorkspaceId = event.target.value;
+            resetInspectorSelection();
+            spacesRequestRef.current?.abort();
+            dataRequestIdRef.current += 1;
+            currentWorkspaceIdRef.current = nextWorkspaceId;
+            setSpaces([]);
+            setSpaceId("");
+            setDataPhase("idle");
+            setWorkspaceId(nextWorkspaceId);
+          }}
+        >
+          {workspaces.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="exam-space">空间</label>
+        <select
+          id="exam-space"
+          value={spaceId}
+          onChange={(event) => {
+            resetInspectorSelection();
+            setSpaceId(event.target.value);
+          }}
+        >
+          {spaces.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <form className="inline-form" onSubmit={unlock}>
+        <label htmlFor="exam-passphrase">本地口令</label>
+        <input
+          id="exam-passphrase"
+          name="passphrase"
+          type="password"
+          minLength={10}
+          autoComplete="current-password"
+          required
+        />
+        <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
+      </form>
+    </ProductDisclosure>
+  );
+
+  if (!showExamData) {
+    return (
+      <main id="main-content" className="settings-page today-page">
+        {examHeader}
+        {examStateNotice}
+        {examVaultControls}
+      </main>
+    );
+  }
+
+  return (
+    <main id="main-content" className="settings-page today-page">
+      {examHeader}
+      {examStateNotice}
 
       <ProductWorkflowStage
         badge={
           <ProductTag tone={primaryExam ? "warn" : "info"}>
-            {primaryExam
-              ? countdown(primaryExam.payload.exam_at)
-              : "尚未建立考试"}
+            {primaryExam ? primarySchedule.label : "尚未建立考试"}
           </ProductTag>
         }
         title={primaryExam?.payload.title ?? "建立你的第一个备考目标"}
@@ -800,51 +1161,51 @@ export function ExamCenter() {
           {
             label: "建立考试目标",
             detail: primaryExam
-              ? countdown(primaryExam.payload.exam_at)
+              ? primarySchedule.label
               : "记录日期、目标分和计分尺度",
             state: primaryExam ? "complete" : "current",
           },
           {
             label: "覆盖重点大纲",
-            detail: `${coveredNodes} / ${visibleNodes.length} 个节点已覆盖`,
+            detail: `${coveredNodes} / ${nodeCount} 个有效节点已覆盖`,
             state: !primaryExam
               ? "pending"
-              : visibleNodes.length === 0 || (coverageRate ?? 0) < 100
+              : nodeCount === 0 || coverageRate === null || coverageRate < 100
                 ? "current"
                 : "complete",
           },
           {
             label: "完成一次模考",
-            detail: visibleScores.length
-              ? `最近得分率 ${Math.round(latestNormalizedScore)}%`
-              : `${visibleMocks.length} 场模考已安排`,
-            state: visibleScores.length
-              ? "complete"
-              : visibleMocks.length
-                ? "current"
-                : "pending",
+            detail:
+              latestNormalizedScore !== null
+                ? `最近得分率 ${Math.round(latestNormalizedScore)}%`
+                : `${visibleMocks.length} 场模考已安排`,
+            state:
+              latestNormalizedScore !== null
+                ? "complete"
+                : visibleMocks.length
+                  ? "current"
+                  : "pending",
           },
         ]}
         actions={
           <a
             className="product-action-link primary"
             href={
-              primaryExam && visibleNodes.length > 0
-                ? "#mock-practice"
-                : "#exam-setup"
+              primaryExam && nodeCount > 0 ? "#mock-practice" : "#exam-setup"
             }
           >
             {!primaryExam
               ? "建立考试目标"
-              : visibleNodes.length === 0
+              : nodeCount === 0
                 ? "配置科目与大纲"
                 : "安排或记录模考"}
           </a>
         }
       >
         {primaryExam
-          ? primaryExam.payload.exam_at
-            ? `${EXAM_DATE_FORMATTER.format(new Date(primaryExam.payload.exam_at))} · 目标 ${primaryExam.payload.target_score ?? "未设置"}${primaryExam.payload.score_scale_max ? ` / ${primaryExam.payload.score_scale_max}` : ""}`
+          ? primarySchedule.status !== "undetermined"
+            ? `${formatExamDate(primaryExam.payload.exam_at, "考试日期待定")} · 目标 ${primaryExam.payload.target_score ?? "未设置"}${primaryExam.payload.score_scale_max ? ` / ${primaryExam.payload.score_scale_max}` : ""}`
             : "考试日期待定；可以先整理科目、大纲和第一场模考。"
           : "从真实考试日期、科目权重和大纲覆盖开始，再用模考成绩校准复习重点。"}
       </ProductWorkflowStage>
@@ -864,17 +1225,19 @@ export function ExamCenter() {
           detail={
             coverageRate === null
               ? "添加大纲节点后再计算比例"
-              : `${coveredNodes} / ${visibleNodes.length} 个节点`
+              : `${coveredNodes} / ${nodeCount} 个有效节点`
           }
           tone={coverageRate === null ? "default" : "good"}
         />
         <ProductMetric
           label="最近模考"
           value={
-            visibleScores.length ? `${Math.round(latestNormalizedScore)}%` : "—"
+            latestNormalizedScore === null
+              ? "—"
+              : `${Math.round(latestNormalizedScore)}%`
           }
-          detail={`${visibleScores.length} 次成绩记录`}
-          tone={visibleScores.length ? "info" : "default"}
+          detail={`${scoreTrend.status === "ok" ? scoreTrend.points.length : 0} 次有效成绩`}
+          tone={latestNormalizedScore === null ? "default" : "info"}
         />
         <ProductMetric
           label="模考计划"
@@ -883,51 +1246,7 @@ export function ExamCenter() {
         />
       </div>
 
-      <ProductDisclosure
-        id="exam-vault"
-        summary="备考空间与本地资料"
-        description="选择工作区、空间并解锁端侧加密内容"
-        defaultOpen={!unlocked}
-      >
-        <div className="inline-form">
-          <label htmlFor="exam-workspace">工作区</label>
-          <select
-            id="exam-workspace"
-            value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
-          >
-            {workspaces.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="exam-space">空间</label>
-          <select
-            id="exam-space"
-            value={spaceId}
-            onChange={(event) => setSpaceId(event.target.value)}
-          >
-            {spaces.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <form className="inline-form" onSubmit={unlock}>
-          <label htmlFor="exam-passphrase">本地口令</label>
-          <input
-            id="exam-passphrase"
-            name="passphrase"
-            type="password"
-            minLength={10}
-            autoComplete="current-password"
-            required
-          />
-          <button type="submit">{unlocked ? "重新解锁" : "解锁资料"}</button>
-        </form>
-      </ProductDisclosure>
+      {examVaultControls}
 
       <div className="product-dashboard-grid product-dashboard-grid-wide">
         <ProductPanel
@@ -956,7 +1275,7 @@ export function ExamCenter() {
               />
               <ProductProgress
                 label="最近一次得分率"
-                value={latestNormalizedScore}
+                value={latestNormalizedScore ?? 0}
                 tone="info"
               />
             </>
@@ -969,6 +1288,66 @@ export function ExamCenter() {
           )}
         </ProductPanel>
       </div>
+
+      <ProductPanel
+        id="exam-coverage"
+        title="覆盖矩阵与复习缺口"
+        description="只展示已解析的考试链路；缺失或非法关系不会被估算。"
+        aside={
+          <ProductTag tone={coverageRate === null ? "default" : "info"}>
+            {coverageRate === null
+              ? "覆盖待定"
+              : `${Math.round(coverageRate)}% 覆盖`}
+          </ProductTag>
+        }
+      >
+        {coverageProjection === null || coverageRate === null ? (
+          <ProductEmptyState
+            icon="◫"
+            title="覆盖率待定"
+            description="当前没有可解析的大纲节点；先建立科目和大纲，再计算覆盖率。"
+          />
+        ) : (
+          <ProductProgress
+            label={`${coveredNodes} / ${nodeCount} 个有效大纲节点已覆盖`}
+            value={coverageRate}
+            tone={coverageRate >= 80 ? "good" : "warn"}
+          />
+        )}
+        <div className="product-task-list">
+          <h3>复习缺口</h3>
+          {reviewGapProjection.status === "unknown" ? (
+            <p>考试或成绩链路待定，暂不生成复习缺口。</p>
+          ) : reviewGapProjection.syllabusGaps.length === 0 &&
+            reviewGapProjection.scoreGaps.length === 0 ? (
+            <p>当前没有可确认的覆盖或成绩缺口。</p>
+          ) : (
+            <ul>
+              {reviewGapProjection.syllabusGaps.map((gap) => {
+                const node = visibleNodes.find(
+                  (item) => item.entity.entity_id === gap.nodeId,
+                );
+                return (
+                  <li key={`syllabus-${gap.nodeId}`}>
+                    大纲缺口：{node?.payload.title ?? gap.nodeId}
+                  </li>
+                );
+              })}
+              {reviewGapProjection.scoreGaps.map((gap) => {
+                const score = visibleScores.find(
+                  (item) => item.entity.entity_id === gap.scoreId,
+                );
+                return (
+                  <li key={`score-${gap.scoreId}`}>
+                    成绩缺口：{score?.payload.score ?? "未知"} /{" "}
+                    {score?.payload.score_scale_max ?? "未知"}（低于目标）
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </ProductPanel>
 
       <ProductDisclosure
         id="exam-setup"
@@ -1133,7 +1512,7 @@ export function ExamCenter() {
         title="模考与成绩记录"
         description="建立限时练习，完成后记录真实得分和用时。"
         aside={
-          <ProductTag tone="info">{visibleScores.length} 次成绩</ProductTag>
+          <ProductTag tone="info">{validScoreIds.size} 次有效成绩</ProductTag>
         }
       >
         <div className="product-config-grid">
@@ -1215,20 +1594,20 @@ export function ExamCenter() {
           </form>
         </div>
         <ol>
-          {visibleScores.map((record) => {
-            const mock = visibleMocks.find(
-              (item) => item.entity.entity_id === record.payload.mock_exam_id,
-            );
-            return (
-              <li key={record.entity.entity_id}>
-                {mock?.payload.title ?? "模考"}：{record.payload.score} /{" "}
-                {record.payload.score_scale_max} ·{" "}
-                {EXAM_DATE_FORMATTER.format(
-                  new Date(record.payload.completed_at),
-                )}
-              </li>
-            );
-          })}
+          {visibleScores
+            .filter((record) => validScoreIds.has(record.entity.entity_id))
+            .map((record) => {
+              const mock = visibleMocks.find(
+                (item) => item.entity.entity_id === record.payload.mock_exam_id,
+              );
+              return (
+                <li key={record.entity.entity_id}>
+                  {mock?.payload.title ?? "模考"}：{record.payload.score} /{" "}
+                  {record.payload.score_scale_max} ·{" "}
+                  {formatExamDate(record.payload.completed_at, "时间待定")}
+                </li>
+              );
+            })}
         </ol>
       </ProductPanel>
 
@@ -1245,11 +1624,14 @@ export function ExamCenter() {
                 {countdown(exam.payload.exam_at)}
               </span>
               <h3>{exam.payload.title}</h3>
-              <p>
-                {exam.payload.exam_at
-                  ? EXAM_DATE_FORMATTER.format(new Date(exam.payload.exam_at))
-                  : "考试日期尚未确定"}
-              </p>
+              <button
+                className="product-action-link"
+                type="button"
+                onClick={() => selectInspector("exam", exam.entity.entity_id)}
+              >
+                查看考试详情
+              </button>
+              <p>{formatExamDate(exam.payload.exam_at, "考试日期尚未确定")}</p>
               <p>
                 目标：
                 {exam.payload.target_score !== null

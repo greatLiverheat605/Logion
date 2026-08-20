@@ -143,3 +143,33 @@
 - 合并后主线 Android run `31951949928` 成功；candidate run `31951949948` 真实完成 `ci:fast`、许可/Compose、四镜像构建、不可变镜像 smoke、provenance、精确镜像扫描、SARIF/SBOM 与证据上传，全部成功且绑定 `11014fb...`。
 - 本轮没有执行部署。受控 prerelease 仍运行 RC7 产品源码 `480adc721600243308fa7b5a32200044efd88f07`；Production 流量、真实邮件、回滚点清理及默认关闭能力均未触碰。
 - 下一批准点为真实受邀邮件、实体移动设备验收和 Production 发布范围。历史协调 Run safe-scan 限制仍单独未绿，不影响合并证据，也未被改写为通过。
+
+## Workbench v1 施工任务包与记忆层核验（2026-08-17）
+
+- 用户批准开始归纳 Workbench v1 施工任务包，并计划在新窗口继续施工。
+- 已建立 `08_WORKBENCH_V1_CONSTRUCTION_TASK_PACKET.md`，冻结 I1→I4 顺序、权限/对象不变量、每轮对抗复审和用户审批门。
+- 已建立 `TENCENTDB_AGENT_MEMORY_HANDOFF.md`。TencentDB Agent Memory 可保存脱敏的 L0/L1/L2/L3 工作摘要，但不能替代 Git/协调账本，也不能假定 Codex 桌面会话自动接入。
+- 当前运行环境没有提供 `MEMORY_ENDPOINT`，因此没有执行健康检查；实际部署仍需完成健康、隔离、持久化和恢复演练，状态只能记为“部署待验收”。
+- 一次辅助源码测试在依赖获取阶段超时，未执行测试主体；该结果未记为通过，也不能代替实际端点验收。
+- 本次只更新文档，不修改正式前端、API、数据库、OpenAPI、迁移或生产配置；未 commit/push/merge/deploy。
+
+## Workbench v1 I1 批准与文档基线授权（2026-08-18）
+
+- I1 已覆盖 34 个 `page.tsx`、21 条正式路由和 73 个唯一逐操作状态合同；独立对抗终审无剩余 P1/P2。
+- 产品 Owner 已批准 I1，并授权完成 Workbench 文档脱敏和基线提交；该授权不包含 push、merge、deploy 或正式前端施工。
+- `apps/web/src/**`、API、数据库、迁移、OpenAPI 和生产配置继续保持不变；I2 必须等待新的明确施工范围与写入授权。
+
+## Workbench v1 W1 施工收口（2026-08-19）
+
+- W1（M1-M4 与 S1）已完成并通过独立对抗复审，最终 HEAD 为 `22b9e339d1935e81685dda1c043384f914c58d02`。
+- 协调方实际复核：Web 68 个文件/525 个测试、认证 Playwright 32/32、lint、typecheck、Prettier、build 与 `git diff --check` 均通过。
+- 独立整批复审第二轮 Verdict 为 PASS，无 P0/P1；新 Workbench Inspector 的页面级 Escape/焦点回归保留为 I4 集成门的可接受 P2。
+- 根级 `corepack pnpm ci:fast` 未全绿：在既有 `apps/worker/src/logion_worker/email_delivery.py` 的 `alibabacloud_credentials` 缺少 mypy stub 处失败；未修改该无关 Worker 文件。
+- 当前分支尚未 push、merge 或 deploy；TencentDB Agent Memory 仍为“部署待验收”。
+- 下一阶段为 I2（研究与考试领域流程），包括 Research Question、Source、Claim/Evidence、Experiment Run、版本/证据关系，以及 Exam、覆盖矩阵、复习缺口、模拟考试和成绩轨迹；开始前需要新的施工范围、写入白名单和 Product Owner 批准。
+
+## Workbench v1 I2 任务包批准（2026-08-19）
+
+- Product Owner 已批准进入 I2 任务包准备；新增 `09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md`，冻结研究线、考试线、I2-Q1 集成线、唯一白名单和独立复审门。
+- I2 基线为 `6e448ac01dc78b94f600658f2574a51cce1cca64`。本次只修改交接文档，未开始 I2 正式代码施工，未触碰 API、contracts、数据库、迁移、权限或生产配置。
+- 下一动作是协调方复核 I2 包并单独授权 I2-R1 或 I2-E1；GLM 只能承担独立、不重叠的纯模型/测试子任务，结果仍需主线验收。

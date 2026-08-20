@@ -46,6 +46,7 @@ from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
 from logion_api.sync.routes import router as sync_router
 from logion_api.users.routes import router as user_settings_router
+from logion_api.workbenches.contract_routes import router as workbench_contract_router
 from logion_api.workspaces.invitation_routes import (
     invitation_router,
     workspace_invitation_router,
@@ -53,7 +54,7 @@ from logion_api.workspaces.invitation_routes import (
 from logion_api.workspaces.routes import router as workspace_router
 
 
-def create_app() -> FastAPI:
+def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     settings = get_settings()
     application = FastAPI(
         title="Logion API",
@@ -112,6 +113,8 @@ def create_app() -> FastAPI:
     application.include_router(account_deletion_router)
     application.include_router(knowledge_space_router)
     application.include_router(local_worker_router)
+    if include_dormant_contracts:
+        application.include_router(workbench_contract_router)
     return application
 
 

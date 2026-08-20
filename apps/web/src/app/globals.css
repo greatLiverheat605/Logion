@@ -9,6 +9,7 @@
 @import "../features/ai/ai-governance.css";
 @import "../features/sync/sync-system.css";
 @import "../features/integrations/integration-hub.css";
+@import "../features/workbenches/workbench-shell.css";
 
 :root,
 :root[data-theme="light"] {

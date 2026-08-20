@@ -4,6 +4,7 @@ import {
   type PersonaDefinition,
 } from "@/features/personas/persona-definitions";
 import { INTEGRATION_ENTRY_PERSONAS } from "@/features/integrations/integration-navigation";
+import { projectPersonaToWorkbench } from "@/features/workbenches/workbench-model";
 
 /**
  * The five top-level navigation areas of the D2 Adaptive Desk shell.
@@ -115,7 +116,7 @@ export const DESK_ROUTES: readonly DeskRouteEntry[] = [
     path: "/app/today",
     subView: "当前行动与验收",
   },
-  // 工作台 (5)
+  // 工作台 (6)
   {
     area: "workbench",
     commandDescription: "推进路线、项目、收件箱和成果",
@@ -198,18 +199,19 @@ export const DESK_ROUTES: readonly DeskRouteEntry[] = [
     path: "/app/spaces",
     subView: "知识库管理",
   },
-  // 协作空间 (2)
+  // 导师工作台沿用既有 URL 和 Persona gate。
   {
     allowedBuiltinPersonas: ["research", "mentor"],
-    area: "collaboration",
+    area: "workbench",
     commandDescription: "基于共享对象发起审阅和反馈",
     commandLabel: "打开审阅与反馈",
     gateRoute: "/app/self-study",
     icon: "users",
     keywords: ["协作", "审阅", "反馈", "成员", "邀请"],
     path: "/app/collaboration",
-    subView: "审阅与反馈",
+    subView: "导师",
   },
+  // 协作空间 (1)
   {
     area: "collaboration",
     commandDescription: "管理 Workspace、Space、成员和邀请",
@@ -436,7 +438,8 @@ export function contextBarDescriptor(path: string): ContextBarDescriptor {
  * never changes authorization or hides error states.
  *
  * - 今天 → `/app/today`
- * - 工作台 → exam persona enters `/app/exam`, others `/app/self-study`
+ * - 工作台 → the read-only Workbench projection entry when its existing gate
+ *   route is visible; a loaded Persona without an entry fails closed to Today
  * - 知识库 → first persona-visible of `/app/records` → `/app/review` → `/app/spaces`
  * - 协作空间 → `/app/workspaces`
  * - 系统中心 → `/app/settings`
@@ -448,10 +451,10 @@ export function defaultRouteForArea(
   switch (area) {
     case "today":
       return "/app/today";
-    case "workbench":
-      return persona?.isBuiltin && persona.id === "exam"
-        ? "/app/exam"
-        : "/app/self-study";
+    case "workbench": {
+      if (!persona) return "/app/today";
+      return projectPersonaToWorkbench(persona)?.entryPath ?? "/app/today";
+    }
     case "knowledge":
       return firstVisibleRoute(
         ["/app/records", "/app/review", "/app/spaces"],
@@ -470,7 +473,7 @@ function firstVisibleRoute(
 ): string {
   if (!persona) return candidates[0]!;
   const allowed = new Set(persona.routes);
-  return candidates.find((route) => allowed.has(route)) ?? candidates[0]!;
+  return candidates.find((route) => allowed.has(route)) ?? "/app/today";
 }
 
 /**

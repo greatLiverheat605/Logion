@@ -35,6 +35,9 @@ describe("mobileDeskNavigation", () => {
       "协作空间",
       "系统中心",
     ]);
+    expect(nav.find((item) => item.area === "workbench")?.href).toBe(
+      "/app/today",
+    );
   });
 
   it("the 5 area IDs and icons are stable", () => {
@@ -62,17 +65,19 @@ describe("mobileDeskNavigation", () => {
     }
   });
 
-  it("workbench defaults to /app/exam for exam persona, /app/self-study for others", () => {
-    const examNav = mobileDeskNavigation(
-      BUILTIN_PERSONAS.find((p) => p.id === "exam")!,
-    );
-    const examWorkbench = examNav.find((item) => item.area === "workbench");
-    expect(examWorkbench?.href).toBe("/app/exam");
-
-    for (const persona of BUILTIN_PERSONAS.filter((p) => p.id !== "exam")) {
+  it("fixed personas keep their Workbench-specific entries", () => {
+    const expected = {
+      self: "/app/self-study",
+      research: "/app/research",
+      exam: "/app/exam",
+      mentor: "/app/collaboration",
+    } as const;
+    for (const persona of BUILTIN_PERSONAS) {
       const nav = mobileDeskNavigation(persona);
       const workbench = nav.find((item) => item.area === "workbench");
-      expect(workbench?.href).toBe("/app/self-study");
+      expect(workbench?.href).toBe(
+        expected[persona.id as keyof typeof expected],
+      );
     }
   });
 
@@ -90,7 +95,10 @@ describe("mobileDeskNavigation", () => {
     };
     const nav = mobileDeskNavigation(minimalPersona);
     expect(nav).toHaveLength(5);
-    // Today is visible; other defaults fall back to the generic default.
+    // Workbench fails closed to Today instead of inventing a visible route.
     expect(nav.find((item) => item.area === "today")?.href).toBe("/app/today");
+    expect(nav.find((item) => item.area === "workbench")?.href).toBe(
+      "/app/today",
+    );
   });
 });

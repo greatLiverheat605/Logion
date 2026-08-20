@@ -192,4 +192,47 @@ describe("ReviewCenter context loading", () => {
     expect(screen.queryByRole("option", { name: /A 空间/ })).toBeNull();
     expect(screen.getByRole("option", { name: /B 空间/ })).toBeTruthy();
   });
+
+  it("clears Inspector when a Space change invalidates the selected object context", async () => {
+    mockRequest.mockImplementation((path: string) => {
+      if (path === "/api/v1/workspaces") {
+        return Promise.resolve({
+          workspaces: [workspace("workspace-a", "工作区 A")],
+        });
+      }
+      if (path === "/api/v1/auth/devices") {
+        return Promise.resolve({
+          devices: [
+            {
+              current: true,
+              first_seen_at: "2026-08-12T00:00:00Z",
+              id: "device-1",
+              last_seen_at: "2026-08-12T00:00:00Z",
+              name: "浏览器",
+              platform: "test",
+              revoked_at: null,
+            },
+          ],
+        });
+      }
+      if (path === "/api/v1/workspaces/workspace-a/spaces") {
+        return Promise.resolve({
+          spaces: [
+            space("workspace-a", "space-a", "A 空间"),
+            space("workspace-a", "space-b", "B 空间"),
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(<ReviewCenter />);
+    const spaceSelect = await screen.findByLabelText("空间");
+    await screen.findByRole("option", { name: /B 空间/ });
+    closeInspector.mockClear();
+
+    fireEvent.change(spaceSelect, { target: { value: "space-b" } });
+
+    expect(closeInspector).toHaveBeenCalledTimes(1);
+  });
 });

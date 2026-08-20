@@ -21,6 +21,7 @@ from logion_api.research import models as research_models  # noqa: F401
 from logion_api.self_study import models as self_study_models  # noqa: F401
 from logion_api.sync import models as sync_models  # noqa: F401
 from logion_api.users import models as user_models  # noqa: F401
+from logion_api.workbenches import models as workbench_models  # noqa: F401
 from logion_api.workspaces import models as workspace_models  # noqa: F401
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config

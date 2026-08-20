@@ -94,29 +94,24 @@ test.describe("persona system", () => {
     ]);
     await expect(
       navigation.getByRole("link", { name: "工作台" }),
-    ).toHaveAttribute("href", "/app/self-study");
+    ).toHaveAttribute("href", "/app/collaboration");
 
     await page.goto("/app/today");
     await expect(
       page.getByRole("heading", {
-        name: "只在授权共享范围内组织协作与审阅",
+        name: "今天先推进最重要的一步",
       }),
     ).toBeVisible();
   });
 
-  test("today heading follows all four built-in personas even while the Vault is locked", async ({
+  test("Today keeps one unified heading across all four built-in personas while the Vault is locked", async ({
     page,
   }) => {
     test.setTimeout(120_000);
-    const expectations = [
-      ["考", "用真实日期、复习与成绩安排备考"],
-      ["学", "让目标、项目与成果形成连续进展"],
-      ["研", "把问题、论文、声明与运行放在同一证据链"],
-      ["导", "只在授权共享范围内组织协作与审阅"],
-    ] as const;
+    const personas = ["考", "学", "研", "导"] as const;
 
     await page.goto("/app/settings");
-    for (const [persona, heading] of expectations) {
+    for (const persona of personas) {
       await page
         .getByRole("button", { name: new RegExp(`^切换到：${persona}，`) })
         .click();
@@ -124,7 +119,9 @@ test.describe("persona system", () => {
         page.getByText(`已切换到「${persona}」画像。`),
       ).toBeVisible();
       await page.goto("/app/today");
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "今天先推进最重要的一步" }),
+      ).toBeVisible();
       await expect(
         page.getByRole("heading", { name: "先解锁本地资料" }),
       ).toBeVisible();
@@ -183,6 +180,6 @@ test.describe("persona system", () => {
     ]);
     await expect(
       navigation.getByRole("link", { name: "工作台" }),
-    ).toHaveAttribute("href", "/app/self-study");
+    ).toHaveAttribute("href", "/app/collaboration");
   });
 });

@@ -40,6 +40,7 @@ import {
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { mobileDeskNavigation } from "@/features/personas/mobile-persona-navigation";
 import { usePersona } from "@/features/personas/persona-context";
+import { WorkbenchSwitcher } from "@/features/workbenches/workbench-switcher";
 import { browserApiClient } from "@/lib/api/client";
 
 type Overlay = "command" | "notifications";
@@ -98,6 +99,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   });
   const commandButtonRef = useRef<HTMLButtonElement>(null);
   const inspectorPathRef = useRef(pathname);
+  const inspectorPersonaRef = useRef(activePersona?.id ?? null);
 
   // Area-based sidebar: all 5 areas are always shown (they are top-level
   // navigation groupings, not individual routes). Highlight is driven by
@@ -230,6 +232,18 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     inspectorPathRef.current = pathname;
     closeInspector();
   }, [closeInspector, pathname]);
+
+  useEffect(() => {
+    if (vaultPhase !== "locked") return;
+    closeInspector();
+  }, [closeInspector, vaultPhase]);
+
+  useEffect(() => {
+    const personaId = activePersona?.id ?? null;
+    if (inspectorPersonaRef.current === personaId) return;
+    inspectorPersonaRef.current = personaId;
+    closeInspector();
+  }, [activePersona?.id, closeInspector]);
 
   return (
     <div className={`app-shell-frame${inspector ? " has-inspector" : ""}`}>
@@ -405,6 +419,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           className="app-content"
           key={vaultPhase === "unlocked" ? "vault-unlocked" : "vault-locked"}
         >
+          {currentArea === "workbench" ? <WorkbenchSwitcher /> : null}
           {children}
         </div>
       </div>

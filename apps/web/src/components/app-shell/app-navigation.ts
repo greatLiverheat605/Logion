@@ -51,9 +51,8 @@ export const NAV_GROUPS: readonly NavGroup[] = DESK_NAV_GROUPS.map((group) => ({
  * Builds persona-aware sidebar groups. The five areas, their order, labels and
  * icons are always the same (driven by {@link DESK_NAV_GROUPS}); only the
  * `href` of each entry is computed via
- * {@link defaultRouteForArea}`(area, persona)` so that e.g. the exam persona's
- * 工作台 entry points to `/app/exam` while other personas point to
- * `/app/self-study`.
+ * {@link defaultRouteForArea}`(area, persona)` so each fixed Persona enters its
+ * read-only Workbench projection without changing the five-area shell.
  *
  * Persona never hides an area, widens permissions, or changes area highlight
  * (which is driven by `routeArea(pathname)`, not by the sidebar href).
