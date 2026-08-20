@@ -1,36 +1,55 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
+import rfc8785
 from logion_api.db import session_factory
 from logion_api.errors import APIError
 from logion_api.identity.models import User
+from logion_api.users.models import UserSetting
+from logion_api.users.schemas import UserSettingWrite
 from logion_api.workbenches.models import (
     WorkbenchDefinition,
     WorkbenchIdempotencyReceipt,
+    WorkbenchLink,
 )
+from logion_api.workbenches.registry import WorkbenchTargetRegistry
 from logion_api.workbenches.repository import (
     DefinitionCounts,
     DefinitionPage,
+    LinkCursor,
+    LinkPage,
     WorkbenchRepository,
 )
 from logion_api.workbenches.schemas import (
     WorkbenchDefinitionCreateRequest,
+    WorkbenchDefinitionDeleteRequest,
     WorkbenchDefinitionDocumentV1,
     WorkbenchDefinitionLifecycleRequest,
     WorkbenchDefinitionReplaceRequest,
+    WorkbenchExportV1,
+    WorkbenchImportRequest,
+    WorkbenchLinkCreateRequest,
+    WorkbenchLinkMutableV1,
+    WorkbenchLinkReorderRequest,
 )
 from logion_api.workbenches.service import (
     CREATE_OPERATION,
+    LINK_CREATE_OPERATION,
     WorkbenchService,
+    WorkbenchUserSettingService,
     _conflict_paths,
+    _require_attribute_quota,
+    canonical_fingerprint,
     definition_response,
     request_fingerprint,
+    validate_workbench_preference,
 )
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,6 +94,21 @@ def _document_with_module(title: str) -> WorkbenchDefinitionDocumentV1:
     return WorkbenchDefinitionDocumentV1.model_validate(value)
 
 
+def _document_with_text_field() -> WorkbenchDefinitionDocumentV1:
+    value = _document().model_dump(mode="json", by_alias=True)
+    payload = cast(dict[str, Any], value["payload"])
+    payload["fieldDefinitions"] = [
+        {
+            "id": "summary",
+            "label": "Summary",
+            "required": False,
+            "type": "text",
+            "maxLength": 80,
+        }
+    ]
+    return WorkbenchDefinitionDocumentV1.model_validate(value)
+
+
 def _definition(owner_id: UUID, *, revision: int = 1, lifecycle: str = "active") -> Any:
     now = datetime.now(UTC)
     document = _document()
@@ -114,13 +148,67 @@ def _repository() -> WorkbenchRepository:
     repository.list_definitions = AsyncMock(  # type: ignore[method-assign]
         return_value=DefinitionPage(items=[], next_cursor=None)
     )
+    repository.get_link = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    repository.list_links = AsyncMock(  # type: ignore[method-assign]
+        return_value=LinkPage(items=[], next_cursor=None)
+    )
+    repository.all_links = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    repository.get_preference = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    repository.delete_definition = AsyncMock()  # type: ignore[method-assign]
+    repository.delete_link = AsyncMock()  # type: ignore[method-assign]
     repository.add_definition = Mock()  # type: ignore[method-assign]
+    repository.add_link = Mock()  # type: ignore[method-assign]
     repository.add_receipt = Mock()  # type: ignore[method-assign]
     return repository
 
 
 def _db() -> AsyncSession:
     return cast(AsyncSession, AsyncMock(spec=AsyncSession))
+
+
+def _link(kind: str = "task", target_id: UUID | None = None, position: int = 0) -> Any:
+    return WorkbenchLinkMutableV1.model_validate(
+        {
+            "target": {"kind": kind, "id": str(target_id or uuid4())},
+            "position": position,
+            "primaryContext": False,
+            "attributes": {},
+        }
+    )
+
+
+def _link_row(owner_id: UUID, definition_id: UUID, mutable: Any) -> WorkbenchLink:
+    now = datetime.now(UTC)
+    return WorkbenchLink(
+        id=uuid4(),
+        workbench_id=definition_id,
+        owner_user_id=owner_id,
+        target_kind=mutable.target.kind,
+        target_id=mutable.target.id,
+        position=mutable.position,
+        primary_context=mutable.primary_context,
+        attributes=mutable.model_dump(mode="json", by_alias=True)["attributes"],
+        revision=1,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _service_with_registry(
+    repository: WorkbenchRepository,
+) -> tuple[WorkbenchService, WorkbenchTargetRegistry]:
+    registry = WorkbenchTargetRegistry()
+    registry.is_link_authorized = AsyncMock(return_value=True)  # type: ignore[method-assign]
+    registry.require_link_authorized = AsyncMock()  # type: ignore[method-assign]
+    return (
+        WorkbenchService(
+            repository,
+            active_definition_limit=20,
+            total_definition_limit=50,
+            registry=registry,
+        ),
+        registry,
+    )
 
 
 @pytest.mark.asyncio
@@ -227,6 +315,37 @@ async def test_replace_writes_only_local_and_increments_revision() -> None:
     assert result.revision == 5
     assert result.name == "Updated desk"
     assert current.document == payload.local.model_dump(mode="json", by_alias=True)
+
+
+@pytest.mark.asyncio
+async def test_replace_rejects_definition_that_invalidates_existing_link_attributes() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    current = _definition(owner_id)
+    current.document = _document_with_text_field().model_dump(mode="json", by_alias=True)
+    mutable = _link()
+    mutable.attributes["summary"] = "kept"
+    repository.get_definition.return_value = current  # type: ignore[attr-defined]
+    repository.all_links.return_value = [  # type: ignore[attr-defined]
+        _link_row(owner_id, current.id, mutable)
+    ]
+
+    with pytest.raises(APIError) as raised:
+        await _service(repository).replace_definition(
+            _db(),
+            owner_id,
+            current.id,
+            WorkbenchDefinitionReplaceRequest(
+                expected_revision=1,
+                base=_document_with_text_field(),
+                local=_document(),
+            ),
+        )
+
+    assert raised.value.code == "WORKBENCH_SCHEMA_INVALID"
+    assert current.revision == 1
+    assert WorkbenchDefinitionDocumentV1.model_validate(current.document).payload.field_definitions
+    assert repository.all_links.await_args.kwargs["for_update"] is True  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -382,6 +501,373 @@ def test_definition_response_does_not_share_mutable_document_state() -> None:
     assert response.document.contract == "workbench.definition"
 
 
+@pytest.mark.asyncio
+async def test_link_create_reauthorizes_then_atomically_advances_collection() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    service, registry = _service_with_registry(repository)
+    payload = WorkbenchLinkCreateRequest(base_link_set_revision=1, local=_link())
+
+    response = await service.create_link(_db(), owner_id, definition.id, payload, uuid4())
+
+    registry.require_link_authorized.assert_awaited_once()  # type: ignore[attr-defined]
+    assert response.revision == 1
+    assert response.link_set_revision == 2
+    assert definition.link_set_revision == 2
+    repository.add_link.assert_called_once()  # type: ignore[attr-defined]
+    repository.add_receipt.assert_called_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_link_list_preserves_cursor_snapshot_and_filters_current_acl() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    denied = _link_row(owner_id, definition.id, _link(position=0))
+    allowed = _link_row(owner_id, definition.id, _link(position=1))
+    next_allowed = _link_row(owner_id, definition.id, _link(position=2))
+    snapshot = datetime.now(UTC)
+    for link in (denied, allowed, next_allowed):
+        link.updated_at = snapshot - timedelta(seconds=1)
+    cursor = LinkCursor(snapshot_at=snapshot, position=-1, link_id=uuid4())
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    repository.all_links.return_value = [denied, allowed, next_allowed]  # type: ignore[attr-defined]
+    service, registry = _service_with_registry(repository)
+    registry.is_link_authorized.side_effect = [False, True, True]  # type: ignore[attr-defined]
+
+    page = await service.list_links(_db(), owner_id, definition.id, limit=1, cursor=cursor)
+
+    assert [item.id for item in page.items] == [allowed.id]
+    assert page.next_cursor == LinkCursor(
+        snapshot_at=snapshot, position=allowed.position, link_id=allowed.id
+    )
+    assert page.link_set_revision == 1
+    repository.list_links.assert_not_awaited()  # type: ignore[attr-defined]
+
+    repository.all_links.return_value = [denied]  # type: ignore[attr-defined]
+    registry.is_link_authorized.side_effect = [False]  # type: ignore[attr-defined]
+    empty = await service.list_links(_db(), owner_id, definition.id, limit=1, cursor=cursor)
+    assert empty.items == []
+    assert empty.next_cursor is None
+
+
+@pytest.mark.asyncio
+async def test_link_create_authorization_precedes_collection_version_disclosure() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    service, registry = _service_with_registry(repository)
+    registry.require_link_authorized.side_effect = APIError(  # type: ignore[attr-defined]
+        code="RESOURCE_NOT_FOUND", message="Workbench not found.", status_code=404
+    )
+
+    with pytest.raises(APIError) as raised:
+        await service.create_link(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkCreateRequest(base_link_set_revision=99, local=_link()),
+            uuid4(),
+        )
+    assert raised.value.code == "RESOURCE_NOT_FOUND"
+    repository.all_links.assert_not_awaited()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_link_create_authorization_precedes_idempotency_conflict() -> None:
+    owner_id, key = uuid4(), uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    repository.get_receipt.return_value = WorkbenchIdempotencyReceipt(  # type: ignore[attr-defined]
+        owner_user_id=owner_id,
+        operation=LINK_CREATE_OPERATION,
+        idempotency_key=key,
+        request_fingerprint="sha256:" + "0" * 64,
+        outcome="succeeded",
+        retryable=False,
+        response_snapshot={},
+    )
+    service, registry = _service_with_registry(repository)
+    registry.require_link_authorized.side_effect = APIError(  # type: ignore[attr-defined]
+        code="RESOURCE_NOT_FOUND", message="Workbench not found.", status_code=404
+    )
+
+    with pytest.raises(APIError) as raised:
+        await service.create_link(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkCreateRequest(base_link_set_revision=1, local=_link()),
+            key,
+        )
+
+    assert raised.value.code == "RESOURCE_NOT_FOUND"
+    assert raised.value.details == {}
+    repository.get_receipt.assert_not_awaited()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_link_create_rejects_undefined_attributes_and_exact_500_limit() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    service, _ = _service_with_registry(repository)
+    value = _link().model_dump(mode="json", by_alias=True)
+    value["attributes"] = {"missing": "value"}
+
+    with pytest.raises(APIError) as raised:
+        await service.create_link(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkCreateRequest(
+                base_link_set_revision=1,
+                local=WorkbenchLinkMutableV1.model_validate(value),
+            ),
+            uuid4(),
+        )
+    assert raised.value.code == "WORKBENCH_SCHEMA_INVALID"
+
+    repository.all_links.return_value = [  # type: ignore[attr-defined]
+        _link_row(owner_id, definition.id, _link(target_id=uuid4(), position=index % 500))
+        for index in range(500)
+    ]
+    with pytest.raises(APIError) as raised:
+        await service.create_link(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkCreateRequest(base_link_set_revision=1, local=_link()),
+            uuid4(),
+        )
+    assert raised.value.code == "WORKBENCH_RATE_LIMITED"
+
+
+@pytest.mark.asyncio
+async def test_reorder_distinguishes_stale_collection_from_invalid_complete_set() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    first = _link_row(owner_id, definition.id, _link(position=0))
+    second = _link_row(owner_id, definition.id, _link(position=1))
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    repository.all_links.return_value = [first, second]  # type: ignore[attr-defined]
+    service, _ = _service_with_registry(repository)
+
+    definition.link_set_revision = 3
+    with pytest.raises(APIError) as stale:
+        await service.reorder_links(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkReorderRequest(
+                base_link_set_revision=2,
+                base_order=[first.id],
+                ordered_link_ids=[first.id],
+            ),
+        )
+    assert stale.value.code == "WORKBENCH_VERSION_CONFLICT"
+    assert stale.value.details["remote"] == [first.id, second.id]
+
+    with pytest.raises(APIError) as invalid:
+        await service.reorder_links(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkReorderRequest(
+                base_link_set_revision=3,
+                base_order=[first.id],
+                ordered_link_ids=[first.id],
+            ),
+        )
+    assert invalid.value.code == "WORKBENCH_SCHEMA_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_reorder_reauthorizes_complete_link_set_before_conflict_disclosure() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    link = _link_row(owner_id, definition.id, _link())
+    definition.link_set_revision = 3
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    repository.all_links.return_value = [link]  # type: ignore[attr-defined]
+    service, registry = _service_with_registry(repository)
+    registry.require_link_authorized.side_effect = APIError(  # type: ignore[attr-defined]
+        code="RESOURCE_NOT_FOUND", message="Workbench not found.", status_code=404
+    )
+
+    with pytest.raises(APIError) as raised:
+        await service.reorder_links(
+            _db(),
+            owner_id,
+            definition.id,
+            WorkbenchLinkReorderRequest(
+                base_link_set_revision=2,
+                base_order=[link.id],
+                ordered_link_ids=[link.id],
+            ),
+        )
+
+    assert raised.value.code == "RESOURCE_NOT_FOUND"
+    assert raised.value.details == {}
+    assert definition.link_set_revision == 3
+
+
+@pytest.mark.asyncio
+async def test_import_validates_source_fingerprint_and_aggregates_unavailable_links() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    service, registry = _service_with_registry(repository)
+    registry.is_link_authorized.side_effect = [True, False]  # type: ignore[attr-defined]
+    exported = WorkbenchExportV1(
+        contract="workbench.export",
+        schema_version=1,
+        document=_document(),
+        links=[_link(position=0), _link(kind="note", position=1)],
+    )
+    payload = WorkbenchImportRequest(
+        source_fingerprint=canonical_fingerprint(exported),
+        payload=exported,
+    )
+
+    result = await service.import_definition(_db(), owner_id, payload, uuid4())
+
+    assert result.status == "succeeded"
+    assert result.skipped_links is not None
+    assert result.skipped_links.count == 1
+    assert repository.add_definition.call_count == 1  # type: ignore[attr-defined]
+    assert repository.add_link.call_count == 1  # type: ignore[attr-defined]
+    assert repository.add_receipt.call_count == 1  # type: ignore[attr-defined]
+
+    changed = payload.model_copy(update={"source_fingerprint": "sha256:" + "0" * 64})
+    with pytest.raises(APIError) as raised:
+        await service.import_definition(_db(), owner_id, changed, uuid4())
+    assert raised.value.code == "WORKBENCH_SCHEMA_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_deletion_impact_is_signed_and_verified_under_current_locked_state() -> None:
+    owner_id = uuid4()
+    repository = _repository()
+    definition = _definition(owner_id)
+    repository.get_definition.return_value = definition  # type: ignore[attr-defined]
+    preference_value = {
+        "contract": "workbench.preference",
+        "schemaVersion": 1,
+        "revision": 1,
+        "payload": {
+            "activeWorkbenchId": str(definition.id),
+            "hiddenFixedWorkbenchIds": [],
+            "workbenchOrder": ["fixed.learning", str(definition.id)],
+            "density": "compact",
+            "defaultViewByWorkbench": {str(definition.id): "board"},
+            "defaultSpaceByWorkbench": {},
+        },
+    }
+    setting = UserSetting(
+        user_id=owner_id,
+        key="workbench.preference",
+        value=json.dumps(preference_value),
+        version=1,
+    )
+    repository.get_preference.return_value = setting  # type: ignore[attr-defined]
+    service = _service(repository)
+    signed: dict[str, object] = {}
+
+    def sign(claims: dict[str, object]) -> str:
+        signed.update(claims)
+        return "active.signature"
+
+    impact = await service.deletion_impact(_db(), owner_id, definition.id, sign_impact=sign)
+    assert impact.preference_will_fallback is True
+    assert signed["ownerUserId"] == str(owner_id)
+    assert signed["formalObjectDeleteCount"] == 0
+
+    payload = WorkbenchDefinitionDeleteRequest(
+        expected_revision=definition.revision,
+        expected_link_set_revision=definition.link_set_revision,
+        impact_fingerprint=impact.impact_fingerprint,
+    )
+    receipt = await service.delete_definition(
+        _db(),
+        owner_id,
+        definition.id,
+        payload,
+        uuid4(),
+        verify_impact=lambda claims, signature: (
+            claims == signed and signature == "active.signature"
+        ),
+    )
+    assert receipt.preference_fallback is True
+    assert setting.version == 2
+    assert str(definition.id) not in setting.value
+    repository.delete_definition.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+def test_preference_enforces_exact_4096_utf8_byte_limit() -> None:
+    value = json.dumps(
+        {
+            "contract": "workbench.preference",
+            "schemaVersion": 1,
+            "revision": 1,
+            "payload": {
+                "activeWorkbenchId": "fixed.learning",
+                "hiddenFixedWorkbenchIds": [],
+                "workbenchOrder": ["fixed.learning"],
+                "density": "compact",
+                "defaultViewByWorkbench": {},
+                "defaultSpaceByWorkbench": {},
+            },
+        }
+    )
+    exact = " " * (4096 - len(value.encode("utf-8"))) + value
+    assert validate_workbench_preference(exact, 1).revision == 1
+    with pytest.raises(APIError) as raised:
+        validate_workbench_preference(" " + exact, 1)
+    assert raised.value.code == "WORKBENCH_PREFERENCE_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_preference_adapter_rejects_before_existing_setting_service_write() -> None:
+    db = _db()
+    with pytest.raises(APIError) as raised:
+        await WorkbenchUserSettingService().update(
+            db,
+            uuid4(),
+            [UserSettingWrite(key="workbench.preference", value="{}", version=0)],
+        )
+    assert raised.value.code == "WORKBENCH_PREFERENCE_INVALID"
+    db.scalars.assert_not_awaited()  # type: ignore[attr-defined]
+
+
+def test_link_attributes_enforce_exact_16kib_aggregate_limit() -> None:
+    owner_id, definition_id = uuid4(), uuid4()
+    candidate = _link()
+    candidate_size = len(
+        rfc8785.dumps(candidate.model_dump(mode="json", by_alias=True)["attributes"])
+    )
+    base_size = len(rfc8785.dumps({"note": ""}))
+    content_size = 16 * 1024 - candidate_size - 9 * base_size
+    chunk, remainder = divmod(content_size, 9)
+    existing = []
+    for index in range(9):
+        row = _link_row(owner_id, definition_id, _link(position=index))
+        row.attributes = {"note": "x" * (chunk + (1 if index < remainder else 0))}
+        existing.append(row)
+    _require_attribute_quota(existing, candidate, 16 * 1024)
+
+    cast(dict[str, str], existing[0].attributes)["note"] += "x"
+    with pytest.raises(APIError) as raised:
+        _require_attribute_quota(existing, candidate, 16 * 1024)
+    assert raised.value.code == "WORKBENCH_SCHEMA_INVALID"
+
+
 async def _create_user(label: str) -> UUID:
     user_id = uuid4()
     async with session_factory() as db:
@@ -394,6 +880,121 @@ async def _create_user(label: str) -> UUID:
         )
         await db.commit()
     return user_id
+
+
+async def _create_definition(owner_id: UUID, label: str) -> WorkbenchDefinition:
+    definition = cast(WorkbenchDefinition, _definition(owner_id))
+    definition.name = label
+    async with session_factory() as db:
+        db.add(definition)
+        await db.commit()
+    return definition
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_postgres_concurrent_link_create_writes_once_and_advances_once() -> None:
+    owner_id = await _create_user("link-concurrent")
+    definition = await _create_definition(owner_id, "Link concurrency")
+    key = uuid4()
+    payload = WorkbenchLinkCreateRequest(base_link_set_revision=1, local=_link())
+    registry = WorkbenchTargetRegistry()
+    registry.require_link_authorized = AsyncMock()  # type: ignore[method-assign]
+
+    async def create() -> UUID:
+        async with session_factory() as db:
+            response = await WorkbenchService(
+                WorkbenchRepository(),
+                active_definition_limit=20,
+                total_definition_limit=50,
+                registry=registry,
+            ).create_link(db, owner_id, definition.id, payload, key)
+            await db.commit()
+            return response.id
+
+    first, second = await asyncio.gather(create(), create())
+    assert first == second
+    async with session_factory() as db:
+        persisted = await db.get(WorkbenchDefinition, definition.id)
+        assert persisted is not None
+        assert persisted.link_set_revision == 2
+        assert (
+            await db.scalar(
+                select(func.count(WorkbenchLink.id)).where(
+                    WorkbenchLink.workbench_id == definition.id
+                )
+            )
+            == 1
+        )
+        assert (
+            await db.scalar(
+                select(func.count(WorkbenchIdempotencyReceipt.id)).where(
+                    WorkbenchIdempotencyReceipt.owner_user_id == owner_id,
+                    WorkbenchIdempotencyReceipt.idempotency_key == key,
+                )
+            )
+            == 1
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_postgres_delete_cascades_links_and_commits_preference_with_receipt() -> None:
+    owner_id = await _create_user("delete")
+    definition = await _create_definition(owner_id, "Delete transaction")
+    link = _link_row(owner_id, definition.id, _link())
+    preference = UserSetting(
+        user_id=owner_id,
+        key="workbench.preference",
+        value=json.dumps(
+            {
+                "contract": "workbench.preference",
+                "schemaVersion": 1,
+                "revision": 1,
+                "payload": {
+                    "activeWorkbenchId": str(definition.id),
+                    "hiddenFixedWorkbenchIds": [],
+                    "workbenchOrder": ["fixed.learning", str(definition.id)],
+                    "density": "compact",
+                    "defaultViewByWorkbench": {},
+                    "defaultSpaceByWorkbench": {},
+                },
+            }
+        ),
+        version=1,
+    )
+    async with session_factory() as db:
+        definition_row = await db.get(WorkbenchDefinition, definition.id)
+        assert definition_row is not None
+        definition_row.link_set_revision = 2
+        db.add_all((link, preference))
+        await db.commit()
+
+    key = uuid4()
+    async with session_factory() as db:
+        receipt = await _service(WorkbenchRepository()).delete_definition(
+            db,
+            owner_id,
+            definition.id,
+            WorkbenchDefinitionDeleteRequest(
+                expected_revision=1,
+                expected_link_set_revision=2,
+                impact_fingerprint="signed-impact",
+            ),
+            key,
+            verify_impact=lambda _claims, signature: signature == "signed-impact",
+        )
+        await db.commit()
+
+    async with session_factory() as db:
+        assert await db.get(WorkbenchDefinition, definition.id) is None
+        assert await db.get(WorkbenchLink, link.id) is None
+        stored_receipt = await db.get(WorkbenchIdempotencyReceipt, receipt.receipt_id)
+        assert stored_receipt is not None
+        stored_preference = await db.get(UserSetting, (owner_id, "workbench.preference"))
+        assert stored_preference is not None
+        assert stored_preference.version == 2
+        assert str(definition.id) not in stored_preference.value
 
 
 @pytest.mark.integration
