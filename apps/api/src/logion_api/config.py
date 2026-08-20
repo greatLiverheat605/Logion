@@ -137,6 +137,36 @@ class Settings(BaseSettings):
     account_deletion_grace_days: int = Field(default=14, ge=1, le=30)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    workbench_custom_api_enabled: bool = False
+    workbench_delete_api_enabled: bool = False
+    workbench_read_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    workbench_definition_create_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_definition_replace_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_definition_archive_limit_per_hour: int = Field(default=30, ge=1, le=5000)
+    workbench_definition_restore_limit_per_hour: int = Field(default=30, ge=1, le=5000)
+    workbench_definition_delete_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_import_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_export_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_link_create_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_link_patch_limit_per_hour: int = Field(default=120, ge=1, le=10000)
+    workbench_link_delete_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_link_reorder_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_rate_limit_window_seconds: int = Field(default=3600, ge=60, le=3600)
+    workbench_active_definition_limit: int = Field(default=20, ge=1, le=100)
+    workbench_total_definition_limit: int = Field(default=50, ge=1, le=500)
+    workbench_link_limit: int = Field(default=500, ge=1, le=500)
+    workbench_link_attributes_limit_bytes: int = Field(default=16 * 1024, ge=1024, le=16 * 1024)
+    workbench_request_body_limit_bytes: int = Field(default=256 * 1024, ge=1024, le=256 * 1024)
+    workbench_import_body_limit_bytes: int = Field(
+        default=2 * 1024 * 1024, ge=1024, le=2 * 1024 * 1024
+    )
+    workbench_export_response_limit_bytes: int = Field(
+        default=2 * 1024 * 1024, ge=1024, le=2 * 1024 * 1024
+    )
+    workbench_cursor_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    workbench_impact_active_key_id: str | None = Field(default=None, max_length=64)
+    workbench_impact_previous_key_id: str | None = Field(default=None, max_length=64)
+    workbench_impact_keys: dict[str, SecretStr] = Field(default_factory=dict)
     knowledge_space_api_enabled: bool = False
     knowledge_space_shared_writes_enabled: bool = False
     knowledge_space_ai_acceptance_enabled: bool = False
@@ -290,6 +320,38 @@ class Settings(BaseSettings):
             raise ValueError(
                 "LOGION_KNOWLEDGE_SPACE_LOCAL_WORKER_ENABLED requires the main API flag"
             )
+        if self.workbench_delete_api_enabled and not self.workbench_custom_api_enabled:
+            raise ValueError(
+                "LOGION_WORKBENCH_DELETE_API_ENABLED requires the main Workbench API flag"
+            )
+        if self.workbench_custom_api_enabled:
+            active_impact_key_id = self.workbench_impact_active_key_id
+            if not active_impact_key_id or active_impact_key_id not in self.workbench_impact_keys:
+                raise ValueError(
+                    "LOGION_WORKBENCH_IMPACT_ACTIVE_KEY_ID must select a configured key"
+                )
+        if (
+            self.workbench_impact_previous_key_id is not None
+            and self.workbench_impact_previous_key_id == self.workbench_impact_active_key_id
+        ):
+            raise ValueError("The active and previous Workbench impact key IDs must differ")
+        if (
+            self.workbench_impact_previous_key_id is not None
+            and self.workbench_impact_previous_key_id not in self.workbench_impact_keys
+        ):
+            raise ValueError("LOGION_WORKBENCH_IMPACT_PREVIOUS_KEY_ID must select a configured key")
+        for key_id, impact_key in self.workbench_impact_keys.items():
+            if not 1 <= len(key_id) <= 64 or any(
+                character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+                for character in key_id
+            ):
+                raise ValueError(
+                    "LOGION_WORKBENCH_IMPACT_KEYS key IDs must use 1-64 safe characters"
+                )
+            if len(impact_key.get_secret_value().encode("utf-8")) < 32:
+                raise ValueError(
+                    f"LOGION_WORKBENCH_IMPACT_KEYS key {key_id} must contain at least 32 bytes"
+                )
         if self.knowledge_space_api_enabled:
             active_cursor_key_id = self.knowledge_cursor_active_key_id
             if not active_cursor_key_id or active_cursor_key_id not in self.knowledge_cursor_keys:

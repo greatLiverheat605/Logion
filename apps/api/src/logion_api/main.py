@@ -45,8 +45,12 @@ from logion_api.portability.routes import router as portability_router
 from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
 from logion_api.sync.routes import router as sync_router
+from logion_api.users.dependencies import get_user_setting_service
 from logion_api.users.routes import router as user_settings_router
 from logion_api.workbenches.contract_routes import router as workbench_contract_router
+from logion_api.workbenches.routes import delete_router as workbench_delete_router
+from logion_api.workbenches.routes import router as workbench_router
+from logion_api.workbenches.service import WorkbenchUserSettingService
 from logion_api.workspaces.invitation_routes import (
     invitation_router,
     workspace_invitation_router,
@@ -68,8 +72,15 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Content-Type", "X-CSRF-Token", "X-Request-ID"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=[
+            "Content-Type",
+            "Idempotency-Key",
+            "If-Match",
+            "If-None-Match",
+            "X-CSRF-Token",
+            "X-Request-ID",
+        ],
     )
     application.middleware("http")(request_id_middleware)
     application.add_exception_handler(APIError, cast(ExceptionHandler, api_error_handler))
@@ -115,6 +126,11 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(local_worker_router)
     if include_dormant_contracts:
         application.include_router(workbench_contract_router)
+    elif settings.workbench_custom_api_enabled:
+        application.include_router(workbench_router)
+        if settings.workbench_delete_api_enabled:
+            application.include_router(workbench_delete_router)
+        application.dependency_overrides[get_user_setting_service] = WorkbenchUserSettingService
     return application
 
 
