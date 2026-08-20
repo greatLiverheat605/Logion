@@ -4960,7 +4960,7 @@ export interface components {
             /** Version */
             version: number;
         };
-        JsonScalar: string | number | boolean | null;
+        JsonScalar: string | components["schemas"]["SafeInteger"] | components["schemas"]["StrictFiniteFloat"] | boolean | null;
         /** KnowledgeCitationCreateRequest */
         KnowledgeCitationCreateRequest: {
             /**
@@ -5830,9 +5830,9 @@ export interface components {
             id: string;
             label: components["schemas"]["NameText"];
             /** Maximum */
-            maximum: components["schemas"]["SafeInteger"] | number;
+            maximum: components["schemas"]["SafeInteger"] | components["schemas"]["StrictFiniteFloat"];
             /** Minimum */
-            minimum: components["schemas"]["SafeInteger"] | number;
+            minimum: components["schemas"]["SafeInteger"] | components["schemas"]["StrictFiniteFloat"];
             /**
              * Required
              * @default false
@@ -7365,6 +7365,7 @@ export interface components {
          */
         SpaceVisibility: "private" | "shared";
         StableItemId: string;
+        StrictFiniteFloat: number;
         /** SubjectCreateRequest */
         SubjectCreateRequest: {
             /**
@@ -8341,43 +8342,9 @@ export interface components {
             name: string;
         };
         /** WorkbenchConflictDetails */
-        WorkbenchConflictDetails: {
-            /** Base */
-            base: components["schemas"]["WorkbenchDefinitionDocumentV1"] | components["schemas"]["WorkbenchLinkMutableV1"];
-            base_revision: components["schemas"]["Revision"];
-            /** Conflict Paths */
-            conflict_paths: string[];
-            /**
-             * Entity
-             * @enum {string}
-             */
-            entity: "definition" | "link" | "link_set";
-            /** Local */
-            local: components["schemas"]["WorkbenchDefinitionDocumentV1"] | components["schemas"]["WorkbenchLinkMutableV1"];
-            /** Remote */
-            remote: components["schemas"]["WorkbenchDefinitionDocumentV1"] | components["schemas"]["WorkbenchLinkMutableV1"];
-            remote_revision: components["schemas"]["Revision"];
-        };
+        WorkbenchConflictDetails: components["schemas"]["WorkbenchDefinitionConflictDetails"] | components["schemas"]["WorkbenchLinkConflictDetails"] | components["schemas"]["WorkbenchLinkSetConflictDetails"];
         /** WorkbenchConflictErrorResponse */
-        WorkbenchConflictErrorResponse: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "WORKBENCH_VERSION_CONFLICT" | "WORKBENCH_IDEMPOTENCY_CONFLICT";
-            /** Details */
-            details?: components["schemas"]["WorkbenchConflictDetails"] | components["schemas"]["WorkbenchEmptyDetails"];
-            /** Message */
-            message: string;
-            /** Request Id */
-            request_id: string;
-            /**
-             * Retryable
-             * @default false
-             * @constant
-             */
-            retryable: false;
-        };
+        WorkbenchConflictErrorResponse: components["schemas"]["WorkbenchVersionConflictErrorResponse"] | components["schemas"]["WorkbenchIdempotencyConflictErrorResponse"];
         /** WorkbenchDefaultSpace */
         WorkbenchDefaultSpace: {
             /**
@@ -8390,6 +8357,21 @@ export interface components {
              * Format: uuid
              */
             workspaceId: string;
+        };
+        /** WorkbenchDefinitionConflictDetails */
+        WorkbenchDefinitionConflictDetails: {
+            base: components["schemas"]["WorkbenchDefinitionDocumentV1"];
+            baseRevision: components["schemas"]["Revision"];
+            /** Conflictpaths */
+            conflictPaths: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "definition";
+            local: components["schemas"]["WorkbenchDefinitionDocumentV1"];
+            remote: components["schemas"]["WorkbenchDefinitionDocumentV1"];
+            remoteRevision: components["schemas"]["Revision"];
         };
         /** WorkbenchDefinitionCreateRequest */
         WorkbenchDefinitionCreateRequest: {
@@ -8618,8 +8600,7 @@ export interface components {
         /** WorkbenchFieldOption */
         WorkbenchFieldOption: {
             id: components["schemas"]["StableItemId"];
-            /** Label */
-            label: string;
+            label: components["schemas"]["NameText"];
         };
         WorkbenchFilter: components["schemas"]["TargetKindInFilter"] | components["schemas"]["TaskStatusInFilter"] | components["schemas"]["UpdatedWithinDaysFilter"] | components["schemas"]["AttributeEqualsFilter"];
         /** WorkbenchForbiddenErrorResponse */
@@ -8637,6 +8618,24 @@ export interface components {
             /**
              * Retryable
              * @default false
+             * @constant
+             */
+            retryable: false;
+        };
+        /** WorkbenchIdempotencyConflictErrorResponse */
+        WorkbenchIdempotencyConflictErrorResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "WORKBENCH_IDEMPOTENCY_CONFLICT";
+            details: components["schemas"]["WorkbenchEmptyDetails"];
+            /** Message */
+            message: string;
+            /** Request Id */
+            request_id: string;
+            /**
+             * Retryable
              * @constant
              */
             retryable: false;
@@ -8770,6 +8769,21 @@ export interface components {
             /** Span */
             span: number;
         };
+        /** WorkbenchLinkConflictDetails */
+        WorkbenchLinkConflictDetails: {
+            base: components["schemas"]["WorkbenchLinkMutableV1"];
+            baseRevision: components["schemas"]["Revision"];
+            /** Conflictpaths */
+            conflictPaths: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "link";
+            local: components["schemas"]["WorkbenchLinkMutableV1"];
+            remote: components["schemas"]["WorkbenchLinkMutableV1"];
+            remoteRevision: components["schemas"]["Revision"];
+        };
         /** WorkbenchLinkCreateRequest */
         WorkbenchLinkCreateRequest: {
             baseLinkSetRevision: components["schemas"]["Revision"];
@@ -8831,6 +8845,24 @@ export interface components {
             baseOrder: string[];
             /** Orderedlinkids */
             orderedLinkIds: string[];
+        };
+        /** WorkbenchLinkSetConflictDetails */
+        WorkbenchLinkSetConflictDetails: {
+            /** Base */
+            base: string[];
+            baseRevision: components["schemas"]["Revision"];
+            /** Conflictpaths */
+            conflictPaths: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            entity: "link_set";
+            /** Local */
+            local: string[];
+            /** Remote */
+            remote: string[];
+            remoteRevision: components["schemas"]["Revision"];
         };
         /** WorkbenchLinkSetResponse */
         WorkbenchLinkSetResponse: {
@@ -9024,6 +9056,25 @@ export interface components {
             path: string[];
             /** Rule */
             rule: string;
+        };
+        /** WorkbenchVersionConflictErrorResponse */
+        WorkbenchVersionConflictErrorResponse: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "WORKBENCH_VERSION_CONFLICT";
+            /** Details */
+            details: components["schemas"]["WorkbenchConflictDetails"] | components["schemas"]["WorkbenchEmptyDetails"];
+            /** Message */
+            message: string;
+            /** Request Id */
+            request_id: string;
+            /**
+             * Retryable
+             * @constant
+             */
+            retryable: false;
         };
         /** WorkspaceCreateRequest */
         WorkspaceCreateRequest: {

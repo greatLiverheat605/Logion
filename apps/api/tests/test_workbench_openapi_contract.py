@@ -416,6 +416,81 @@ def test_definition_owner_is_response_only() -> None:
     assert "ownerUserId" in link_response["required"]
 
 
+def test_conflict_details_use_the_runtime_camel_case_contract() -> None:
+    document = normalize_workbench_openapi(create_app(include_dormant_contracts=True).openapi())
+    schemas = document["components"]["schemas"]
+    details = schemas["WorkbenchConflictDetails"]
+    assert details["discriminator"]["propertyName"] == "entity"
+    assert details["discriminator"]["mapping"] == {
+        "definition": _ref("WorkbenchDefinitionConflictDetails"),
+        "link": _ref("WorkbenchLinkConflictDetails"),
+        "link_set": _ref("WorkbenchLinkSetConflictDetails"),
+    }
+    assert {option["$ref"] for option in details["oneOf"]} == set(
+        details["discriminator"]["mapping"].values()
+    )
+
+    expected = {
+        "entity",
+        "baseRevision",
+        "remoteRevision",
+        "conflictPaths",
+        "base",
+        "local",
+        "remote",
+    }
+    for name in (
+        "WorkbenchDefinitionConflictDetails",
+        "WorkbenchLinkConflictDetails",
+        "WorkbenchLinkSetConflictDetails",
+    ):
+        variant = schemas[name]
+        assert set(variant["properties"]) == expected
+        assert set(variant["required"]) == expected
+        assert variant["properties"]["conflictPaths"]["uniqueItems"] is True
+
+    definition = schemas["WorkbenchDefinitionConflictDetails"]
+    link = schemas["WorkbenchLinkConflictDetails"]
+    link_set = schemas["WorkbenchLinkSetConflictDetails"]
+    for field in ("base", "local", "remote"):
+        assert definition["properties"][field]["$ref"] == _ref("WorkbenchDefinitionDocumentV1")
+        assert link["properties"][field]["$ref"] == _ref("WorkbenchLinkMutableV1")
+        assert link_set["properties"][field]["maxItems"] == 500
+        assert link_set["properties"][field]["uniqueItems"] is True
+        assert link_set["properties"][field]["items"] == {
+            "format": "uuid",
+            "type": "string",
+        }
+
+    assert "base_revision" not in json.dumps(details)
+    assert "remote_revision" not in json.dumps(details)
+    assert "conflict_paths" not in json.dumps(details)
+    assert "NameText-Input" not in schemas
+    assert "NameText-Output" not in schemas
+    assert schemas["NameText"] == {"maxLength": 80, "minLength": 1, "type": "string"}
+
+    error = schemas["WorkbenchConflictErrorResponse"]
+    assert error["discriminator"]["propertyName"] == "code"
+    assert error["discriminator"]["mapping"] == {
+        "WORKBENCH_VERSION_CONFLICT": _ref("WorkbenchVersionConflictErrorResponse"),
+        "WORKBENCH_IDEMPOTENCY_CONFLICT": _ref("WorkbenchIdempotencyConflictErrorResponse"),
+    }
+    assert {option["$ref"] for option in error["oneOf"]} == set(
+        error["discriminator"]["mapping"].values()
+    )
+    required = {"code", "message", "details", "retryable", "request_id"}
+    version_error = schemas["WorkbenchVersionConflictErrorResponse"]
+    idempotency_error = schemas["WorkbenchIdempotencyConflictErrorResponse"]
+    assert set(version_error["required"]) == required
+    assert set(idempotency_error["required"]) == required
+    detail_options = version_error["properties"]["details"]["anyOf"]
+    assert {option["$ref"] for option in detail_options} == {
+        _ref("WorkbenchConflictDetails"),
+        _ref("WorkbenchEmptyDetails"),
+    }
+    assert idempotency_error["properties"]["details"] == {"$ref": _ref("WorkbenchEmptyDetails")}
+
+
 def test_evidence_manifest_and_non_leakage_are_written_when_requested(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

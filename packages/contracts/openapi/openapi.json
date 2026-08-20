@@ -5355,10 +5355,10 @@
             "type": "string"
           },
           {
-            "type": "integer"
+            "$ref": "#/components/schemas/SafeInteger"
           },
           {
-            "type": "number"
+            "$ref": "#/components/schemas/StrictFiniteFloat"
           },
           {
             "type": "boolean"
@@ -7363,7 +7363,7 @@
                 "$ref": "#/components/schemas/SafeInteger"
               },
               {
-                "type": "number"
+                "$ref": "#/components/schemas/StrictFiniteFloat"
               }
             ],
             "title": "Maximum"
@@ -7374,7 +7374,7 @@
                 "$ref": "#/components/schemas/SafeInteger"
               },
               {
-                "type": "number"
+                "$ref": "#/components/schemas/StrictFiniteFloat"
               }
             ],
             "title": "Minimum"
@@ -10884,6 +10884,9 @@
         "pattern": "^[a-z][a-z0-9_-]{0,63}$",
         "type": "string"
       },
+      "StrictFiniteFloat": {
+        "type": "number"
+      },
       "SubjectCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -12983,122 +12986,44 @@
         "type": "object"
       },
       "WorkbenchConflictDetails": {
-        "additionalProperties": false,
-        "properties": {
-          "base": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorkbenchDefinitionDocumentV1"
-              },
-              {
-                "$ref": "#/components/schemas/WorkbenchLinkMutableV1"
-              }
-            ],
-            "title": "Base"
+        "discriminator": {
+          "mapping": {
+            "definition": "#/components/schemas/WorkbenchDefinitionConflictDetails",
+            "link": "#/components/schemas/WorkbenchLinkConflictDetails",
+            "link_set": "#/components/schemas/WorkbenchLinkSetConflictDetails"
           },
-          "base_revision": {
-            "$ref": "#/components/schemas/Revision"
-          },
-          "conflict_paths": {
-            "items": {
-              "maxLength": 256,
-              "type": "string"
-            },
-            "maxItems": 128,
-            "title": "Conflict Paths",
-            "type": "array"
-          },
-          "entity": {
-            "enum": [
-              "definition",
-              "link",
-              "link_set"
-            ],
-            "title": "Entity",
-            "type": "string"
-          },
-          "local": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorkbenchDefinitionDocumentV1"
-              },
-              {
-                "$ref": "#/components/schemas/WorkbenchLinkMutableV1"
-              }
-            ],
-            "title": "Local"
-          },
-          "remote": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorkbenchDefinitionDocumentV1"
-              },
-              {
-                "$ref": "#/components/schemas/WorkbenchLinkMutableV1"
-              }
-            ],
-            "title": "Remote"
-          },
-          "remote_revision": {
-            "$ref": "#/components/schemas/Revision"
-          }
+          "propertyName": "entity"
         },
-        "required": [
-          "entity",
-          "base_revision",
-          "remote_revision",
-          "conflict_paths",
-          "base",
-          "local",
-          "remote"
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WorkbenchDefinitionConflictDetails"
+          },
+          {
+            "$ref": "#/components/schemas/WorkbenchLinkConflictDetails"
+          },
+          {
+            "$ref": "#/components/schemas/WorkbenchLinkSetConflictDetails"
+          }
         ],
-        "title": "WorkbenchConflictDetails",
-        "type": "object"
+        "title": "WorkbenchConflictDetails"
       },
       "WorkbenchConflictErrorResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "enum": [
-              "WORKBENCH_VERSION_CONFLICT",
-              "WORKBENCH_IDEMPOTENCY_CONFLICT"
-            ],
-            "title": "Code",
-            "type": "string"
+        "discriminator": {
+          "mapping": {
+            "WORKBENCH_IDEMPOTENCY_CONFLICT": "#/components/schemas/WorkbenchIdempotencyConflictErrorResponse",
+            "WORKBENCH_VERSION_CONFLICT": "#/components/schemas/WorkbenchVersionConflictErrorResponse"
           },
-          "details": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WorkbenchConflictDetails"
-              },
-              {
-                "$ref": "#/components/schemas/WorkbenchEmptyDetails"
-              }
-            ],
-            "title": "Details"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "request_id": {
-            "title": "Request Id",
-            "type": "string"
-          },
-          "retryable": {
-            "const": false,
-            "default": false,
-            "title": "Retryable",
-            "type": "boolean"
-          }
+          "propertyName": "code"
         },
-        "required": [
-          "code",
-          "message",
-          "request_id"
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WorkbenchVersionConflictErrorResponse"
+          },
+          {
+            "$ref": "#/components/schemas/WorkbenchIdempotencyConflictErrorResponse"
+          }
         ],
-        "title": "WorkbenchConflictErrorResponse",
-        "type": "object"
+        "title": "WorkbenchConflictErrorResponse"
       },
       "WorkbenchDefaultSpace": {
         "additionalProperties": false,
@@ -13119,6 +13044,52 @@
           "spaceId"
         ],
         "title": "WorkbenchDefaultSpace",
+        "type": "object"
+      },
+      "WorkbenchDefinitionConflictDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "$ref": "#/components/schemas/WorkbenchDefinitionDocumentV1"
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "conflictPaths": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Conflictpaths",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "entity": {
+            "const": "definition",
+            "title": "Entity",
+            "type": "string"
+          },
+          "local": {
+            "$ref": "#/components/schemas/WorkbenchDefinitionDocumentV1"
+          },
+          "remote": {
+            "$ref": "#/components/schemas/WorkbenchDefinitionDocumentV1"
+          },
+          "remoteRevision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "baseRevision",
+          "remoteRevision",
+          "conflictPaths",
+          "entity",
+          "base",
+          "local",
+          "remote"
+        ],
+        "title": "WorkbenchDefinitionConflictDetails",
         "type": "object"
       },
       "WorkbenchDefinitionCreateRequest": {
@@ -13702,10 +13673,7 @@
             "$ref": "#/components/schemas/StableItemId"
           },
           "label": {
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Label",
-            "type": "string"
+            "$ref": "#/components/schemas/NameText"
           }
         },
         "required": [
@@ -13772,6 +13740,41 @@
           "request_id"
         ],
         "title": "WorkbenchForbiddenErrorResponse",
+        "type": "object"
+      },
+      "WorkbenchIdempotencyConflictErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "const": "WORKBENCH_IDEMPOTENCY_CONFLICT",
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "$ref": "#/components/schemas/WorkbenchEmptyDetails"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "const": false,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "retryable",
+          "request_id",
+          "code",
+          "details"
+        ],
+        "title": "WorkbenchIdempotencyConflictErrorResponse",
         "type": "object"
       },
       "WorkbenchImportFailedReceipt": {
@@ -14073,6 +14076,52 @@
         "title": "WorkbenchLayoutItem",
         "type": "object"
       },
+      "WorkbenchLinkConflictDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "$ref": "#/components/schemas/WorkbenchLinkMutableV1"
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "conflictPaths": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Conflictpaths",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "entity": {
+            "const": "link",
+            "title": "Entity",
+            "type": "string"
+          },
+          "local": {
+            "$ref": "#/components/schemas/WorkbenchLinkMutableV1"
+          },
+          "remote": {
+            "$ref": "#/components/schemas/WorkbenchLinkMutableV1"
+          },
+          "remoteRevision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "baseRevision",
+          "remoteRevision",
+          "conflictPaths",
+          "entity",
+          "base",
+          "local",
+          "remote"
+        ],
+        "title": "WorkbenchLinkConflictDetails",
+        "type": "object"
+      },
       "WorkbenchLinkCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -14269,6 +14318,73 @@
           "orderedLinkIds"
         ],
         "title": "WorkbenchLinkReorderRequest",
+        "type": "object"
+      },
+      "WorkbenchLinkSetConflictDetails": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Base",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/Revision"
+          },
+          "conflictPaths": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 128,
+            "title": "Conflictpaths",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "entity": {
+            "const": "link_set",
+            "title": "Entity",
+            "type": "string"
+          },
+          "local": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Local",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "remote": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Remote",
+            "type": "array",
+            "uniqueItems": true
+          },
+          "remoteRevision": {
+            "$ref": "#/components/schemas/Revision"
+          }
+        },
+        "required": [
+          "baseRevision",
+          "remoteRevision",
+          "conflictPaths",
+          "entity",
+          "base",
+          "local",
+          "remote"
+        ],
+        "title": "WorkbenchLinkSetConflictDetails",
         "type": "object"
       },
       "WorkbenchLinkSetResponse": {
@@ -14762,6 +14878,49 @@
           "rule"
         ],
         "title": "WorkbenchValidationIssue",
+        "type": "object"
+      },
+      "WorkbenchVersionConflictErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "const": "WORKBENCH_VERSION_CONFLICT",
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkbenchConflictDetails"
+              },
+              {
+                "$ref": "#/components/schemas/WorkbenchEmptyDetails"
+              }
+            ],
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "const": false,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "message",
+          "retryable",
+          "request_id",
+          "code",
+          "details"
+        ],
+        "title": "WorkbenchVersionConflictErrorResponse",
         "type": "object"
       },
       "WorkspaceCreateRequest": {
