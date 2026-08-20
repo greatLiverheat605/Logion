@@ -167,7 +167,7 @@ C4 已明确不新增 `components.securitySchemes`。dormant 候选不得添加 
 - 对 15 个 method/path 逐项发送最小合法请求，全部必须得到同一通用 404；DB、Session、CSRF、限流、网络和 mutation construction/invocation spy 全部为 0；
 - 对每个需要 body/Header 的 operation 再发送缺失 body、畸形 JSON、Schema 非法 body、缺失 required Header 和非法 Header；这些请求也必须在解析/校验前得到同一通用 404，且所有副作用 spy 为 0；
 - 非法 UUID、`fixed.*` 和未知静态子路径在 body validation 前得到同一通用 404；
-- 生成的响应不暴露 owner、内部 ID、fingerprint、对象正文、成员、ACL、剩余配额或拒绝值；
+- Definition summary/detail 响应仅允许暴露服务端生成的 `ownerUserId`；既有 Link 响应的服务端 `ownerUserId` 保持不变。其他 owner 信息、内部 ID、fingerprint、对象正文、成员、ACL、剩余配额或拒绝值不得暴露；
 - dormant 只构造 schema，不创建 Workbench，不写 receipt，不调用网络或数据库。
 
 本门只验证 OpenAPI 中的安全 Header/Schema 元数据与 dormant 零副作用，**不验证或伪造**真实 Session、CSRF、owner、raw-body、ACL、并发或写入顺序；这些运行时顺序明确留到正式 API 数据路径门。不得为测试建立第二套安全 dependency。若测试需要真实授权或持久化，立即停止并转入后续门。
@@ -182,7 +182,7 @@ C4 已明确不新增 `components.securitySchemes`。dormant 候选不得添加 
 
 精确 profile 定义：`WID`/`LID` 是 required path 参数 `workbench_id`/`link_id`，schema `{type:string,format:uuid}`；`SESSION` 是运行时 Session 语义标记，**不生成 Cookie 参数或 OpenAPI security 对象**；`ORIGIN` 是 required Header `Origin`，string `minLength=1,maxLength=2048`；`CSRF` 是 required Header `X-CSRF-Token`，string `minLength=1,maxLength=4096`；`IDEMPOTENCY` 是 required UUID Header `Idempotency-Key`；`IF_MATCH` 是 optional `If-Match`，string `minLength=2,maxLength=256`；`IF_NONE_MATCH` 是 optional `If-None-Match`，string `minLength=1,maxLength=1024`；`LIFECYCLE` 是 optional query enum `[active,archived]`；`LIMIT_50`/`LIMIT_100` 是 optional integer query，范围分别 `1..50 default=25` 与 `1..100 default=50`；`CURSOR` 是 optional nullable string query `maxLength=1024`；`INCLUDE_LINKS` 是 optional boolean query `default=false`。所有 JSON request/response media type 均为 `application/json`；request body 为 required，精确引用 `#/components/schemas/<名称>`；`304` 无 content；每条 manifest 的 `security` 必须是 `absent`，而不是新增 scheme。
 
-响应 profile：`NO_STORE` 是 required string const `private, no-store`；`ETAG` 是 required string `minLength=2,maxLength=256`；`LOCATION` 是 required string；`CONTENT_DISPOSITION` 是 required string pattern `^attachment; filename="workbench-[0-9a-f-]{36}\\.json"$`。所有已声明错误响应必须含 `NO_STORE`；所有 429 还必须含 required `Retry-After`，integer `minimum=1,maximum=3600`。错误 `$ref` 固定为 400 `#/components/schemas/WorkbenchPreconditionInvalidErrorResponse`、401/413/503 `#/components/schemas/ErrorResponse`、403 `#/components/schemas/WorkbenchForbiddenErrorResponse`、404 `#/components/schemas/WorkbenchNotFoundErrorResponse`、409 `#/components/schemas/WorkbenchConflictErrorResponse`、422 `#/components/schemas/WorkbenchValidationErrorResponse`、429 `#/components/schemas/WorkbenchRateLimitedErrorResponse`；禁止未列出的 default response。
+响应 profile：`NO_STORE` 是 required string const `private, no-store`；`ETAG` 是 required string `minLength=2,maxLength=256`；`LOCATION` 是 required string；`CONTENT_DISPOSITION` 是 required string pattern `^attachment; filename="workbench-[0-9a-f-]{36}\\.json"$`。所有已声明错误响应必须含 `NO_STORE`；所有 429 还必须含 required `Retry-After`，integer `minimum=1,maximum=3600`。错误 `$ref` 固定为 400 `#/components/schemas/WorkbenchPreconditionInvalidErrorResponse`、401/413/503 `#/components/schemas/ErrorResponse`、403 `#/components/schemas/WorkbenchForbiddenErrorResponse`、404 `#/components/schemas/WorkbenchNotFoundErrorResponse`、409 `#/components/schemas/WorkbenchConflictErrorResponse`、422 `#/components/schemas/WorkbenchValidationErrorResponse`、429 `#/components/schemas/WorkbenchRateLimitedErrorResponse`；唯一例外是 import 的提交点前 503，固定为 `#/components/schemas/WorkbenchImportRetryableErrorResponse`，其中 `retryable` 为 const `true`。禁止未列出的 default response。
 
 机器 manifest 的 15 条绝对记录如下。Schema 名必须机械展开为 `#/components/schemas/<名称>`；每个 `errors` 状态必须机械展开为上段唯一 `$ref`、`application/json` 和 `NO_STORE`，429 再加 `Retry-After`；每条记录的 `security=absent`。实现测试必须把展开后的完整对象与 OpenAPI 子树深比较，禁止只比较缩写字符串。
 
@@ -227,25 +227,25 @@ C5-A 经独立复审及 Product Owner 明确批准精确候选后，单独进入
 - `packages/contracts/src/openapi.d.ts` 只增加对应类型，不能改变既有类型定义；
 - 第二次运行生成器没有 diff；
 - 三个 sync-v1 生成文件两次生成前后 SHA-256 均不变且不出现在 diff；
-- 候选 OpenAPI 不含 CSRF cookie、Session cookie、owner、内部 fingerprint、数据库 ID 或 Feature Flag 可写字段；
+- 候选 OpenAPI 不含 CSRF cookie、Session cookie、客户端可写 owner、内部 fingerprint、数据库 ID 或 Feature Flag 可写字段；Definition summary/detail 响应包含服务端生成的 `ownerUserId`，既有 Link 响应的 `ownerUserId` 保持不变；
 - 生成过程不需要启动 API、连接数据库、启用生产 flag 或读取生产数据。
 
 如果生成 diff 出现旧合同删除/重命名、未批准组件、默认 app 暴露路径、重复 operationId、手写 OpenAPI 路径副本或非确定性差异，立即停止，不修补快照掩盖问题。
 
 ## 5. 验收矩阵
 
-| 场景             | 必须证明                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| Default disabled | 10 path 全部与未知路径同为通用 404，零副作用调用                                            |
-| Dormant export   | 精确 10 path、15 operationId；无服务、数据库、Session 或 mutation                           |
-| Schema           | strict body、discriminator、UUID、范围、nullable、required、additionalProperties 约束可生成 |
-| Routing          | 15 个 dormant 请求统一 404；UUID converter 先于 body validation；所有副作用 spy 为 0        |
-| Security         | mutation/import/export 明确 Origin 与 CSRF；404/403/409/422 不泄露对象或授权信息            |
-| Operation matrix | 15 项 method/path/body/status/Header/security/error profile 精确匹配 C4                     |
-| Error headers    | 每个错误响应 no-store；全部 429 的 Retry-After 为 1–3600 秒整数                             |
-| Compatibility    | 旧 OpenAPI 与 contracts 类型只加法；sync-v1 零变化；二次生成稳定                            |
-| Isolation        | API 实现门不修改数据库、迁移、配额、威胁模型、Web、生产配置或 Feature Flag                  |
-| Main factory     | 移除三个批准 AST 节点后与基线相同；中间件、异常处理器、旧 router 顺序逐行零变化             |
+| 场景             | 必须证明                                                                                                                           |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Default disabled | 10 path 全部与未知路径同为通用 404，零副作用调用                                                                                   |
+| Dormant export   | 精确 10 path、15 operationId；无服务、数据库、Session 或 mutation                                                                  |
+| Schema           | strict body、discriminator、UUID、范围、nullable、required、additionalProperties 约束可生成                                        |
+| Routing          | 15 个 dormant 请求统一 404；UUID converter 先于 body validation；所有副作用 spy 为 0                                               |
+| Security         | mutation/import/export 明确 Origin 与 CSRF；404/403/409/422 不泄露对象或授权信息                                                   |
+| Operation matrix | 15 项 method/path/body/status/Header/security/error profile 精确匹配 C4                                                            |
+| Error headers    | 每个错误响应 no-store；全部 429 的 Retry-After 为 1–3600 秒整数                                                                    |
+| Compatibility    | 旧 OpenAPI 与 contracts 类型只加法；sync-v1 零变化；二次生成稳定                                                                   |
+| Isolation        | 本轮候选白名单不包含数据库、迁移、配额、威胁模型、Web、生产配置或 Feature Flag；验收在只应用白名单 diff 的干净隔离 worktree 中执行 |
+| Main factory     | 移除三个批准 AST 节点后与基线相同；中间件、异常处理器、旧 router 顺序逐行零变化                                                    |
 
 最低门禁（在干净 C5-A worktree 执行；每条命令期望退出码 `0`）：
 
@@ -275,6 +275,10 @@ if ((Compare-Object (Get-Content "$C5Evidence\sync.hash.first.json") (Get-Conten
 if (-not (Test-Path "$C5Evidence\semantic-manifest.json")) { throw "semantic manifest missing" }
 if (-not (Test-Path "$C5Evidence\non-leakage.json")) { throw "non-leakage evidence missing" }
 ```
+
+## Approved Baseline Amendment (2026-08-20)
+
+C5 implementation includes server-generated `owner_user_id` in Definition response schemas and regenerates the OpenAPI/type snapshots. Client request schemas must continue rejecting owner fields. Existing Link response `owner_user_id` is unchanged; this amendment adds no new owner field outside Definition responses. The existing failed import receipt remains terminal with `retryable=false`; a pre-commit recoverable failure must return `503 retryable=true` without a receipt. This amendment supersedes the older owner non-disclosure wording in sections 3.3 and 4.2. C6-M owns the Definition-row `link_set_revision` migration and atomicity tests; C5 does not implement persistence or route enablement.
 
 `check-openapi-breaking.mjs` 负责旧合同兼容性；`semantic-manifest.json` 负责 C4/C5 精确 operation matrix 与安全/非泄露断言，不得以人工口头审查替代。禁止全仓 formatter write。`contracts:check` 明确属于批准提交后的 C5-B；C5-A 必须报告未运行及上述原因，不得以全仓 Web 测试代替 API/合同门。
 

@@ -23,6 +23,7 @@ from logion_api.workbenches.schemas import (
     WorkbenchForbiddenErrorResponse,
     WorkbenchImportFailedReceipt,
     WorkbenchImportRequest,
+    WorkbenchImportRetryableErrorResponse,
     WorkbenchImportSucceededReceipt,
     WorkbenchLinkCreateRequest,
     WorkbenchLinkDeleteReceipt,
@@ -194,6 +195,7 @@ async def create_workbench(
         **_errors(_IMPORT_CODES),
         200: {"model": WorkbenchImportFailedReceipt, "headers": CACHE_HEADER},
         201: {"headers": CACHE_HEADER},
+        503: {"model": WorkbenchImportRetryableErrorResponse, "headers": CACHE_HEADER},
     },
 )
 async def import_workbench(

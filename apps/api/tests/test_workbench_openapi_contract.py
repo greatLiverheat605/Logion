@@ -8,6 +8,8 @@ import pytest
 from logion_api import openapi_export
 from logion_api.main import create_app
 from logion_api.openapi_export import normalize_workbench_openapi
+from logion_api.workbenches.schemas import WorkbenchDefinitionCreateRequest
+from pydantic import ValidationError
 
 BASE_PATH = "/api/v1/users/me/workbenches"
 EXPECTED_OPERATIONS = {
@@ -334,7 +336,12 @@ def test_security_headers_and_error_refs_are_explicit() -> None:
             if code not in operation["responses"]:
                 continue
             response = operation["responses"][code]
-            assert _response_ref(operation, code) == _ref(schema_name)
+            expected_schema = (
+                "WorkbenchImportRetryableErrorResponse"
+                if operation["operationId"] == "workbench_import" and code == "503"
+                else schema_name
+            )
+            assert _response_ref(operation, code) == _ref(expected_schema)
             assert response["headers"]["Cache-Control"]["schema"]["const"] == "private, no-store"
             if code == "429":
                 retry_schema = response["headers"]["Retry-After"]["schema"]
@@ -364,6 +371,49 @@ def test_import_receipts_are_distinct_const_overlays() -> None:
     import_operation = _operation(document, "POST", f"{BASE_PATH}/imports")
     assert _response_ref(import_operation, "201") == _ref("WorkbenchImportSucceededReceipt")
     assert _response_ref(import_operation, "200") == _ref("WorkbenchImportFailedReceipt")
+    assert _response_ref(import_operation, "503") == _ref("WorkbenchImportRetryableErrorResponse")
+    retryable_error = schemas["WorkbenchImportRetryableErrorResponse"]
+    assert retryable_error["properties"]["retryable"] == {
+        "type": "boolean",
+        "const": True,
+        "title": "Retryable",
+    }
+    assert set(retryable_error["required"]) == {
+        "code",
+        "message",
+        "details",
+        "retryable",
+        "request_id",
+    }
+
+
+def test_definition_owner_is_response_only() -> None:
+    document = normalize_workbench_openapi(create_app(include_dormant_contracts=True).openapi())
+    schemas = document["components"]["schemas"]
+    for name in ("WorkbenchDefinitionSummary", "WorkbenchDefinitionResponse"):
+        schema = schemas[name]
+        assert schema["properties"]["ownerUserId"] == {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owneruserid",
+        }
+        assert "ownerUserId" in schema["required"]
+
+    for name, schema in schemas.items():
+        if name.startswith("Workbench") and name.endswith("Request"):
+            assert schema["additionalProperties"] is False
+            assert "ownerUserId" not in json.dumps(schema)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WorkbenchDefinitionCreateRequest.model_validate({"ownerUserId": "not-accepted"})
+    assert any(
+        error["type"] == "extra_forbidden" and error["loc"] == ("ownerUserId",)
+        for error in exc_info.value.errors()
+    )
+
+    link_response = schemas["WorkbenchObjectLinkResponse"]
+    assert link_response["properties"]["ownerUserId"]["format"] == "uuid"
+    assert "ownerUserId" in link_response["required"]
 
 
 def test_evidence_manifest_and_non_leakage_are_written_when_requested(

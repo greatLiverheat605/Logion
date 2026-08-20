@@ -344,6 +344,7 @@ class WorkbenchDefinitionLifecycleRequest(PortableModel):
 
 class WorkbenchDefinitionSummary(PortableModel):
     id: UUID
+    owner_user_id: UUID
     name: str
     description: str
     icon: str
@@ -499,6 +500,14 @@ class WorkbenchErrorDetails(StrictModel):
 
 class WorkbenchEmptyDetails(StrictModel):
     pass
+
+
+class WorkbenchImportRetryableErrorResponse(StrictModel):
+    code: str
+    message: str
+    details: WorkbenchEmptyDetails
+    retryable: Literal[True]
+    request_id: str
 
 
 class WorkbenchConflictDetails(StrictModel):

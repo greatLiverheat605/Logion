@@ -13484,6 +13484,11 @@
             "title": "Name",
             "type": "string"
           },
+          "ownerUserId": {
+            "format": "uuid",
+            "title": "Owneruserid",
+            "type": "string"
+          },
           "revision": {
             "$ref": "#/components/schemas/Revision"
           },
@@ -13499,6 +13504,7 @@
         },
         "required": [
           "id",
+          "ownerUserId",
           "name",
           "description",
           "icon",
@@ -13550,6 +13556,11 @@
             "title": "Name",
             "type": "string"
           },
+          "ownerUserId": {
+            "format": "uuid",
+            "title": "Owneruserid",
+            "type": "string"
+          },
           "revision": {
             "$ref": "#/components/schemas/Revision"
           },
@@ -13565,6 +13576,7 @@
         },
         "required": [
           "id",
+          "ownerUserId",
           "name",
           "description",
           "icon",
@@ -13895,6 +13907,40 @@
           "payload"
         ],
         "title": "WorkbenchImportRequest",
+        "type": "object"
+      },
+      "WorkbenchImportRetryableErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "$ref": "#/components/schemas/WorkbenchEmptyDetails"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retryable": {
+            "const": true,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "retryable",
+          "request_id"
+        ],
+        "title": "WorkbenchImportRetryableErrorResponse",
         "type": "object"
       },
       "WorkbenchImportSucceededReceipt": {
@@ -19191,7 +19237,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/WorkbenchImportRetryableErrorResponse"
                 }
               }
             },

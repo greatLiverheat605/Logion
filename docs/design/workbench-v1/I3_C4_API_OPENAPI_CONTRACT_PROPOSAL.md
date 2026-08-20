@@ -121,7 +121,7 @@ operationId 必须全仓唯一。不得依赖 FastAPI 自动命名，也不得�
 
 排序固定为 `updatedAt desc, id desc`。响应只含 `items` 与可空 `nextCursor`，不含 total、offset、页码、Link 数或目标对象数。cursor 必须绑定当前 user、lifecycle、排序和快照边界；非法、过期、跨用户或过滤器不匹配统一 422，不回显 cursor 内容。
 
-`WorkbenchDefinitionSummary` 只含 `id`、`name`、`description`、`icon`、`accent`、`templateId`、`revision`、`lifecycle`、`createdAt`、`updatedAt`，不内联 document 模块、Link 或对象摘要。
+`WorkbenchDefinitionSummary` 只含 `id`、服务端生成的 `ownerUserId`、`name`、`description`、`icon`、`accent`、`templateId`、`revision`、`lifecycle`、`createdAt`、`updatedAt`，不内联 document 模块、Link 或对象摘要。
 
 ### 5.2 Create 与 get
 
@@ -161,6 +161,10 @@ fallbackWorkbenchId = fixed.learning
 formalObjectDeleteCount = 0
 impactFingerprint
 ```
+
+## Approved Baseline Amendment (2026-08-20)
+
+Definition summary and detail responses must expose `ownerUserId`. The existing terminal failed receipt remains `retryable=false`; only a proven pre-commit failure may return `503 retryable=true` without creating a receipt. `linkSetRevision` is the Definition-row collection version, atomically advanced with Link mutations. The production Feature Flag is the sole route-registration gate and remains default-off.
 
 `linkCount` 统计当前用户拥有的 Link 记录，不按目标可见性分组，不返回 kind、Space、标题或成员。`impactFingerprint` 是服务端对上述有界影响、当前 user 和 revision 的不透明签名，最长 1024 字符。
 

@@ -8538,6 +8538,11 @@ export interface components {
             lifecycle: "active" | "archived";
             /** Name */
             name: string;
+            /**
+             * Owneruserid
+             * Format: uuid
+             */
+            ownerUserId: string;
             revision: components["schemas"]["Revision"];
             /** Templateid */
             templateId: string;
@@ -8572,6 +8577,11 @@ export interface components {
             lifecycle: "active" | "archived";
             /** Name */
             name: string;
+            /**
+             * Owneruserid
+             * Format: uuid
+             */
+            ownerUserId: string;
             revision: components["schemas"]["Revision"];
             /** Templateid */
             templateId: string;
@@ -8693,6 +8703,21 @@ export interface components {
             payload: components["schemas"]["WorkbenchExportV1"];
             /** Sourcefingerprint */
             sourceFingerprint: string;
+        };
+        /** WorkbenchImportRetryableErrorResponse */
+        WorkbenchImportRetryableErrorResponse: {
+            /** Code */
+            code: string;
+            details: components["schemas"]["WorkbenchEmptyDetails"];
+            /** Message */
+            message: string;
+            /** Request Id */
+            request_id: string;
+            /**
+             * Retryable
+             * @constant
+             */
+            retryable: true;
         };
         WorkbenchImportSucceededReceipt: components["schemas"]["WorkbenchImportReceipt"] & {
             /**
@@ -12087,7 +12112,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["WorkbenchImportRetryableErrorResponse"];
                 };
             };
         };
