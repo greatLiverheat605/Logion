@@ -396,6 +396,12 @@ describe("ResearchCenter workbench integration", () => {
 
     render(<ResearchCenter />);
     const select = await screen.findByLabelText("工作区");
+    await waitFor(() =>
+      expect(mocks.request).toHaveBeenCalledWith(
+        "/api/v1/workspaces/workspace-1/spaces",
+        expect.any(Object),
+      ),
+    );
     fireEvent.change(select, { target: { value: "workspace-2" } });
     await waitFor(() =>
       expect(mocks.request).toHaveBeenCalledWith(
