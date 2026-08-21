@@ -5,6 +5,7 @@ import { CommandFeedbackProvider } from "@/features/desk/command-feedback-contex
 import { SessionBoundary } from "@/features/auth/session-boundary";
 import { VaultSessionProvider } from "@/features/offline/vault-session-provider";
 import { PersonaProvider } from "@/features/personas/persona-context";
+import { WorkbenchProvider } from "@/features/workbenches/workbench-context";
 
 export default function AuthenticatedLayout({
   children,
@@ -12,11 +13,13 @@ export default function AuthenticatedLayout({
   return (
     <SessionBoundary requireOnboarding>
       <PersonaProvider>
-        <VaultSessionProvider>
-          <CommandFeedbackProvider>
-            <AppShell>{children}</AppShell>
-          </CommandFeedbackProvider>
-        </VaultSessionProvider>
+        <WorkbenchProvider>
+          <VaultSessionProvider>
+            <CommandFeedbackProvider>
+              <AppShell>{children}</AppShell>
+            </CommandFeedbackProvider>
+          </VaultSessionProvider>
+        </WorkbenchProvider>
       </PersonaProvider>
     </SessionBoundary>
   );

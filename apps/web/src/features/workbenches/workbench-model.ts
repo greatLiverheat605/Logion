@@ -3,8 +3,11 @@ import {
   type PersonaDefinition,
   type PersonaId,
 } from "@/features/personas/persona-definitions";
+import type { WorkbenchDocument } from "./workbench-service";
 
 export type FixedWorkbenchId = "learning" | "research" | "exam" | "mentor";
+export type FixedWorkbenchRef = `fixed.${FixedWorkbenchId}`;
+export type WorkbenchRef = FixedWorkbenchRef | string;
 export type WorkbenchId = FixedWorkbenchId | `legacy:${string}`;
 
 const WORKBENCH_ENTRY_PATHS = [
@@ -65,6 +68,182 @@ export const FIXED_WORKBENCHES = [
     personaId: "mentor",
   },
 ] as const satisfies readonly FixedWorkbenchDefinition[];
+
+export const FIXED_WORKBENCH_REFS = FIXED_WORKBENCHES.map(
+  (definition) => `fixed.${definition.id}` as FixedWorkbenchRef,
+);
+
+export const WORKBENCH_MODULES = [
+  ["next-action", "下一行动"],
+  ["task-queue", "任务队列"],
+  ["projects", "项目"],
+  ["sources", "来源"],
+  ["topics", "主题"],
+  ["review", "复习"],
+  ["evidence", "证据"],
+  ["timeline", "时间线"],
+  ["graph-projection", "图谱投影"],
+  ["saved-view", "保存视图"],
+  ["recent-objects", "最近对象"],
+  ["pinned-objects", "固定对象"],
+] as const;
+
+type WorkbenchModuleKind = (typeof WORKBENCH_MODULES)[number][0];
+type WorkbenchTemplateId = FixedWorkbenchRef | "blank";
+
+const TEMPLATE_MODULES: Readonly<
+  Record<WorkbenchTemplateId, readonly WorkbenchModuleKind[]>
+> = {
+  "fixed.learning": ["next-action", "projects", "task-queue", "review"],
+  "fixed.research": ["next-action", "sources", "evidence", "graph-projection"],
+  "fixed.exam": ["next-action", "review", "task-queue", "timeline"],
+  "fixed.mentor": ["next-action", "task-queue", "evidence", "recent-objects"],
+  blank: [],
+};
+
+export function fixedWorkbenchRef(id: FixedWorkbenchId): FixedWorkbenchRef {
+  return `fixed.${id}`;
+}
+
+export function personaIdForWorkbenchRef(
+  ref: string,
+  templateId?: string,
+): BuiltinPersonaId {
+  const fixed = ref.startsWith("fixed.") ? ref : templateId;
+  switch (fixed) {
+    case "fixed.research":
+      return "research";
+    case "fixed.exam":
+      return "exam";
+    case "fixed.mentor":
+      return "mentor";
+    default:
+      return "self";
+  }
+}
+
+export function workbenchEntryPath(
+  ref: string,
+  templateId?: string,
+): WorkbenchEntryPath {
+  const personaId = personaIdForWorkbenchRef(ref, templateId);
+  return FIXED_WORKBENCHES.find((item) => item.personaId === personaId)!
+    .entryPath;
+}
+
+export function createWorkbenchDocument(input: {
+  accent: WorkbenchDocument["payload"]["accent"];
+  description: string;
+  icon: WorkbenchDocument["payload"]["icon"];
+  moduleKinds?: readonly WorkbenchModuleKind[];
+  name: string;
+  templateId: WorkbenchTemplateId;
+}): WorkbenchDocument {
+  const kinds = input.moduleKinds ?? TEMPLATE_MODULES[input.templateId];
+  const modules = kinds.map((kind, index) => ({
+    id: `module-${index + 1}`,
+    kind,
+  }));
+  return {
+    contract: "workbench.definition",
+    schemaVersion: 1,
+    payload: {
+      accent: input.accent,
+      description: input.description,
+      fieldDefinitions: [],
+      filters: [],
+      icon: input.icon,
+      layout: {
+        columns: 2,
+        items: modules.map((module, index) => ({
+          moduleId: module.id,
+          order: Math.floor(index / 2),
+          region: index % 2 === 0 ? "main" : "side",
+          span: 1,
+        })),
+      },
+      modules,
+      name: input.name,
+      quickCreate: [],
+      templateId: input.templateId,
+    },
+  };
+}
+
+export function documentFromLegacyPersona(
+  persona: PersonaDefinition,
+): WorkbenchDocument {
+  const templateId: WorkbenchTemplateId = persona.routes.includes("/app/exam")
+    ? "fixed.exam"
+    : persona.routes.includes("/app/research")
+      ? "fixed.research"
+      : persona.routes.includes("/app/collaboration")
+        ? "fixed.mentor"
+        : "fixed.learning";
+  const document = createWorkbenchDocument({
+    accent: "neutral",
+    description: persona.description,
+    icon:
+      templateId === "fixed.exam"
+        ? "graduation-cap"
+        : templateId === "fixed.research"
+          ? "microscope"
+          : templateId === "fixed.mentor"
+            ? "users"
+            : "book-open",
+    name: persona.name,
+    templateId,
+  });
+  const source = legacyPersonaSourceKey(persona.id);
+  const hash = legacyPersonaSourceHash(persona.id);
+  const ids = new Map(
+    document.payload.modules.map((module, index) => [
+      module.id,
+      `legacy-${source}-${hash}-${index + 1}`,
+    ]),
+  );
+  return {
+    ...document,
+    payload: {
+      ...document.payload,
+      layout: {
+        ...document.payload.layout,
+        items: document.payload.layout.items.map((item) => ({
+          ...item,
+          moduleId: ids.get(item.moduleId)!,
+        })),
+      },
+      modules: document.payload.modules.map((module) => ({
+        ...module,
+        id: ids.get(module.id)!,
+      })),
+    },
+  };
+}
+
+export function legacyPersonaSourceKey(personaId: string): string {
+  return personaId.replace(/^custom-/i, "").toLowerCase();
+}
+
+function legacyPersonaSourceHash(personaId: string): string {
+  let hash = 2166136261;
+  for (const character of personaId) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function legacySourceKeyFromDocument(
+  document: WorkbenchDocument,
+): string | null {
+  const prefix = /^legacy-([0-9a-f-]{36})-[0-9a-f]{8}-\d+$/;
+  const matches = document.payload.modules.map(
+    (module) => module.id.match(prefix)?.[1] ?? null,
+  );
+  if (!matches[0] || matches.some((match) => match !== matches[0])) return null;
+  return matches[0];
+}
 
 function fixedProjection(
   definition: FixedWorkbenchDefinition,

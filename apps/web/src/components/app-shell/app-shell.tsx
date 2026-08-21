@@ -41,6 +41,7 @@ import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { mobileDeskNavigation } from "@/features/personas/mobile-persona-navigation";
 import { usePersona } from "@/features/personas/persona-context";
 import { WorkbenchSwitcher } from "@/features/workbenches/workbench-switcher";
+import { useWorkbench } from "@/features/workbenches/workbench-context";
 import { browserApiClient } from "@/lib/api/client";
 
 type Overlay = "command" | "notifications";
@@ -78,6 +79,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     isLoading: personaLoading,
     isRouteVisible,
   } = usePersona();
+  const { activeWorkbench, phase: workbenchPhase } = useWorkbench();
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(true);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -301,21 +303,23 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <div className="app-sidebar-foot">
           <Link
             aria-label={
-              activePersona
-                ? `当前画像：${activePersona.name}，前往画像设置`
-                : "画像加载中"
+              activeWorkbench
+                ? `当前工作台：${activeWorkbench.name}，前往工作台设置`
+                : "工作台加载中"
             }
             className="persona-indicator"
             href="/app/settings"
             onClick={closeTransientUi}
           >
             <span aria-hidden="true" className="persona-indicator-icon">
-              {activePersona?.icon ?? "…"}
+              {activeWorkbench?.icon ?? "…"}
             </span>
             <span>
-              <strong>{activePersona?.name ?? "画像加载中"}</strong>
+              <strong>{activeWorkbench?.name ?? "工作台加载中"}</strong>
               <small>
-                {personaLoading ? "正在同步偏好" : activePersona?.description}
+                {personaLoading || workbenchPhase === "loading"
+                  ? "正在同步偏好"
+                  : activeWorkbench?.description}
               </small>
             </span>
           </Link>

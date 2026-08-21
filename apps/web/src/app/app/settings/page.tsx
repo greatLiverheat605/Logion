@@ -8,7 +8,7 @@ import {
 } from "@/components/product/product-ui";
 import { IntegrationHubEntry } from "@/features/integrations/integration-hub-entry";
 
-import { PersonaSettings } from "./persona-settings";
+import { WorkbenchSettings } from "./workbench-settings";
 
 export default function SettingsPage() {
   return (
@@ -16,11 +16,11 @@ export default function SettingsPage() {
       <main className="settings-page persona-settings-page" id="main-content">
         <ProductPageHeader
           actions={<ProductTag tone="info">同步到用户设置</ProductTag>}
-          description="管理个人界面偏好；画像与 Workspace 角色相互独立。"
+          description="管理工作台与个人界面偏好；工作台与 Workspace 角色相互独立。"
           eyebrow="PERSONAL PREFERENCES"
           title="设置"
         />
-        <PersonaSettings />
+        <WorkbenchSettings />
         <ProductPanel
           title="互操作与自动化边界"
           description="互操作中心聚合现有真实能力；通用连接器与自动化规则仍未开放。"

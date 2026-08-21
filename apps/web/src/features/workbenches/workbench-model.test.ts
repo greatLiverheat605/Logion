@@ -7,6 +7,9 @@ import {
 
 import {
   FIXED_WORKBENCHES,
+  createWorkbenchDocument,
+  documentFromLegacyPersona,
+  personaIdForWorkbenchRef,
   projectPersonaToWorkbench,
 } from "./workbench-model";
 
@@ -178,5 +181,52 @@ describe("workbench persona projection", () => {
     persona.routes.push("/app/settings");
 
     expect(projection.visibleRoutes).toEqual(["/app/today", "/app/self-study"]);
+  });
+});
+
+describe("custom Workbench templates", () => {
+  it("creates a complete controlled research template", () => {
+    const document = createWorkbenchDocument({
+      accent: "cyan",
+      description: "证据工作流",
+      icon: "microscope",
+      name: "论文推进",
+      templateId: "fixed.research",
+    });
+
+    expect(document.payload.modules.map((module) => module.kind)).toEqual([
+      "next-action",
+      "sources",
+      "evidence",
+      "graph-projection",
+    ]);
+    expect(document.payload.layout.items.map((item) => item.moduleId)).toEqual(
+      document.payload.modules.map((module) => module.id),
+    );
+    expect(document.payload.fieldDefinitions).toEqual([]);
+    expect(document).not.toHaveProperty("ownerUserId");
+  });
+
+  it("projects legacy data to safe tokens without carrying emoji or routes", () => {
+    const legacy: PersonaDefinition = {
+      description: "混合场景",
+      icon: "<img src=x onerror=alert(1)>",
+      id: "CUSTOM-123E4567-E89B-42D3-A456-426614174000" as PersonaDefinition["id"],
+      isBuiltin: false,
+      name: "旧画像",
+      routes: ["/app/today", "/app/exam"],
+    };
+
+    const document = documentFromLegacyPersona(legacy);
+    expect(document.payload.icon).toBe("graduation-cap");
+    expect(document.payload.templateId).toBe("fixed.exam");
+    expect(JSON.stringify(document)).not.toContain("onerror");
+    expect(document.payload.modules[0]?.id).toMatch(
+      /^legacy-123e4567-e89b-42d3-a456-426614174000-[0-9a-f]{8}-1$/,
+    );
+    expect(document.payload.layout.items.map((item) => item.moduleId)).toEqual(
+      document.payload.modules.map((module) => module.id),
+    );
+    expect(personaIdForWorkbenchRef("custom-id", "fixed.exam")).toBe("exam");
   });
 });
