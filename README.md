@@ -7,7 +7,7 @@
 
 Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前状态：仓库清单版本仍为 `0.1.0`；受控 prerelease 仍运行已观察通过的 `0.2.0-rc7`。C7 修复候选正在补齐 RC8 证据并等待 GLM 整体复审，尚未进入 Production；flags 默认关闭，真实邮件、实体设备、生产备份和流量切换仍未授权。
+> 当前状态：仓库清单版本仍为 `0.1.0`；受控 prerelease 仍运行已观察通过的 `0.2.0-rc7`。C7 修复 PR #220 的 fast/integration/browser 门禁已通过，当前等待 GLM 整体复审，尚未进入 Production；flags 默认关闭，真实邮件、实体设备、生产备份和流量切换仍未授权。
 
 ## 为什么是 Logion
 
@@ -274,7 +274,7 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 ## 近期方向
 
-当前主线是观察 `0.2.0-rc7` 的受控 prerelease；C7 修复候选已补齐 Today 工作区切换竞态防护，并完成隔离反向代理 DELETE body 门验收，正在生成新的候选证据并等待 GLM `PASS / P0=0 / P1=0`。Production 发布和流量切换仍需更高一级审批。
+当前主线是观察 `0.2.0-rc7` 的受控 prerelease；C7 修复 PR #220 已通过 fast/integration/browser 门禁，包含 Today 工作区切换竞态防护和隔离反向代理 DELETE body 门验收，当前等待 GLM `PASS / P0=0 / P1=0`。Production 发布和流量切换仍需更高一级审批。
 
 后续产品迭代优先处理 Today/Review/Sync 大型模块拆分、页面级离线能力说明、实体设备验收和认知工作台的真实用户验证。Connector/Automation v2、共享写入、附件、本地 Worker 和 AI Acceptance 仍需独立设计与生产准入。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 

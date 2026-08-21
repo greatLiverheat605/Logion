@@ -7,21 +7,22 @@
 
 - RC7 仍是受控 prerelease 的运行版本；本轮 C7 修复尚未替换线上版本。
 - `workbench_delete_api_enabled` 与其它敏感 Workbench 能力继续默认关闭；本轮没有启用删除路由、生产 flag、生产凭据或生产访问。
-- C7 修复候选必须在提交后重新生成 Main candidate、容量、镜像、SBOM、provenance 和 Release candidate 证据，不能复用旧候选作为 RC8 发布证明。
+- C7 修复实现提交为 `fa8e119e355c8ab733b034e0b58eb21290326c9a`；PR #220 的 `fast`、`integration`、`browser` 已在 run `32479408725` 成功。合并后仍必须以新的 `main` SHA 重新生成 Main candidate、容量、镜像、SBOM、provenance 和 Release candidate 证据，不能复用旧候选作为 RC8 发布证明。
 - 只有 GLM 对完整版本变更返回 `PASS` 且 `P0=0 / P1=0`，并由协调方复核后，才可向用户申请 Production 发布批准。
 
 ## 修复候选身份
 
-当前工作树基于 `origin/main=692abfa2f6e1aaae57655628dc8533ba62f0bbdf` 的直接修复分支。TodayCenter 修复和本文档更新形成新的提交前工作树；因此以下字段在新提交和 GitHub candidate workflow 完成前保持待填，不把旧 SHA 冒充 RC8：
+当前工作树基于 `origin/main=692abfa2f6e1aaae57655628dc8533ba62f0bbdf` 的直接修复分支。TodayCenter 修复、依赖安全锁定和文档更新已形成 PR 候选；最终 RC8 source SHA 仍须在合并到 `main` 后固定，不能把 feature branch SHA 冒充 RC8：
 
-| 字段                       | 状态                   |
-| -------------------------- | ---------------------- |
-| RC8 产品源码 SHA           | 待提交后固定           |
-| Main candidate             | 待新 SHA 触发          |
-| Full capacity              | 待新 SHA 触发          |
-| Release candidate          | 待新 SHA 触发          |
-| Candidate manifest SHA-256 | 待 artifact 下载并核验 |
-| Alembic head               | 以新 manifest 为准     |
+| 字段                       | 状态                                       |
+| -------------------------- | ------------------------------------------ |
+| C7 修复实现提交            | `fa8e119e355c8ab733b034e0b58eb21290326c9a` |
+| RC8 产品源码 SHA           | 待合并到 `main` 后固定                     |
+| Main candidate             | 待新 SHA 触发                              |
+| Full capacity              | 待新 SHA 触发                              |
+| Release candidate          | 待新 SHA 触发                              |
+| Candidate manifest SHA-256 | 待 artifact 下载并核验                     |
+| Alembic head               | 以新 manifest 为准                         |
 
 ## 已有参考证据
 
@@ -51,6 +52,14 @@
 - 两条请求均保留 `Origin`、`X-CSRF-Token` 和 `Idempotency-Key`。
 - 请求和响应仅在本机即时断言，未写入仓库、未访问生产；临时容器和网络已删除。
 - 失败关闭规则保持有效：任一代理验收失败时，必须保持 `workbench_delete_api_enabled=false`，不得把字段降级到 query、URL 或未认证 fallback。
+
+## PR 门禁结果
+
+- PR：[#220](https://github.com/greatLiverheat605/Logion/pull/220)
+- Head：`fa8e119e355c8ab733b034e0b58eb21290326c9a`
+- Checks run：[#32479408725](https://github.com/greatLiverheat605/Logion/actions/runs/32479408725)
+- `fast`、`integration`、`browser`：success
+- 该 run 只证明 PR head 的代码门禁，不等同于合并后的 Main candidate、Release candidate 或 Production 发布。
 
 ## RC8 必须补齐的证据
 
