@@ -7,7 +7,7 @@
 
 - RC7 仍是受控 prerelease 的运行版本；本轮 C7 修复尚未替换线上版本。
 - `workbench_delete_api_enabled` 与其它敏感 Workbench 能力继续默认关闭；本轮没有启用删除路由、生产 flag、生产凭据或生产访问。
-- C7 修复实现提交为 `fa8e119e355c8ab733b034e0b58eb21290326c9a`；PR #220 的 `fast`、`integration`、`browser` 已在 run `32479408725` 成功。合并后仍必须以新的 `main` SHA 重新生成 Main candidate、容量、镜像、SBOM、provenance 和 Release candidate 证据，不能复用旧候选作为 RC8 发布证明。
+- C7 修复实现提交为 `fa8e119e355c8ab733b034e0b58eb21290326c9a`；随后文档收口提交为 `e252a9f9bbc8ecd2f6e847126b4ab661be708ec5`。两次 PR 门禁的 `fast`、`integration`、`browser` 均成功：实现提交对应 run `32479408725`，最终文档 head 对应 run `32479814986`。合并后仍必须以新的 `main` SHA 重新生成 Main candidate、容量、镜像、SBOM、provenance 和 Release candidate 证据，不能复用旧候选作为 RC8 发布证明。
 - 只有 GLM 对完整版本变更返回 `PASS` 且 `P0=0 / P1=0`，并由协调方复核后，才可向用户申请 Production 发布批准。
 
 ## 修复候选身份
@@ -56,8 +56,10 @@
 ## PR 门禁结果
 
 - PR：[#220](https://github.com/greatLiverheat605/Logion/pull/220)
-- Head：`fa8e119e355c8ab733b034e0b58eb21290326c9a`
-- Checks run：[#32479408725](https://github.com/greatLiverheat605/Logion/actions/runs/32479408725)
+- Implementation head：`fa8e119e355c8ab733b034e0b58eb21290326c9a`
+- Final documentation head：`e252a9f9bbc8ecd2f6e847126b4ab661be708ec5`
+- Checks run（实现 head）：[#32479408725](https://github.com/greatLiverheat605/Logion/actions/runs/32479408725)
+- Checks run（最终文档 head）：[#32479814986](https://github.com/greatLiverheat605/Logion/actions/runs/32479814986)
 - `fast`、`integration`、`browser`：success
 - 该 run 只证明 PR head 的代码门禁，不等同于合并后的 Main candidate、Release candidate 或 Production 发布。
 
