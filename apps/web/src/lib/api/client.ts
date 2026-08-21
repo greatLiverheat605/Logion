@@ -2,7 +2,8 @@ import type { components } from "@logion/contracts";
 
 type ErrorResponse = components["schemas"]["ErrorResponse"];
 
-const API_PATH = /^\/api\/v1(?:\/|$)/;
+const API_PATH =
+  /^(?:\/api\/v1(?:\/|$)|\/app\/api\/workbench-exports\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$)/i;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const CSRF_COOKIE_NAME = "logion_csrf";
 const FORBIDDEN_REQUEST_HEADERS = new Set([
@@ -16,12 +17,14 @@ const FORBIDDEN_REQUEST_HEADERS = new Set([
 
 export class LogionApiError extends Error {
   readonly code: string;
+  readonly details: unknown;
   readonly requestId: string;
   readonly retryable: boolean;
   readonly status: number;
 
   constructor(input: {
     code: string;
+    details?: unknown;
     message: string;
     requestId?: string;
     retryable?: boolean;
@@ -30,6 +33,12 @@ export class LogionApiError extends Error {
     super(input.message);
     this.name = "LogionApiError";
     this.code = input.code;
+    Object.defineProperty(this, "details", {
+      configurable: false,
+      enumerable: false,
+      value: input.details ?? {},
+      writable: false,
+    });
     this.requestId = input.requestId ?? "unavailable";
     this.retryable = input.retryable ?? false;
     this.status = input.status;
@@ -236,6 +245,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         if (isErrorResponse(payload)) {
           throw new LogionApiError({
             code: payload.code,
+            details: isRecord(payload) ? payload.details : undefined,
             message: payload.message,
             requestId: payload.request_id,
             retryable: payload.retryable,

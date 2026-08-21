@@ -54,6 +54,11 @@ test.describe("prototype productization", () => {
     page,
   }) => {
     await page.goto("/app/research");
+    await expect(page.getByLabel("工作区")).not.toHaveValue("");
+    await expect(page.getByLabel("空间")).not.toHaveValue("");
+    await page.getByLabel("本地口令").fill("browser-test-vault");
+    await page.getByRole("button", { name: "解锁资料" }).click();
+    await expect(page.getByText("研究资料已在应用内解锁。")).toBeVisible();
     await expect(page.getByPlaceholder("论文来源 URL（可选）")).toHaveAttribute(
       "type",
       "url",

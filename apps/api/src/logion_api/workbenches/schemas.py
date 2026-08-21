@@ -94,7 +94,7 @@ type WorkbenchRef = Annotated[
             r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
             r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
         ),
-        min_length=13,
+        min_length=10,
         max_length=36,
     ),
 ]

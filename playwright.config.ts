@@ -9,7 +9,7 @@ import {
 
 const publicTests = /(?:public-accessibility|pwa-offline)\.spec\.ts/;
 const authenticatedTests =
-  /(?:authenticated-accessibility|authenticated-shell|persona-system|prototype-productization|integration-hub|knowledge-space-prototype)\.spec\.ts/;
+  /(?:authenticated-accessibility|authenticated-shell|persona-system|workbench-system|prototype-productization|integration-hub|knowledge-space-prototype)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./tests/browser",

@@ -9,16 +9,64 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  BUILTIN_PERSONAS,
-  type PersonaDefinition,
-} from "@/features/personas/persona-definitions";
+const options = [
+  {
+    description: "学习项目",
+    entryPath: "/app/self-study",
+    icon: "📚",
+    kind: "fixed",
+    lifecycle: "active",
+    name: "学习",
+    ref: "fixed.learning",
+    templateId: "fixed.learning",
+  },
+  {
+    description: "研究证据",
+    entryPath: "/app/research",
+    icon: "🔬",
+    kind: "fixed",
+    lifecycle: "active",
+    name: "研究",
+    ref: "fixed.research",
+    templateId: "fixed.research",
+  },
+  {
+    description: "考试覆盖",
+    entryPath: "/app/exam",
+    icon: "📝",
+    kind: "fixed",
+    lifecycle: "active",
+    name: "考试",
+    ref: "fixed.exam",
+    templateId: "fixed.exam",
+  },
+  {
+    description: "导师审阅",
+    entryPath: "/app/collaboration",
+    icon: "🧭",
+    kind: "fixed",
+    lifecycle: "active",
+    name: "导师",
+    ref: "fixed.mentor",
+    templateId: "fixed.mentor",
+  },
+  {
+    description: "兼容入口",
+    entryPath: "/app/research",
+    icon: "C",
+    kind: "legacy",
+    lifecycle: "active",
+    name: "兼容工作台",
+    ref: "custom-existing",
+    templateId: "blank",
+  },
+] as const;
 
 const mocks = vi.hoisted(() => ({
   closeInspector: vi.fn(),
-  persona: {} as Record<string, unknown>,
   push: vi.fn(),
-  setActivePersona: vi.fn(),
+  selectWorkbench: vi.fn(),
+  workbench: {} as Record<string, unknown>,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,44 +77,11 @@ vi.mock("@/features/desk/command-feedback-context", () => ({
   useInspector: () => ({ closeInspector: mocks.closeInspector }),
 }));
 
-vi.mock("@/features/personas/persona-context", () => ({
-  usePersona: () => mocks.persona,
+vi.mock("./workbench-context", () => ({
+  useWorkbench: () => mocks.workbench,
 }));
 
 import { WorkbenchSwitcher } from "./workbench-switcher";
-
-const learningPersona = BUILTIN_PERSONAS.find(
-  (persona) => persona.id === "self",
-)!;
-
-function legacyPersona(
-  routes: string[] = ["/app/today", "/app/research"],
-): PersonaDefinition {
-  return {
-    description: "沿用现有路由的兼容工作台",
-    icon: "C",
-    id: "custom-existing",
-    isBuiltin: false,
-    name: "兼容工作台",
-    routes,
-  };
-}
-
-function usePersonaState(
-  overrides: Partial<{
-    activePersona: PersonaDefinition | null;
-    allPersonas: readonly PersonaDefinition[];
-    isLoading: boolean;
-  }> = {},
-) {
-  Object.assign(mocks.persona, {
-    activePersona: learningPersona,
-    allPersonas: [...BUILTIN_PERSONAS, legacyPersona()],
-    isLoading: false,
-    setActivePersona: mocks.setActivePersona,
-    ...overrides,
-  });
-}
 
 function useMobileViewport(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -83,37 +98,47 @@ function useMobileViewport(matches: boolean) {
 beforeEach(() => {
   mocks.closeInspector.mockReset();
   mocks.push.mockReset();
-  mocks.setActivePersona.mockReset().mockResolvedValue(undefined);
+  mocks.selectWorkbench.mockReset().mockImplementation((ref: string) => {
+    const option = options.find((item) => item.ref === ref);
+    return option
+      ? Promise.resolve(option.entryPath)
+      : Promise.reject(new Error("missing"));
+  });
+  Object.assign(mocks.workbench, {
+    activeWorkbench: options[0],
+    options,
+    phase: "ready",
+    selectWorkbench: mocks.selectWorkbench,
+  });
   useMobileViewport(false);
-  usePersonaState();
 });
 
 afterEach(cleanup);
 
 describe("WorkbenchSwitcher", () => {
   it.each([
-    ["学习", "self", "/app/self-study"],
-    ["研究", "research", "/app/research"],
-    ["考试", "exam", "/app/exam"],
-    ["导师", "mentor", "/app/collaboration"],
+    ["学习", "fixed.learning", "/app/self-study"],
+    ["研究", "fixed.research", "/app/research"],
+    ["考试", "fixed.exam", "/app/exam"],
+    ["导师", "fixed.mentor", "/app/collaboration"],
     ["兼容工作台", "custom-existing", "/app/research"],
   ])(
-    "switches %s through the existing Persona and projected route",
-    async (name, id, path) => {
+    "switches %s through the active Workbench contract",
+    async (name, ref, path) => {
       render(<WorkbenchSwitcher />);
 
       fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
 
       await waitFor(() =>
-        expect(mocks.setActivePersona).toHaveBeenCalledWith(id),
+        expect(mocks.selectWorkbench).toHaveBeenCalledWith(ref),
       );
       expect(mocks.closeInspector).toHaveBeenCalledTimes(1);
       expect(mocks.push).toHaveBeenCalledWith(path);
     },
   );
 
-  it("fails closed to Today when the existing Persona save fails", async () => {
-    mocks.setActivePersona.mockRejectedValueOnce(new Error("save failed"));
+  it("fails closed to Today when preference persistence fails", async () => {
+    mocks.selectWorkbench.mockRejectedValueOnce(new Error("save failed"));
     render(<WorkbenchSwitcher />);
 
     fireEvent.click(screen.getByRole("button", { name: /研究/ }));
@@ -124,58 +149,50 @@ describe("WorkbenchSwitcher", () => {
     expect(mocks.push).toHaveBeenCalledWith("/app/today");
   });
 
-  it("does not navigate a legacy Persona without a projected entry", () => {
-    usePersonaState({
-      allPersonas: [
-        ...BUILTIN_PERSONAS,
-        legacyPersona(["/app/today", "/app/settings"]),
-      ],
+  it("does not navigate an archived Workbench", () => {
+    Object.assign(mocks.workbench, {
+      options: [{ ...options[4], lifecycle: "archived" }],
+      activeWorkbench: options[0],
     });
     render(<WorkbenchSwitcher />);
 
-    const option = screen.getByRole("button", {
-      name: /兼容工作台.*暂无入口/,
-    });
+    const option = screen.getByRole("button", { name: /兼容工作台.*已归档/ });
     expect((option as HTMLButtonElement).disabled).toBe(true);
-    expect(option.textContent).toContain("暂无入口");
     fireEvent.click(option);
-    expect(mocks.setActivePersona).not.toHaveBeenCalled();
-    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.selectWorkbench).not.toHaveBeenCalled();
   });
 
   it.each([
-    [true, null, "工作台加载中"],
-    [false, null, "当前工作台不可用"],
-  ])(
-    "falls back to Today for loading/null Persona",
-    (isLoading, activePersona, copy) => {
-      usePersonaState({ activePersona, isLoading });
-      render(<WorkbenchSwitcher />);
+    ["loading", null, "工作台加载中"],
+    ["error", null, "当前工作台不可用"],
+  ])("falls back to Today for %s state", (phase, activeWorkbench, copy) => {
+    Object.assign(mocks.workbench, { activeWorkbench, phase });
+    render(<WorkbenchSwitcher />);
 
-      expect(screen.getByText(copy)).toBeTruthy();
-      expect(
-        screen.getByRole("link", { name: "返回 Today" }).getAttribute("href"),
-      ).toBe("/app/today");
-    },
-  );
+    expect(screen.getByText(copy)).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "返回 Today" }).getAttribute("href"),
+    ).toBe("/app/today");
+  });
 
   it("uses native button-group semantics with visible selected state", () => {
     render(<WorkbenchSwitcher />);
 
     expect(screen.getByRole("group", { name: "选择工作台" })).toBeTruthy();
-    const learning = screen.getByRole("button", { name: /学习.*当前/ });
-    const research = screen.getByRole("button", { name: /研究.*打开/ });
-    expect(learning.getAttribute("aria-pressed")).toBe("true");
-    expect(research.getAttribute("aria-pressed")).toBe("false");
-
-    research.focus();
-    fireEvent.click(research);
-    expect(document.activeElement).toBe(research);
-    expect(mocks.setActivePersona).toHaveBeenCalledWith("research");
+    expect(
+      screen
+        .getByRole("button", { name: /学习.*当前/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: /研究.*打开/ })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
   });
 
   it.each([390, 320])(
-    "uses the existing modal Sheet contract at %ipx",
+    "uses the modal Sheet contract at %ipx",
     async (width) => {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,

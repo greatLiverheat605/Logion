@@ -833,6 +833,31 @@ def test_preference_enforces_exact_4096_utf8_byte_limit() -> None:
     assert raised.value.code == "WORKBENCH_PREFERENCE_INVALID"
 
 
+def test_preference_accepts_every_fixed_workbench_reference() -> None:
+    value = json.dumps(
+        {
+            "contract": "workbench.preference",
+            "schemaVersion": 1,
+            "revision": 1,
+            "payload": {
+                "activeWorkbenchId": "fixed.exam",
+                "hiddenFixedWorkbenchIds": ["fixed.mentor"],
+                "workbenchOrder": [
+                    "fixed.learning",
+                    "fixed.research",
+                    "fixed.exam",
+                    "fixed.mentor",
+                ],
+                "density": "comfortable",
+                "defaultViewByWorkbench": {},
+                "defaultSpaceByWorkbench": {},
+            },
+        }
+    )
+
+    assert validate_workbench_preference(value, 1).payload.active_workbench_id == "fixed.exam"
+
+
 @pytest.mark.asyncio
 async def test_preference_adapter_rejects_before_existing_setting_service_write() -> None:
     db = _db()

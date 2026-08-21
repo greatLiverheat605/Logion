@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   closeInspector: vi.fn(),
   pathname: "/app/today",
   persona: {} as Record<string, unknown>,
+  workbench: {} as Record<string, unknown>,
   vault: { phase: "unlocked" },
 }));
 
@@ -63,6 +64,10 @@ vi.mock("@/features/personas/persona-context", () => ({
   usePersona: () => mocks.persona,
 }));
 
+vi.mock("@/features/workbenches/workbench-context", () => ({
+  useWorkbench: () => mocks.workbench,
+}));
+
 vi.mock("@/lib/api/client", () => ({
   browserApiClient: { request: vi.fn() },
 }));
@@ -86,6 +91,15 @@ beforeEach(() => {
     isLoading: false,
     isRouteVisible: () => true,
     setActivePersona: vi.fn(),
+  });
+  Object.assign(mocks.workbench, {
+    activeWorkbench: {
+      description: learningPersona.description,
+      icon: learningPersona.icon,
+      name: "学习",
+      ref: "fixed.learning",
+    },
+    phase: "ready",
   });
 });
 

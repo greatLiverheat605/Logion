@@ -26,6 +26,7 @@ interface PersonaContextValue {
   customPersonas: PersonaDefinition[];
   allPersonas: readonly PersonaDefinition[];
   setActivePersona: (personaId: string) => Promise<void>;
+  setCompatibilityPersona: (personaId: string) => void;
   createCustomPersona: (
     persona: Omit<PersonaDefinition, "isBuiltin">,
   ) => Promise<void>;
@@ -116,6 +117,16 @@ export function PersonaProvider({
     ],
   );
 
+  const setCompatibilityPersona = useCallback(
+    (personaId: string) => {
+      const persona = allPersonas.find(
+        (candidate) => candidate.id === personaId,
+      );
+      if (persona) setActivePersonaState(persona);
+    },
+    [allPersonas],
+  );
+
   const createCustomPersona = useCallback(
     async (persona: Omit<PersonaDefinition, "isBuiltin">) => {
       const newPersona: PersonaDefinition = { ...persona, isBuiltin: false };
@@ -159,6 +170,7 @@ export function PersonaProvider({
       customPersonas,
       allPersonas,
       setActivePersona,
+      setCompatibilityPersona,
       createCustomPersona,
       deleteCustomPersona,
       isRouteVisible,
@@ -173,6 +185,7 @@ export function PersonaProvider({
       isLoading,
       isRouteVisible,
       setActivePersona,
+      setCompatibilityPersona,
     ],
   );
 

@@ -74,7 +74,7 @@ test.describe("persona system", () => {
       "系统中心",
     ]);
     await expect(
-      navigation.getByRole("link", { name: "工作台" }),
+      navigation.getByRole("link", { name: "工作台", exact: true }),
     ).toHaveAttribute("href", "/app/exam");
   });
 
@@ -93,7 +93,7 @@ test.describe("persona system", () => {
       "系统中心",
     ]);
     await expect(
-      navigation.getByRole("link", { name: "工作台" }),
+      navigation.getByRole("link", { name: "工作台", exact: true }),
     ).toHaveAttribute("href", "/app/collaboration");
 
     await page.goto("/app/today");
@@ -166,7 +166,7 @@ test.describe("persona system", () => {
       "系统中心",
     ]);
     await expect(
-      navigation.getByRole("link", { name: "工作台" }),
+      navigation.getByRole("link", { name: "工作台", exact: true }),
     ).toHaveAttribute("href", "/app/exam");
 
     await page.getByRole("button", { name: /^切换到：导，/ }).click();
@@ -179,7 +179,7 @@ test.describe("persona system", () => {
       "系统中心",
     ]);
     await expect(
-      navigation.getByRole("link", { name: "工作台" }),
+      navigation.getByRole("link", { name: "工作台", exact: true }),
     ).toHaveAttribute("href", "/app/collaboration");
   });
 });
