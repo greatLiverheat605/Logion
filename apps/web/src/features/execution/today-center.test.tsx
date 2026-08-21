@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -62,6 +63,14 @@ const device = {
   current: true,
   id: "device-1",
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 function localEntity(
   entityType: string,
@@ -335,6 +344,96 @@ describe("TodayCenter workbench state", () => {
     expect(await screen.findByText("还缺少工作台上下文")).toBeTruthy();
     expect(document.querySelector(".product-today-layout")).toBeNull();
     expect(screen.getByLabelText("本地口令")).toBeTruthy();
+  });
+
+  it("drops late Spaces and local reads after a fast Workspace switch", async () => {
+    const firstRead = deferred<Record<string, unknown>[]>();
+    const secondWorkspace = {
+      ...workspace,
+      id: "workspace-2",
+      name: "工作区 B",
+    };
+    const secondSpace = {
+      ...space,
+      id: "space-2",
+      name: "空间 B",
+    };
+
+    Object.assign(mocks.vaultSession, {
+      database: {
+        current: {
+          conflicts: {
+            where: () => ({
+              equals: () => ({ count: () => Promise.resolve(0) }),
+            }),
+          },
+          entities: {
+            where: () => ({
+              equals: ([selectedWorkspace, entityType]: [string, string]) => ({
+                toArray: () =>
+                  selectedWorkspace === "workspace-1" && entityType === "task"
+                    ? firstRead.promise
+                    : selectedWorkspace === "workspace-2" &&
+                        entityType === "task"
+                      ? Promise.resolve([
+                          task({
+                            id: "task-b",
+                            spaceId: "space-2",
+                            title: "工作区 B 任务",
+                          }),
+                        ])
+                      : Promise.resolve([]),
+              }),
+            }),
+          },
+        },
+      },
+      phase: "unlocked",
+      revision: 1,
+      unlock: vi.fn(),
+      vault: { current: { get: vi.fn() } },
+    });
+    mocks.request.mockImplementation((path: string) => {
+      if (path === "/api/v1/workspaces") {
+        return Promise.resolve({ workspaces: [workspace, secondWorkspace] });
+      }
+      if (path === "/api/v1/auth/devices") {
+        return Promise.resolve({ devices: [device] });
+      }
+      if (path === "/api/v1/workspaces/workspace-1/spaces") {
+        return Promise.resolve({ spaces: [space] });
+      }
+      if (path === "/api/v1/workspaces/workspace-2/spaces") {
+        return Promise.resolve({ spaces: [secondSpace] });
+      }
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    render(<TodayCenter />);
+    const select = await screen.findByLabelText("工作区");
+    await waitFor(() =>
+      expect(mocks.request).toHaveBeenCalledWith(
+        "/api/v1/workspaces/workspace-1/spaces",
+        expect.any(Object),
+      ),
+    );
+
+    fireEvent.change(select, { target: { value: "workspace-2" } });
+    expect(await screen.findByRole("option", { name: /空间 B/ })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "工作区 B 任务" }),
+    ).toBeTruthy();
+
+    await act(async () => {
+      firstRead.resolve([task({ title: "过期工作区 A 任务" })]);
+      await firstRead.promise;
+    });
+
+    expect((select as HTMLSelectElement).value).toBe("workspace-2");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "工作区 B 任务" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("过期工作区 A 任务")).toBeNull();
   });
 
   it("keeps a task without verification in the manual acceptance path", async () => {
