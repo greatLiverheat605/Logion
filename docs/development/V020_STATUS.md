@@ -1,12 +1,20 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-16（Asia/Shanghai）。
-> 当前阶段：**V20-01～V20-14 已通过验收；V20-15 RC7 已完成同 SHA 全链路验收并部署到受控 prerelease，至少 24 小时技术观察已通过。用户已报告当前浏览器会话登录，认证 UX 实际走查仍为 `not_run`。Production 发布、真实受邀邮件、实体移动设备验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 更新时间：2026-08-21（Asia/Shanghai）。
+> 当前阶段：**RC7 仍运行于受控 prerelease；C7 修复 PR #220 已通过 fast/integration/browser 门禁，Today 工作区竞态修复、隔离反向代理 DELETE body 门验收和 RC8 证据索引已完成，当前等待 GLM 整体复审。Production 发布、真实受邀邮件、实体移动设备验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前文档主线：`origin/main=11014fb736b1f74085a32a7ad1c00054b0b83d6b`。RC7 实际产品源码为
+> 当前文档主线：`origin/main=692abfa2f6e1aaae57655628dc8533ba62f0bbdf`。RC7 实际产品源码为
 > `480adc721600243308fa7b5a32200044efd88f07`；Main candidate run `31672956241`、Full capacity run
 > `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 均成功并绑定该产品 SHA。文档主线 SHA
 > 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC7；该状态不等于 Production 发布。
+
+## C7 修复候选与 RC8 前置门（2026-08-21）
+
+- GLM 首轮整体审核返回 `FAIL`，原因是 Today 工作区切换竞态、DELETE body 反向代理真实验收证据缺失，以及 RC8 发布证据未归档；P0=0、P1=3。三项均已进入当前修复范围。
+- TodayCenter 已增加 context/Spaces/本地数据请求的取消和最新请求身份守卫，并新增快速 workspace 切换回归；定向测试为 `13 passed`。
+- 仓库 Nginx 配置已在一次性 localhost 隔离链路中真实验收两条 DELETE 路径：JSON body、`Origin`、`X-CSRF-Token`、`Idempotency-Key` 均完整到达 mock API。临时容器和网络已删除，生产删除 flag 仍关闭。
+- C7 修复提交为 `fa8e119e355c8ab733b034e0b58eb21290326c9a`；PR #220 的 checks run [`32479408725`](https://github.com/greatLiverheat605/Logion/actions/runs/32479408725) 中 `fast`、`integration`、`browser` 均成功。RC8 证据索引见 [`V020_V15_PRERELEASE_RC8_EVIDENCE.md`](./V020_V15_PRERELEASE_RC8_EVIDENCE.md)。旧 Main candidate [`32463164818`](https://github.com/greatLiverheat605/Logion/actions/runs/32463164818) 仅作为修复前参考，不能替代合并后同 SHA candidate。
+- 下一顺序固定为：GLM 只读整体复审 → `PASS / P0=0 / P1=0` 后申请合并批准 → 合并后生成 Main candidate/Release 证据 → 再申请 Production 发布批准。当前不 merge、deploy、不切流、不启用 flags。
 
 ## V20-15 RC6 受控 prerelease 部署断点（2026-08-10）
 

@@ -13,7 +13,13 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ProductBarChart,
@@ -185,38 +191,97 @@ export function TodayCenter() {
     LocalView<ContentReferencePayload>[]
   >([]);
   const [conflictCount, setConflictCount] = useState(0);
+  const contextRequestRef = useRef<AbortController | null>(null);
+  const spacesRequestRef = useRef<AbortController | null>(null);
+  const dataRequestIdRef = useRef(0);
+  const currentWorkspaceIdRef = useRef(workspaceId);
+
+  const resetWorkspaceData = useCallback(() => {
+    dataRequestIdRef.current += 1;
+    setSpaces([]);
+    setSpaceId("");
+    setTasks([]);
+    setSessions([]);
+    setGoals([]);
+    setEvidence([]);
+    setVerifications([]);
+    setNotes([]);
+    setResources([]);
+    setConflictCount(0);
+    setDataPhase("idle");
+  }, []);
 
   const loadContext = useCallback(async () => {
+    contextRequestRef.current?.abort();
+    const controller = new AbortController();
+    contextRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: Workspace[] }>(
           "/api/v1/workspaces",
+          { signal: controller.signal },
         ),
-        browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
+        browserApiClient.request<{ devices: Device[] }>(
+          "/api/v1/auth/devices",
+          { signal: controller.signal },
+        ),
       ]);
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(workspaceResult.workspaces);
-      setWorkspaceId((current) =>
-        workspaceResult.workspaces.some((item) => item.id === current)
-          ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
-      );
+      const nextWorkspaceId = workspaceResult.workspaces.some(
+        (item) => item.id === currentWorkspaceIdRef.current,
+      )
+        ? currentWorkspaceIdRef.current
+        : (workspaceResult.workspaces[0]?.id ?? "");
+      if (nextWorkspaceId !== currentWorkspaceIdRef.current) {
+        spacesRequestRef.current?.abort();
+        resetWorkspaceData();
+      }
+      currentWorkspaceIdRef.current = nextWorkspaceId;
+      setWorkspaceId(nextWorkspaceId);
       setDeviceId(currentDevice?.id ?? "");
       setStatus(currentDevice ? "请解锁本地资料。" : "未找到当前设备。");
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (contextRequestRef.current === controller) {
+        contextRequestRef.current = null;
+      }
     }
-  }, []);
+  }, [resetWorkspaceData]);
 
   const loadSpaces = useCallback(async (selectedWorkspace: string) => {
+    spacesRequestRef.current?.abort();
+    const controller = new AbortController();
+    spacesRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const spaceResult = await browserApiClient.request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${selectedWorkspace}/spaces`,
+        `/api/v1/workspaces/${encodeURIComponent(selectedWorkspace)}/spaces`,
+        { signal: controller.signal },
       );
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selectedWorkspace
+      ) {
+        return;
+      }
       setSpaces(spaceResult.spaces);
       setSpaceId((current) =>
         spaceResult.spaces.some((item) => item.id === current)
@@ -225,19 +290,49 @@ export function TodayCenter() {
       );
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selectedWorkspace
+      ) {
+        return;
+      }
       setSpaces([]);
       setSpaceId("");
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (spacesRequestRef.current === controller) {
+        spacesRequestRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => void loadContext());
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadContext();
+    });
+    return () => {
+      active = false;
+      contextRequestRef.current?.abort();
+      dataRequestIdRef.current += 1;
+    };
   }, [loadContext]);
 
   useEffect(() => {
-    if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
+    let active = true;
+    if (workspaceId) {
+      queueMicrotask(() => {
+        if (active) void loadSpaces(workspaceId);
+      });
+    } else {
+      spacesRequestRef.current?.abort();
+    }
+    return () => {
+      active = false;
+      spacesRequestRef.current?.abort();
+    };
   }, [loadSpaces, workspaceId]);
 
   async function bootstrap(
@@ -301,6 +396,8 @@ export function TodayCenter() {
   async function readTodayData(
     db: LogionOfflineDatabase,
     localVault: OfflineVault,
+    targetWorkspaceId: string,
+    requestId: number,
   ): Promise<void> {
     const [
       taskRows,
@@ -314,35 +411,35 @@ export function TodayCenter() {
     ] = await Promise.all([
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "task"])
+        .equals([targetWorkspaceId, "task"])
         .toArray(),
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "study_session"])
+        .equals([targetWorkspaceId, "study_session"])
         .toArray(),
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "learning_goal"])
+        .equals([targetWorkspaceId, "learning_goal"])
         .toArray(),
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "evidence"])
+        .equals([targetWorkspaceId, "evidence"])
         .toArray(),
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "verification"])
+        .equals([targetWorkspaceId, "verification"])
         .toArray(),
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "note"])
+        .equals([targetWorkspaceId, "note"])
         .toArray(),
       db.entities
         .where("[workspace_id+entity_type]")
-        .equals([workspaceId, "resource"])
+        .equals([targetWorkspaceId, "resource"])
         .toArray(),
       db.conflicts
         .where("[workspace_id+status]")
-        .equals([workspaceId, "open"])
+        .equals([targetWorkspaceId, "open"])
         .count(),
     ]);
     const [
@@ -384,6 +481,12 @@ export function TodayCenter() {
         ),
       ),
     ]);
+    if (
+      dataRequestIdRef.current !== requestId ||
+      currentWorkspaceIdRef.current !== targetWorkspaceId
+    ) {
+      return;
+    }
     setTasks(nextTasks);
     setSessions(nextSessions);
     setGoals(nextGoals);
@@ -398,12 +501,26 @@ export function TodayCenter() {
     db = database.current,
     localVault = vault.current,
   ): Promise<void> {
-    if (db === null || localVault === null || !workspaceId) return;
+    const targetWorkspaceId = workspaceId;
+    if (db === null || localVault === null || !targetWorkspaceId) return;
+    const requestId = ++dataRequestIdRef.current;
     setDataPhase("loading");
     try {
-      await readTodayData(db, localVault);
+      await readTodayData(db, localVault, targetWorkspaceId, requestId);
+      if (
+        dataRequestIdRef.current !== requestId ||
+        currentWorkspaceIdRef.current !== targetWorkspaceId
+      ) {
+        return;
+      }
       setDataPhase("ready");
     } catch (error) {
+      if (
+        dataRequestIdRef.current !== requestId ||
+        currentWorkspaceIdRef.current !== targetWorkspaceId
+      ) {
+        return;
+      }
       setDataPhase("error");
       throw error;
     }
@@ -986,7 +1103,15 @@ export function TodayCenter() {
         <select
           id="today-workspace"
           value={workspaceId}
-          onChange={(event) => setWorkspaceId(event.target.value)}
+          onChange={(event) => {
+            const nextWorkspaceId = event.target.value;
+            if (nextWorkspaceId === workspaceId) return;
+            spacesRequestRef.current?.abort();
+            currentWorkspaceIdRef.current = nextWorkspaceId;
+            resetWorkspaceData();
+            setContextPhase("loading");
+            setWorkspaceId(nextWorkspaceId);
+          }}
         >
           {workspaces.map((item) => (
             <option key={item.id} value={item.id}>

@@ -7,7 +7,7 @@
 
 Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前状态：仓库清单版本仍为 `0.1.0`；`0.2.0-rc7` 已按固定产品提交 `480adc721600243308fa7b5a32200044efd88f07` 部署到受控 prerelease，尚未进入 Production。真实邮件、实体设备、观察期与生产流量切换仍未完成。
+> 当前状态：仓库清单版本仍为 `0.1.0`；受控 prerelease 仍运行已观察通过的 `0.2.0-rc7`。C7 修复 PR #220 的 fast/integration/browser 门禁已通过，当前等待 GLM 整体复审，尚未进入 Production；flags 默认关闭，真实邮件、实体设备、生产备份和流量切换仍未授权。
 
 ## 为什么是 Logion
 
@@ -258,6 +258,9 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 - [项目功能全景](docs/product/PROJECT_FUNCTION_MAP.md)
 - [用户指南](docs/user-guide.md)
+- [V20-15 RC8 修复候选与发布证据](docs/development/V020_V15_PRERELEASE_RC8_EVIDENCE.md)
+- [V20-15 RC7 受控 prerelease 证据](docs/development/V020_V15_PRERELEASE_RC7_EVIDENCE.md)
+- [版本状态快照](docs/development/V020_STATUS.md)
 - [下一版本产品与技术路线](docs/product/NEXT_VERSION_ROADMAP.md)
 - [全仓代码审查与问题台账](docs/reviews/PROJECT_CODE_REVIEW_2026-08-01.md)
 - [互操作中心 v1](docs/features/interoperability-hub.md)
@@ -271,7 +274,7 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 ## 近期方向
 
-当前主线是观察 `0.2.0-rc7` 的受控 prerelease；RC7 已完成同一产品提交的 Main candidate、Full capacity、不可变镜像 smoke、空环境恢复、真实浏览器/WCAG 和 rollout rehearsal。Production 发布和流量切换仍需更高一级审批。
+当前主线是观察 `0.2.0-rc7` 的受控 prerelease；C7 修复 PR #220 已通过 fast/integration/browser 门禁，包含 Today 工作区切换竞态防护和隔离反向代理 DELETE body 门验收，当前等待 GLM `PASS / P0=0 / P1=0`。Production 发布和流量切换仍需更高一级审批。
 
 后续产品迭代优先处理 Today/Review/Sync 大型模块拆分、页面级离线能力说明、实体设备验收和认知工作台的真实用户验证。Connector/Automation v2、共享写入、附件、本地 Worker 和 AI Acceptance 仍需独立设计与生产准入。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 
