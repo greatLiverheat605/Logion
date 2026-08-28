@@ -1459,7 +1459,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Goal Plans */
+        get: operations["planning_goal_list"];
         put?: never;
         /** Create Goal Plan */
         post: operations["planning_goal_create"];
@@ -4108,6 +4109,11 @@ export interface components {
             /** Weekly Minutes */
             weekly_minutes: number;
         };
+        /** GoalPlanListResponse */
+        GoalPlanListResponse: {
+            /** Goals */
+            goals: components["schemas"]["GoalPlanResponse"][];
+        };
         /** GoalPlanResponse */
         GoalPlanResponse: {
             /**
@@ -6560,12 +6566,9 @@ export interface components {
              * Visibility
              * @enum {string}
              */
-            visibility: "private" | "workspace";
-            /**
-             * Workspace Id
-             * Format: uuid
-             */
-            workspace_id: string;
+            visibility: "private" | "workspace" | "official";
+            /** Workspace Id */
+            workspace_id: string | null;
         };
         /** TopicCreateRequest */
         TopicCreateRequest: {
@@ -14451,6 +14454,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExamResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    planning_goal_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalPlanListResponse"];
                 };
             };
             /** @description Unauthorized */
