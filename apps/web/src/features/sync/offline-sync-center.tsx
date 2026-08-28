@@ -14,32 +14,31 @@ import {
   type JsonObject,
   type LocalConflict,
   type LogionOfflineDatabase,
+  type OutboxEntry,
   type SyncTransport,
   type WorkspaceSyncState,
 } from "@logion/offline";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import {
-  ProductEmptyState,
-  ProductMetric,
-  ProductTag,
-} from "@/components/product/product-ui";
 import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
-import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { LogionApiError, type ApiClient } from "@/lib/api/client";
 
 import { ApiAttachmentUploadTransport } from "./attachment-upload-transport";
 import { summarizeSyncQueue, type SyncQueueSummary } from "./sync-diagnostics";
+import { SyncWorkbench } from "./sync-workbench";
+import { useSyncController } from "./use-sync-controller";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
 type ConnectionState = "offline" | "online";
+type PermissionIssue = "permission" | "error" | null;
 
 const CLEAR_DEVICE_CONFIRMATION = "CLEAR THIS DEVICE";
 const EMPTY_QUEUE_SUMMARY = summarizeSyncQueue([]);
 
-interface ConflictView {
+export interface ConflictView {
   conflict: LocalConflict;
   local: JsonObject;
   remote: JsonObject;
@@ -61,18 +60,21 @@ function userMessage(error: unknown): string {
   return "操作未完成；本地数据保持不变，请检查解锁状态或稍后重试。";
 }
 
-function transport(workspaceId: string): SyncTransport {
+function transport(
+  apiRequest: ApiClient["request"],
+  workspaceId: string,
+): SyncTransport {
   return {
-    push: (request) =>
-      browserApiClient.request(`/api/v1/workspaces/${workspaceId}/sync/push`, {
+    push: (syncRequest) =>
+      apiRequest(`/api/v1/workspaces/${workspaceId}/sync/push`, {
         method: "POST",
         csrf: true,
-        body: JSON.stringify(request),
+        body: JSON.stringify(syncRequest),
       }),
-    pull: (request) =>
-      browserApiClient.request(`/api/v1/workspaces/${workspaceId}/sync/pull`, {
+    pull: (syncRequest) =>
+      apiRequest(`/api/v1/workspaces/${workspaceId}/sync/pull`, {
         method: "POST",
-        body: JSON.stringify(request),
+        body: JSON.stringify(syncRequest),
       }),
   };
 }
@@ -94,29 +96,8 @@ async function reveal(
   return revealed;
 }
 
-function preview(value: unknown): string {
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined) return "—";
-  return encoded.length > 160 ? `${encoded.slice(0, 157)}…` : encoded;
-}
-
-function fieldDiff(view: ConflictView) {
-  return Array.from(
-    new Set([...Object.keys(view.local), ...Object.keys(view.remote)]),
-  )
-    .slice(0, 50)
-    .map((field) => ({
-      field,
-      local: preview(view.local[field]),
-      remote: preview(view.remote[field]),
-      changed:
-        JSON.stringify(view.local[field]) !==
-        JSON.stringify(view.remote[field]),
-    }))
-    .filter((item) => item.changed);
-}
-
 export function OfflineSyncCenter() {
+  const { request } = useSyncController();
   const { state: session } = useSession();
   const {
     clearLocalData,
@@ -134,8 +115,12 @@ export function OfflineSyncCenter() {
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在读取同步上下文…");
+  const [loading, setLoading] = useState(true);
+  const [accessIssue, setAccessIssue] = useState<PermissionIssue>(null);
+  const [syncing, setSyncing] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictView[]>([]);
   const [attachments, setAttachments] = useState<AttachmentQueueEntry[]>([]);
+  const [outbox, setOutbox] = useState<OutboxEntry[]>([]);
   const [queueSummary, setQueueSummary] =
     useState<SyncQueueSummary>(EMPTY_QUEUE_SUMMARY);
   const [syncState, setSyncState] = useState<WorkspaceSyncState | null>(null);
@@ -144,16 +129,18 @@ export function OfflineSyncCenter() {
   const [clearConfirmation, setClearConfirmation] = useState("");
 
   const loadContext = useCallback(async () => {
+    setLoading(true);
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
-        browserApiClient.request<{ workspaces: Workspace[] }>(
+        request<{ workspaces: Workspace[] }>(
           "/api/v1/workspaces",
         ),
-        browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
+        request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(workspaceResult.workspaces);
       setDevices(deviceResult.devices);
+      setAccessIssue(null);
       setWorkspaceId((current) =>
         workspaceResult.workspaces.some((item) => item.id === current)
           ? current
@@ -166,9 +153,17 @@ export function OfflineSyncCenter() {
           : "没有找到当前设备，无法安全同步。",
       );
     } catch (error) {
+      setAccessIssue(
+        error instanceof LogionApiError &&
+        (error.status === 401 || error.status === 403)
+          ? "permission"
+          : "error",
+      );
       setStatus(userMessage(error));
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [request]);
 
   useEffect(() => {
     const update = () => setConnection(currentConnection());
@@ -190,7 +185,7 @@ export function OfflineSyncCenter() {
     if (current?.bootstrap_state === "ready" && current.device_id === deviceId)
       return;
     const repository = new BootstrapRepository(db, {}, localVault);
-    const first = await browserApiClient.request<unknown>(
+    const first = await request<unknown>(
       `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
       {
         method: "POST",
@@ -218,7 +213,7 @@ export function OfflineSyncCenter() {
       device_id: deviceId,
     });
     for (let index = 1; index < manifest.chunk_count; index += 1) {
-      const chunk = await browserApiClient.request<unknown>(
+      const chunk = await request<unknown>(
         `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
         {
           method: "POST",
@@ -269,6 +264,7 @@ export function OfflineSyncCenter() {
         ),
     );
     setQueueSummary(summarizeSyncQueue(outbox));
+    setOutbox(outbox);
     setSyncState(currentSyncState ?? null);
   }
 
@@ -307,6 +303,7 @@ export function OfflineSyncCenter() {
     lockVault();
     setConflicts([]);
     setAttachments([]);
+    setOutbox([]);
     setQueueSummary(EMPTY_QUEUE_SUMMARY);
     setSyncState(null);
     setMergeConflictId(null);
@@ -322,6 +319,7 @@ export function OfflineSyncCenter() {
       await clearLocalData();
       setConflicts([]);
       setAttachments([]);
+      setOutbox([]);
       setQueueSummary(EMPTY_QUEUE_SUMMARY);
       setSyncState(null);
       setMergeConflictId(null);
@@ -337,9 +335,10 @@ export function OfflineSyncCenter() {
     const db = database.current;
     const localVault = vault.current;
     if (db === null || localVault === null || !workspaceId || !deviceId) return;
+    setSyncing(true);
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(db, transport(workspaceId), localVault).synchronize(
+      await new SyncClient(db, transport(request, workspaceId), localVault).synchronize(
         workspaceId,
         deviceId,
       );
@@ -348,6 +347,7 @@ export function OfflineSyncCenter() {
       setStatus(userMessage(error));
     } finally {
       await refresh(db, localVault);
+      setSyncing(false);
     }
   }
 
@@ -442,6 +442,23 @@ export function OfflineSyncCenter() {
     }
   }
 
+  async function dismiss(view: ConflictView) {
+    const db = database.current;
+    const localVault = vault.current;
+    if (db === null || localVault === null) return;
+    try {
+      await new ConflictRepository(db, localVault).dismiss(
+        workspaceId,
+        view.conflict.conflict_id,
+      );
+      setStatus("冲突已暂不处理；本地版本与服务器版本均未被覆盖。 ");
+      await refresh(db, localVault);
+    } catch (error) {
+      setStatus(userMessage(error));
+      await refresh(db, localVault);
+    }
+  }
+
   async function upload(attachment: AttachmentQueueEntry) {
     const db = database.current;
     if (db === null) return;
@@ -463,366 +480,48 @@ export function OfflineSyncCenter() {
   }
 
   return (
-    <section aria-label="同步状态" className="sync-grid">
-      <div className="product-metric-grid sync-wide-card">
-        <ProductMetric
-          label="连接状态"
-          value={connection === "online" ? "在线" : "离线"}
-          detail="离线编辑仍保存在本机"
-          tone={connection === "online" ? "good" : "warn"}
-        />
-        <ProductMetric
-          label="本地资料"
-          value={unlocked ? "已解锁" : "已锁定"}
-          detail="端侧保险箱"
-          tone={unlocked ? "good" : "default"}
-        />
-        <ProductMetric
-          label="待处理冲突"
-          value={conflicts.length}
-          detail="不会静默覆盖"
-          tone={conflicts.length ? "bad" : "good"}
-        />
-        <ProductMetric
-          label="同步队列"
-          value={queueSummary.total}
-          detail={`${queueSummary.pending} 待推送 · ${queueSummary.blocked + queueSummary.isolated} 需诊断`}
-          tone={queueSummary.blocked || queueSummary.isolated ? "warn" : "info"}
-        />
-        <ProductMetric
-          label="附件队列"
-          value={attachments.length}
-          detail="上传后校验哈希"
-          tone={attachments.length ? "info" : "default"}
-        />
-      </div>
-      <article className="settings-card sync-status-card">
-        <div>
-          <p className="eyebrow">Connection</p>
-          <h2>{connection === "online" ? "已连接" : "离线工作中"}</h2>
-        </div>
-        <span
-          className={`status-orb status-${connection}`}
-          aria-hidden="true"
-        />
-        <ProductTag tone={connection === "online" ? "good" : "warn"}>
-          {connection === "online" ? "网络可用" : "本地优先"}
-        </ProductTag>
-        <p aria-live="polite">{status}</p>
-        {unlocked ? (
-          <button type="button" onClick={() => void synchronize()}>
-            立即同步
-          </button>
-        ) : null}
-      </article>
-
-      <article className="settings-card sync-wide-card sync-topology-card">
-        <div className="sync-card-heading">
-          <div>
-            <p className="eyebrow">Sync topology</p>
-            <h2>真实同步拓扑与设备</h2>
-          </div>
-          <ProductTag tone={connection === "online" ? "good" : "warn"}>
-            {connection === "online" ? "服务器可连接" : "服务器不可连接"}
-          </ProductTag>
-        </div>
-        <div className="sync-topology-live" aria-label="当前同步拓扑">
-          <div>
-            <strong>本地加密仓库</strong>
-            <small>{unlocked ? "当前已解锁" : "当前已锁定"}</small>
-          </div>
-          <span aria-hidden="true">⇄</span>
-          <div>
-            <strong>Logion sync-v1</strong>
-            <small>
-              {syncState?.last_sync_at
-                ? `上次同步 ${new Date(syncState.last_sync_at).toLocaleString()}`
-                : "尚无成功同步记录"}
-            </small>
-          </div>
-          <span aria-hidden="true">⇄</span>
-          <div>
-            <strong>{devices.length} 台已登记设备</strong>
-            <small>
-              {devices.filter((device) => device.revoked_at === null).length}{" "}
-              台未撤销
-            </small>
-          </div>
-        </div>
-        {devices.length ? (
-          <ul className="sync-device-list" aria-label="已登记设备">
-            {devices.map((device) => (
-              <li key={device.id}>
-                <span>
-                  <strong>{device.name}</strong>
-                  <small>
-                    {device.platform} · 最近活动{" "}
-                    {new Date(device.last_seen_at).toLocaleString()}
-                  </small>
-                </span>
-                <ProductTag
-                  tone={
-                    device.revoked_at
-                      ? "bad"
-                      : device.current
-                        ? "good"
-                        : "default"
-                  }
-                >
-                  {device.revoked_at
-                    ? "已撤销"
-                    : device.current
-                      ? "当前设备"
-                      : "已授权"}
-                </ProductTag>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ProductEmptyState
-            title="没有可展示的设备"
-            description="设备接口未返回登记记录，当前无法建立同步拓扑。"
-          />
-        )}
-        <div className="sync-queue-diagnostics" aria-label="同步队列诊断">
-          <span>待推送 {queueSummary.pending}</span>
-          <span>传输中 {queueSummary.in_flight}</span>
-          <span>冲突 {queueSummary.conflict}</span>
-          <span>阻塞 {queueSummary.blocked}</span>
-          <span>隔离 {queueSummary.isolated}</span>
-        </div>
-      </article>
-
-      <article className="settings-card">
-        <p className="eyebrow">Local vault</p>
-        <h2>{unlocked ? "本地资料已解锁" : "本地资料已锁定"}</h2>
-        <label>
-          工作区
-          <select
-            value={workspaceId}
-            disabled={unlocked}
-            onChange={(event) => setWorkspaceId(event.target.value)}
-          >
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {unlocked ? (
-          <button type="button" onClick={lock}>
-            立即锁定
-          </button>
-        ) : (
-          <form onSubmit={(event) => void unlock(event)}>
-            <label>
-              本地解锁口令
-              <input
-                name="passphrase"
-                type="password"
-                minLength={12}
-                required
-              />
-            </label>
-            <button type="submit" disabled={!workspaceId || !deviceId}>
-              解锁
-            </button>
-          </form>
-        )}
-      </article>
-
-      <article className="settings-card sync-wide-card">
-        <div className="sync-card-heading">
-          <div>
-            <p className="eyebrow">Review queue</p>
-            <h2>待处理冲突</h2>
-          </div>
-          <span className="count-badge">{conflicts.length}</span>
-        </div>
-        {!unlocked ? <p>解锁后才能查看加密的本地与服务器版本。</p> : null}
-        {unlocked && conflicts.length === 0 ? (
-          <ProductEmptyState
-            icon="✓"
-            title="没有待处理冲突"
-            description="当前设备与服务器之间没有需要人工选择的版本。"
-          />
-        ) : null}
-        {conflicts.map((view) => (
-          <section key={view.conflict.conflict_id} className="settings-card">
-            <h3>{view.conflict.entity_type} 冲突</h3>
-            <p>
-              当前设备修改：版本 {view.conflict.base_version}；服务器版本：
-              {view.conflict.remote_version}；发现时间：
-              {new Date(view.conflict.created_at).toLocaleString()}
-            </p>
-            {view.conflict.status === "resolving" ? (
-              <p role="status">解决方案正在等待服务器确认。</p>
-            ) : (
-              <>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>字段</th>
-                      <th>当前设备</th>
-                      <th>服务器</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fieldDiff(view).map((item) => (
-                      <tr key={item.field}>
-                        <th>{item.field}</th>
-                        <td>{item.local}</td>
-                        <td>{item.remote}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div>
-                  {view.conflict.resolution_options.includes("keep_local") ? (
-                    <button
-                      type="button"
-                      onClick={() => void resolve(view, "keep_local")}
-                    >
-                      保留当前设备版本
-                    </button>
-                  ) : null}
-                  {view.conflict.resolution_options.includes("keep_remote") ? (
-                    <button
-                      type="button"
-                      onClick={() => void resolve(view, "keep_remote")}
-                    >
-                      采用服务器版本
-                    </button>
-                  ) : null}
-                  {view.conflict.resolution_options.includes("merge") ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMergeConflictId(view.conflict.conflict_id);
-                        setMergeDraft(JSON.stringify(view.local, null, 2));
-                      }}
-                    >
-                      编辑合并版本
-                    </button>
-                  ) : null}
-                  {["note", "resource"].includes(view.conflict.entity_type) ? (
-                    <button type="button" onClick={() => void copyLocal(view)}>
-                      复制本地版本为新对象
-                    </button>
-                  ) : null}
-                  {view.conflict.resolution_options.includes("dismiss") ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const db = database.current;
-                        const localVault = vault.current;
-                        if (db && localVault)
-                          void new ConflictRepository(db, localVault)
-                            .dismiss(workspaceId, view.conflict.conflict_id)
-                            .then(() => refresh(db, localVault));
-                      }}
-                    >
-                      暂不处理
-                    </button>
-                  ) : null}
-                </div>
-                {mergeConflictId === view.conflict.conflict_id ? (
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void resolve(view, "merge");
-                    }}
-                  >
-                    <label>
-                      合并后的 JSON 对象
-                      <textarea
-                        value={mergeDraft}
-                        onChange={(event) => setMergeDraft(event.target.value)}
-                        rows={12}
-                      />
-                    </label>
-                    <button type="submit">提交合并版本</button>
-                    <button
-                      type="button"
-                      onClick={() => setMergeConflictId(null)}
-                    >
-                      取消
-                    </button>
-                  </form>
-                ) : null}
-              </>
-            )}
-          </section>
-        ))}
-      </article>
-
-      <article className="settings-card sync-wide-card">
-        <div className="sync-card-heading">
-          <div>
-            <p className="eyebrow">Attachments</p>
-            <h2>附件上传队列</h2>
-          </div>
-          <span className="count-badge">{attachments.length}</span>
-        </div>
-        {attachments.length === 0 ? (
-          <ProductEmptyState
-            icon="✓"
-            title="附件队列为空"
-            description="等待上传或重试的附件会出现在这里。"
-          />
-        ) : null}
-        <ul>
-          {attachments.map((attachment) => (
-            <li key={attachment.attachment_id}>
-              <strong>{attachment.filename}</strong> — {attachment.state} —{" "}
-              {attachment.byte_size} bytes
-              {attachment.state === "pending_upload" ||
-              attachment.state === "failed" ? (
-                <button type="button" onClick={() => void upload(attachment)}>
-                  {attachment.state === "failed" ? "重试" : "上传并验证"}
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </article>
-
-      <article className="settings-card sync-wide-card device-clear-card">
-        <div>
-          <p className="eyebrow">Device data</p>
-          <h2>清除此设备数据</h2>
-          <p>
-            删除当前账户保存在此浏览器中的保险箱、离线副本、待同步操作、冲突、附件队列和同步游标。服务器数据不会删除，其他设备不受影响。
-          </p>
-        </div>
-        <form className="device-clear-form" onSubmit={clearThisDevice}>
-          <label>
-            输入 <code>{CLEAR_DEVICE_CONFIRMATION}</code> 确认
-            <input
-              value={clearConfirmation}
-              onChange={(event) => setClearConfirmation(event.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </label>
-          <button
-            className="danger-button"
-            type="submit"
-            disabled={
-              clearConfirmation !== CLEAR_DEVICE_CONFIRMATION ||
-              vaultPhase === "clearing"
-            }
-          >
-            {vaultPhase === "clearing" ? "正在清除…" : "清除此设备数据"}
-          </button>
-        </form>
-      </article>
-
-      <aside className="residual-data-warning sync-wide-card" role="note">
-        <strong>共享设备提示：</strong>
-        退出账号不会自动承诺清除浏览器中的全部离线副本。在公共设备上请使用“清除此设备数据”；设备被撤销后，本地库保持锁定，直到明确清除。
-      </aside>
-    </section>
+    <SyncWorkbench
+      accessIssue={accessIssue}
+      attachments={attachments}
+      clearConfirmation={clearConfirmation}
+      connection={connection}
+      conflicts={conflicts}
+      deviceId={deviceId}
+      devices={devices}
+      lock={lock}
+      loading={loading}
+      mergeConflictId={mergeConflictId}
+      mergeDraft={mergeDraft}
+      onClearConfirmationChange={setClearConfirmation}
+      onClearDevice={clearThisDevice}
+      onCopyLocal={(view) => void copyLocal(view)}
+      onDismiss={(view) => void dismiss(view)}
+      onMergeDraftChange={setMergeDraft}
+      onMergeOpen={(view) => {
+        setMergeConflictId(view.conflict.conflict_id);
+        setMergeDraft(JSON.stringify(view.local, null, 2));
+      }}
+      onMergeOpenChange={(open) => {
+        if (!open) {
+          setMergeConflictId(null);
+          setMergeDraft("");
+        }
+      }}
+      onResolve={(view, resolution) => void resolve(view, resolution)}
+      onSynchronize={() => void synchronize()}
+      onUnlock={(event) => void unlock(event)}
+      onUpload={(attachment) => void upload(attachment)}
+      onWorkspaceChange={setWorkspaceId}
+      onReload={() => void loadContext()}
+      outbox={outbox}
+      queueSummary={queueSummary}
+      status={status}
+      syncState={syncState}
+      syncing={syncing}
+      unlocked={unlocked}
+      vaultPhase={vaultPhase}
+      workspaceId={workspaceId}
+      workspaces={workspaces}
+    />
   );
 }

@@ -1,21 +1,27 @@
 "use client";
 
 import type { components } from "@logion/contracts";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
+import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 import {
-  ProductEmptyState,
-  ProductHero,
-  ProductMetric,
-  ProductPageHeader,
-  ProductPanel,
-  ProductTag,
-} from "@/components/product/product-ui";
-import { browserApiClient, LogionApiError } from "@/lib/api/client";
+  InspectorSection,
+  WorkbenchActionBar,
+  WorkbenchContextBar,
+  WorkbenchFrame,
+  WorkbenchHeader,
+  WorkbenchToolbar,
+} from "@/components/product/workbench";
+import { LogionApiError } from "@/lib/api/client";
+
+import styles from "./audit-workbench.module.css";
+import { useAuditController } from "./use-audit-controller";
 
 type AuditEvent = components["schemas"]["AuditEventResponse"];
-type AuditResultFilter = "all" | "success" | "other";
+type AuditPage = components["schemas"]["AuditEventPageResponse"];
+export type AuditResultFilter = "all" | "success" | "other";
+type LoadState = "loading" | "ready" | "error";
 
 export function filterAuditEvents(
   events: readonly AuditEvent[],
@@ -41,41 +47,75 @@ export function filterAuditEvents(
   });
 }
 
+function eventTone(event: AuditEvent): "good" | "warn" {
+  return event.result.toLocaleLowerCase() === "success" ? "good" : "warn";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof LogionApiError
+    ? `读取失败（请求编号：${error.requestId}）`
+    : "读取失败，请稍后重试。";
+}
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
 export function AuditLog() {
+  const { request } = useAuditController();
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState("正在读取审计记录…");
-  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
-    "loading",
-  );
+  const [loadState, setLoadState] = useState<LoadState>("loading");
   const [query, setQuery] = useState("");
   const [resultFilter, setResultFilter] = useState<AuditResultFilter>("all");
   const [targetType, setTargetType] = useState("all");
+  const requestVersion = useRef(0);
+
+  const load = useCallback(
+    async (cursor: string | null, append: boolean) => {
+      const version = ++requestVersion.current;
+      setLoadState("loading");
+      const query: Record<string, string> = { page_size: "50" };
+      if (cursor) query.cursor = cursor;
+      if (resultFilter === "success") query.result = "success";
+
+      try {
+        const result = await request<AuditPage>(
+          "/api/v1/audit/me",
+          { query },
+        );
+        if (version !== requestVersion.current) return;
+        const pageEvents = Array.isArray(result.events) ? result.events : [];
+        setEvents((current) =>
+          append ? [...current, ...pageEvents] : pageEvents,
+        );
+        setNextCursor(result.next_cursor ?? null);
+        setSelectedId((current) =>
+          append
+            ? current ?? pageEvents[0]?.id ?? null
+            : pageEvents[0]?.id ?? null,
+        );
+        setStatus("审计记录已更新。");
+        setLoadState("ready");
+      } catch (error) {
+        if (version !== requestVersion.current) return;
+        setStatus(errorMessage(error));
+        setLoadState("error");
+      }
+    },
+    [request, resultFilter],
+  );
 
   useEffect(() => {
-    queueMicrotask(
-      () =>
-        void browserApiClient
-          .request<{ events: AuditEvent[] }>("/api/v1/audit/me")
-          .then((result) => {
-            setEvents(Array.isArray(result.events) ? result.events : []);
-            setStatus("审计记录已更新。");
-            setLoadState("ready");
-          })
-          .catch((error: unknown) => {
-            setStatus(
-              error instanceof LogionApiError
-                ? `读取失败（请求编号：${error.requestId}）`
-                : "读取失败。",
-            );
-            setLoadState("error");
-          }),
-    );
-  }, []);
+    queueMicrotask(() => void load(null, false));
+  }, [load]);
 
   const targetTypes = useMemo(
     () =>
-      [...new Set(events.map((event) => event.target_type))].sort(
-        (left, right) => left.localeCompare(right),
+      [...new Set(events.map((event) => event.target_type))].sort((left, right) =>
+        left.localeCompare(right),
       ),
     [events],
   );
@@ -83,209 +123,346 @@ export function AuditLog() {
     () => filterAuditEvents(events, query, resultFilter, targetType),
     [events, query, resultFilter, targetType],
   );
+  const selectedEvent =
+    filteredEvents.find((event) => event.id === selectedId) ??
+    filteredEvents[0] ??
+    null;
   const successfulEvents = events.filter(
     (event) => event.result.toLocaleLowerCase() === "success",
   ).length;
   const otherEvents = events.length - successfulEvents;
-  const latestEvent = events[0];
   const hasActiveFilters =
     query.trim().length > 0 || resultFilter !== "all" || targetType !== "all";
+  const primaryAction = hasActiveFilters ? (
+    <button
+      className={styles.primaryButton}
+      data-testid="audit-clear-filters"
+      type="button"
+      onClick={() => {
+        setQuery("");
+        setResultFilter("all");
+        setTargetType("all");
+      }}
+    >
+      清除筛选
+    </button>
+  ) : nextCursor ? (
+    <button
+      className={styles.primaryButton}
+      type="button"
+      onClick={() => void load(nextCursor, true)}
+    >
+      加载更多
+    </button>
+  ) : undefined;
 
   return (
-    <main id="main-content" className="settings-page">
-      <ProductPageHeader
-        eyebrow="AUDIT · IDENTITY ACTIVITY"
-        title="把安全事件变成可筛选、可解释的时间线"
-        description={
-          <>
-            <p>默认展示人能读懂的事件摘要；原始对象类型和结果仍可展开核对。</p>
-            <p className="product-page-status" aria-live="polite">
-              {status}
-            </p>
-          </>
-        }
-      />
-      <ProductHero
-        badge={
-          <ProductTag tone={otherEvents ? "warn" : "good"}>
-            {otherEvents ? `${otherEvents} 条需留意` : "未发现异常结果"}
-          </ProductTag>
-        }
-        title={
-          latestEvent
-            ? `最近活动：${latestEvent.event_type}`
-            : "等待第一条身份活动记录"
-        }
-        progressLabel={events.length ? "成功事件占比" : undefined}
-        progressValue={
-          events.length ? (successfulEvents / events.length) * 100 : 0
-        }
-      >
-        审计页只展示与你身份相关的最小必要记录，便于核对时间、结果和目标类型。
-      </ProductHero>
-      <div className="product-metric-grid product-metric-grid-compact">
-        <ProductMetric
-          label="全部事件"
-          value={events.length}
-          detail="当前可见范围"
-          tone="info"
-        />
-        <ProductMetric
-          label="成功"
-          value={successfulEvents}
-          detail="正常完成"
-          tone="good"
-        />
-        <ProductMetric
-          label="其他结果"
-          value={otherEvents}
-          detail="建议逐项核对"
-          tone={otherEvents ? "warn" : "default"}
-        />
-      </div>
-      <section
-        className="product-toolbar product-audit-toolbar"
-        aria-label="审计记录筛选"
-      >
-        <label className="product-search-field" htmlFor="audit-search">
-          <AppIcon name="search" size={17} />
-          <input
-            id="audit-search"
-            type="search"
-            value={query}
-            placeholder="搜索事件、结果或目标类型"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <div className="product-segmented" aria-label="事件结果" role="group">
-          {(
-            [
-              ["all", "全部"],
-              ["success", "成功"],
-              ["other", "其他"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              aria-pressed={resultFilter === value}
-              className={resultFilter === value ? "active" : ""}
-              key={value}
-              type="button"
-              onClick={() => setResultFilter(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <label className="product-filter-field" htmlFor="audit-target-type">
-          <span>目标类型</span>
-          <span className="product-filter-select">
-            <select
-              id="audit-target-type"
-              value={targetType}
-              onChange={(event) => setTargetType(event.target.value)}
-            >
-              <option value="all">全部类型</option>
-              {targetTypes.map((value) => (
-                <option value={value} key={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-            <AppIcon name="chevron-down" size={15} />
-          </span>
-        </label>
-      </section>
-      <ProductPanel
-        title="我的身份活动"
-        description={
-          hasActiveFilters
-            ? `已从 ${events.length} 条事件中筛选出 ${filteredEvents.length} 条。`
-            : "按服务器返回顺序展示事件类型、时间、结果与目标。"
-        }
-        aside={
-          <ProductTag tone={hasActiveFilters ? "info" : "default"}>
-            {filteredEvents.length} / {events.length} 条
-          </ProductTag>
-        }
-      >
-        <ol className="product-audit-timeline">
-          {filteredEvents.map((event) => {
-            const isSuccessful = event.result.toLocaleLowerCase() === "success";
-            return (
-              <li
-                key={event.id}
-                className={isSuccessful ? "is-success" : "is-attention"}
-              >
-                <span className="product-audit-marker" aria-hidden="true">
-                  <AppIcon name={isSuccessful ? "shield" : "bell"} size={16} />
-                </span>
-                <span className="product-audit-event-copy">
-                  <span className="product-audit-event-head">
-                    <strong>{event.event_type}</strong>
-                    <ProductTag tone={isSuccessful ? "good" : "warn"}>
-                      {event.result}
-                    </ProductTag>
-                  </span>
-                  <small>{new Date(event.occurred_at).toLocaleString()}</small>
-                </span>
-                <span className="product-audit-target">
-                  <small>目标类型</small>
-                  <code>{event.target_type}</code>
-                  {event.target_id ? (
-                    <>
-                      <small>目标 ID</small>
-                      <code>{event.target_id}</code>
-                    </>
-                  ) : null}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-        {loadState === "loading" ? (
-          <ProductEmptyState
-            icon="⌁"
-            title="正在读取审计记录"
-            description="正在建立与你身份相关的安全活动时间线。"
-          />
-        ) : null}
-        {loadState === "error" ? (
-          <ProductEmptyState
-            icon="?"
-            title="暂时无法读取审计记录"
-            description={status}
-          />
-        ) : null}
-        {loadState === "ready" && events.length === 0 ? (
-          <ProductEmptyState
-            icon="✓"
-            title="暂无可显示的记录"
-            description="重要的登录与身份安全活动会出现在这里。"
-          />
-        ) : null}
-        {loadState === "ready" &&
-        events.length > 0 &&
-        filteredEvents.length === 0 ? (
-          <ProductEmptyState
-            icon="⌕"
-            title="没有符合条件的事件"
-            description="尝试调整关键词、事件结果或目标类型。"
-            action={
-              <button
-                className="secondary-action"
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setResultFilter("all");
-                  setTargetType("all");
-                }}
-              >
-                清除筛选
-              </button>
+    <main id="main-content" className={styles.root}>
+      <WorkbenchFrame
+        label="审计时间线工作台"
+        header={
+          <WorkbenchHeader
+            eyebrow="AUDIT · IDENTITY ACTIVITY"
+            title="审计时间线"
+            description="筛选与你身份相关的活动，在当前工作区核对结果、目标和事件追踪信息。"
+            actions={
+              <ProductTag tone={otherEvents ? "warn" : "good"}>
+                {otherEvents ? `${otherEvents} 条需留意` : "未发现异常结果"}
+              </ProductTag>
             }
           />
-        ) : null}
-      </ProductPanel>
+        }
+        context={
+          <WorkbenchContextBar
+            context={{
+              permission: { label: "仅本人身份事件", tone: "good" },
+              sync: { label: "只读审计流", tone: "good" },
+              vault: { label: "服务器记录" },
+            }}
+          />
+        }
+        toolbar={
+          <WorkbenchToolbar label="审计工具">
+            <span className={styles.toolbarStatus} aria-live="polite">
+              {status}
+            </span>
+          </WorkbenchToolbar>
+        }
+        masterLabel="审计筛选"
+        master={
+          <aside className={styles.masterPane} data-testid="audit-filters">
+            <div className={styles.paneHeading}>
+              <span className={styles.eyebrow}>FILTER COMMAND BAR</span>
+              <strong>审计筛选</strong>
+            </div>
+            <label className={styles.searchField} htmlFor="audit-search">
+              <AppIcon name="search" size={15} />
+              <span className={styles.srOnly}>搜索事件</span>
+              <input
+                id="audit-search"
+                type="search"
+                value={query}
+                placeholder="事件、结果或目标"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <fieldset className={styles.filterBlock}>
+              <legend>结果</legend>
+              <div
+                className={styles.filterOptions}
+                role="group"
+                aria-label="事件结果"
+              >
+                {(["all", "success", "other"] as const).map((value) => (
+                  <button
+                    className={
+                      resultFilter === value
+                        ? styles.filterButtonActive
+                        : styles.filterButton
+                    }
+                    aria-pressed={resultFilter === value}
+                    key={value}
+                    type="button"
+                    onClick={() => setResultFilter(value)}
+                  >
+                    {value === "all"
+                      ? "全部"
+                      : value === "success"
+                        ? "成功"
+                        : "需留意"}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className={styles.filterBlock}>
+              <legend>目标类型</legend>
+              <div
+                className={styles.filterOptions}
+                role="group"
+                aria-label="目标类型"
+              >
+                <button
+                  className={
+                    targetType === "all"
+                      ? styles.filterButtonActive
+                      : styles.filterButton
+                  }
+                  aria-pressed={targetType === "all"}
+                  type="button"
+                  onClick={() => setTargetType("all")}
+                >
+                  全部类型
+                </button>
+                {targetTypes.map((value) => (
+                  <button
+                    className={
+                      targetType === value
+                        ? styles.filterButtonActive
+                        : styles.filterButton
+                    }
+                    aria-pressed={targetType === value}
+                    key={value}
+                    type="button"
+                    onClick={() => setTargetType(value)}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div className={styles.filterHint}>
+              个人审计只返回身份相关事件；筛选不会扩大权限范围。
+            </div>
+          </aside>
+        }
+        mainLabel="活动时间线"
+        main={
+          <div className={styles.mainPane}>
+            <WorkbenchActionBar
+              secondary={
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  onClick={() => void load(null, false)}
+                >
+                  <AppIcon name="refresh" size={14} />
+                  刷新
+                </button>
+              }
+              primary={primaryAction}
+            />
+            <section className={styles.timelineSection} data-testid="audit-timeline">
+              <header className={styles.sectionHeader}>
+                <div>
+                  <span className={styles.eyebrow}>IDENTITY EVENT STREAM</span>
+                  <h2>活动时间线</h2>
+                </div>
+                <span className={styles.resultMeta}>
+                  {filteredEvents.length} / {events.length} 条
+                </span>
+              </header>
+              {loadState === "error" ? (
+                <ProductEmptyState
+                  action={
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={() => void load(null, false)}
+                    >
+                      重新读取
+                    </button>
+                  }
+                  description={status}
+                  icon="?"
+                  title="审计记录暂时不可用"
+                />
+              ) : null}
+              {loadState === "loading" && events.length === 0 ? (
+                <ProductEmptyState
+                  description="正在建立与你身份相关的只读时间线。"
+                  icon="⌁"
+                  title="正在读取审计记录"
+                />
+              ) : null}
+              {loadState === "ready" && events.length === 0 ? (
+                <ProductEmptyState
+                  description="重要的登录与身份安全活动会出现在这里。"
+                  icon="✓"
+                  title="暂无可显示的记录"
+                />
+              ) : null}
+              {loadState === "ready" &&
+              events.length > 0 &&
+              filteredEvents.length === 0 ? (
+                <ProductEmptyState
+                  action={
+                    <button
+                      className={styles.secondaryButton}
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        setResultFilter("all");
+                        setTargetType("all");
+                      }}
+                    >
+                      清除筛选
+                    </button>
+                  }
+                  description="尝试调整关键词、事件结果或目标类型。"
+                  icon="⌕"
+                  title="没有符合条件的事件"
+                />
+              ) : null}
+              {filteredEvents.length > 0 ? (
+                <ol className={styles.timeline}>
+                  {filteredEvents.map((event) => {
+                    const tone = eventTone(event);
+                    return (
+                      <li key={event.id}>
+                        <button
+                          aria-pressed={selectedEvent?.id === event.id}
+                          className={
+                            selectedEvent?.id === event.id
+                              ? styles.eventRowActive
+                              : styles.eventRow
+                          }
+                          type="button"
+                          onClick={() => setSelectedId(event.id)}
+                        >
+                          <span className={styles.eventRail} aria-hidden="true">
+                            <AppIcon
+                              name={tone === "good" ? "shield" : "bell"}
+                              size={15}
+                            />
+                          </span>
+                          <span className={styles.eventContent}>
+                            <span className={styles.eventHead}>
+                              <strong>{event.event_type}</strong>
+                              <ProductTag tone={tone}>{event.result}</ProductTag>
+                            </span>
+                            <small>{formatDate(event.occurred_at)}</small>
+                          </span>
+                          <span className={styles.eventTarget}>
+                            <small>{event.target_type}</small>
+                            {event.target_id ? (
+                              <code>{event.target_id}</code>
+                            ) : (
+                              <span>无目标 ID</span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : null}
+            </section>
+          </div>
+        }
+        inspectorLabel="事件详情"
+        inspector={
+          <aside className={styles.inspectorPane} data-testid="audit-event-detail">
+            <InspectorSection title="事件详情">
+              {selectedEvent ? (
+                <dl className={styles.kvList}>
+                  <div>
+                    <dt>事件</dt>
+                    <dd>{selectedEvent.event_type}</dd>
+                  </div>
+                  <div>
+                    <dt>结果</dt>
+                    <dd>
+                      <ProductTag tone={eventTone(selectedEvent)}>
+                        {selectedEvent.result}
+                      </ProductTag>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>发生时间</dt>
+                    <dd>{formatDate(selectedEvent.occurred_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>目标类型</dt>
+                    <dd>{selectedEvent.target_type}</dd>
+                  </div>
+                  <div>
+                    <dt>目标 ID</dt>
+                    <dd>{selectedEvent.target_id ?? "无"}</dd>
+                  </div>
+                  <div>
+                    <dt>事件 ID</dt>
+                    <dd>
+                      <code>{selectedEvent.id}</code>
+                    </dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className={styles.inspectorNotice}>
+                  从时间线选择一条事件查看完整字段。
+                </p>
+              )}
+            </InspectorSection>
+            <InspectorSection title="解释与追踪">
+              {selectedEvent && eventTone(selectedEvent) === "warn" ? (
+                <p className={styles.stateWarn}>
+                  该事件未以 success 结果完成，请核对结果、目标与事件 ID。读取失败时，API 会另外提供 request ID。
+                </p>
+              ) : (
+                <p className={styles.muted}>
+                  审计事件只读展示；事件 ID 用于定位服务器记录，不会扩大当前身份的可见范围。
+                </p>
+              )}
+            </InspectorSection>
+            <InspectorSection title="当前查询">
+              <p className={styles.muted} aria-live="polite">
+                {hasActiveFilters
+                  ? `已筛选 ${filteredEvents.length} 条事件。`
+                  : `当前显示 ${events.length} 条事件。`}
+              </p>
+            </InspectorSection>
+          </aside>
+        }
+      />
     </main>
   );
 }
