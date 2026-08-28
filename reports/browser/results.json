@@ -1,0 +1,1902 @@
+{
+  "config": {
+    "argv": [
+      "E:\\node\\node.exe",
+      "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--project=authenticated-chromium"
+    ],
+    "configFile": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\playwright.config.ts",
+    "rootDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\tests\\browser\\global-setup.ts",
+    "globalTeardown": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\tests\\browser\\global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/reports/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "public-chromium",
+        "name": "public-chromium",
+        "testDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:public-accessibility|public-flows-conformance|pwa-offline)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/reports/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "public-firefox",
+        "name": "public-firefox",
+        "testDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:public-accessibility|public-flows-conformance|pwa-offline)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/reports/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "public-webkit",
+        "name": "public-webkit",
+        "testDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:public-accessibility|public-flows-conformance|pwa-offline)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/reports/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "public-mobile-chrome",
+        "name": "public-mobile-chrome",
+        "testDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:public-accessibility|public-flows-conformance|pwa-offline)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/reports/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "public-mobile-safari",
+        "name": "public-mobile-safari",
+        "testDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:public-accessibility|public-flows-conformance|pwa-offline)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/reports/browser/artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "authenticated-chromium",
+        "name": "authenticated-chromium",
+        "testDir": "C:/Users/Administrator/.codex/worktrees/25db/ai_study/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:authenticated-accessibility|authenticated-shell|auth-public-flow|persona-system|prototype-productization|integration-hub|today-workbench|search-workbench|records-workbench|planning-workbench|review-workbench|exam-workbench|self-study-workbench|research-workbench|collaboration-workbench|templates-workbench)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "reports/browser/results.json"
+        }
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "reports/browser/html",
+          "open": "never"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "auth-public-flow.spec.ts",
+      "file": "auth-public-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "formal auth and onboarding public flows",
+          "file": "auth-public-flow.spec.ts",
+          "line": 18,
+          "column": 6,
+          "specs": [
+            {
+              "title": "onboarding exposes its approved layout at all product viewports",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3016,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:57:46.882Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "172bd2be9ef79242071c-8cfee43827338707f6b2",
+              "file": "auth-public-flow.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "completes the formal seven-step onboarding with real services",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2644,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:57:50.013Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "172bd2be9ef79242071c-f3648a0a83a68e82a864",
+              "file": "auth-public-flow.spec.ts",
+              "line": 42,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "authenticated-accessibility.spec.ts",
+      "file": "authenticated-accessibility.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "sample workbenches pass Axe at every product viewport",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24360,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T10:57:52.723Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "dff83ccc2ade2d397fdf-d08c6a99c1012821be9c",
+          "file": "authenticated-accessibility.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "persona selection and settings expose keyboard and ARIA state",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2630,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T10:58:17.096Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "dff83ccc2ade2d397fdf-857b4bbf9303f4b7a6d8",
+          "file": "authenticated-accessibility.spec.ts",
+          "line": 30,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "authenticated-shell.spec.ts",
+      "file": "authenticated-shell.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "authenticated shell",
+          "file": "authenticated-shell.spec.ts",
+          "line": 39,
+          "column": 6,
+          "specs": [
+            {
+              "title": "workbenches have no WCAG violations or horizontal overflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 42770,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:58:19.762Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-b335afbb76e92081102b",
+              "file": "authenticated-shell.spec.ts",
+              "line": 40,
+              "column": 7
+            },
+            {
+              "title": "all authenticated routes fit every product breakpoint",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 300000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 44557,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:59:02.559Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-ff93e5677ea719c0b7f8",
+              "file": "authenticated-shell.spec.ts",
+              "line": 58,
+              "column": 7
+            },
+            {
+              "title": "Audit keeps its mobile primary action inside the viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1570,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:59:47.137Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-13e752d9a1713262cb0c",
+              "file": "authenticated-shell.spec.ts",
+              "line": 77,
+              "column": 7
+            },
+            {
+              "title": "Audit event rows meet WCAG contrast requirements",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2579,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:59:48.724Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-f721cf01388d19064e54",
+              "file": "authenticated-shell.spec.ts",
+              "line": 95,
+              "column": 7
+            },
+            {
+              "title": "theme preference persists across document navigation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1478,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:59:51.319Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-aa81bbd499e29c2a0962",
+              "file": "authenticated-shell.spec.ts",
+              "line": 107,
+              "column": 7
+            },
+            {
+              "title": "every authenticated route renders with complete light and dark tokens",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 23214,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T10:59:52.809Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-62ae855b3fc71549d28f",
+              "file": "authenticated-shell.spec.ts",
+              "line": 126,
+              "column": 7
+            },
+            {
+              "title": "command palette traps and restores keyboard focus",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1944,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:00:16.043Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-04720bb81ba43aa5b9d6",
+              "file": "authenticated-shell.spec.ts",
+              "line": 160,
+              "column": 7
+            },
+            {
+              "title": "global keyboard shortcuts and Escape restore their trigger focus",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1429,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:00:18.010Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-f24ba4fe28ce2422cb32",
+              "file": "authenticated-shell.spec.ts",
+              "line": 195,
+              "column": 7
+            },
+            {
+              "title": "reduced motion removes non-essential motion on every authenticated route",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 180000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9212,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:00:19.457Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-3c847ac920613bc6cb82",
+              "file": "authenticated-shell.spec.ts",
+              "line": 228,
+              "column": 7
+            },
+            {
+              "title": "command palette opens the real capture workflow",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8518,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:00:28.685Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-df44a91638ede016c81c",
+              "file": "authenticated-shell.spec.ts",
+              "line": 243,
+              "column": 7
+            },
+            {
+              "title": "operational tools expose real Vault gates and restore focus",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1889,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:00:37.442Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-1dd5801f60acfb73d5a2",
+              "file": "authenticated-shell.spec.ts",
+              "line": 258,
+              "column": 7
+            },
+            {
+              "title": "device data clearing is explicit and scoped",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1275,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:00:39.488Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "9d99c4cac9c01259dbdf-a36063e7de6a81a44fee",
+              "file": "authenticated-shell.spec.ts",
+              "line": 299,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "collaboration-workbench.spec.ts",
+      "file": "collaboration-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Collaboration completes shared review, feedback and immutable snapshot workflow",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 28097,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:00:40.783Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "fb500837904a74dd0004-c04798bf1479df63cc80",
+          "file": "collaboration-workbench.spec.ts",
+          "line": 68,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "exam-workbench.spec.ts",
+      "file": "exam-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Exam completes the protected planning and mock-exam workflow",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18771,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:01:08.899Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "296f2229f8f252355e57-7e123a1b2de292e0e857",
+          "file": "exam-workbench.spec.ts",
+          "line": 23,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "integration-hub.spec.ts",
+      "file": "integration-hub.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "interoperability hub real flows",
+          "file": "integration-hub.spec.ts",
+          "line": 7,
+          "column": 6,
+          "specs": [
+            {
+              "title": "keeps discovery persona-aware while allowing direct access",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3958,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:27.689Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d1917405441bb78152bd-2350e20a26d7ad74c205",
+              "file": "integration-hub.spec.ts",
+              "line": 10,
+              "column": 7
+            },
+            {
+              "title": "creates, copies, closes and revokes a one-time Calendar URL",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3472,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:31.665Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d1917405441bb78152bd-0da36a57e93a91b5a049",
+              "file": "integration-hub.spec.ts",
+              "line": 48,
+              "column": 7
+            },
+            {
+              "title": "previews Markdown and commits only to the owned Private Space",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2328,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:35.152Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d1917405441bb78152bd-d5b8d05c8f5ab27e02c0",
+              "file": "integration-hub.spec.ts",
+              "line": 85,
+              "column": 7
+            },
+            {
+              "title": "surfaces the recent-auth gate, then downloads and verifies an export",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5449,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:37.493Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d1917405441bb78152bd-31a5edd075c59f12d363",
+              "file": "integration-hub.spec.ts",
+              "line": 105,
+              "column": 7
+            },
+            {
+              "title": "renders missing-context, API-error and unsupported boundaries honestly",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2200,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:42.959Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d1917405441bb78152bd-ffa92fc2e01e59074a34",
+              "file": "integration-hub.spec.ts",
+              "line": 217,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "persona-system.spec.ts",
+      "file": "persona-system.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "persona system",
+          "file": "persona-system.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "onboarding starts with a required persona selection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1522,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:45.184Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4df1ee5ffe07c01b5eb-6f4705ef17442ff0142d",
+              "file": "persona-system.spec.ts",
+              "line": 6,
+              "column": 7
+            },
+            {
+              "title": "sidebar shows only routes visible to the active persona",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1757,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:46.723Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4df1ee5ffe07c01b5eb-d17d1a5af26f674b3cd2",
+              "file": "persona-system.spec.ts",
+              "line": 27,
+              "column": 7
+            },
+            {
+              "title": "settings switch updates the sidebar immediately",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2490,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:48.496Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4df1ee5ffe07c01b5eb-7a873b5381de93fb6efd",
+              "file": "persona-system.spec.ts",
+              "line": 40,
+              "column": 7
+            },
+            {
+              "title": "today context follows all four built-in personas even while the Vault is locked",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4786,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:51.002Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4df1ee5ffe07c01b5eb-279b626b2366b7eadd26",
+              "file": "persona-system.spec.ts",
+              "line": 63,
+              "column": 7
+            },
+            {
+              "title": "creates and removes a custom persona",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2475,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:55.804Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4df1ee5ffe07c01b5eb-e51afa3d0b950a78b8ca",
+              "file": "persona-system.spec.ts",
+              "line": 93,
+              "column": 7
+            },
+            {
+              "title": "mobile bottom navigation updates immediately with the persona",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1634,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:01:58.292Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "d4df1ee5ffe07c01b5eb-dc1e808c963ca6aa581f",
+              "file": "persona-system.spec.ts",
+              "line": 113,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "planning-workbench.spec.ts",
+      "file": "planning-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Planning completes real goal, task and offline sync workflows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 26582,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:01:59.949Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1eab2f4ae9c1546bf1dd-a25144398dc997702c03",
+          "file": "planning-workbench.spec.ts",
+          "line": 23,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "prototype-productization.spec.ts",
+      "file": "prototype-productization.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "prototype productization",
+          "file": "prototype-productization.spec.ts",
+          "line": 22,
+          "column": 6,
+          "specs": [
+            {
+              "title": "freezes every formal route against the approved GLM design contract",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:26.554Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-61870e7a4ea9581c940e",
+              "file": "prototype-productization.spec.ts",
+              "line": 23,
+              "column": 7
+            },
+            {
+              "title": "verifies approved GLM target files and SHA-256 when the isolated source is available",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 22,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:26.565Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-27493499d44bec18cb39",
+              "file": "prototype-productization.spec.ts",
+              "line": 33,
+              "column": 7
+            },
+            {
+              "title": "shared Shell and Today Workbench honor frozen desktop geometry",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1343,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:26.595Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-7f4da7ac8117243cd2c1",
+              "file": "prototype-productization.spec.ts",
+              "line": 44,
+              "column": 7
+            },
+            {
+              "title": "rejects missing routes, targets, deviation records and tampered evidence",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 22,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:27.955Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-7e0269d7a04eaed56453",
+              "file": "prototype-productization.spec.ts",
+              "line": 55,
+              "column": 7
+            },
+            {
+              "title": "formal public routing keeps callback and does not invent a passkey page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 584,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:27.986Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-3597afdb45ee01c3f6af",
+              "file": "prototype-productization.spec.ts",
+              "line": 101,
+              "column": 7
+            },
+            {
+              "title": "learning workbenches distinguish a locked Vault from empty data",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4263,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:28.585Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-26c513d41bb2bb3ebb76",
+              "file": "prototype-productization.spec.ts",
+              "line": 120,
+              "column": 7
+            },
+            {
+              "title": "knowledge and records views expose their real-data controls",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3037,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:32.866Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-d27310fa83632a82c7e5",
+              "file": "prototype-productization.spec.ts",
+              "line": 155,
+              "column": 7
+            },
+            {
+              "title": "research, collaboration and AI retain real source and permission gates",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2189,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:35.920Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-0306b086eec3987a5074",
+              "file": "prototype-productization.spec.ts",
+              "line": 204,
+              "column": 7
+            },
+            {
+              "title": "system workbenches expose real diagnostics and explicit integration boundaries",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "authenticated-chromium",
+                  "projectName": "authenticated-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2826,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-08-28T11:02:38.125Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "67953041a838240e76f5-ab579f6e97f623b6eb25",
+              "file": "prototype-productization.spec.ts",
+              "line": 231,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "records-workbench.spec.ts",
+      "file": "records-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Records completes real encrypted object workflows at four breakpoints",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10203,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:02:40.983Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d7fee2be0dafd661263d-afc2d97d257424746cfc",
+          "file": "records-workbench.spec.ts",
+          "line": 22,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "research-workbench.spec.ts",
+      "file": "research-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Research completes a traceable question, evidence and experiment workflow",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 28925,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:02:51.207Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4846949ea5fec4e8e103-4ea94ecfa7257a144735",
+          "file": "research-workbench.spec.ts",
+          "line": 23,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "review-workbench.spec.ts",
+      "file": "review-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Review exposes the due queue, answer sheet and knowledge inspector",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 28149,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:03:20.146Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "14819168dee3703f1263-8ded84489f00ad754ac4",
+          "file": "review-workbench.spec.ts",
+          "line": 22,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "search-workbench.spec.ts",
+      "file": "search-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Search completes real retrieval and utility workflows at four breakpoints",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9398,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:03:48.311Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "175fdbc4fe1e681d2a92-06f25f90e27c03b2df7a",
+          "file": "search-workbench.spec.ts",
+          "line": 36,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "self-study-workbench.spec.ts",
+      "file": "self-study-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Self-study advances a real inbox item into a route, project and deliverable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 19019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:03:57.724Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "a28cd72cdfc624c26262-d2055421f709c45533c2",
+          "file": "self-study-workbench.spec.ts",
+          "line": 23,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "templates-workbench.spec.ts",
+      "file": "templates-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Templates completes real version, install, import and share workflows",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 25345,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:04:16.759Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "043fc71b05664034f970-d01f862a8a9161b04fb0",
+          "file": "templates-workbench.spec.ts",
+          "line": 38,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "today-workbench.spec.ts",
+      "file": "today-workbench.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Today completes a real execution loop and four-breakpoint audit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 300000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "authenticated-chromium",
+              "projectName": "authenticated-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 32720,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-08-28T11:04:42.122Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "95d536814763b8e7fdfe-37fcc1c69d09287c39d1",
+          "file": "today-workbench.spec.ts",
+          "line": 23,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-08-28T10:57:45.540Z",
+    "duration": 450162.18299999996,
+    "expected": 46,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
