@@ -563,7 +563,8 @@
   gap: 0.55rem;
   margin-top: 1rem;
   padding: 0.85rem;
-  border-top: 2px solid color-mix(in srgb, var(--text-danger) 38%, var(--border));
+  border-top: 2px solid
+    color-mix(in srgb, var(--text-danger) 38%, var(--border));
   background: color-mix(in srgb, var(--text-danger) 6%, var(--bg-muted));
 }
 

@@ -152,9 +152,7 @@ export function ExamCenter() {
     setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
-        request<{ workspaces: Workspace[] }>(
-          "/api/v1/workspaces",
-        ),
+        request<{ workspaces: Workspace[] }>("/api/v1/workspaces"),
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       setWorkspaces(workspaceResult.workspaces);
@@ -172,26 +170,29 @@ export function ExamCenter() {
     }
   }, [request]);
 
-  const loadSpaces = useCallback(async (selected: string) => {
-    setContextPhase("loading");
-    try {
-      const result = await request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${selected}/spaces`,
-      );
-      setSpaces(result.spaces);
-      setSpaceId((current) =>
-        result.spaces.some((item) => item.id === current)
-          ? current
-          : (result.spaces[0]?.id ?? ""),
-      );
-      setContextPhase("ready");
-    } catch (error) {
-      setSpaces([]);
-      setSpaceId("");
-      setStatus(message(error));
-      setContextPhase("error");
-    }
-  }, [request]);
+  const loadSpaces = useCallback(
+    async (selected: string) => {
+      setContextPhase("loading");
+      try {
+        const result = await request<{ spaces: Space[] }>(
+          `/api/v1/workspaces/${selected}/spaces`,
+        );
+        setSpaces(result.spaces);
+        setSpaceId((current) =>
+          result.spaces.some((item) => item.id === current)
+            ? current
+            : (result.spaces[0]?.id ?? ""),
+        );
+        setContextPhase("ready");
+      } catch (error) {
+        setSpaces([]);
+        setSpaceId("");
+        setStatus(message(error));
+        setContextPhase("error");
+      }
+    },
+    [request],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void loadContext());
@@ -344,10 +345,11 @@ export function ExamCenter() {
     let succeeded = false;
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(db, transport(request, workspaceId), localVault).synchronize(
-        workspaceId,
-        deviceId,
-      );
+      await new SyncClient(
+        db,
+        transport(request, workspaceId),
+        localVault,
+      ).synchronize(workspaceId, deviceId);
       setStatus("备考数据已同步。");
       succeeded = true;
     } catch (error) {
@@ -748,5 +750,4 @@ export function ExamCenter() {
       }}
     />
   );
-
 }

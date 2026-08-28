@@ -82,10 +82,7 @@ export function AuditLog() {
       if (resultFilter === "success") query.result = "success";
 
       try {
-        const result = await request<AuditPage>(
-          "/api/v1/audit/me",
-          { query },
-        );
+        const result = await request<AuditPage>("/api/v1/audit/me", { query });
         if (version !== requestVersion.current) return;
         const pageEvents = Array.isArray(result.events) ? result.events : [];
         setEvents((current) =>
@@ -94,8 +91,8 @@ export function AuditLog() {
         setNextCursor(result.next_cursor ?? null);
         setSelectedId((current) =>
           append
-            ? current ?? pageEvents[0]?.id ?? null
-            : pageEvents[0]?.id ?? null,
+            ? (current ?? pageEvents[0]?.id ?? null)
+            : (pageEvents[0]?.id ?? null),
         );
         setStatus("审计记录已更新。");
         setLoadState("ready");
@@ -114,8 +111,8 @@ export function AuditLog() {
 
   const targetTypes = useMemo(
     () =>
-      [...new Set(events.map((event) => event.target_type))].sort((left, right) =>
-        left.localeCompare(right),
+      [...new Set(events.map((event) => event.target_type))].sort(
+        (left, right) => left.localeCompare(right),
       ),
     [events],
   );
@@ -291,7 +288,10 @@ export function AuditLog() {
               }
               primary={primaryAction}
             />
-            <section className={styles.timelineSection} data-testid="audit-timeline">
+            <section
+              className={styles.timelineSection}
+              data-testid="audit-timeline"
+            >
               <header className={styles.sectionHeader}>
                 <div>
                   <span className={styles.eyebrow}>IDENTITY EVENT STREAM</span>
@@ -378,7 +378,9 @@ export function AuditLog() {
                           <span className={styles.eventContent}>
                             <span className={styles.eventHead}>
                               <strong>{event.event_type}</strong>
-                              <ProductTag tone={tone}>{event.result}</ProductTag>
+                              <ProductTag tone={tone}>
+                                {event.result}
+                              </ProductTag>
                             </span>
                             <small>{formatDate(event.occurred_at)}</small>
                           </span>
@@ -401,7 +403,10 @@ export function AuditLog() {
         }
         inspectorLabel="事件详情"
         inspector={
-          <aside className={styles.inspectorPane} data-testid="audit-event-detail">
+          <aside
+            className={styles.inspectorPane}
+            data-testid="audit-event-detail"
+          >
             <InspectorSection title="事件详情">
               {selectedEvent ? (
                 <dl className={styles.kvList}>
@@ -445,11 +450,13 @@ export function AuditLog() {
             <InspectorSection title="解释与追踪">
               {selectedEvent && eventTone(selectedEvent) === "warn" ? (
                 <p className={styles.stateWarn}>
-                  该事件未以 success 结果完成，请核对结果、目标与事件 ID。读取失败时，API 会另外提供 request ID。
+                  该事件未以 success 结果完成，请核对结果、目标与事件
+                  ID。读取失败时，API 会另外提供 request ID。
                 </p>
               ) : (
                 <p className={styles.muted}>
-                  审计事件只读展示；事件 ID 用于定位服务器记录，不会扩大当前身份的可见范围。
+                  审计事件只读展示；事件 ID
+                  用于定位服务器记录，不会扩大当前身份的可见范围。
                 </p>
               )}
             </InspectorSection>

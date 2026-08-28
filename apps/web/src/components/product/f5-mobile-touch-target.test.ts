@@ -11,7 +11,10 @@ const syncStyles = readFileSync(
   "utf8",
 );
 const aiStyles = readFileSync(
-  new URL("../../features/ai/ai-governance-workbench.module.css", import.meta.url),
+  new URL(
+    "../../features/ai/ai-governance-workbench.module.css",
+    import.meta.url,
+  ),
   "utf8",
 );
 

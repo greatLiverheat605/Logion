@@ -210,9 +210,7 @@ export function ReviewCenter() {
     setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
-        request<{ workspaces: Workspace[] }>(
-          "/api/v1/workspaces",
-        ),
+        request<{ workspaces: Workspace[] }>("/api/v1/workspaces"),
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       setWorkspaces(workspaceResult.workspaces);
@@ -230,26 +228,29 @@ export function ReviewCenter() {
     }
   }, [request]);
 
-  const loadSpaces = useCallback(async (selected: string) => {
-    setContextPhase("loading");
-    try {
-      const result = await request<{ spaces: Space[] }>(
-        `/api/v1/workspaces/${selected}/spaces`,
-      );
-      setSpaces(result.spaces);
-      setSpaceId((current) =>
-        result.spaces.some((item) => item.id === current)
-          ? current
-          : (result.spaces[0]?.id ?? ""),
-      );
-      setContextPhase("ready");
-    } catch (error) {
-      setSpaces([]);
-      setSpaceId("");
-      setStatus(errorMessage(error));
-      setContextPhase("error");
-    }
-  }, [request]);
+  const loadSpaces = useCallback(
+    async (selected: string) => {
+      setContextPhase("loading");
+      try {
+        const result = await request<{ spaces: Space[] }>(
+          `/api/v1/workspaces/${selected}/spaces`,
+        );
+        setSpaces(result.spaces);
+        setSpaceId((current) =>
+          result.spaces.some((item) => item.id === current)
+            ? current
+            : (result.spaces[0]?.id ?? ""),
+        );
+        setContextPhase("ready");
+      } catch (error) {
+        setSpaces([]);
+        setSpaceId("");
+        setStatus(errorMessage(error));
+        setContextPhase("error");
+      }
+    },
+    [request],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void loadContext());
@@ -461,10 +462,11 @@ export function ReviewCenter() {
     if (db === null || localVault === null || !workspaceId || !deviceId) return;
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(db, transport(request, workspaceId), localVault).synchronize(
-        workspaceId,
-        deviceId,
-      );
+      await new SyncClient(
+        db,
+        transport(request, workspaceId),
+        localVault,
+      ).synchronize(workspaceId, deviceId);
       const remaining = await db.outbox
         .where("[workspace_id+device_id]")
         .equals([workspaceId, deviceId])

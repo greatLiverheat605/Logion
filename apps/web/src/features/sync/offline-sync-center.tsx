@@ -132,9 +132,7 @@ export function OfflineSyncCenter() {
     setLoading(true);
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
-        request<{ workspaces: Workspace[] }>(
-          "/api/v1/workspaces",
-        ),
+        request<{ workspaces: Workspace[] }>("/api/v1/workspaces"),
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       const currentDevice = deviceResult.devices.find((item) => item.current);
@@ -155,7 +153,7 @@ export function OfflineSyncCenter() {
     } catch (error) {
       setAccessIssue(
         error instanceof LogionApiError &&
-        (error.status === 401 || error.status === 403)
+          (error.status === 401 || error.status === 403)
           ? "permission"
           : "error",
       );
@@ -338,10 +336,11 @@ export function OfflineSyncCenter() {
     setSyncing(true);
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(db, transport(request, workspaceId), localVault).synchronize(
-        workspaceId,
-        deviceId,
-      );
+      await new SyncClient(
+        db,
+        transport(request, workspaceId),
+        localVault,
+      ).synchronize(workspaceId, deviceId);
       setStatus("同步完成；仍需选择的冲突会继续保留。 ");
     } catch (error) {
       setStatus(userMessage(error));

@@ -99,7 +99,9 @@ function errorMessage(error: unknown) {
     : "网络暂不可用；内容仍保存在本机 Outbox。";
 }
 
-function contextSelectionKey(mode: "self-study" | "research" | "collaboration") {
+function contextSelectionKey(
+  mode: "self-study" | "research" | "collaboration",
+) {
   return `logion:workbench-context:${mode}`;
 }
 
@@ -186,9 +188,7 @@ function OfflineLearningCenter({
     setContextPhase("loading");
     try {
       const [w, d] = await Promise.all([
-        request<{ workspaces: Workspace[] }>(
-          "/api/v1/workspaces",
-        ),
+        request<{ workspaces: Workspace[] }>("/api/v1/workspaces"),
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       setWorkspaces(w.workspaces);
@@ -273,21 +273,18 @@ function OfflineLearningCenter({
       chunk_index: number | null,
       known_sync_epoch: string | null,
     ) =>
-      request<unknown>(
-        `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            message_type: "bootstrap_request",
-            protocol_version: "sync-v1",
-            workspace_id: workspaceId,
-            device_id: deviceId,
-            known_sync_epoch,
-            snapshot_id,
-            chunk_index,
-          }),
-        },
-      );
+      request<unknown>(`/api/v1/workspaces/${workspaceId}/sync/bootstrap`, {
+        method: "POST",
+        body: JSON.stringify({
+          message_type: "bootstrap_request",
+          protocol_version: "sync-v1",
+          workspace_id: workspaceId,
+          device_id: deviceId,
+          known_sync_epoch,
+          snapshot_id,
+          chunk_index,
+        }),
+      });
     const first = await chunk(null, null, current?.sync_epoch ?? null),
       validation = validateSyncV1Message(first);
     if (
@@ -355,7 +352,8 @@ function OfflineLearningCenter({
   }
   async function unlock(event: FormEvent<HTMLFormElement>): Promise<boolean> {
     event.preventDefault();
-    if (session.status !== "authenticated" || !workspaceId || !deviceId) return false;
+    if (session.status !== "authenticated" || !workspaceId || !deviceId)
+      return false;
     try {
       const passphrase = String(
         new FormData(event.currentTarget).get("passphrase") ?? "",

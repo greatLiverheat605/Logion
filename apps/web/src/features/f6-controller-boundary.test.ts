@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 const views = [
   ["memory/review-center.tsx", "memory/use-review-controller.ts"],
   ["exam/exam-center.tsx", "exam/use-exam-controller.ts"],
-  ["self-study/self-study-center.tsx", "self-study/use-self-study-controller.ts"],
+  [
+    "self-study/self-study-center.tsx",
+    "self-study/use-self-study-controller.ts",
+  ],
   ["security/security-center.tsx", "security/use-security-controller.ts"],
   ["sync/offline-sync-center.tsx", "sync/use-sync-controller.ts"],
   ["ai/provider-center.tsx", "ai/use-provider-controller.ts"],
@@ -26,7 +29,9 @@ describe("F-6 controller boundary", () => {
 
       expect(view, viewPath).not.toContain("browserApiClient");
       expect(controller, controllerPath).toContain("browserApiClient");
-      expect(controller, controllerPath).toMatch(/export function use[A-Z].*Controller/);
+      expect(controller, controllerPath).toMatch(
+        /export function use[A-Z].*Controller/,
+      );
     }
   });
 });
