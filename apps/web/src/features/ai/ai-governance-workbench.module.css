@@ -574,10 +574,9 @@
 .tableRow {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(10rem, 1.4fr) minmax(10rem, 1fr) minmax(
-      5rem,
-      0.5fr
-    ) auto;
+  grid-template-columns:
+    minmax(10rem, 1.4fr) minmax(10rem, 1fr) minmax(5rem, 0.5fr)
+    auto;
   align-items: center;
   gap: 0.7rem;
   padding: 0.65rem 0.75rem;

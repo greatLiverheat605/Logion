@@ -27,6 +27,7 @@
 ## Task 1: Lock the API and database contract with failing tests
 
 **Files:**
+
 - Test: `apps/api/tests/test_growth_template.py`
 - Test: `apps/api/tests/test_growth_integration.py`
 - Create: `apps/api/migrations/versions/0036_official_template_catalog.py`
@@ -104,6 +105,7 @@
 ## Task 2: Make official packages globally readable and installable through the real service
 
 **Files:**
+
 - Test: `apps/api/tests/test_growth_integration.py`
 - Modify: `apps/api/src/logion_api/growth/service.py`
 
@@ -189,6 +191,7 @@
 ## Task 3: Regenerate contracts and update the Templates controller/view
 
 **Files:**
+
 - Modify: `packages/contracts/openapi/openapi.json`
 - Modify: `packages/contracts/src/openapi.d.ts`
 - Test: `apps/web/src/features/growth/use-templates-controller.test.ts`
@@ -247,6 +250,7 @@
 ## Task 4: Verify the real catalog and close evidence
 
 **Files:**
+
 - Test: `tests/browser/templates-workbench.spec.ts`
 - Modify: `reports/ui-refactor/templates-conformance.md`
 - Modify: `.codex/plans/current/2026-08-26_logion-glm-design-conformance-remediation/sub-012_templates-glm-conformance.md`
