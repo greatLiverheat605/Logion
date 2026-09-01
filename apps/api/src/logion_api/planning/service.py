@@ -161,6 +161,99 @@ class PlanningService:
         )
         return GoalPlanAggregate(goal, plan, version, phases)
 
+    async def list_goals(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        *,
+        request_id: str,
+    ) -> list[GoalPlanAggregate]:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        goals = list(
+            (
+                await db.scalars(
+                    select(LearningGoal)
+                    .where(
+                        LearningGoal.workspace_id == workspace_id,
+                        LearningGoal.space_id == space_id,
+                        LearningGoal.deleted_at.is_(None),
+                    )
+                    .order_by(LearningGoal.updated_at.desc(), LearningGoal.id.desc())
+                )
+            ).all()
+        )
+        if not goals:
+            return []
+
+        goal_ids = [goal.id for goal in goals]
+        plans = list(
+            (
+                await db.scalars(
+                    select(LearningPlan).where(
+                        LearningPlan.workspace_id == workspace_id,
+                        LearningPlan.space_id == space_id,
+                        LearningPlan.goal_id.in_(goal_ids),
+                    )
+                )
+            ).all()
+        )
+        plan_by_goal = {plan.goal_id: plan for plan in plans}
+        if not plan_by_goal:
+            return []
+
+        versions = list(
+            (
+                await db.scalars(
+                    select(PlanVersion)
+                    .where(
+                        PlanVersion.workspace_id == workspace_id,
+                        PlanVersion.plan_id.in_([plan.id for plan in plans]),
+                    )
+                    .order_by(PlanVersion.version_number.desc())
+                )
+            ).all()
+        )
+        version_by_plan: dict[UUID, PlanVersion] = {}
+        for candidate_version in versions:
+            version_by_plan.setdefault(candidate_version.plan_id, candidate_version)
+        selected_versions = list(version_by_plan.values())
+        selected_version_ids = [version.id for version in selected_versions]
+        phases = list(
+            (
+                await db.scalars(
+                    select(PlanPhase)
+                    .where(
+                        PlanPhase.workspace_id == workspace_id,
+                        PlanPhase.plan_version_id.in_(selected_version_ids),
+                    )
+                    .order_by(PlanPhase.position)
+                )
+            ).all()
+        )
+        phases_by_version: dict[UUID, list[PlanPhase]] = {}
+        for phase in phases:
+            phases_by_version.setdefault(phase.plan_version_id, []).append(phase)
+
+        aggregates: list[GoalPlanAggregate] = []
+        for goal in goals:
+            plan = plan_by_goal.get(goal.id)
+            version = version_by_plan.get(plan.id) if plan is not None else None
+            if plan is None or version is None:
+                continue
+            aggregates.append(
+                GoalPlanAggregate(
+                    goal,
+                    plan,
+                    version,
+                    phases_by_version.get(version.id, []),
+                )
+            )
+        return aggregates
+
     async def publish(
         self,
         db: AsyncSession,

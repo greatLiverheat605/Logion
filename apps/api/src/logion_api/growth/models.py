@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,16 +28,31 @@ class TemplatePackage(Base):
             "version_number > 0 AND schema_version > 0", name="ck_template_versions_positive"
         ),
         CheckConstraint("status IN ('active','withdrawn')", name="ck_template_status"),
-        CheckConstraint("visibility IN ('private','workspace')", name="ck_template_visibility"),
+        CheckConstraint(
+            "visibility IN ('private','workspace','official')", name="ck_template_visibility"
+        ),
+        CheckConstraint(
+            "(visibility = 'official' AND workspace_id IS NULL AND created_by IS NULL)"
+            " OR (visibility IN ('private','workspace') AND workspace_id IS NOT NULL"
+            " AND created_by IS NOT NULL)",
+            name="ck_template_scope_ownership",
+        ),
         UniqueConstraint(
             "workspace_id", "template_key", "version_number", name="uq_template_version"
+        ),
+        Index(
+            "uq_official_template_version",
+            "template_key",
+            "version_number",
+            unique=True,
+            postgresql_where=text("visibility = 'official'"),
         ),
         Index("ix_template_workspace_created", "workspace_id", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
-    workspace_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
     )
     template_key: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -52,13 +68,15 @@ class TemplatePackage(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     risk_metadata: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     object_graph: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
-    visibility: Mapped[Literal["private", "workspace"]] = mapped_column(
+    visibility: Mapped[Literal["private", "workspace", "official"]] = mapped_column(
         String(16), nullable=False, default="private"
     )
     status: Mapped[Literal["active", "withdrawn"]] = mapped_column(
         String(16), nullable=False, default="active"
     )
-    created_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_by: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

@@ -374,3 +374,195 @@ async def test_example_47_day_template_import_is_bounded_private_and_date_preser
             )
             == 0
         )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_official_templates_are_global_readable_installable_and_tenant_isolated() -> None:
+    official_ids = {
+        UUID("01982f3e-7b00-7000-8000-000000000101"),
+        UUID("01982f3e-7b00-7000-8000-000000000102"),
+    }
+    origin = "http://test"
+    async with (
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.180", 49020)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as owner,
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.181", 49021)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as external,
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.182", 49022)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as viewer,
+        AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.183", 49023)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as reviewer,
+    ):
+        clients = (
+            (owner, "owner"),
+            (external, "external"),
+            (viewer, "viewer"),
+            (reviewer, "reviewer"),
+        )
+        registrations = []
+        for client, label in clients:
+            registrations.append(
+                await client.post(
+                    "/api/v1/auth/register",
+                    json={
+                        "email": f"official-catalog-{label}-{uuid4()}@example.com",
+                        "password": "a-strong-password-123",
+                        "device_name": label,
+                    },
+                )
+            )
+        assert all(response.status_code == 201 for response in registrations)
+        owner_user = UUID(registrations[0].json()["user"]["id"])
+        owner_workspace = UUID(
+            (await owner.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+        )
+        external_workspace = UUID(
+            (await external.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+        )
+        owner_csrf = {"X-CSRF-Token": owner.cookies["logion_csrf"]}
+        shared_space_response = await owner.post(
+            f"/api/v1/workspaces/{owner_workspace}/spaces",
+            headers=owner_csrf,
+            json={"name": "Official install target", "visibility": "shared"},
+        )
+        assert shared_space_response.status_code == 201, shared_space_response.text
+        target_space = UUID(shared_space_response.json()["id"])
+        viewer_id = UUID(registrations[2].json()["user"]["id"])
+        reviewer_id = UUID(registrations[3].json()["user"]["id"])
+        async with session_factory() as db:
+            db.add_all(
+                [
+                    WorkspaceMembership(
+                        workspace_id=owner_workspace,
+                        user_id=viewer_id,
+                        role="viewer",
+                        status="active",
+                        joined_at=datetime.now(UTC),
+                    ),
+                    WorkspaceMembership(
+                        workspace_id=owner_workspace,
+                        user_id=reviewer_id,
+                        role="reviewer",
+                        status="active",
+                        joined_at=datetime.now(UTC),
+                    ),
+                    TemplatePackage(
+                        id=uuid4(),
+                        workspace_id=owner_workspace,
+                        template_key=uuid4(),
+                        version_number=1,
+                        name="A private template",
+                        description="Tenant-only source",
+                        schema_version=1,
+                        product_min_version="0.1.0",
+                        author_name="Owner",
+                        license="CC-BY-4.0",
+                        locale="en-US",
+                        target_personas=["execution"],
+                        changelog="Initial",
+                        content_hash="b" * 64,
+                        risk_metadata={"external_links": []},
+                        object_graph={},
+                        visibility="private",
+                        created_by=owner_user,
+                    ),
+                ]
+            )
+            await db.commit()
+
+        owner_templates = (
+            await owner.get(f"/api/v1/workspaces/{owner_workspace}/templates")
+        ).json()["templates"]
+        external_templates = (
+            await external.get(f"/api/v1/workspaces/{external_workspace}/templates")
+        ).json()["templates"]
+        assert {
+            UUID(row["id"])
+            for row in owner_templates
+            if row["visibility"] == "official"
+        } == official_ids
+        assert {
+            UUID(row["id"])
+            for row in external_templates
+            if row["visibility"] == "official"
+        } == official_ids
+        assert all(
+            row["workspace_id"] is None
+            for row in owner_templates
+            if row["visibility"] == "official"
+        )
+        assert not any(row["name"] == "A private template" for row in external_templates)
+
+        install_url = f"/api/v1/workspaces/{owner_workspace}/template-installations"
+        official_id = str(sorted(official_ids)[0])
+        missing_date = await owner.post(
+            install_url,
+            headers=owner_csrf,
+            json={
+                "id": str(uuid4()),
+                "template_id": official_id,
+                "target_space_id": str(target_space),
+            },
+        )
+        assert missing_date.status_code == 422
+        installed = await owner.post(
+            install_url,
+            headers=owner_csrf,
+            json={
+                "id": str(uuid4()),
+                "template_id": official_id,
+                "target_space_id": str(target_space),
+                "start_date": "2027-01-05",
+            },
+        )
+        assert installed.status_code == 201, installed.text
+        installed_ids = installed.json()["installed_object_ids"]
+        assert installed_ids["goal_id"] not in {str(value) for value in official_ids}
+
+        async with session_factory() as db:
+            install_audit = await db.scalar(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.workspace_id == owner_workspace,
+                    AuditEvent.event_type == "template.installed",
+                    AuditEvent.target_id == UUID(installed.json()["id"]),
+                )
+                .order_by(AuditEvent.occurred_at.desc())
+            )
+            assert install_audit is not None
+            assert install_audit.event_metadata["template_scope"] == "official"
+            assert install_audit.event_metadata["source_scope"] == "official_catalog"
+            assert install_audit.event_metadata["template_content_hash"]
+
+        for client in (viewer, reviewer):
+            listing = await client.get(f"/api/v1/workspaces/{owner_workspace}/templates")
+            assert listing.status_code == 200
+            assert {
+                UUID(row["id"])
+                for row in listing.json()["templates"]
+                if row["visibility"] == "official"
+            } == official_ids
+            denied = await client.post(
+                install_url,
+                headers={"X-CSRF-Token": client.cookies["logion_csrf"]},
+                json={
+                    "id": str(uuid4()),
+                    "template_id": official_id,
+                    "target_space_id": str(target_space),
+                    "start_date": "2027-01-05",
+                },
+            )
+            assert denied.status_code == 403
