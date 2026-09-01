@@ -86,6 +86,7 @@ test.describe("interoperability hub real flows", () => {
     page,
   }) => {
     await page.goto("/app/integrations");
+    await page.getByRole("button", { name: /导入预览/ }).click();
     const marker = `import-${randomUUID()}`;
     await page.getByLabel("格式").selectOption("markdown");
     await page.getByLabel("文件名").fill(`${marker}.md`);
@@ -93,7 +94,8 @@ test.describe("interoperability hub real flows", () => {
     await page.getByRole("button", { name: "生成导入预览" }).click();
 
     const target = page.getByLabel("写入自己的 Private Space");
-    await expect(target.locator("option")).toHaveCount(1);
+    await expect(target.locator("option")).not.toHaveCount(0);
+    await expect(target).not.toHaveValue("");
     const row = page.locator("li").filter({ hasText: `${marker}.md` });
     await expect(row.getByText("previewed", { exact: false })).toBeVisible();
     await row.getByRole("button", { name: "确认 IMPORT" }).click();
@@ -104,6 +106,7 @@ test.describe("interoperability hub real flows", () => {
     page,
   }) => {
     await page.goto("/app/integrations");
+    await page.getByRole("button", { name: /导出任务/ }).click();
     let rejectOnce = true;
     const exportCollection = "**/api/v1/workspaces/*/data-exports";
     await page.route(exportCollection, async (route) => {
@@ -164,12 +167,14 @@ test.describe("interoperability hub real flows", () => {
       .toBe("succeeded");
 
     await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: /导出任务/ }).click();
     const exportRow = page.locator("li").filter({
       has: page.locator(`a[href*="${created.id}"]`),
     });
     await expect(exportRow.getByRole("link", { name: "下载" })).toBeVisible();
 
-    const sha256 = (await exportRow.locator("code").textContent())?.trim();
+    const exportMetadata = await exportRow.locator("small").textContent();
+    const sha256 = exportMetadata?.match(/[a-f0-9]{64}/)?.[0];
     expect(sha256).toMatch(/^[a-f0-9]{64}$/);
     const downloadPromise = page.waitForEvent("download");
     await exportRow.getByRole("link", { name: "下载" }).click();

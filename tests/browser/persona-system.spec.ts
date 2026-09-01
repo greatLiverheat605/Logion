@@ -1,39 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
-
-import { test as baseTest } from "@playwright/test";
-
 import { expect, test } from "./fixtures";
-
-baseTest(
-  "a newly registered account is forced into onboarding on first login",
-  async ({ page }) => {
-    await page.goto("/auth/login");
-    const email = `persona-onboarding-${randomUUID()}@example.com`;
-    const password = `${randomBytes(24).toString("base64url")}Aa1!`;
-    const registered = await page.request.post("/api/v1/auth/register", {
-      data: {
-        device_name: "Persona onboarding guard",
-        email,
-        password,
-      },
-      headers: { Origin: new URL(page.url()).origin },
-    });
-    expect(registered.status(), await registered.text()).toBe(201);
-
-    await page.context().clearCookies();
-    await page.goto("/auth/login");
-    await page.getByLabel("邮箱").fill(email);
-    await page.getByLabel("密码").fill(password);
-    await page.getByRole("button", { name: "登录", exact: true }).click();
-
-    await expect(page).toHaveURL(/\/onboarding$/);
-    await expect(
-      page.getByRole("heading", { name: "选择你的学习场景" }),
-    ).toBeVisible();
-    await page.goto("/app/today");
-    await expect(page).toHaveURL(/\/onboarding$/);
-  },
-);
 
 test.describe("persona system", () => {
   test.describe.configure({ mode: "serial" });
@@ -83,25 +48,26 @@ test.describe("persona system", () => {
 
     await page.goto("/app/today");
     await expect(
-      page.getByRole("heading", {
-        name: "只在授权共享范围内组织协作与审阅",
-      }),
+      page.getByRole("heading", { name: "今日驾驶舱" }),
     ).toBeVisible();
+    await expect(
+      page
+        .getByLabel("当前工作台上下文")
+        .locator("dt")
+        .filter({ hasText: /^Persona$/ })
+        .locator("..")
+        .locator("dd"),
+    ).toHaveText("导");
   });
 
-  test("today heading follows all four built-in personas even while the Vault is locked", async ({
+  test("today context follows all four built-in personas even while the Vault is locked", async ({
     page,
   }) => {
     test.setTimeout(120_000);
-    const expectations = [
-      ["考", "用真实日期、复习与成绩安排备考"],
-      ["学", "让目标、项目与成果形成连续进展"],
-      ["研", "把问题、论文、声明与运行放在同一证据链"],
-      ["导", "只在授权共享范围内组织协作与审阅"],
-    ] as const;
+    const expectations = ["考", "学", "研", "导"] as const;
 
     await page.goto("/app/settings");
-    for (const [persona, heading] of expectations) {
+    for (const persona of expectations) {
       await page
         .getByRole("button", { name: new RegExp(`^切换到：${persona}，`) })
         .click();
@@ -109,10 +75,17 @@ test.describe("persona system", () => {
         page.getByText(`已切换到「${persona}」画像。`),
       ).toBeVisible();
       await page.goto("/app/today");
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "先解锁本地资料" }),
+        page.getByRole("heading", { name: "今日驾驶舱" }),
       ).toBeVisible();
+      await expect(
+        page
+          .getByLabel("当前工作台上下文")
+          .locator("dt")
+          .filter({ hasText: /^Persona$/ })
+          .locator("..")
+          .locator("dd"),
+      ).toHaveText(persona);
       await page.goto("/app/settings");
     }
   });

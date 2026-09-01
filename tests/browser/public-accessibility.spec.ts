@@ -1,9 +1,32 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+import {
+  assertGlmPrimaryContract,
+  assertGlmRouteRegions,
+  loadGlmTargetManifest,
+} from "./glm-conformance";
+import {
+  auditHorizontalOverflow,
+  captureEvidenceScreenshot,
+  WORKBENCH_VIEWPORTS,
+} from "./workbench-audit";
 
-for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {
+const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+const manifest = loadGlmTargetManifest();
+const evidencePhase =
+  process.env.LOGION_EVIDENCE_PHASE === "before" ? "before" : "after";
+const publicRoutes = [
+  "/",
+  "/auth/login",
+  "/auth/register",
+  "/auth/verify",
+  "/auth/recover",
+  "/auth/callback",
+  "/offline",
+] as const;
+
+for (const route of publicRoutes) {
   test(`${route} has no automated WCAG 2.2 AA violations`, async ({ page }) => {
     await page.goto(route);
     await expect(page.locator("main")).toBeVisible();
@@ -11,6 +34,100 @@ for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {
     expect(results.violations).toEqual([]);
   });
 }
+
+for (const { route, url } of [
+  { route: "/auth/login", url: "/auth/login" },
+  { route: "/auth/register", url: "/auth/register" },
+  { route: "/auth/verify", url: "/auth/verify" },
+  { route: "/auth/recover", url: "/auth/recover" },
+  { route: "/auth/callback", url: "/auth/callback" },
+] as const) {
+  test(`${route} exposes its GLM regions and at most one primary`, async ({
+    page,
+  }) => {
+    await page.goto(url);
+    await page
+      .getByTestId(
+        manifest.routes.find((item) => item.route === route)!.regions[0]!,
+      )
+      .waitFor();
+    await assertGlmRouteRegions(page, manifest, route);
+    await assertGlmPrimaryContract(page, manifest, route);
+  });
+}
+
+test("captures public authentication evidence at all product viewports", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "public-chromium",
+    "Canonical evidence uses the Chromium production viewport set.",
+  );
+  for (const route of [
+    "/auth/login",
+    "/auth/register",
+    "/auth/verify",
+    "/auth/recover",
+    "/auth/callback",
+  ] as const) {
+    const firstRegion = manifest.routes.find((item) => item.route === route)!
+      .regions[0]!;
+    for (const viewport of WORKBENCH_VIEWPORTS) {
+      await page.setViewportSize(viewport);
+      await page.goto(route);
+      if (evidencePhase === "after") {
+        await page.getByTestId(firstRegion).waitFor();
+        await assertGlmRouteRegions(page, manifest, route);
+        await assertGlmPrimaryContract(page, manifest, route);
+      } else {
+        await expect(page.locator("main")).toBeVisible();
+      }
+      const overflow = await auditHorizontalOverflow(page);
+      if (evidencePhase === "after") {
+        expect(
+          overflow.offenders,
+          `${route} @ ${viewport.label} must not leak horizontally`,
+        ).toEqual([]);
+        expect(overflow.scrollWidth).toBe(overflow.clientWidth);
+      }
+      await captureEvidenceScreenshot(page, evidencePhase, route, viewport);
+    }
+  }
+});
+
+test("authentication preserves password manager, paste and visibility controls", async ({
+  page,
+}) => {
+  await page.goto("/auth/login");
+  const email = page.getByLabel("邮箱");
+  const password = page.locator("#login-password");
+  await expect(email).toHaveAttribute("autocomplete", "email");
+  await expect(password).toHaveAttribute("autocomplete", "current-password");
+
+  const pasteAllowed = await password.evaluate((element) =>
+    element.dispatchEvent(
+      new Event("paste", { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(pasteAllowed).toBe(true);
+
+  await password.fill("visible-password-check");
+  await page.getByRole("button", { name: "显示密码" }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "隐藏密码" }).click();
+  await expect(password).toHaveAttribute("type", "password");
+});
+
+test("callback failure keeps retry and login recovery reachable", async ({
+  page,
+}) => {
+  await page.goto("/auth/callback");
+  await expect(
+    page.getByRole("heading", { name: "无法完成登录" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "返回登录" })).toBeVisible();
+});
 
 test("skip link and authentication controls are keyboard reachable", async ({
   browserName,
@@ -60,7 +177,7 @@ test("login secondary action remains readable in the light theme", async ({
   expect(colors.foreground).not.toBe(colors.background);
 });
 
-for (const route of ["/", "/auth/login", "/auth/register", "/offline"]) {
+for (const route of publicRoutes) {
   test(`${route} fits a narrow viewport without page overflow`, async ({
     page,
   }) => {

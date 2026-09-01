@@ -1,5 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures";
+import {
+  assertNoHorizontalOverflow,
+  assertPrimaryActionContract,
+  assertReducedMotion,
+  captureEvidenceScreenshot,
+  waitForWorkbenchReady,
+  WORKBENCH_VIEWPORTS,
+} from "./workbench-audit";
+
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const authenticatedRoutes = [
   "/app/today",
@@ -24,33 +33,21 @@ const authenticatedRoutes = [
   "/app/profile",
   "/app/help",
 ];
-const responsiveViewports = [
-  { height: 900, label: "desktop", width: 1440 },
-  { height: 900, label: "1250", width: 1250 },
-  { height: 844, label: "900", width: 900 },
-  { height: 844, label: "720", width: 720 },
-  { height: 844, label: "420", width: 420 },
-  { height: 844, label: "390x844", width: 390 },
-  { height: 640, label: "320x640", width: 320 },
-] as const;
+const sampleRoutes = new Set(["/app/today", "/app/search", "/app/records"]);
+const captureBefore = process.env.LOGION_E2E_CAPTURE_BEFORE === "true";
 
 test.describe("authenticated shell", () => {
   test("workbenches have no WCAG violations or horizontal overflow", async ({
     page,
   }) => {
     test.setTimeout(120_000);
+    const viewport = WORKBENCH_VIEWPORTS[3];
+    await page.setViewportSize(viewport);
 
     for (const route of authenticatedRoutes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
-      await expect(page.locator("h1")).toBeVisible();
-      const hasOverflow = await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth >
-          document.documentElement.clientWidth,
-      );
-      expect(hasOverflow, `${route} must not overflow horizontally`).toBe(
-        false,
-      );
+      await waitForWorkbenchReady(page, route);
+      await assertNoHorizontalOverflow(page, route, viewport);
       const results = await new AxeBuilder({ page })
         .withTags(wcagTags)
         .analyze();
@@ -63,21 +60,48 @@ test.describe("authenticated shell", () => {
   }) => {
     test.setTimeout(300_000);
 
-    for (const viewport of responsiveViewports) {
+    for (const viewport of WORKBENCH_VIEWPORTS) {
       await page.setViewportSize(viewport);
       for (const route of authenticatedRoutes) {
         await page.goto(route, { waitUntil: "domcontentloaded" });
-        await expect(page.locator("h1")).toBeVisible();
-        const dimensions = await page.evaluate(() => ({
-          clientWidth: document.documentElement.clientWidth,
-          scrollWidth: document.documentElement.scrollWidth,
-        }));
-        expect(
-          dimensions.scrollWidth,
-          `${route} must fit the ${viewport.label} viewport`,
-        ).toBeLessThanOrEqual(dimensions.clientWidth);
+        await waitForWorkbenchReady(page, route);
+        await assertNoHorizontalOverflow(page, route, viewport);
+        await assertPrimaryActionContract(page, route, viewport);
+        if (captureBefore && sampleRoutes.has(route)) {
+          await captureEvidenceScreenshot(page, "before", route, viewport);
+        }
       }
     }
+  });
+
+  test("Audit keeps its mobile primary action inside the viewport", async ({
+    page,
+  }) => {
+    const viewport = WORKBENCH_VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    await page.goto("/app/audit", { waitUntil: "domcontentloaded" });
+    await waitForWorkbenchReady(page, "/app/audit");
+
+    const primary = page.locator('[data-workbench-primary="true"]:visible');
+    await expect(primary).toHaveCount(1);
+    const diagnostic = await primary.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { bottom: rect.bottom, top: rect.top, viewport: innerHeight };
+    });
+    expect(diagnostic.top).toBeLessThan(diagnostic.viewport);
+    expect(diagnostic.bottom).toBeGreaterThan(0);
+  });
+
+  test("Audit event rows meet WCAG contrast requirements", async ({ page }) => {
+    const viewport = WORKBENCH_VIEWPORTS[3];
+    await page.setViewportSize(viewport);
+    await page.goto("/app/audit", { waitUntil: "domcontentloaded" });
+    await waitForWorkbenchReady(page, "/app/audit");
+
+    const results = await new AxeBuilder({ page })
+      .withTags(wcagTags)
+      .analyze();
+    expect(results.violations).toEqual([]);
   });
 
   test("theme preference persists across document navigation", async ({
@@ -205,25 +229,14 @@ test.describe("authenticated shell", () => {
     page,
   }) => {
     test.setTimeout(180_000);
+    const viewport = WORKBENCH_VIEWPORTS[3];
+    await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: "reduce" });
 
     for (const route of authenticatedRoutes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
-      const movingElements = await page
-        .locator(".app-shell-frame *")
-        .evaluateAll(
-          (elements) =>
-            elements.filter((element) => {
-              const style = getComputedStyle(element);
-              return (
-                (style.animationName !== "none" &&
-                  style.animationDuration !== "0s") ||
-                (style.transitionDuration !== "0s" &&
-                  style.transitionProperty !== "none")
-              );
-            }).length,
-        );
-      expect(movingElements, `${route} must honor reduced motion`).toBe(0);
+      await waitForWorkbenchReady(page, route);
+      await assertReducedMotion(page, route, viewport);
     }
   });
 
