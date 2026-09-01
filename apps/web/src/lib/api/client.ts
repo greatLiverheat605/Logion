@@ -36,6 +36,17 @@ export class LogionApiError extends Error {
   }
 }
 
+export function isRecentAuthRequired(
+  error: unknown,
+): error is LogionApiError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "AUTH_RECENT_LOGIN_REQUIRED"
+  );
+}
+
 export interface ApiRequestOptions extends Omit<
   RequestInit,
   "cache" | "credentials" | "headers" | "signal"

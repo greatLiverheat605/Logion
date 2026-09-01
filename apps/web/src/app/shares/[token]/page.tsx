@@ -11,9 +11,5 @@ export default async function SharePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  return (
-    <main id="main-content" className="session-state">
-      <PublicShareView token={token} />
-    </main>
-  );
+  return <PublicShareView token={token} />;
 }

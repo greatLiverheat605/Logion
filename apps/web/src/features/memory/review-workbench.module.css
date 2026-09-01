@@ -1,0 +1,858 @@
+.root {
+  min-width: 0;
+  min-height: calc(100dvh - var(--topbar-height));
+  padding: 1rem;
+  background: var(--bg-app);
+}
+
+.root :global(.workbench-frame) {
+  min-height: calc(100dvh - var(--topbar-height) - 2rem);
+}
+
+.root :global(.workbench-header) h1 {
+  font-size: 1.2rem;
+}
+
+.root :global(.workbench-header-actions) {
+  align-self: center;
+}
+
+.root :global(.workbench-pane) {
+  background: var(--bg-surface);
+}
+
+.root :global(.workbench-main) {
+  background: var(--bg-app);
+}
+
+.root :global(.workbench-inspector) {
+  background: var(--bg-muted);
+}
+
+.master,
+.main,
+.inspector {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.master {
+  display: flex;
+  padding: 0.8rem;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.masterHeader,
+.sectionHeader,
+.inspectorHeader,
+.queueHero,
+.patternRow,
+.reviewRow > header,
+.quizRow,
+.masterFooter,
+.actionRail,
+.findingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.masterHeader h2,
+.sectionHeader h2,
+.queueHero h2,
+.inspectorHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin: 0 0 0.2rem;
+  color: var(--text-tertiary);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.masterHeader :global(.product-tag),
+.sectionHeader :global(.product-tag) {
+  flex: 0 0 auto;
+}
+
+.primaryButton,
+.secondaryButton,
+.textButton,
+.iconButton {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+.secondaryButton:hover:not(:disabled),
+.textButton:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.textButton {
+  min-height: 2rem;
+  padding: 0.3rem 0.5rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.iconButton {
+  width: 2.25rem;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.textButton:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.textButton:focus-visible,
+.iconButton:focus-visible,
+.topicRow:focus-visible,
+.masteryTopic:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.queueSummary {
+  display: flex;
+  min-height: 2.3rem;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border-left: 2px solid var(--text-warning);
+  background: color-mix(in srgb, var(--text-warning) 8%, var(--bg-surface));
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.topicList,
+.quizList,
+.patternList,
+.reviewList,
+.masteryList {
+  display: grid;
+  min-width: 0;
+}
+
+.topicList {
+  gap: 0.2rem;
+}
+
+.topicListItem {
+  min-width: 0;
+}
+
+.topicListItem > .topicRow {
+  width: 100%;
+}
+
+.topicRow {
+  display: flex;
+  width: 100%;
+  min-height: 3.25rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.topicRow:hover,
+.topicRow[data-selected="true"] {
+  background: var(--bg-hover);
+}
+
+.topicRow[data-selected="true"] {
+  box-shadow: inset 2px 0 var(--primary);
+}
+
+.topicIcon,
+.quizIcon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  place-items: center;
+}
+
+.topicCopy,
+.quizCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.13rem;
+}
+
+.topicCopy {
+  flex: 1;
+}
+
+.topicCopy strong,
+.topicCopy small,
+.quizCopy strong,
+.quizCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topicCopy strong,
+.quizCopy strong {
+  font-size: 0.73rem;
+  font-weight: 650;
+}
+
+.topicCopy small,
+.quizCopy small {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+}
+
+.muted,
+.listEmpty,
+.formHint {
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.dueDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: 0 0 0.45rem;
+  border-radius: 50%;
+  background: var(--text-warning);
+}
+
+.masterFooter {
+  align-items: center;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-tertiary);
+  font-size: 0.68rem;
+}
+
+.masterFooter strong {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.dependencyList {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dependencyList p {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.main {
+  padding: 0.75rem 1rem 2rem;
+  overflow: auto;
+}
+
+.statusLine {
+  display: flex;
+  min-height: 1.1rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.45rem;
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.statusLine > span {
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 0.4rem;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.main :global(.product-workbench-state),
+.main :global(.product-operational-state) {
+  margin-bottom: 0.65rem;
+}
+
+.panelStack {
+  display: grid;
+  gap: 0.85rem;
+  padding-top: 0.8rem;
+}
+
+.queueHero {
+  align-items: flex-end;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.queueHero p,
+.sectionHeader p,
+.inspectorHeader p {
+  max-width: 58ch;
+  margin: 0.3rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.heroMetric {
+  display: grid;
+  min-width: 3.4rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  text-align: center;
+}
+
+.heroMetric strong {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.heroMetric span {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+}
+
+.section {
+  min-width: 0;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionHeader {
+  align-items: flex-start;
+  margin-bottom: 0.65rem;
+}
+
+.quizList,
+.patternList,
+.reviewList {
+  border-top: 1px solid var(--border);
+}
+
+.quizRow,
+.patternRow,
+.reviewRow {
+  min-width: 0;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.quizRow {
+  align-items: center;
+}
+
+.quizCopy {
+  flex: 1;
+}
+
+.quizCopy strong {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.loadSection {
+  padding-bottom: 0.5rem;
+}
+
+.loadBars {
+  display: grid;
+  min-height: 7.8rem;
+  align-items: end;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0;
+  border-bottom: 1px solid var(--border);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.loadBar {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 0.2rem;
+}
+
+.loadBar > span {
+  display: block;
+  width: min(1.5rem, 70%);
+  min-height: 0.35rem;
+  border-radius: 2px 2px 0 0;
+  background: var(--primary);
+}
+
+.loadBar strong {
+  color: var(--text-primary);
+  font-size: 0.68rem;
+}
+
+.loadBar small {
+  color: var(--text-tertiary);
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+
+.segmented {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+
+.segmented button {
+  min-height: 2rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-sm) - 0.1rem);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.67rem;
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.masteryList {
+  border-top: 1px solid var(--border);
+}
+
+.masteryRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.masteryTopic {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.18rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.masteryTopic strong {
+  font-size: 0.73rem;
+}
+
+.masteryTopic small {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.masteryForm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.masteryForm select,
+.findingForm select,
+.sheetForm select,
+.sheetForm input,
+.sheetForm textarea,
+.findingForm input,
+.findingForm textarea {
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.actionRail {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+
+.patternRow {
+  align-items: center;
+}
+
+.patternRow > div,
+.reviewRow > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.patternRow strong,
+.reviewRow strong {
+  font-size: 0.73rem;
+}
+
+.patternRow small,
+.reviewRow small {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+}
+
+.reviewRow > header {
+  align-items: center;
+}
+
+.findingList {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem 0;
+}
+
+.findingRow {
+  align-items: center;
+  justify-content: flex-start;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.findingRow > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.findingRow > small {
+  flex: 0 0 auto;
+}
+
+.findingForm {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: 7rem minmax(0, 1fr) minmax(0, 1fr) auto auto;
+}
+
+.inspector {
+  padding-bottom: 1rem;
+  overflow: auto;
+}
+
+.inspectorHeader {
+  display: block;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspectorHeader h2 {
+  font-size: 0.95rem;
+}
+
+.inspectorHeader p {
+  overflow-wrap: anywhere;
+}
+
+.metaList {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.metaList > div {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+}
+
+.metaList dt {
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.metaList dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.69rem;
+  overflow-wrap: anywhere;
+}
+
+.emptyPane {
+  display: grid;
+  min-height: 8rem;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+}
+
+.emptyPane > span {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--primary);
+  place-items: center;
+}
+
+.emptyPane h2,
+.emptyPane p {
+  margin: 0;
+}
+
+.emptyPane h2 {
+  font-size: 0.8rem;
+}
+
+.emptyPane p {
+  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.69rem;
+  line-height: 1.5;
+}
+
+.sheetForm {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sheetForm label {
+  margin-top: 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.sheetForm textarea {
+  resize: vertical;
+}
+
+.promptBox {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border-left: 2px solid var(--primary);
+  background: var(--bg-muted);
+}
+
+.promptBox strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.promptBox small,
+.formHint {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.disclosureNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+@media (max-width: 719px) {
+  .root {
+    padding: 0;
+    padding-bottom: 4.5rem;
+  }
+
+  .root :global(.workbench-header) {
+    display: block;
+  }
+
+  .root :global(.workbench-header-actions) {
+    margin-top: 0.65rem;
+  }
+
+  .root :global(.workbench-header-actions) .primaryButton {
+    width: 100%;
+  }
+
+  .master,
+  .main,
+  .inspector {
+    min-height: 0;
+  }
+
+  .master {
+    padding: 0.7rem;
+  }
+
+  .main {
+    padding: 0.7rem 0.85rem 2rem;
+    overflow: visible;
+  }
+
+  .segmented {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .segmented button {
+    flex: 0 0 auto;
+    min-height: 2.75rem;
+  }
+
+  .quizRow,
+  .patternRow,
+  .reviewRow > header,
+  .masteryRow {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .quizRow .primaryButton,
+  .patternRow .secondaryButton {
+    min-height: 2.75rem;
+  }
+
+  .findingForm {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .findingForm input,
+  .findingForm select {
+    grid-column: 1 / -1;
+  }
+
+  .findingForm button {
+    min-height: 2.75rem;
+  }
+
+  .masteryForm {
+    width: 100%;
+  }
+
+  .masteryForm select {
+    min-height: 2.75rem;
+    flex: 1;
+  }
+
+  .masteryForm button {
+    min-height: 2.75rem;
+  }
+
+  .actionRail {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actionRail > * {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 359px) {
+  .queueHero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .heroMetric {
+    width: 100%;
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .loadBars {
+    gap: 0.25rem;
+  }
+
+  .loadBar small {
+    font-size: 0.56rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

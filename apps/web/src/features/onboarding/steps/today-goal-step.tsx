@@ -8,12 +8,14 @@ import {
 } from "../onboarding-setup-service";
 
 interface TodayGoalStepProps {
+  onBack: () => void;
   onNext: () => void;
   spaceId: string;
   workspaceId: string;
 }
 
 export function TodayGoalStep({
+  onBack,
   onNext,
   spaceId,
   workspaceId,
@@ -44,10 +46,16 @@ export function TodayGoalStep({
   }
 
   return (
-    <section aria-labelledby="today-goal-title" className="onboarding-step">
+    <section
+      aria-labelledby="today-goal-title"
+      className="onboarding-step"
+      data-testid="onboarding-step"
+    >
       <header>
         <p className="eyebrow">STEP 6 · REQUIRED</p>
-        <h1 id="today-goal-title">设定今日目标</h1>
+        <h1 id="today-goal-title" tabIndex={-1}>
+          设定今日目标
+        </h1>
         <p>创建一条今天就能开始、结果可验收的学习目标。</p>
       </header>
       <form className="onboarding-form" onSubmit={createGoal}>
@@ -92,8 +100,22 @@ export function TodayGoalStep({
             今日目标未能创建，请重试。
           </p>
         ) : null}
-        <div className="onboarding-actions">
-          <button className="primary-action" disabled={pending} type="submit">
+        <div className="onboarding-actions" data-testid="onboarding-recovery">
+          <button
+            className="secondary-button"
+            disabled={pending}
+            type="button"
+            onClick={onBack}
+          >
+            上一步
+          </button>
+          <span>写入当前空间</span>
+          <button
+            className="primary-action"
+            data-workbench-primary="true"
+            disabled={pending}
+            type="submit"
+          >
             {pending ? "正在创建目标…" : "创建目标并继续"}
           </button>
         </div>

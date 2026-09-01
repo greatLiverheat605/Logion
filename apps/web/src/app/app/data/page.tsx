@@ -1,11 +1,11 @@
 import { SecurityDataNavigation } from "@/components/product/security-data-navigation";
-import { DataSovereigntyCenter } from "@/features/portability/data-sovereignty-center";
+import { DataRoute } from "@/features/data/data-workbench";
 
 export default function DataPage() {
   return (
     <>
       <SecurityDataNavigation active="data" />
-      <DataSovereigntyCenter />
+      <DataRoute />
     </>
   );
 }

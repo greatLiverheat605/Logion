@@ -63,6 +63,7 @@ function isMfaChallenge(value: unknown): value is MfaChallengeResponse {
     typeof value.challenge_token === "string" &&
     typeof value.expires_at === "string" &&
     Array.isArray(value.methods) &&
+    value.methods.length > 0 &&
     value.methods.every(
       (method) => method === "totp" || method === "recovery_code",
     )

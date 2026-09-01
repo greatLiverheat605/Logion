@@ -10,6 +10,8 @@ export type AppIconName =
   | "clipboard"
   | "close"
   | "download"
+  | "eye"
+  | "eye-off"
   | "files"
   | "flask"
   | "folder"
@@ -19,14 +21,17 @@ export type AppIconName =
   | "menu"
   | "moon"
   | "more"
+  | "more-horizontal"
   | "plus"
   | "refresh"
   | "search"
+  | "share"
   | "shield"
   | "sun"
   | "target"
   | "timer"
   | "unlock"
+  | "upload"
   | "users";
 
 const ICON_PATHS: Readonly<Record<AppIconName, readonly string[]>> = {
@@ -67,6 +72,16 @@ const ICON_PATHS: Readonly<Record<AppIconName, readonly string[]>> = {
   ],
   close: ["M6 6l12 12", "M18 6 6 18"],
   download: ["M12 3v12", "m7 10 5 5 5-5", "M5 21h14"],
+  eye: [
+    "M2.1 12s3.6-7 9.9-7 9.9 7 9.9 7-3.6 7-9.9 7S2.1 12 2.1 12Z",
+    "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  ],
+  "eye-off": [
+    "m3 3 18 18",
+    "M10.6 5.2A10.4 10.4 0 0 1 12 5c6.3 0 9.9 7 9.9 7a16.7 16.7 0 0 1-2.1 3.1",
+    "M6.2 6.2C3.6 8.1 2.1 12 2.1 12s3.6 7 9.9 7a9.5 9.5 0 0 0 4.1-.9",
+    "M9.9 9.9A3 3 0 0 0 14.1 14.1",
+  ],
   files: [
     "M7 3h7l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z",
     "M14 3v5h5",
@@ -91,6 +106,7 @@ const ICON_PATHS: Readonly<Record<AppIconName, readonly string[]>> = {
   menu: ["M4 7h16", "M4 12h16", "M4 17h16"],
   moon: ["M20.5 14.2A8 8 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"],
   more: ["M5 12h.01", "M12 12h.01", "M19 12h.01"],
+  "more-horizontal": ["M5 12h.01", "M12 12h.01", "M19 12h.01"],
   plus: ["M12 5v14", "M5 12h14"],
   refresh: [
     "M20 7v5h-5",
@@ -99,6 +115,12 @@ const ICON_PATHS: Readonly<Record<AppIconName, readonly string[]>> = {
     "M5.5 14A7 7 0 0 0 17.3 17.3L20 15",
   ],
   search: ["M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z", "m21 21-4.4-4.4"],
+  share: [
+    "M18 8a3 3 0 1 0-2.83-4",
+    "M6 14a3 3 0 1 0 2.83 4",
+    "M8.7 13.5l6.6-3",
+    "M8.7 10.5l6.6 3",
+  ],
   shield: [
     "M12 3 4.5 6v5.5c0 4.5 3 7.7 7.5 9.5 4.5-1.8 7.5-5 7.5-9.5V6L12 3Z",
     "m9 12 2 2 4-4",
@@ -125,6 +147,7 @@ const ICON_PATHS: Readonly<Record<AppIconName, readonly string[]>> = {
     "M8 10V7a4 4 0 0 1 7.6-1.75",
     "M12 14v2",
   ],
+  upload: ["M12 16V4", "m7 9 5-5 5 5", "M5 20h14"],
   users: [
     "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",
     "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",

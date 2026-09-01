@@ -1,0 +1,776 @@
+.root {
+  min-width: 0;
+}
+
+.root :global(.workbench-frame) {
+  min-height: calc(100dvh - var(--topbar-height));
+}
+
+.primaryButton,
+.secondaryButton,
+.iconButton,
+.sectionAction {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.primaryButton {
+  padding: 0.55rem 0.85rem;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+.secondaryButton,
+.iconButton,
+.sectionAction {
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.secondaryButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled),
+.sectionAction:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.iconButton {
+  width: 2.75rem;
+  padding: 0;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.iconButton:disabled,
+.sectionAction:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.iconButton:focus-visible,
+.sectionAction:focus-visible,
+.goalRow:focus-visible,
+.sectionLink:focus-visible,
+.sheetForm :is(input, textarea, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.desktopContextControls {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mobileContextControls {
+  display: none;
+  margin-left: auto;
+}
+
+.contextPopover {
+  display: grid;
+  width: min(18rem, calc(100vw - 2rem));
+  gap: 0.65rem;
+}
+
+.contextPopover :global(.headless-select-trigger),
+.contextPopover .secondaryButton {
+  width: 100%;
+}
+
+.eyebrow {
+  margin: 0 0 0.2rem;
+  color: var(--text-tertiary);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.master,
+.main,
+.inspector {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.master {
+  display: flex;
+  flex-direction: column;
+}
+
+.paneHeader,
+.goalHeading,
+.sectionHeader,
+.phaseBody > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.paneHeader {
+  min-height: 4rem;
+  padding: 0.8rem 0.85rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.paneHeader h2,
+.goalHeading h2,
+.sectionHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.35;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  display: grid;
+  min-width: 1.55rem;
+  height: 1.55rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  place-items: center;
+}
+
+.goalList {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.goalRow {
+  display: grid;
+  width: 100%;
+  min-height: 5.25rem;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.6rem;
+  padding: 0.72rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.goalRow:hover,
+.goalRow[data-selected="true"] {
+  background: var(--bg-hover);
+}
+
+.goalRow[data-selected="true"] {
+  box-shadow: inset 2px 0 var(--primary);
+}
+
+.goalIcon,
+.taskIcon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--text-tertiary);
+  place-items: center;
+}
+
+.goalCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.goalCopy strong {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.goalCopy small,
+.phaseBody small,
+.taskRow small {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.goalCopy > small {
+  color: var(--text-secondary);
+}
+
+.goalTags :global(.product-tag.tone-good) {
+  color: color-mix(in srgb, var(--text-success) 88%, var(--text-primary));
+}
+
+.goalTags {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.masterFooter {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+.main {
+  background: var(--bg-surface);
+}
+
+.main > :global(.product-operational-state) {
+  margin: 0.8rem 1rem 0;
+}
+
+.statusLine {
+  display: flex;
+  min-height: 2.2rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.69rem;
+  line-height: 1.4;
+}
+
+.statusLine > span {
+  width: 0.42rem;
+  height: 0.42rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--text-success);
+}
+
+.goalSummary,
+.workspaceSection {
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.goalHeading h2 {
+  max-width: 42ch;
+  font-size: 1.04rem;
+}
+
+.goalHeading p:not(.eyebrow),
+.goalDescription,
+.sectionHeader p,
+.phaseBody p,
+.listEmpty,
+.inspectorProse {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.goalHeading p:not(.eyebrow) {
+  max-width: 68ch;
+  margin-top: 0.32rem;
+}
+
+.goalStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.9rem 0 0;
+}
+
+.goalStats > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+
+.goalStats dt,
+.metaList dt {
+  color: var(--text-tertiary);
+  font-size: 0.63rem;
+}
+
+.goalStats dd,
+.metaList dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.goalDescription {
+  max-width: 74ch;
+  margin-top: 0.8rem;
+}
+
+.sectionHeader {
+  align-items: center;
+  padding-bottom: 0.72rem;
+}
+
+.sectionHeader p {
+  margin-top: 0.15rem;
+  font-size: 0.67rem;
+}
+
+.sectionAction {
+  min-height: 2.25rem;
+  font-size: 0.68rem;
+}
+
+.sectionLink {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  color: var(--accent-text);
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.phaseRoute {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.phaseItem {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+.phaseMarker {
+  display: grid;
+  grid-template-rows: 1.65rem minmax(0, 1fr);
+  justify-items: center;
+}
+
+.phaseMarker > span {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 58%, var(--border));
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--primary) 10%, var(--bg-surface));
+  color: var(--primary);
+  font-size: 0.67rem;
+  font-weight: 700;
+  place-items: center;
+}
+
+.phaseMarker > i {
+  width: 1px;
+  min-height: 1.1rem;
+  background: var(--border-strong);
+}
+
+.phaseBody {
+  display: grid;
+  gap: 0.62rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.7rem;
+  background: var(--bg-muted);
+}
+
+.phaseBody header strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.phaseBody header small {
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.criteria {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+
+.criteria > span {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+}
+
+.criteria ul {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  list-style-position: inside;
+}
+
+.predecessor {
+  color: var(--text-tertiary);
+}
+
+.taskList {
+  border-top: 1px solid var(--border);
+}
+
+.taskRow {
+  display: grid;
+  min-height: 3.6rem;
+  grid-template-columns: 2rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.taskRow > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.taskRow strong {
+  color: var(--text-primary);
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
+}
+
+.taskRow > span:not(.taskIcon) {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+}
+
+.listEmpty {
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.emptyPane {
+  display: grid;
+  min-height: 14rem;
+  align-content: center;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 2rem 1.2rem;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.emptyPane > span {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  place-items: center;
+}
+
+.emptyPane strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.emptyPane p {
+  max-width: 34ch;
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.metaList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.metaList > div {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.metaList > div:last-child {
+  border-bottom: 0;
+}
+
+.inspectorCriteria {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.inspectorCriteria > div {
+  display: grid;
+  gap: 0.15rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspectorCriteria strong {
+  color: var(--text-primary);
+  font-size: 0.69rem;
+}
+
+.inspectorCriteria span {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sheetForm {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sheetForm > label,
+.sheetForm label > span {
+  color: var(--text-secondary);
+  font-size: 0.71rem;
+  font-weight: 620;
+}
+
+.sheetForm :is(input, textarea) {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.58rem 0.68rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.sheetForm textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.fieldGrid > label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.secondaryFields {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+}
+
+.secondaryFields summary {
+  min-height: 2.75rem;
+  padding: 0.72rem 0.8rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.secondaryFields > div {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0 0.8rem 0.8rem;
+}
+
+.formDivider {
+  display: grid;
+  gap: 0.15rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.2rem;
+}
+
+.formDivider strong {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+}
+
+.formDivider span {
+  color: var(--text-tertiary);
+  font-size: 0.66rem;
+}
+
+@media (max-width: 719px) {
+  .root :global(.workbench-frame) {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .root :global(.workbench-context-bar) {
+    overflow-x: visible;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.8rem;
+  }
+
+  .root :global(.workbench-pane-switcher) {
+    display: none;
+  }
+
+  .root :global(.workbench-grid) {
+    display: flex;
+    min-height: 0;
+    flex: none;
+    flex-direction: column;
+  }
+
+  .root :global(.workbench-pane) {
+    display: block;
+    height: auto;
+    max-height: none;
+    border: 0;
+    overflow: visible;
+  }
+
+  .root :global(.workbench-master) {
+    max-height: min(22rem, 42dvh);
+    border-bottom: 1px solid var(--border);
+    overflow: auto;
+  }
+
+  .root :global(.workbench-inspector) {
+    border-top: 1px solid var(--border);
+  }
+
+  .desktopContextControls {
+    display: none;
+  }
+
+  .mobileContextControls {
+    display: block;
+  }
+
+  .root :global(.workbench-toolbar) {
+    justify-content: flex-end;
+  }
+
+  .root :global(.workbench-header) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .root :global(.workbench-description) {
+    max-width: 30ch;
+  }
+
+  .goalSummary,
+  .workspaceSection {
+    padding: 0.9rem 1rem;
+  }
+
+  .goalStats {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeader {
+    align-items: flex-start;
+  }
+
+  .taskRow {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+  }
+
+  .sectionAction,
+  .sectionLink {
+    min-height: 2.75rem;
+  }
+
+  .taskRow > small {
+    display: none;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 389px) {
+  .root :global(.workbench-header) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .root :global(.workbench-header-actions) {
+    justify-content: flex-start;
+  }
+
+  .primaryButton:not(.iconButton),
+  .secondaryButton:not(.iconButton) {
+    max-width: 100%;
+  }
+
+  .criteria {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

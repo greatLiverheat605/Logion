@@ -11,7 +11,10 @@ export function proxy(request: NextRequest) {
   const directives = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src 'self'",
+    `style-src 'self' 'nonce-${nonce}'`,
+    // Radix and Next's route announcer use React style attributes for
+    // positioning and focus affordances; keep style elements nonce-gated.
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",

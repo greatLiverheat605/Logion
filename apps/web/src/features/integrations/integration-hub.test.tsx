@@ -95,7 +95,7 @@ describe("IntegrationHub", () => {
   });
 
   it("renders ready metrics from real response records", async () => {
-    render(
+    const { container } = render(
       <IntegrationHub
         service={serviceWith({
           feeds: [
@@ -144,6 +144,11 @@ describe("IntegrationHub", () => {
         })}
       />,
     );
+
+    expect(await screen.findByTestId("integrations-summary")).toBeTruthy();
+    expect(container.querySelector('[data-testid="integrations-calendar"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="integrations-open-format"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="integrations-deferred"]')).toBeTruthy();
 
     const calendarMetric = await screen.findByText("有效日历 Feed");
     expect(calendarMetric.parentElement?.textContent).toContain("11 个已撤销");
@@ -249,6 +254,9 @@ describe("IntegrationHub", () => {
     });
     render(<IntegrationHub service={service} />);
 
+    fireEvent.click(
+      await screen.findByRole("button", { name: /导入预览 .*待确认/ }),
+    );
     fireEvent.change(await screen.findByLabelText("内容（最大 1 MiB）"), {
       target: { value: "# Imported note" },
     });
@@ -302,6 +310,9 @@ describe("IntegrationHub", () => {
     );
     render(<IntegrationHub service={service} />);
 
+    fireEvent.click(
+      await screen.findByRole("button", { name: /导出任务 .*条记录/ }),
+    );
     fireEvent.change(await screen.findByLabelText("输入 EXPORT 确认创建"), {
       target: { value: "EXPORT" },
     });

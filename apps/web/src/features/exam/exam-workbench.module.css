@@ -1,0 +1,685 @@
+.root {
+  min-width: 0;
+  min-height: calc(100dvh - var(--topbar-height));
+  padding: 1rem;
+  background: var(--bg-app);
+}
+
+.root :global(.workbench-frame) {
+  min-height: calc(100dvh - var(--topbar-height) - 2rem);
+}
+
+.root :global(.workbench-header) h1 {
+  font-size: 1.2rem;
+}
+
+.root :global(.workbench-header-actions) {
+  align-self: center;
+}
+
+.root :global(.workbench-main) {
+  background: var(--bg-app);
+}
+
+.root :global(.workbench-inspector) {
+  background: var(--bg-muted);
+}
+
+.master,
+.main,
+.inspector {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.master {
+  display: flex;
+  padding: 0.8rem;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.paneHeader,
+.sectionHeader,
+.inspectorHeader,
+.examHero,
+.subjectRow,
+.syllabusRow,
+.mockRow,
+.weakRow,
+.masterFooter {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.paneHeader h2,
+.sectionHeader h2,
+.examHero h2,
+.inspectorHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin: 0 0 0.2rem;
+  color: var(--text-tertiary);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.count,
+.sectionMeta {
+  min-width: 1.5rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  text-align: center;
+}
+
+.primaryButton,
+.secondaryButton,
+.masterPrimary,
+.sectionAction,
+.textButton,
+.iconButton {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryButton,
+.masterPrimary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.masterPrimary {
+  width: 100%;
+}
+
+.masterPrimary:hover:not(:disabled),
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+.secondaryButton:hover:not(:disabled),
+.sectionAction:hover:not(:disabled),
+.textButton:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.sectionAction,
+.textButton {
+  min-height: 2rem;
+  padding: 0.3rem 0.5rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.iconButton {
+  width: 2.25rem;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.masterPrimary:disabled,
+.sectionAction:disabled,
+.textButton:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.masterPrimary:focus-visible,
+.sectionAction:focus-visible,
+.textButton:focus-visible,
+.iconButton:focus-visible,
+.examRow:focus-visible,
+.weakRow:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.examList {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.examRow {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.35rem;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.6rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.examRow:hover,
+.examRow[data-selected="true"] {
+  background: var(--bg-hover);
+}
+
+.examRow[data-selected="true"] {
+  box-shadow: inset 2px 0 var(--primary);
+}
+
+.examIcon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--primary);
+  place-items: center;
+}
+
+.examCopy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.15rem;
+}
+
+.examCopy strong,
+.examCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.examCopy strong {
+  font-size: 0.73rem;
+  font-weight: 650;
+}
+
+.examCopy small,
+.subjectRow small,
+.syllabusRow small,
+.mockRow small,
+.weakRow small {
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+}
+
+.rowTags {
+  display: flex;
+  min-width: 0;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+/* Selected exam rows blend the tag surface with the hover background; keep the
+   success signal above the WCAG AA threshold on that composite surface. */
+.examRow[data-selected="true"] :global(.product-tag.tone-good) {
+  color: #0f5f3b;
+}
+
+:global(:root[data-theme="dark"]) .examRow[data-selected="true"] :global(.product-tag.tone-good) {
+  color: #79e6b7;
+}
+
+.masterFooter {
+  align-items: center;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-tertiary);
+  font-size: 0.68rem;
+}
+
+.main {
+  padding: 0.75rem 1rem 2rem;
+  overflow: auto;
+}
+
+.statusLine {
+  display: flex;
+  min-height: 1.1rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.45rem;
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.statusLine > span {
+  width: 0.4rem;
+  height: 0.4rem;
+  flex: 0 0 0.4rem;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.examHero {
+  align-items: center;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.examHero p,
+.sectionHeader p,
+.inspectorHeader p {
+  max-width: 60ch;
+  margin: 0.3rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.heroMetric {
+  display: grid;
+  min-width: 4.4rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  text-align: center;
+}
+
+.heroMetric strong {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.heroMetric span {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+}
+
+.section {
+  min-width: 0;
+  padding: 0.95rem 0 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionHeader {
+  align-items: flex-start;
+  margin-bottom: 0.65rem;
+}
+
+.sectionHeader p {
+  margin-top: 0.25rem;
+}
+
+.metricStrip {
+  display: grid;
+  margin-bottom: 0.65rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metricStrip > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.55rem 0.6rem;
+  border-right: 1px solid var(--border);
+}
+
+.metricStrip > div:last-child {
+  border-right: 0;
+}
+
+.metricStrip span {
+  color: var(--text-tertiary);
+  font-size: 0.63rem;
+}
+
+.metricStrip strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+.subjectList,
+.syllabusList,
+.mockList,
+.weakList {
+  display: grid;
+  min-width: 0;
+}
+
+.subjectRow,
+.syllabusRow,
+.mockRow {
+  min-width: 0;
+  align-items: center;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.subjectRow > div:first-child,
+.syllabusRow > div,
+.mockRow > div,
+.weakRow > span {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.16rem;
+}
+
+.subjectRow strong,
+.syllabusRow strong,
+.mockRow strong,
+.weakRow strong {
+  color: var(--text-primary);
+  font-size: 0.73rem;
+}
+
+.meter {
+  width: min(10rem, 30%);
+  height: 0.35rem;
+  flex: 0 0 auto;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+}
+
+.percent {
+  width: 2.7rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  text-align: right;
+}
+
+.treeIndent {
+  width: 1rem;
+  flex: 0 0 1rem;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.weakRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  text-decoration: none;
+}
+
+.weakRow:hover strong {
+  color: var(--primary);
+}
+
+.emptyPane {
+  display: grid;
+  min-height: 7rem;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px dashed var(--border-strong);
+  background: var(--bg-surface);
+  grid-template-columns: 2rem minmax(0, 1fr);
+}
+
+.emptyPane > span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--primary);
+  place-items: center;
+}
+
+.emptyPane strong,
+.emptyPane p {
+  margin: 0;
+}
+
+.emptyPane strong {
+  color: var(--text-primary);
+  font-size: 0.76rem;
+}
+
+.emptyPane p,
+.inspectorNote,
+.formHint {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.inspector {
+  padding-bottom: 1rem;
+  overflow: auto;
+}
+
+.inspectorHeader {
+  display: block;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspectorHeader h2 {
+  font-size: 0.95rem;
+}
+
+.metaList {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.metaList > div {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+}
+
+.metaList dt {
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.metaList dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.69rem;
+  overflow-wrap: anywhere;
+}
+
+.inspectorNote {
+  margin: 0.8rem 0.9rem;
+  padding: 0.65rem 0.7rem;
+  border-left: 2px solid var(--primary);
+  background: var(--bg-surface);
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.sheetForm {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sheetForm label,
+.choiceField legend {
+  margin-top: 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.sheetForm input,
+.sheetForm select {
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.choiceField {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.1rem 0;
+  border: 0;
+}
+
+.choiceField label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.choiceField input {
+  min-height: 1rem;
+}
+
+.formGrid {
+  display: grid;
+  gap: 0.4rem 0.55rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 719px) {
+  .root {
+    padding: 0;
+    padding-bottom: 4.5rem;
+  }
+
+  .root :global(.workbench-header) {
+    display: block;
+  }
+
+  .root :global(.workbench-header-actions) {
+    margin-top: 0.65rem;
+  }
+
+  .root :global(.workbench-header-actions) .primaryButton {
+    width: 100%;
+  }
+
+  .master,
+  .main,
+  .inspector {
+    min-height: 0;
+  }
+
+  .master {
+    padding: 0.7rem;
+  }
+
+  .main {
+    padding: 0.7rem 0.85rem 2rem;
+    overflow: visible;
+  }
+
+  .metricStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricStrip > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .metricStrip > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .subjectRow,
+  .syllabusRow,
+  .mockRow,
+  .examHero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .meter {
+    width: 100%;
+    order: 3;
+  }
+
+  .percent {
+    margin-left: auto;
+  }
+
+  .sectionAction,
+  .textButton {
+    min-height: 2.75rem;
+  }
+
+  .sheetForm input,
+  .sheetForm select {
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 359px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

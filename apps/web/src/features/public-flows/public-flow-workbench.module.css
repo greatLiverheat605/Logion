@@ -1,0 +1,475 @@
+.page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.page :global(.access-header) {
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+}
+
+.page :global(.access-brand) {
+  min-height: 40px;
+}
+
+.stage {
+  display: grid;
+  flex: 1;
+  place-items: start center;
+  padding: clamp(24px, 8vh, 72px) 0 40px;
+}
+
+.panel {
+  width: min(100%, 460px);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(18 24 38 / 8%);
+}
+
+.wide .panel {
+  width: min(100%, 680px);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0 24px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.header {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.description {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.stack {
+  display: grid;
+  gap: 14px;
+}
+
+.region {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.region h2,
+.region h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.muted {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metaList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.metaRow {
+  display: grid;
+  grid-template-columns: minmax(100px, .65fr) minmax(0, 1.35fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.metaRow:last-child {
+  border-bottom: 0;
+}
+
+.metaRow dt {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.metaRow dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.badge {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-surface);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.noticeWarning {
+  border-color: color-mix(in srgb, var(--text-warning) 40%, var(--border));
+  background: color-mix(in srgb, var(--text-warning) 9%, var(--surface-2));
+  color: var(--text);
+}
+
+.noticeSuccess {
+  border-color: color-mix(in srgb, var(--text-success) 40%, var(--border));
+  background: color-mix(in srgb, var(--text-success) 9%, var(--surface-2));
+  color: var(--text);
+}
+
+.state {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.state > :last-child,
+.stateBody {
+  min-width: 0;
+}
+
+.stateIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.state h2 {
+  margin: 1px 0 5px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.stateBody {
+  display: grid;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.stateBody p {
+  margin: 0;
+}
+
+.stateNeutral .stateIcon {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.stateSuccess .stateIcon {
+  background: color-mix(in srgb, var(--text-success) 14%, var(--surface-3));
+  color: var(--text-success);
+}
+
+.stateWarning .stateIcon {
+  background: color-mix(in srgb, var(--text-warning) 14%, var(--surface-3));
+  /* The light token is intentionally darkened here to clear the 4.5:1 AA threshold on the mixed surface. */
+  color: #7f4b00;
+}
+
+:global(:root[data-theme="dark"]) .stateWarning .stateIcon {
+  color: var(--text-warning);
+}
+
+.stateError .stateIcon {
+  background: color-mix(in srgb, var(--text-danger) 14%, var(--surface-3));
+  color: var(--text-danger);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.actions button,
+.primaryLink,
+.secondaryLink,
+.dangerButton {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 680;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.actions button:hover:not(:disabled),
+.primaryLink:hover,
+.secondaryLink:hover,
+.dangerButton:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--surface-3);
+}
+
+.primaryLink {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--primary-foreground);
+}
+
+.primaryLink:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--primary-foreground);
+}
+
+.dangerButton {
+  border-color: color-mix(in srgb, var(--text-danger) 55%, var(--border-strong));
+  color: var(--text-danger);
+}
+
+.actions button:disabled,
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  padding-top: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.linkRow a {
+  color: var(--accent-text);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.linkRow a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.snapshot {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.snapshotRow {
+  display: grid;
+  grid-template-columns: minmax(120px, .35fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.snapshotRow:last-child {
+  border-bottom: 0;
+}
+
+.snapshotKey {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.snapshotValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.snapshotValue ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.field input:focus-visible,
+.actions button:focus-visible,
+.primaryLink:focus-visible,
+.secondaryLink:focus-visible,
+.dangerButton:focus-visible,
+.linkRow a:focus-visible {
+  outline: 2px solid var(--surface);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent);
+}
+
+.subtleCode {
+  overflow-wrap: anywhere;
+  color: var(--text-3);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+}
+
+@media (max-width: 719px) {
+  .shell {
+    padding: 0 16px;
+  }
+
+  .stage {
+    padding: 20px 0 24px;
+  }
+
+  .panel {
+    padding: 22px;
+  }
+
+  .footer {
+    flex-direction: column;
+    gap: 5px;
+    padding-bottom: 18px;
+  }
+
+  .actions button,
+  .primaryLink,
+  .secondaryLink,
+  .dangerButton,
+  .field input {
+    min-height: 44px;
+  }
+
+  .actions > * {
+    flex: 1 1 140px;
+  }
+
+  .metaRow,
+  .snapshotRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 359px) {
+  .shell {
+    padding: 0 12px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    animation-duration: 0s !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+  }
+}

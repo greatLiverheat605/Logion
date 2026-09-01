@@ -1,0 +1,801 @@
+.public-flow-page {
+  min-height: 100vh;
+  padding: 0 20px 32px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.public-flow-page .access-shell {
+  width: min(100%, 72rem);
+  min-height: calc(100vh - 32px);
+}
+
+.public-flow-page .access-header {
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+}
+
+.public-flow-page .access-brand {
+  min-height: 44px;
+  gap: 8px;
+  color: var(--text);
+}
+
+.public-flow-page .access-brand-mark {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--primary-foreground);
+  box-shadow: var(--shadow-card);
+  font-size: 12px;
+}
+
+.public-flow-page .access-brand-copy strong {
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.public-flow-page .access-theme-toggle {
+  width: 40px;
+  min-height: 40px;
+}
+
+.access-page .access-entry-action-index {
+  color: #5b635e;
+}
+
+:root[data-theme="dark"] .access-page .access-entry-action-index {
+  color: var(--access-muted);
+}
+
+.public-flow-stage {
+  display: grid;
+  flex: 1;
+  place-items: start center;
+  padding: clamp(20px, 5vh, 44px) 0 48px;
+}
+
+.public-flow-panel {
+  width: min(100%, 440px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(31 39 51 / 8%);
+}
+
+:root[data-theme="dark"] .public-flow-panel {
+  box-shadow: 0 12px 32px rgb(0 0 0 / 26%);
+}
+
+.public-flow-page .auth-card {
+  animation: none;
+}
+
+.auth-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-kicker {
+  margin: 0;
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 640;
+  letter-spacing: 0;
+}
+
+.public-flow-page .auth-card h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 640;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.auth-heading > p:last-child,
+.public-flow-page .auth-description {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.public-flow-page .auth-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.auth-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.public-flow-page .auth-form label,
+.auth-field > label,
+.auth-choice-group legend {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.public-flow-page .auth-form input,
+.public-flow-page .auth-form select,
+.auth-password-control input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.public-flow-page .auth-form input:hover:not(:disabled),
+.public-flow-page .auth-form select:hover:not(:disabled),
+.auth-password-control input:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--surface);
+}
+
+.public-flow-page .auth-form input:focus-visible,
+.public-flow-page .auth-form select:focus-visible,
+.auth-password-control input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--surface);
+  box-shadow: 0 0 0 4px var(--accent-border);
+}
+
+.auth-password-control {
+  position: relative;
+  min-width: 0;
+}
+
+.auth-password-control input {
+  padding-right: 44px;
+}
+
+.public-flow-page .auth-password-toggle {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+}
+
+.public-flow-page .auth-password-toggle:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+  transform: none;
+}
+
+.auth-field-hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.public-flow-page .auth-form button,
+.public-flow-page .auth-links button,
+.public-flow-page .secondary-button,
+.public-flow-page .primary-action {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 620;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.public-flow-page .auth-form [data-workbench-primary="true"],
+.public-flow-page [data-workbench-primary="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--primary-foreground);
+}
+
+.public-flow-page .auth-form button:hover:not(:disabled),
+.public-flow-page .auth-links button:hover:not(:disabled),
+.public-flow-page .secondary-button:hover:not(:disabled),
+.public-flow-page .primary-action:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--surface-3);
+  color: var(--text);
+  transform: none;
+}
+
+.public-flow-page
+  .auth-form
+  [data-workbench-primary="true"]:hover:not(:disabled),
+.public-flow-page [data-workbench-primary="true"]:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--primary-foreground);
+}
+
+.public-flow-page button:disabled,
+.public-flow-page input:disabled,
+.public-flow-page select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.public-flow-page :is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--surface);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent);
+}
+
+.auth-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  height: 1px;
+  background: var(--border);
+  content: "";
+}
+
+.auth-note,
+.auth-policy {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auth-policy {
+  margin-top: 16px;
+}
+
+.auth-policy strong {
+  color: var(--accent-text);
+}
+
+.auth-choice-group {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.auth-choice-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.auth-choice-row-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.auth-choice-row label {
+  position: relative;
+  min-width: 0;
+}
+
+.auth-choice-row input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.auth-choice-row span {
+  display: grid;
+  min-height: 40px;
+  place-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  text-align: center;
+}
+
+.auth-choice-row input:checked + span {
+  border-color: var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent-text);
+}
+
+.auth-choice-row input:focus-visible + span {
+  outline: 2px solid var(--surface);
+  box-shadow: 0 0 0 4px var(--accent);
+}
+
+.public-flow-page .form-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.public-flow-page .form-message p {
+  margin: 0;
+}
+
+.public-flow-page .form-message p + p {
+  margin-top: 4px;
+}
+
+.public-flow-page .auth-links,
+.public-flow-page .auth-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.public-flow-page .auth-links a,
+.public-flow-page .auth-switch a,
+.public-flow-page .form-success a {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  color: var(--accent-text);
+  font-weight: 620;
+  text-decoration: none;
+}
+
+.public-flow-page .auth-links a:hover,
+.public-flow-page .auth-switch a:hover,
+.public-flow-page .form-success a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.public-flow-page.onboarding-page {
+  display: block;
+  background: var(--bg);
+}
+
+.onboarding-stage {
+  padding-top: 16px;
+}
+
+.onboarding-panel {
+  display: flex;
+  width: min(100%, 620px);
+  min-height: min(700px, calc(100vh - 112px));
+  flex-direction: column;
+  padding: 24px;
+}
+
+.public-flow-page .onboarding-progress,
+.public-flow-page .onboarding-step {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.public-flow-page .onboarding-progress {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+}
+
+.public-flow-page .onboarding-progress ol {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  order: -1;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.public-flow-page .onboarding-progress li {
+  min-height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+
+.public-flow-page .onboarding-progress li.active {
+  background: var(--accent);
+}
+
+.public-flow-page .onboarding-progress > p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.onboarding-context {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--border);
+  overflow: hidden;
+}
+
+.onboarding-context span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.onboarding-context strong {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-flow-page .onboarding-step {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 0 0;
+}
+
+.public-flow-page .onboarding-step > header {
+  display: grid;
+  gap: 8px;
+}
+
+.public-flow-page .onboarding-step > header .eyebrow {
+  margin: 0;
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.public-flow-page .onboarding-step > header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 640;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.public-flow-page .onboarding-step > header h1:focus {
+  outline: none;
+}
+
+.public-flow-page .onboarding-step > header p:last-child {
+  max-width: 520px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.public-flow-page .onboarding-persona-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.public-flow-page .persona-card {
+  display: grid;
+  min-width: 0;
+  min-height: 64px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 2px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--text-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.public-flow-page .persona-card:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--surface-2);
+}
+
+.public-flow-page .persona-card.active {
+  border-color: var(--accent);
+  background: var(--accent-surface);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.public-flow-page .persona-card-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.public-flow-page .persona-card strong {
+  align-self: end;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.public-flow-page .persona-card span:not(.persona-card-icon) {
+  align-self: start;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-flow-page .onboarding-form {
+  display: grid;
+  gap: 14px;
+}
+
+.public-flow-page .onboarding-form > label,
+.public-flow-page .onboarding-inline-form > label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.public-flow-page .onboarding-form :is(input, select, textarea),
+.public-flow-page .onboarding-inline-form :is(input, select) {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.public-flow-page .onboarding-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.public-flow-page .onboarding-form :is(input, select, textarea):focus-visible,
+.public-flow-page .onboarding-inline-form :is(input, select):focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--surface);
+  box-shadow: 0 0 0 4px var(--accent-border);
+}
+
+.public-flow-page .onboarding-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.public-flow-page .onboarding-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.public-flow-page .onboarding-divider::before,
+.public-flow-page .onboarding-divider::after {
+  height: 1px;
+  background: var(--border);
+  content: "";
+}
+
+.public-flow-page .onboarding-preview {
+  display: grid;
+  min-height: 120px;
+  place-content: center;
+  gap: 6px;
+  padding: 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.public-flow-page .onboarding-preview p {
+  max-width: 360px;
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.public-flow-page .onboarding-actions {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) 1fr minmax(88px, auto);
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.public-flow-page .onboarding-actions > span {
+  color: var(--text-3);
+  font-size: 11px;
+  text-align: center;
+}
+
+.public-flow-page .onboarding-actions > :only-child {
+  grid-column: 3;
+}
+
+@media (max-width: 719px) {
+  .public-flow-page .auth-links button,
+  .public-flow-page .onboarding-form :is(input, select, textarea),
+  .public-flow-page .onboarding-inline-form :is(input, select),
+  .public-flow-page .persona-card {
+    min-height: 44px;
+  }
+
+  .onboarding-stage {
+    padding-top: 8px;
+  }
+
+  .onboarding-panel {
+    min-height: calc(100vh - 88px);
+    padding: 24px;
+  }
+
+  .onboarding-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .public-flow-page .onboarding-persona-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-flow-page .onboarding-inline-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 359px) {
+  .onboarding-panel {
+    padding: 20px;
+  }
+
+  .public-flow-page .onboarding-actions {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .public-flow-page .onboarding-actions > span {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 719px) {
+  .public-flow-page {
+    padding: 0 16px 24px;
+  }
+
+  .public-flow-page .access-header {
+    min-height: 56px;
+  }
+
+  .public-flow-page .access-shell {
+    min-height: calc(100vh - 24px);
+  }
+
+  .public-flow-page .access-theme-toggle {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .public-flow-stage {
+    padding: 16px 0 32px;
+  }
+
+  .public-flow-panel {
+    padding: 24px;
+  }
+
+  .public-flow-page .auth-form input,
+  .public-flow-page .auth-form select,
+  .auth-password-control input,
+  .public-flow-page .auth-form button,
+  .public-flow-page .secondary-button,
+  .public-flow-page .primary-action,
+  .auth-choice-row span {
+    min-height: 44px;
+  }
+
+  .public-flow-page .auth-links a,
+  .public-flow-page .auth-switch a,
+  .public-flow-page .form-success a {
+    min-height: 44px;
+  }
+
+  .public-flow-page .auth-password-toggle {
+    width: 40px;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 359px) {
+  .public-flow-page {
+    padding-inline: 12px;
+  }
+
+  .public-flow-panel {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-flow-page *,
+  .public-flow-page *::before,
+  .public-flow-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}

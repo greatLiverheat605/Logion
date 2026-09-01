@@ -8,7 +8,7 @@ export default function OnboardingLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <SessionBoundary>
+    <SessionBoundary publicFlow>
       <PersonaProvider>
         <VaultSessionProvider>{children}</VaultSessionProvider>
       </PersonaProvider>

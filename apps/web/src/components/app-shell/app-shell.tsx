@@ -41,6 +41,15 @@ type Overlay = "command" | "mobile-more" | "notifications";
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Notification = components["schemas"]["NotificationResponse"];
 
+const WORKSPACE_ROLE_LABEL: Readonly<Record<Workspace["role"], string>> = {
+  admin: "管理员",
+  contributor: "贡献者",
+  editor: "编辑者",
+  owner: "所有者",
+  reviewer: "审阅者",
+  viewer: "查看者",
+};
+
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { state: session } = useSession();
@@ -61,6 +70,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     unread: number;
     workspaceId: string;
     workspaceName: string;
+    workspaceRole: Workspace["role"] | null;
   }>({
     latest: [],
     status: "loading",
@@ -68,6 +78,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     unread: 0,
     workspaceId: "",
     workspaceName: "",
+    workspaceRole: null,
   });
   const commandButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -131,6 +142,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             unread: 0,
             workspaceId: "",
             workspaceName: "",
+            workspaceRole: null,
           });
           return;
         }
@@ -145,6 +157,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           status: "ready",
           workspaceId: workspace.id,
           workspaceName: workspace.name,
+          workspaceRole: workspace.role,
         });
       } catch {
         setNotificationState((current) => ({
@@ -202,6 +215,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       <aside
         aria-label="主导航"
         className={`app-sidebar${menuOpen ? " open" : ""}`}
+        data-testid="app-sidebar"
       >
         <Link
           className="app-brand"
@@ -221,10 +235,20 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           onClick={closeTransientUi}
         >
           <span className="workspace-line">
-            <strong>当前工作区</strong>
+            <strong>
+              {notificationState.status === "loading"
+                ? "正在读取工作区"
+                : notificationState.workspaceName || "选择工作区"}
+            </strong>
             <AppIcon aria-hidden="true" name="chevron-down" size={15} />
           </span>
-          <span className="workspace-privacy">私有优先 · 点击选择或管理</span>
+          <span className="workspace-privacy">
+            {notificationState.workspaceName && notificationState.workspaceRole
+              ? `${WORKSPACE_ROLE_LABEL[notificationState.workspaceRole]} · 点击切换或管理`
+              : notificationState.status === "error"
+                ? "工作区读取失败 · 点击管理"
+                : "点击选择或管理"}
+          </span>
         </Link>
         <nav className="app-nav-scroll">
           {visibleNavGroups.map((group) => (
@@ -295,7 +319,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       ) : null}
 
       <div className="app-main-shell">
-        <header className="app-topbar">
+        <header className="app-topbar" data-testid="app-topbar">
           <div className="app-top-left">
             <button
               aria-expanded={menuOpen}
@@ -350,6 +374,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </header>
         <div
           className="app-content"
+          data-testid="app-main"
           key={vaultPhase === "unlocked" ? "vault-unlocked" : "vault-locked"}
         >
           {children}

@@ -1,4 +1,4 @@
-import { type ALL_ROUTES } from "@/features/personas/persona-definitions";
+import { ALL_ROUTES } from "@/features/personas/persona-definitions";
 
 export type PersonaPrimaryRoute = (typeof ALL_ROUTES)[number];
 
@@ -36,6 +36,27 @@ export const SECONDARY_PRODUCT_ROUTES = [
 ] as const;
 
 export type SecondaryProductRoute = (typeof SECONDARY_PRODUCT_ROUTES)[number];
+
+export const APP_PRODUCT_ROUTES = [
+  ...ALL_ROUTES,
+  ...SECONDARY_PRODUCT_ROUTES,
+] as const;
+
+export type AppProductRoute = (typeof APP_PRODUCT_ROUTES)[number];
+
+export const PUBLIC_FLOW_ROUTES = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/verify",
+  "/auth/recover",
+  "/auth/callback",
+  "/onboarding",
+  "/invitations/accept",
+  "/shares/[token]",
+  "/account/deletion",
+] as const;
+
+export type PublicFlowRoute = (typeof PUBLIC_FLOW_ROUTES)[number];
 
 interface ExistingPrototypeViewTarget {
   primaryRoute: PersonaPrimaryRoute;

@@ -1,4 +1,12 @@
-import type { ReactNode } from "react";
+"use client";
+
+import {
+  type InputHTMLAttributes,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { AccessShellHeader } from "@/components/app-shell/access-shell-header";
 import { AppIcon } from "@/components/app-shell/app-icon";
@@ -6,61 +14,34 @@ import { AppIcon } from "@/components/app-shell/app-icon";
 export function AuthFormShell({
   children,
   description,
+  eyebrow = "LOGION ACCESS",
+  identityTestId,
   title,
-}: Readonly<{ children: ReactNode; description: string; title: string }>) {
+}: Readonly<{
+  children: ReactNode;
+  description: string;
+  eyebrow?: string;
+  identityTestId?: string;
+  title: string;
+}>) {
   return (
-    <main id="main-content" className="auth-page">
+    <main id="main-content" className="auth-page public-flow-page">
       <div className="access-shell">
-        <AccessShellHeader />
-        <div className="auth-layout">
-          <section className="auth-card" aria-labelledby="auth-title">
-            <p className="access-eyebrow">SECURE ACCESS</p>
-            <h1 id="auth-title">{title}</h1>
-            <p className="auth-description">{description}</p>
+        <AccessShellHeader minimal />
+        <div className="public-flow-stage">
+          <section
+            className="auth-card public-flow-panel"
+            aria-describedby="auth-description"
+            aria-labelledby="auth-title"
+          >
+            <header className="auth-heading" data-testid={identityTestId}>
+              <p className="auth-kicker">{eyebrow}</p>
+              <h1 id="auth-title">{title}</h1>
+              <p id="auth-description">{description}</p>
+            </header>
             {children}
           </section>
-          <section className="auth-context" aria-label="工作区说明">
-            <p className="access-eyebrow">PRIVATE LEARNING WORKSPACE</p>
-            <p className="auth-context-title">
-              把学习过程沉淀为可继续、可复查的工作。
-            </p>
-            <p className="auth-context-description">
-              Logion
-              面向个人及受邀小组，统一承载计划、资料、笔记、复习、研究证据与 AI
-              草稿。
-            </p>
-            <ul className="auth-context-list">
-              <li>
-                <span aria-hidden="true">
-                  <AppIcon name="lock" />
-                </span>
-                <div>
-                  <strong>私有访问</strong>
-                  <small>仅本人及受邀成员进入工作区。</small>
-                </div>
-              </li>
-              <li>
-                <span aria-hidden="true">
-                  <AppIcon name="refresh" />
-                </span>
-                <div>
-                  <strong>本地优先</strong>
-                  <small>断网时继续记录，恢复连接后再安全同步。</small>
-                </div>
-              </li>
-              <li>
-                <span aria-hidden="true">
-                  <AppIcon name="shield" />
-                </span>
-                <div>
-                  <strong>操作可追溯</strong>
-                  <small>关键变更保留状态与审计线索。</small>
-                </div>
-              </li>
-            </ul>
-          </section>
         </div>
-        <p className="access-footer">私有工作区 · 本地优先 · 可验证同步</p>
       </div>
     </main>
   );
@@ -70,8 +51,19 @@ export function FormError({
   message = "操作未完成，请检查输入或稍后重试。",
   requestId,
 }: Readonly<{ message?: string; requestId: string }>) {
+  const messageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messageRef.current?.focus();
+  }, []);
+
   return (
-    <div className="form-message form-error" role="alert">
+    <div
+      className="form-message form-error"
+      ref={messageRef}
+      role="alert"
+      tabIndex={-1}
+    >
       <p>{message}</p>
       <p>
         请求编号：<code>{requestId}</code>
@@ -84,6 +76,51 @@ export function FormSuccess({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <div className="form-message form-success" role="status">
       {children}
+    </div>
+  );
+}
+
+type PasswordFieldProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "id" | "type"
+> & {
+  hint?: string;
+  id: string;
+  label: string;
+};
+
+export function PasswordField({
+  disabled,
+  hint,
+  id,
+  label,
+  ...inputProps
+}: PasswordFieldProps) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="auth-field">
+      <label htmlFor={id}>{label}</label>
+      <div className="auth-password-control">
+        <input
+          {...inputProps}
+          disabled={disabled}
+          id={id}
+          type={visible ? "text" : "password"}
+        />
+        <button
+          aria-label={`${visible ? "隐藏" : "显示"}${label}`}
+          aria-pressed={visible}
+          className="auth-password-toggle"
+          disabled={disabled}
+          title={`${visible ? "隐藏" : "显示"}${label}`}
+          type="button"
+          onClick={() => setVisible((current) => !current)}
+        >
+          <AppIcon name={visible ? "eye-off" : "eye"} size={16} />
+        </button>
+      </div>
+      {hint ? <p className="auth-field-hint">{hint}</p> : null}
     </div>
   );
 }

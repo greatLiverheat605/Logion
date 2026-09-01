@@ -21,7 +21,12 @@ export function LogoutButton() {
   }
 
   return (
-    <button type="button" onClick={logout} disabled={pending}>
+    <button
+      className="logout-button"
+      type="button"
+      onClick={logout}
+      disabled={pending}
+    >
       {pending ? "正在退出…" : "退出登录"}
     </button>
   );

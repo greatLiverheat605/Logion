@@ -1,0 +1,452 @@
+.root {
+  min-width: 0;
+  min-height: calc(100dvh - var(--topbar-height));
+  background: var(--bg-app);
+}
+
+.root :global(.workbench-frame) {
+  min-height: calc(100dvh - var(--topbar-height));
+  border: 0;
+  border-radius: 0;
+}
+
+.masterPane,
+.mainPane,
+.inspectorPane {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.masterPane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+}
+
+.mainPane {
+  background: var(--bg-surface);
+}
+
+.inspectorPane {
+  background: var(--bg-muted);
+}
+
+.paneHeading {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.9rem 0.85rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.paneHeading strong,
+.dataSection h2,
+.unsupportedSection h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.titleDescriptor {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.eyebrow {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.toolbarLead,
+.muted,
+.capabilityHint {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.toolbarLead {
+  min-width: 0;
+  flex: 1;
+}
+
+.capabilityList {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.6rem;
+}
+
+.capabilityList button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.8rem;
+  grid-template-columns: 1.2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.capabilityList button:hover,
+.capabilityActive {
+  border-color: var(--accent-border) !important;
+  background: var(--accent-surface) !important;
+  color: var(--accent-text) !important;
+}
+
+.capabilityList button > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.capabilityList strong,
+.capabilityList small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.capabilityList strong {
+  color: var(--text-primary);
+  font-size: 0.73rem;
+}
+
+.capabilityList small {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+}
+
+.capabilityList :global(.product-tag) {
+  white-space: nowrap;
+}
+
+.masterNote {
+  margin: auto 0.75rem 0.75rem;
+  padding: 0.6rem;
+  border-left: 2px solid var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.dataSection,
+.unsupportedSection {
+  min-width: 0;
+  padding: 1.05rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+
+.sectionHeader > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.metricStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.metricStrip > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+
+.metricStrip span,
+.metricStrip small {
+  color: var(--text-tertiary);
+  font-size: 0.64rem;
+  overflow-wrap: anywhere;
+}
+
+.metricStrip strong {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inlineForm,
+.formStack,
+.targetLabel {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.7rem 0;
+}
+
+.inlineForm {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.inlineForm label,
+.formStack label,
+.targetLabel {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.inlineForm input,
+.formStack input,
+.formStack textarea,
+.formStack select,
+.targetLabel select {
+  display: block;
+  width: 100%;
+  min-height: 2.15rem;
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.formStack textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.secondaryButton,
+.primaryButton,
+.dataList button,
+.dataList a,
+.inlineActions button,
+.unsupportedSection button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.secondaryButton:hover,
+.dataList button:hover,
+.dataList a:hover,
+.inlineActions button:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.primaryButton:hover {
+  background: var(--primary-hover);
+}
+
+.secondaryButton:disabled,
+.primaryButton:disabled,
+.dataList button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.secondaryButton:focus-visible,
+.primaryButton:focus-visible,
+.capabilityList button:focus-visible,
+.dataList button:focus-visible,
+.dataList a:focus-visible,
+.inlineActions button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.dataList {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0.7rem 0 0;
+  list-style: none;
+  border: 1px solid var(--border);
+}
+
+.dataList li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid var(--border-weak);
+}
+
+.dataList li:first-child {
+  border-top: 0;
+}
+
+.dataList li > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.dataList strong,
+.dataList small,
+.dataList code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dataList strong {
+  color: var(--text-primary);
+  font-size: 0.73rem;
+}
+
+.dataList small,
+.dataList code {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+}
+
+.integrationToken {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.7rem;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-surface);
+}
+
+.integrationToken a {
+  color: var(--accent-text);
+  overflow-wrap: anywhere;
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.unsupportedList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.unsupportedList article {
+  padding: 0.6rem;
+  border-left: 2px solid var(--border-strong);
+  background: var(--bg-muted);
+}
+
+.unsupportedList h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.unsupportedList p {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+.stateWarn {
+  padding: 0.55rem 0.65rem;
+  border-left: 2px solid var(--text-warning);
+  background: color-mix(in srgb, var(--text-warning) 10%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.kvList {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.kvList > div {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.kvList dt {
+  color: var(--text-tertiary);
+  font-size: 0.66rem;
+}
+
+.kvList dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.69rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .metricStrip,
+  .unsupportedList,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .inlineForm {
+    grid-template-columns: 1fr;
+  }
+
+  .dataList li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
