@@ -1,0 +1,1144 @@
+{
+  "schemaVersion": 1,
+  "approvedAt": "2026-08-26",
+  "source": {
+    "root": "C:\\Users\\Administrator\\.codex\\visualizations\\2026\\08\\25\\01a0391f-0946-7970-b640-e09e5cac089c\\logion-glm-design-workspace",
+    "specs": [
+      "specs/01-design-principles.md",
+      "specs/02-ia-navigation.md",
+      "specs/03-route-matrix.md",
+      "specs/04-design-system.md",
+      "specs/05-interaction-states-responsive.md"
+    ],
+    "screenshotsDirectory": "artifacts/screenshots"
+  },
+  "tokens": {
+    "accentLight": "#3056d3",
+    "accentDark": "#4a75e0",
+    "backgroundLight": "#f5f6f8",
+    "backgroundDark": "#0e1116",
+    "bodyFontPx": 13,
+    "spacingGridPx": 4,
+    "radiiPx": [4, 6, 10],
+    "motionMs": [120, 180]
+  },
+  "geometry": {
+    "tolerancePx": 4,
+    "desktopMinWidthPx": 1100,
+    "tabletMinWidthPx": 720,
+    "shell": {
+      "sidebarPx": 232,
+      "topbarPx": 48,
+      "selectors": {
+        "sidebar": "[data-testid=\"app-sidebar\"]",
+        "topbar": "[data-testid=\"app-topbar\"]",
+        "main": "[data-testid=\"app-main\"]"
+      }
+    },
+    "workbench": {
+      "masterPx": 264,
+      "inspectorPx": 316,
+      "selectors": {
+        "master": "[data-testid=\"workbench-master\"]",
+        "main": "[data-testid=\"workbench-main\"]",
+        "inspector": "[data-testid=\"workbench-inspector\"]"
+      }
+    },
+    "controls": {
+      "desktopPx": 28,
+      "desktopPrimaryPx": 34,
+      "mobileTargetMinPx": 44
+    }
+  },
+  "acceptance": {
+    "viewports": [
+      { "width": 320, "height": 640 },
+      { "width": 390, "height": 844 },
+      { "width": 1024, "height": 768 },
+      { "width": 1440, "height": 900 }
+    ],
+    "evidencePhases": ["before", "glm-target", "after"],
+    "primarySelector": "[data-workbench-primary=\"true\"]",
+    "maxVisiblePrimary": 1,
+    "fullPagePixelMatch": false,
+    "requiresProductOwnerReview": true
+  },
+  "globalDeviations": [
+    {
+      "scope": "mobile interactive targets",
+      "reason": "Formal accessibility baseline raises the GLM 40px touch control to at least 44x44px.",
+      "approvedBy": "Product Owner via approved remediation plan",
+      "approvedAt": "2026-08-26",
+      "recovery": "No recovery required; this is a deliberate WCAG-oriented enhancement."
+    },
+    {
+      "scope": "behavior and data semantics",
+      "reason": "Formal API, permission, Vault, sync-v1 and object contracts override prototype fixtures.",
+      "approvedBy": "Product Owner via approved remediation plan",
+      "approvedAt": "2026-08-26",
+      "recovery": "Record any visual consequence in the route evidence report without weakening formal behavior."
+    }
+  ],
+  "excludedAssets": [
+    {
+      "asset": "pub_passkey-1440x900.png",
+      "reason": "The prototype-only /auth/passkey route is not a formal Next route; Passkey remains a login method inside /auth/login."
+    }
+  ],
+  "assets": {
+    "app_ai-1440x900.png": {
+      "path": "artifacts/screenshots/app_ai-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "e963fcc875e2d4bf682cb52aacdd94eb662ac7599b73fe4cb2df84e70c8dbf65"
+    },
+    "app_ai-390x844.png": {
+      "path": "artifacts/screenshots/app_ai-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "ea161bb3bbed461b022258007ce0ea624ba46ba0af61da6b3b9dec7d35f689e3"
+    },
+    "app_audit-1440x900.png": {
+      "path": "artifacts/screenshots/app_audit-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "0d503bd2f1a73e6746fe1e388aac23b37ed616f1e21066765f491306431bbe0e"
+    },
+    "app_audit-390x844.png": {
+      "path": "artifacts/screenshots/app_audit-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "b3a1ca161197b224c4acc121a3a61429255271c2a769e4fdb2a1e976b7a6aaa2"
+    },
+    "app_collaboration-1440x900.png": {
+      "path": "artifacts/screenshots/app_collaboration-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "22a099fa2f0772f00ea502eb8ca94e54706c50490c3bc08d94dccefd8e970d76"
+    },
+    "app_collaboration-390x844.png": {
+      "path": "artifacts/screenshots/app_collaboration-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "a7abaf161796570d439cea6a053472dce8cf7c3482cb8651ead5f2c940e84494"
+    },
+    "app_data-1440x900.png": {
+      "path": "artifacts/screenshots/app_data-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "3cfaa6cba59c4e89af6933e57e4c9bf81df5649588032a45676584d36449fda3"
+    },
+    "app_data-390x844.png": {
+      "path": "artifacts/screenshots/app_data-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "69ca3576f4ff1bdc03ef404a2e7c05da9534ce7809651bd7cf2adfbb3cc9b595"
+    },
+    "app_exam-1440x900.png": {
+      "path": "artifacts/screenshots/app_exam-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "b5a0897a80d8f8286848c75d9d9733a8c44bd7849a52d18de9120ac72c3e340f"
+    },
+    "app_exam-390x844.png": {
+      "path": "artifacts/screenshots/app_exam-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "16f61ca0e5286650ad0dac9bb62c6b3c9817cfb794d210847cf22934c3a8f64c"
+    },
+    "app_help-1440x900.png": {
+      "path": "artifacts/screenshots/app_help-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "12c1a652e5a78542410096d91fb0c9c81b5567a894d8dce5ae5d78e0fe99b6a6"
+    },
+    "app_help-390x844.png": {
+      "path": "artifacts/screenshots/app_help-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "6d92293ffe7af212d6aba173c691e54e6a75fd8f28f8b02a1337dfe294fe9567"
+    },
+    "app_integrations-1440x900.png": {
+      "path": "artifacts/screenshots/app_integrations-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "3cfaa6cba59c4e89af6933e57e4c9bf81df5649588032a45676584d36449fda3"
+    },
+    "app_integrations-390x844.png": {
+      "path": "artifacts/screenshots/app_integrations-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "bc2636b2340e1df171f58caeb05d3f35732a995876ffd229ed080011fe74d62b"
+    },
+    "app_planning-1440x900.png": {
+      "path": "artifacts/screenshots/app_planning-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "ea85f84277c120c637f994fe5c55b8a5cb99e163e0c802feb2a199446f3fb3fa"
+    },
+    "app_planning-390x844.png": {
+      "path": "artifacts/screenshots/app_planning-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "562bb42d9ee667c1ed201eaa12076810d4c0c4cf681e912b22b88dcc784b0427"
+    },
+    "app_profile-1440x900.png": {
+      "path": "artifacts/screenshots/app_profile-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "6d268b6454886c56ca3d86063784871c1d5a3ceff3b7383016ab5019e2b95dab"
+    },
+    "app_profile-390x844.png": {
+      "path": "artifacts/screenshots/app_profile-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "c7d623ee0b6b9ecc0cbc627b30706169a0919906ffdbc707e4aa4880db38a979"
+    },
+    "app_records-1024x768.png": {
+      "path": "artifacts/screenshots/app_records-1024x768.png",
+      "viewport": { "width": 1024, "height": 768 },
+      "sha256": "c05d801dbf46ad278a6ad1471541b4761a20aceeb5a6babce8d97e07bf6df83a"
+    },
+    "app_records-1440x900.png": {
+      "path": "artifacts/screenshots/app_records-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "c51d888bdb2c3980b0cc7de7f87c9360c204c68d35623c46cd932eaa5010f744"
+    },
+    "app_records-320x640.png": {
+      "path": "artifacts/screenshots/app_records-320x640.png",
+      "viewport": { "width": 320, "height": 640 },
+      "sha256": "25771196e316e90e344fad6f01ad9e49971bf3309af8f1ec41a607c6c6fe3ce8"
+    },
+    "app_records-390x844.png": {
+      "path": "artifacts/screenshots/app_records-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "7c07c68ad2f5330dfc83dddc3b739bd28e251013e88c19092588f64528a7b865"
+    },
+    "app_research-1440x900.png": {
+      "path": "artifacts/screenshots/app_research-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "0d503bd2f1a73e6746fe1e388aac23b37ed616f1e21066765f491306431bbe0e"
+    },
+    "app_research-390x844.png": {
+      "path": "artifacts/screenshots/app_research-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "1e7921fbf5a1033ddd8376da6437632140dba9272d4296f23cc657e68613c1e2"
+    },
+    "app_review-1440x900.png": {
+      "path": "artifacts/screenshots/app_review-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "b5a0897a80d8f8286848c75d9d9733a8c44bd7849a52d18de9120ac72c3e340f"
+    },
+    "app_review-390x844.png": {
+      "path": "artifacts/screenshots/app_review-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "2d00bc822d2f018ca3e15b8a7bb7e7010bdbc2cb7ba32fde45ccdcbf7fb09b6c"
+    },
+    "app_search-1024x768.png": {
+      "path": "artifacts/screenshots/app_search-1024x768.png",
+      "viewport": { "width": 1024, "height": 768 },
+      "sha256": "9c0e0ea422cfd8b04486c9fe4ec2b2e14a58d28e324c3622ac60429170a4feda"
+    },
+    "app_search-1440x900.png": {
+      "path": "artifacts/screenshots/app_search-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "4dad990bf0e9d23f1febbddb5b799455a895b825274d08fff7790e3630af0f2f"
+    },
+    "app_search-320x640.png": {
+      "path": "artifacts/screenshots/app_search-320x640.png",
+      "viewport": { "width": 320, "height": 640 },
+      "sha256": "ace9e512f42c6e44d7cfbb2a62ad696d0e84be9be5de8f79865c0494058e8544"
+    },
+    "app_search-390x844.png": {
+      "path": "artifacts/screenshots/app_search-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "b952e1d532b1cacd72fb77ff2c49de117a0f376e44e11fb7313627ffec9dda69"
+    },
+    "app_security-1440x900.png": {
+      "path": "artifacts/screenshots/app_security-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "ed3dcb1823025c8b96f0b983a62886f95790060c5b413a94559de0bfeaba5c95"
+    },
+    "app_security-390x844.png": {
+      "path": "artifacts/screenshots/app_security-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "fac203b80215b55634b7d323a5c64647e17d691d7f7c7fd1b9334831b294eb38"
+    },
+    "app_self-study-1440x900.png": {
+      "path": "artifacts/screenshots/app_self-study-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "546bdd3820910188a72fd5ee2d3ac380c27cd401d55ef9528a41a2ea0dcb351b"
+    },
+    "app_self-study-390x844.png": {
+      "path": "artifacts/screenshots/app_self-study-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "b633400989c298857c01805e40e25ac72b967321a7380ed841afad0b4de43c4c"
+    },
+    "app_settings-1440x900.png": {
+      "path": "artifacts/screenshots/app_settings-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "425e7432b20dd38eb6a8a42d141d0bc74400462570d80e2e1ccb6e7ef234b7ba"
+    },
+    "app_settings-390x844.png": {
+      "path": "artifacts/screenshots/app_settings-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "977b949dc36bd6528376f4a2d5ecbe3b77a7bab8b68301577c430c24766afe7a"
+    },
+    "app_spaces-1440x900.png": {
+      "path": "artifacts/screenshots/app_spaces-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "425e7432b20dd38eb6a8a42d141d0bc74400462570d80e2e1ccb6e7ef234b7ba"
+    },
+    "app_spaces-390x844.png": {
+      "path": "artifacts/screenshots/app_spaces-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "4464c3682fe526b636941c424c72e7853f779bc7dbc5b2a66840027a8ca1cde7"
+    },
+    "app_sync-1440x900.png": {
+      "path": "artifacts/screenshots/app_sync-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "78835c3212db065671cee411d611099eaab565c3c292070337e5e3e6c923c8a7"
+    },
+    "app_sync-390x844.png": {
+      "path": "artifacts/screenshots/app_sync-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "272d1e695edd7aa45e936ec3634065e09b93ca54ac7dd4760e3967b4099feb0e"
+    },
+    "app_templates-1440x900.png": {
+      "path": "artifacts/screenshots/app_templates-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "5eeba320457982bb5ab0f75b2dbfb4119421d1e265eab446af6b5a8ddcae9d29"
+    },
+    "app_templates-390x844.png": {
+      "path": "artifacts/screenshots/app_templates-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "fbadcb4d3e67825f7d21985207bfa69074f86efb192e6b077254923d9a5a8674"
+    },
+    "app_today-1024x768.png": {
+      "path": "artifacts/screenshots/app_today-1024x768.png",
+      "viewport": { "width": 1024, "height": 768 },
+      "sha256": "dbc4d4152bb2b83f4197d022b1e66871325fcaea003a2db94834a0684bae2fd6"
+    },
+    "app_today-1440x900.png": {
+      "path": "artifacts/screenshots/app_today-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "45237a580d7af2cb47477efd5c805d7cca6d38549c63bacbd961b11bb0a261ce"
+    },
+    "app_today-320x640.png": {
+      "path": "artifacts/screenshots/app_today-320x640.png",
+      "viewport": { "width": 320, "height": 640 },
+      "sha256": "6e968f533d9dc665d00070106025fe46da34d2d61718562376ba153564230c27"
+    },
+    "app_today-390x844.png": {
+      "path": "artifacts/screenshots/app_today-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "92f1a276e422c34a2fab118e02cdf3d7f0e4cc33caf9aac89c16b07d73913fb2"
+    },
+    "app_workspaces-1440x900.png": {
+      "path": "artifacts/screenshots/app_workspaces-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "6f276dab2419291df183dd20cb5d1353c6af2d5d70d725cbc9fb7836f08e3276"
+    },
+    "app_workspaces-390x844.png": {
+      "path": "artifacts/screenshots/app_workspaces-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "bd51da6c64b6429d78a3be0f576a38bc37fb5497bae8d5fd9cf841900b7eb597"
+    },
+    "pub_deletion-1440x900.png": {
+      "path": "artifacts/screenshots/pub_deletion-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "56f7f0720699ae88f2b0e0707ae21eaf8fbb306105fe0baac0aa0b0ec6d4c3b6"
+    },
+    "pub_invite-1440x900.png": {
+      "path": "artifacts/screenshots/pub_invite-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "6f280ece7d45630a154611bd235da281451261e7b5fd5f2b097159cf1ee9310b"
+    },
+    "pub_login-1440x900.png": {
+      "path": "artifacts/screenshots/pub_login-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "86e70d2fc5e4220a901dad69af0b33e94d95ed227316f031bb5d3bd2edb378bf"
+    },
+    "pub_login-390x844.png": {
+      "path": "artifacts/screenshots/pub_login-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "5cb5ec5af6f5375f02fac2cfde26c2734c446c3ba7a95774f6d0cfcfecb1f980"
+    },
+    "pub_not-found-1440x900.png": {
+      "path": "artifacts/screenshots/pub_not-found-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "9db403dce60afd3c9de0083ef3d62136b1716f777d0894b4f34c10567c30dce0"
+    },
+    "pub_offline-1440x900.png": {
+      "path": "artifacts/screenshots/pub_offline-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "2aa44980f3b1896a3cc2efc2a3bab768f8cecf335c8eb056fd7e669b2a77cb68"
+    },
+    "pub_offline-390x844.png": {
+      "path": "artifacts/screenshots/pub_offline-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "aa397b500ab10dbb00887aaf8f1e2d83100d276e8338de7665f12b0628b1e393"
+    },
+    "pub_onboarding-1440x900.png": {
+      "path": "artifacts/screenshots/pub_onboarding-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "951dfcc7f458d2a644e16dda5a81af15813f9d71526bb5ce700da2f91e02f29c"
+    },
+    "pub_onboarding-390x844.png": {
+      "path": "artifacts/screenshots/pub_onboarding-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "2f2eca1910496b34b3d46017845aee4d36e59abb19a42522d5afffc9dcfe4aec"
+    },
+    "pub_passkey-1440x900.png": {
+      "path": "artifacts/screenshots/pub_passkey-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "c5ee67c5187e0c8699b14a225ecfaf2a4258b35fdd44a03eda74ef5bc3047c6e"
+    },
+    "pub_recover-1440x900.png": {
+      "path": "artifacts/screenshots/pub_recover-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "e39670aaa6bc0ed68ae31cdccf8e85b048a2a003e42c08d5f2cbea102f6b5de9"
+    },
+    "pub_register-closed-1440x900.png": {
+      "path": "artifacts/screenshots/pub_register-closed-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "1eeae9ff82b94a077350f676517e849d797a808fd7ebcdd1c2ae427894ab5f91"
+    },
+    "pub_register-invite-1440x900.png": {
+      "path": "artifacts/screenshots/pub_register-invite-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "a64452b9944e5b60181e7ef9dbd84f456f0f9d10e9da0dd3b4763f10f2acd4da"
+    },
+    "pub_register-invite-390x844.png": {
+      "path": "artifacts/screenshots/pub_register-invite-390x844.png",
+      "viewport": { "width": 390, "height": 844 },
+      "sha256": "65e3735bd26867659af5798e144e566f7fe15d49520c4a9612b1192cbba80920"
+    },
+    "pub_register-open-1440x900.png": {
+      "path": "artifacts/screenshots/pub_register-open-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "0beb31388c1b7bbc7bcf9f43ac8bae59b5500a3fe117bce189a5f8dadb8a205e"
+    },
+    "pub_share-revoked-1440x900.png": {
+      "path": "artifacts/screenshots/pub_share-revoked-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "04d48607c748df546522c031807601a8b3ebf9f4bfddbe80e56f895528a45777"
+    },
+    "pub_share-valid-1440x900.png": {
+      "path": "artifacts/screenshots/pub_share-valid-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "13cc4572fba579eba0d95c24af6676b9abc4e6a521f1d58ce5ee135587b73a3d"
+    },
+    "pub_verify-1440x900.png": {
+      "path": "artifacts/screenshots/pub_verify-1440x900.png",
+      "viewport": { "width": 1440, "height": 900 },
+      "sha256": "107a15bd536b8c5ee478be402779f31026cf07a9baa64aa777515dce1944870a"
+    }
+  },
+  "routes": [
+    {
+      "route": "/app/today",
+      "kind": "app",
+      "task": "Advance the next action, then attach evidence and explicit acceptance.",
+      "layoutTree": [
+        "AppShell",
+        "TodayWorkbench",
+        "QueueMaster",
+        "NextActionMain",
+        "TaskContextInspector"
+      ],
+      "primary": "Start focus or end the active session in the same position.",
+      "regions": [
+        "today-queue",
+        "today-next-action",
+        "today-evidence",
+        "today-signals",
+        "today-trend",
+        "today-inspector"
+      ],
+      "targets": [
+        "app_today-320x640.png",
+        "app_today-390x844.png",
+        "app_today-1024x768.png",
+        "app_today-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/self-study",
+      "kind": "app",
+      "task": "Triage the inbox and advance projects into deliverables.",
+      "layoutTree": [
+        "AppShell",
+        "StudyTabs",
+        "Inbox",
+        "RouteAndProjectBoard",
+        "DeliverableTimeline"
+      ],
+      "primary": "Triage the next inbox item.",
+      "regions": [
+        "self-study-tabs",
+        "self-study-inbox",
+        "self-study-projects",
+        "self-study-deliverables"
+      ],
+      "targets": ["app_self-study-390x844.png", "app_self-study-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/records",
+      "kind": "app",
+      "task": "Write a note and connect it to source material and work objects.",
+      "layoutTree": [
+        "AppShell",
+        "RecordsWorkbench",
+        "DocumentTree",
+        "MarkdownEditor",
+        "MetadataInspector"
+      ],
+      "primary": "Create note.",
+      "regions": [
+        "records-tree",
+        "records-editor",
+        "records-save-status",
+        "records-inspector",
+        "records-attachments"
+      ],
+      "targets": [
+        "app_records-320x640.png",
+        "app_records-390x844.png",
+        "app_records-1024x768.png",
+        "app_records-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/review",
+      "kind": "app",
+      "task": "Clear the due active-recall queue.",
+      "layoutTree": [
+        "AppShell",
+        "ReviewTabs",
+        "DueQueue",
+        "AnswerSheet",
+        "KnowledgeInspector"
+      ],
+      "primary": "Start recall.",
+      "regions": [
+        "review-tabs",
+        "review-due-queue",
+        "review-answer",
+        "review-misconceptions",
+        "review-cycle"
+      ],
+      "targets": ["app_review-390x844.png", "app_review-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/exam",
+      "kind": "app",
+      "task": "Advance coverage and mock-exam work for the nearest exam.",
+      "layoutTree": ["AppShell", "ExamMaster", "CoverageMain", "ExamInspector"],
+      "primary": "Create exam or start mock exam.",
+      "regions": [
+        "exam-list",
+        "exam-coverage",
+        "exam-syllabus",
+        "exam-mocks",
+        "exam-weaknesses"
+      ],
+      "targets": ["app_exam-390x844.png", "app_exam-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/planning",
+      "kind": "app",
+      "task": "Break a goal into an assessable learning route.",
+      "layoutTree": [
+        "AppShell",
+        "GoalMaster",
+        "StageRouteMain",
+        "GoalInspector"
+      ],
+      "primary": "Create goal or create stage.",
+      "regions": [
+        "planning-goals",
+        "planning-stages",
+        "planning-dependencies",
+        "planning-tasks",
+        "planning-inspector"
+      ],
+      "targets": ["app_planning-390x844.png", "app_planning-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/templates",
+      "kind": "app",
+      "task": "Preview a template and install an independent copy.",
+      "layoutTree": [
+        "AppShell",
+        "CategoryMaster",
+        "TemplateList",
+        "TemplatePreview",
+        "InstallSheet"
+      ],
+      "primary": "Install independent copy.",
+      "regions": [
+        "templates-categories",
+        "templates-list",
+        "templates-preview",
+        "templates-installed"
+      ],
+      "targets": ["app_templates-390x844.png", "app_templates-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/audit",
+      "kind": "app",
+      "task": "Filter and explain the security event timeline.",
+      "layoutTree": [
+        "AppShell",
+        "AuditCommandBar",
+        "AuditTimeline",
+        "InlineEventDetail"
+      ],
+      "primary": "No write primary; filtering is the first interaction.",
+      "regions": ["audit-filters", "audit-timeline", "audit-event-detail"],
+      "targets": ["app_audit-390x844.png", "app_audit-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/spaces",
+      "kind": "app",
+      "task": "Understand and manage private versus shared-space boundaries.",
+      "layoutTree": [
+        "AppShell",
+        "SpaceDirectory",
+        "SpaceAccessDetail",
+        "MoveConfirmSheet"
+      ],
+      "primary": "Create space when permitted.",
+      "regions": [
+        "spaces-directory",
+        "spaces-access",
+        "spaces-epoch",
+        "spaces-move"
+      ],
+      "targets": ["app_spaces-390x844.png", "app_spaces-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/settings",
+      "kind": "app",
+      "task": "Adjust persona, interface and interaction preferences.",
+      "layoutTree": [
+        "AppShell",
+        "GroupedSettingsList",
+        "SecondarySettingsSheet"
+      ],
+      "primary": "The active settings command.",
+      "regions": [
+        "settings-persona",
+        "settings-appearance",
+        "settings-interaction",
+        "settings-navigation"
+      ],
+      "targets": ["app_settings-390x844.png", "app_settings-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/profile",
+      "kind": "app",
+      "task": "Inspect account identity and personal activity.",
+      "layoutTree": [
+        "AppShell",
+        "AccountSummary",
+        "PersonalActivity",
+        "AccountActions"
+      ],
+      "primary": "No mandatory write primary.",
+      "regions": ["profile-account", "profile-activity", "profile-actions"],
+      "targets": ["app_profile-390x844.png", "app_profile-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/help",
+      "kind": "app",
+      "task": "Diagnose the environment and recover without leaving the product.",
+      "layoutTree": [
+        "AppShell",
+        "HelpSearch",
+        "EnvironmentDiagnostics",
+        "RecoveryPaths",
+        "FAQ"
+      ],
+      "primary": "Search help.",
+      "regions": [
+        "help-search",
+        "help-diagnostics",
+        "help-recovery",
+        "help-faq"
+      ],
+      "targets": ["app_help-390x844.png", "app_help-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/research",
+      "kind": "app",
+      "task": "Maintain the research-question, claim and evidence chain.",
+      "layoutTree": [
+        "AppShell",
+        "ResearchTabs",
+        "ClaimsMain",
+        "EvidenceInspector"
+      ],
+      "primary": "Create research question or add claim.",
+      "regions": [
+        "research-tabs",
+        "research-questions",
+        "research-claims",
+        "research-evidence",
+        "research-experiments"
+      ],
+      "targets": ["app_research-390x844.png", "app_research-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/collaboration",
+      "kind": "app",
+      "task": "Complete a review and turn feedback into actions.",
+      "layoutTree": [
+        "AppShell",
+        "ReviewRequestMaster",
+        "RubricAndFeedbackMain",
+        "MemberInspector"
+      ],
+      "primary": "Submit feedback.",
+      "regions": [
+        "collaboration-queue",
+        "collaboration-rubric",
+        "collaboration-feedback",
+        "collaboration-snapshot",
+        "collaboration-inspector"
+      ],
+      "targets": [
+        "app_collaboration-390x844.png",
+        "app_collaboration-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/ai",
+      "kind": "app",
+      "task": "Review AI drafts or manage provider execution settings.",
+      "layoutTree": [
+        "AppShell",
+        "DraftProviderSegmented",
+        "DraftReviewSplit",
+        "RunAuditInspector"
+      ],
+      "primary": "Adopt draft or test and discover models.",
+      "regions": [
+        "ai-mode",
+        "ai-drafts",
+        "ai-source",
+        "ai-review",
+        "ai-provider",
+        "ai-runs"
+      ],
+      "targets": ["app_ai-390x844.png", "app_ai-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/sync",
+      "kind": "app",
+      "task": "Process pending operations and explicit conflicts.",
+      "layoutTree": [
+        "AppShell",
+        "SyncSummary",
+        "OperationalTabs",
+        "ConflictCompare"
+      ],
+      "primary": "Sync now or process conflict.",
+      "regions": [
+        "sync-summary",
+        "sync-outbox",
+        "sync-conflicts",
+        "sync-attachments",
+        "sync-devices"
+      ],
+      "targets": ["app_sync-390x844.png", "app_sync-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/security",
+      "kind": "app",
+      "task": "Complete the security checklist and manage sessions.",
+      "layoutTree": [
+        "AppShell",
+        "SecurityChecklist",
+        "SecuritySettingsSections",
+        "RecentAuthSheet"
+      ],
+      "primary": "First incomplete security action.",
+      "regions": [
+        "security-checklist",
+        "security-passkeys",
+        "security-totp",
+        "security-recovery",
+        "security-devices"
+      ],
+      "targets": ["app_security-390x844.png", "app_security-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/data",
+      "kind": "app",
+      "task": "Create a verifiable encrypted export.",
+      "layoutTree": [
+        "AppShell",
+        "ExportSection",
+        "ImportSection",
+        "IsolatedDangerZone"
+      ],
+      "primary": "Create encrypted export.",
+      "regions": [
+        "data-export",
+        "data-export-status",
+        "data-import",
+        "data-danger"
+      ],
+      "targets": ["app_data-390x844.png", "app_data-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/search",
+      "kind": "app",
+      "task": "Find content and the next action from one entry point.",
+      "layoutTree": [
+        "AppShell",
+        "StickySearchCommand",
+        "ModeSegmented",
+        "GroupedResults",
+        "UtilityInspector"
+      ],
+      "primary": "Submit search; clear filters when no result.",
+      "regions": [
+        "search-command",
+        "search-modes",
+        "search-results",
+        "search-preview",
+        "search-utilities"
+      ],
+      "targets": [
+        "app_search-320x640.png",
+        "app_search-390x844.png",
+        "app_search-1024x768.png",
+        "app_search-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/workspaces",
+      "kind": "app",
+      "task": "Manage members, invitations and workspace ownership.",
+      "layoutTree": [
+        "AppShell",
+        "WorkspaceTabs",
+        "MembersDataView",
+        "WorkspaceSheets"
+      ],
+      "primary": "Invite member.",
+      "regions": [
+        "workspaces-tabs",
+        "workspaces-members",
+        "workspaces-invites",
+        "workspaces-info",
+        "workspaces-danger"
+      ],
+      "targets": ["app_workspaces-390x844.png", "app_workspaces-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/app/integrations",
+      "kind": "app",
+      "task": "Connect available capabilities without widening permission boundaries.",
+      "layoutTree": [
+        "AppShell",
+        "CapabilitySummary",
+        "ConnectorList",
+        "ConnectorInspector"
+      ],
+      "primary": "Create calendar subscription.",
+      "regions": [
+        "integrations-summary",
+        "integrations-calendar",
+        "integrations-open-format",
+        "integrations-deferred"
+      ],
+      "targets": [
+        "app_integrations-390x844.png",
+        "app_integrations-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/auth/login",
+      "kind": "public",
+      "task": "Establish a device session.",
+      "layoutTree": [
+        "PublicShell",
+        "Identity",
+        "Credentials",
+        "RecoveryAndRegistrationLinks"
+      ],
+      "primary": "Sign in.",
+      "regions": ["login-identity", "login-credentials", "login-recovery"],
+      "targets": ["pub_login-390x844.png", "pub_login-1440x900.png"],
+      "deviation": {
+        "status": "approved",
+        "scope": "Passkey route",
+        "reason": "Passkey remains a method inside /auth/login; the prototype-only /auth/passkey route is excluded.",
+        "approvedBy": "Product Owner via approved remediation plan",
+        "approvedAt": "2026-08-26",
+        "recovery": "Keep Passkey capability and recovery states reachable from the formal login flow."
+      }
+    },
+    {
+      "route": "/auth/register",
+      "kind": "public",
+      "task": "Register under the active deployment or invitation policy.",
+      "layoutTree": [
+        "PublicShell",
+        "RegistrationPolicyState",
+        "RegistrationForm"
+      ],
+      "primary": "Create account or use invitation.",
+      "regions": ["register-policy", "register-form", "register-recovery"],
+      "targets": [
+        "pub_register-invite-390x844.png",
+        "pub_register-open-1440x900.png",
+        "pub_register-invite-1440x900.png",
+        "pub_register-closed-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/auth/verify",
+      "kind": "public",
+      "task": "Verify email and continue credential setup.",
+      "layoutTree": [
+        "PublicShell",
+        "VerificationTokenState",
+        "CredentialSetup"
+      ],
+      "primary": "Verify and continue.",
+      "regions": ["verify-state", "verify-credentials", "verify-recovery"],
+      "targets": ["pub_verify-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/auth/recover",
+      "kind": "public",
+      "task": "Request or complete password recovery without account disclosure.",
+      "layoutTree": ["PublicShell", "RecoveryForm", "PrivacyFeedback"],
+      "primary": "Continue recovery.",
+      "regions": ["recover-form", "recover-feedback", "recover-exit"],
+      "targets": ["pub_recover-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/auth/callback",
+      "kind": "public",
+      "task": "Complete the formal authentication callback and recover from errors.",
+      "layoutTree": [
+        "PublicShell",
+        "TransientCallbackStatus",
+        "CallbackErrorRecovery"
+      ],
+      "primary": "Automatic completion; return to login on failure.",
+      "regions": ["callback-status", "callback-recovery"],
+      "targets": ["pub_login-390x844.png", "pub_login-1440x900.png"],
+      "deviation": {
+        "status": "approved",
+        "scope": "Callback content",
+        "reason": "GLM has no independent callback screen; login targets freeze PublicShell geometry only.",
+        "approvedBy": "Product Owner via approved remediation plan",
+        "approvedAt": "2026-08-26",
+        "recovery": "Preserve the formal transient callback state and explicit login recovery path."
+      }
+    },
+    {
+      "route": "/onboarding",
+      "kind": "public",
+      "task": "Configure persona, workspace, space, Vault and the first goal.",
+      "layoutTree": [
+        "PublicShell",
+        "OnboardingStepper",
+        "CurrentStep",
+        "PersistentContext"
+      ],
+      "primary": "Continue the current step.",
+      "regions": [
+        "onboarding-progress",
+        "onboarding-step",
+        "onboarding-context",
+        "onboarding-recovery"
+      ],
+      "targets": ["pub_onboarding-390x844.png", "pub_onboarding-1440x900.png"],
+      "deviation": {
+        "status": "approved",
+        "scope": "Onboarding step count and data",
+        "reason": "The formal seven-step API-backed onboarding contract overrides prototype fixture sequencing.",
+        "approvedBy": "Product Owner via approved remediation plan",
+        "approvedAt": "2026-08-26",
+        "recovery": "Retain the GLM stepper hierarchy while preserving resumable formal state."
+      }
+    },
+    {
+      "route": "/invitations/accept",
+      "kind": "public",
+      "task": "Review workspace and role before accepting an invitation.",
+      "layoutTree": [
+        "PublicShell",
+        "InvitationSummary",
+        "AuthenticationOrAcceptAction"
+      ],
+      "primary": "Accept invitation.",
+      "regions": [
+        "invite-summary",
+        "invite-role",
+        "invite-action",
+        "invite-recovery"
+      ],
+      "targets": ["pub_invite-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/shares/[token]",
+      "kind": "public",
+      "task": "Inspect a short-lived read-only share.",
+      "layoutTree": ["WidePublicView", "ShareMetadata", "ReadOnlySnapshot"],
+      "primary": "Open an allowed deep link.",
+      "regions": ["share-metadata", "share-snapshot", "share-state"],
+      "targets": [
+        "pub_share-valid-1440x900.png",
+        "pub_share-revoked-1440x900.png"
+      ],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/account/deletion",
+      "kind": "public",
+      "task": "Confirm deletion or establish a restricted recovery session.",
+      "layoutTree": [
+        "PublicShell",
+        "DeletionImpact",
+        "RecoveryWindow",
+        "PhraseGate"
+      ],
+      "primary": "Confirm deletion or recover account.",
+      "regions": [
+        "deletion-impact",
+        "deletion-permission",
+        "deletion-confirmation",
+        "deletion-recovery"
+      ],
+      "targets": ["pub_deletion-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/offline",
+      "kind": "auxiliary",
+      "task": "Explain offline boundaries and provide a recovery action.",
+      "layoutTree": ["PublicShell", "OfflineState", "LocalAndSyncRecovery"],
+      "primary": "Retry connection or open sync.",
+      "regions": ["offline-state", "offline-local", "offline-recovery"],
+      "targets": ["pub_offline-390x844.png", "pub_offline-1440x900.png"],
+      "deviation": {
+        "status": "none",
+        "reason": "No route-specific deviation approved."
+      }
+    },
+    {
+      "route": "/404",
+      "kind": "auxiliary",
+      "task": "Recover navigation from an invalid address.",
+      "layoutTree": ["PublicShell", "NotFoundState", "RecoveryLinks"],
+      "primary": "Return to Today or login.",
+      "regions": ["not-found-state", "not-found-recovery"],
+      "targets": ["pub_not-found-1440x900.png"],
+      "deviation": {
+        "status": "approved",
+        "scope": "Route representation",
+        "reason": "Next not-found.tsx owns this state; /404 is a manifest key, not a new business route.",
+        "approvedBy": "Product Owner via approved remediation plan",
+        "approvedAt": "2026-08-26",
+        "recovery": "Keep the target and recovery links on every unmatched URL."
+      }
+    }
+  ]
+}
