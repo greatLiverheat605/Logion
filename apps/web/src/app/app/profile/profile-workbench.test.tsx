@@ -23,9 +23,9 @@ describe("Profile workbench", () => {
     expect(screen.getByTestId("profile-workbench")).toBeTruthy();
     expect(screen.getByText("researcher@example.com")).toBeTruthy();
     expect(screen.getByText("最近活动")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "打开安全中心" }).getAttribute("href")).toBe(
-      "/app/security",
-    );
+    expect(
+      screen.getByRole("link", { name: "打开安全中心" }).getAttribute("href"),
+    ).toBe("/app/security");
     expect(document.querySelector(".product-panel")).toBeNull();
   });
 });

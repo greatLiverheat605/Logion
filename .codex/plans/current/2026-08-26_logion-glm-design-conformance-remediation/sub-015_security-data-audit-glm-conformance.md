@@ -35,11 +35,11 @@
 
 ## 执行记录
 
-| 时间 | 路由 | 状态 | 结果 |
-| --- | --- | --- | --- |
-| 2026-08-28 01:51 | Security | 技术完成 | `security-center.tsx` 已迁移到 Checklist Master / Settings Main / Security Inspector；补齐 `security-workbench.module.css` 与 `security-workbench.test.tsx`。MCP `a2d3fa42-d957-4d9e-b656-3030481d19f2` 已以 88/100 验证完成。 |
-| 2026-08-28 02:13 | Data | 技术完成 | `Data Workbench` 已迁移到 Export / Import Master、Data View Main、Danger Inspector；导入显式二步确认、Private Space 边界、删除恢复和 offline / permission / recent-auth / 409 / error / capability-disabled 均保留。Web 66 files / 247 tests、typecheck、lint 通过；MCP `984ed501-8002-428d-9f6f-f5fdd66b3b57` 88/100 完成。 |
-| 2026-08-28 02:15 | Audit | 技术完成 | `Audit Workbench` 已迁移到 Filter Command Bar、Audit Timeline、Inline Event Detail；保留 `/api/v1/audit/me` 的 page_size / cursor、结果与目标筛选、事件 ID 和 request ID 错误语义。Web 66 files / 247 tests、typecheck、lint、build 通过；MCP `ec251af5-0316-479e-afec-88efdae7200d` 88/100 完成。 |
+| 时间             | 路由     | 状态     | 结果                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-28 01:51 | Security | 技术完成 | `security-center.tsx` 已迁移到 Checklist Master / Settings Main / Security Inspector；补齐 `security-workbench.module.css` 与 `security-workbench.test.tsx`。MCP `a2d3fa42-d957-4d9e-b656-3030481d19f2` 已以 88/100 验证完成。                                                                                               |
+| 2026-08-28 02:13 | Data     | 技术完成 | `Data Workbench` 已迁移到 Export / Import Master、Data View Main、Danger Inspector；导入显式二步确认、Private Space 边界、删除恢复和 offline / permission / recent-auth / 409 / error / capability-disabled 均保留。Web 66 files / 247 tests、typecheck、lint 通过；MCP `984ed501-8002-428d-9f6f-f5fdd66b3b57` 88/100 完成。 |
+| 2026-08-28 02:15 | Audit    | 技术完成 | `Audit Workbench` 已迁移到 Filter Command Bar、Audit Timeline、Inline Event Detail；保留 `/api/v1/audit/me` 的 page_size / cursor、结果与目标筛选、事件 ID 和 request ID 错误语义。Web 66 files / 247 tests、typecheck、lint、build 通过；MCP `ec251af5-0316-479e-afec-88efdae7200d` 88/100 完成。                           |
 
 ## Security 证据边界
 

@@ -59,16 +59,16 @@ Sync 合同测试固定 `sync-summary`、`sync-outbox`、`sync-conflicts`、`syn
 
 ## 运行摘要
 
-| 项目 | 记录 |
-| --- | --- |
-| Web image | `logion-web:0.1.0` |
-| Web image ID | `sha256:a820997e3a5cade9852e0b5bc3a491a72a8278384896a9e0af9e023124f9c9b7` |
-| Web image Created | `2026-08-27T16:18:58.552076001Z` |
-| Web container Started | `2026-08-27T16:23:42.803610589Z` |
-| Web mounts | `[]` |
-| API health | `healthy` |
-| 8080 `/health` | `200` |
-| 真实浏览器 | `/app/sync` 当前重定向登录；未在未确认情况下输入测试密码 |
+| 项目                  | 记录                                                                      |
+| --------------------- | ------------------------------------------------------------------------- |
+| Web image             | `logion-web:0.1.0`                                                        |
+| Web image ID          | `sha256:a820997e3a5cade9852e0b5bc3a491a72a8278384896a9e0af9e023124f9c9b7` |
+| Web image Created     | `2026-08-27T16:18:58.552076001Z`                                          |
+| Web container Started | `2026-08-27T16:23:42.803610589Z`                                          |
+| Web mounts            | `[]`                                                                      |
+| API health            | `healthy`                                                                 |
+| 8080 `/health`        | `200`                                                                     |
+| 真实浏览器            | `/app/sync` 当前重定向登录；未在未确认情况下输入测试密码                  |
 
 ## 未完成证据与 PO 走查
 

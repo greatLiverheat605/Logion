@@ -30,12 +30,15 @@ test("Research completes a traceable question, evidence and experiment workflow"
     process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;
   const runtimeProblems: string[] = [];
   page.on("console", (entry) => {
-    if (entry.text() === "Service Worker registration blocked by Playwright") return;
+    if (entry.text() === "Service Worker registration blocked by Playwright")
+      return;
     if (["error", "warning"].includes(entry.type())) {
       runtimeProblems.push(`${entry.type()}: ${entry.text()}`);
     }
   });
-  page.on("pageerror", (error) => runtimeProblems.push(`pageerror: ${error.message}`));
+  page.on("pageerror", (error) =>
+    runtimeProblems.push(`pageerror: ${error.message}`),
+  );
 
   await page.goto("/app/research", { waitUntil: "domcontentloaded" });
   await waitForWorkbenchReady(page, "/app/research");
@@ -44,7 +47,9 @@ test("Research completes a traceable question, evidence and experiment workflow"
   await expect(page.getByTestId("research-evidence")).toBeAttached();
   await expect(page.getByTestId("research-experiments")).toBeAttached();
 
-  const unlock = page.getByRole("button", { exact: true, name: "解锁资料" }).first();
+  const unlock = page
+    .getByRole("button", { exact: true, name: "解锁资料" })
+    .first();
   if (await unlock.isVisible()) {
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁研究资料" });
@@ -78,41 +83,65 @@ test("Research completes a traceable question, evidence and experiment workflow"
   await questionRow.click();
 
   await page.getByRole("tab", { name: "论文" }).click();
-  await page.getByTestId("research-papers").getByRole("button", { name: "索引论文" }).click();
+  await page
+    .getByTestId("research-papers")
+    .getByRole("button", { name: "索引论文" })
+    .click();
   const paperSheet = page.getByRole("dialog", { name: "索引论文" });
   await paperSheet.getByLabel("论文标题").fill(paperTitle);
   await paperSheet.getByLabel("Citation Key").fill(citationKey);
-  await paperSheet.getByLabel("HTTP(S) 来源（可选）").fill("https://example.com/research-paper");
+  await paperSheet
+    .getByLabel("HTTP(S) 来源（可选）")
+    .fill("https://example.com/research-paper");
   await paperSheet.getByRole("button", { name: "保存论文" }).click();
   await expect(paperSheet).toHaveCount(0);
   await expect(page.getByTestId("research-papers")).toContainText(paperTitle);
 
   await page.getByRole("tab", { name: "声明与证据" }).click();
-  await page.getByTestId("research-claims").getByRole("button", { name: "建立声明" }).click();
+  await page
+    .getByTestId("research-claims")
+    .getByRole("button", { name: "建立声明" })
+    .click();
   const claimSheet = page.getByRole("dialog", { name: "建立声明" });
-  await claimSheet.getByLabel("来源论文").selectOption({ label: `${citationKey} · ${paperTitle}` });
+  await claimSheet
+    .getByLabel("来源论文")
+    .selectOption({ label: `${citationKey} · ${paperTitle}` });
   await claimSheet.getByLabel("研究声明").fill(claimText);
   await claimSheet.getByLabel("声明立场").selectOption("supports");
   await claimSheet.getByRole("button", { name: "记录声明" }).click();
   await expect(claimSheet).toHaveCount(0);
-  const claimRow = page.getByTestId("research-claims").getByRole("button", { name: new RegExp(claimText) });
+  const claimRow = page
+    .getByTestId("research-claims")
+    .getByRole("button", { name: new RegExp(claimText) });
   await expect(claimRow).toBeVisible();
   await claimRow.click();
-  await expect(page.getByTestId("research-evidence")).toContainText("来源与立场");
+  await expect(page.getByTestId("research-evidence")).toContainText(
+    "来源与立场",
+  );
 
-  await page.getByTestId("research-evidence").getByRole("button", { name: "记录反馈" }).click();
+  await page
+    .getByTestId("research-evidence")
+    .getByRole("button", { name: "记录反馈" })
+    .click();
   const feedbackSheet = page.getByRole("dialog", { name: "记录反馈" });
   await feedbackSheet.getByLabel("关联声明").selectOption({ label: claimText });
   await feedbackSheet.getByLabel("反馈").fill(feedbackText);
   await feedbackSheet.getByLabel("建议动作（可选）").fill("补充高负载实验。");
   await feedbackSheet.getByRole("button", { name: "记录反馈" }).click();
   await expect(feedbackSheet).toHaveCount(0);
-  await expect(page.getByTestId("research-evidence")).toContainText(feedbackText);
+  await expect(page.getByTestId("research-evidence")).toContainText(
+    feedbackText,
+  );
 
   await page.getByRole("tab", { name: "实验与指标" }).click();
-  await page.getByTestId("research-experiments").getByRole("button", { name: "记录已完成运行" }).click();
+  await page
+    .getByTestId("research-experiments")
+    .getByRole("button", { name: "记录已完成运行" })
+    .click();
   const runSheet = page.getByRole("dialog", { name: "记录已完成运行" });
-  await runSheet.getByLabel("所属研究问题").selectOption({ label: questionTitle });
+  await runSheet
+    .getByLabel("所属研究问题")
+    .selectOption({ label: questionTitle });
   await runSheet.getByLabel("实验运行名称").fill(runTitle);
   await runSheet.getByLabel("方法摘要").fill("在两个负载档位运行基准测试。");
   await runSheet.getByRole("button", { name: "记录运行" }).click();
@@ -122,7 +151,9 @@ test("Research completes a traceable question, evidence and experiment workflow"
 
   await runRegion.getByRole("button", { name: "指标" }).first().click();
   const metricSheet = page.getByRole("dialog", { name: "追加指标" });
-  await metricSheet.getByLabel("所属实验运行").selectOption({ label: runTitle });
+  await metricSheet
+    .getByLabel("所属实验运行")
+    .selectOption({ label: runTitle });
   await metricSheet.getByLabel("指标名称").fill("p95 latency");
   await metricSheet.getByLabel("数值").fill("42");
   await metricSheet.getByLabel("单位").fill("ms");
@@ -159,5 +190,8 @@ test("Research completes a traceable question, evidence and experiment workflow"
     await assertReducedMotion(page, "/app/research", viewport);
   }
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  expect(runtimeProblems, "Research must not emit browser warnings or errors").toEqual([]);
+  expect(
+    runtimeProblems,
+    "Research must not emit browser warnings or errors",
+  ).toEqual([]);
 });

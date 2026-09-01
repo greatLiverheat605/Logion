@@ -6,7 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/features/auth/session-provider", () => ({
   useSession: () => ({
     refresh: vi.fn(),
-    state: { status: "authenticated", user: { email: "help@example.com", id: "user-1" } },
+    state: {
+      status: "authenticated",
+      user: { email: "help@example.com", id: "user-1" },
+    },
   }),
 }));
 

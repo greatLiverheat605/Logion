@@ -121,8 +121,12 @@ export async function assertWorkbenchViewportFill(
 ) {
   if (viewport.width < 720) return;
   const diagnostic = await page.evaluate(() => {
-    const main = document.querySelector<HTMLElement>('[data-testid="app-main"]');
-    const frame = document.querySelector<HTMLElement>('[data-testid="workbench-frame"]');
+    const main = document.querySelector<HTMLElement>(
+      '[data-testid="app-main"]',
+    );
+    const frame = document.querySelector<HTMLElement>(
+      '[data-testid="workbench-frame"]',
+    );
     if (!main || !frame) return null;
     const mainRect = main.getBoundingClientRect();
     const frameRect = frame.getBoundingClientRect();

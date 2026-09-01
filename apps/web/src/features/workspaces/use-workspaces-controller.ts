@@ -8,7 +8,8 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 export type Workspace = components["schemas"]["WorkspaceResponse"];
 export type Space = components["schemas"]["SpaceResponse"];
 export type Member = components["schemas"]["WorkspaceMemberResponse"];
-export type Invitation = components["schemas"]["WorkspaceInvitationCreatedResponse"];
+export type Invitation =
+  components["schemas"]["WorkspaceInvitationCreatedResponse"];
 
 export type WorkspaceRole = Workspace["role"];
 export type SpaceVisibility = Space["visibility"];
@@ -42,14 +43,23 @@ export interface WorkspaceWorkbenchController {
       visibility: SpaceVisibility;
     }) => Promise<boolean>;
     createWorkspace: (name: string) => Promise<boolean>;
-    invite: (input: { email: string; role: Exclude<WorkspaceRole, "owner"> }) => Promise<boolean>;
+    invite: (input: {
+      email: string;
+      role: Exclude<WorkspaceRole, "owner">;
+    }) => Promise<boolean>;
     leaveWorkspace: () => Promise<boolean>;
     load: () => Promise<void>;
     revokeInvitation: (invitationId: string) => Promise<boolean>;
     selectSpace: (spaceId: string) => void;
     selectWorkspace: (workspaceId: string) => void;
     transferOwnership: (targetMembershipId: string) => Promise<boolean>;
-    updateMember: (member: Member, input: { role?: Exclude<WorkspaceRole, "owner">; status?: "active" | "suspended" | "revoked" }) => Promise<boolean>;
+    updateMember: (
+      member: Member,
+      input: {
+        role?: Exclude<WorkspaceRole, "owner">;
+        status?: "active" | "suspended" | "revoked";
+      },
+    ) => Promise<boolean>;
   };
   context: {
     selectedSpace: Space | null;
@@ -106,9 +116,9 @@ export function useWorkspacesController(): WorkspaceWorkbenchController {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await browserApiClient.request<{ workspaces: Workspace[] }>(
-        "/api/v1/workspaces",
-      );
+      const result = await browserApiClient.request<{
+        workspaces: Workspace[];
+      }>("/api/v1/workspaces");
       const nextWorkspaces = Array.isArray(result.workspaces)
         ? result.workspaces
         : [];
@@ -166,7 +176,10 @@ export function useWorkspacesController(): WorkspaceWorkbenchController {
     }
   }
 
-  async function createSpace(input: { name: string; visibility: SpaceVisibility }) {
+  async function createSpace(input: {
+    name: string;
+    visibility: SpaceVisibility;
+  }) {
     if (!selectedWorkspaceId || !input.name.trim()) return false;
     try {
       await browserApiClient.request(
@@ -220,7 +233,11 @@ export function useWorkspacesController(): WorkspaceWorkbenchController {
         `/api/v1/workspaces/${selectedWorkspaceId}/invitations/${invitation.id}`,
         { csrf: true, method: "DELETE" },
       );
-      setInvitations((current) => current.map((item) => item.id === invitationId ? { ...item, status: "revoked" } : item));
+      setInvitations((current) =>
+        current.map((item) =>
+          item.id === invitationId ? { ...item, status: "revoked" } : item,
+        ),
+      );
       setStatus("邀请已撤销；该 Token 立即失效。");
       return true;
     } catch (error) {
@@ -264,7 +281,8 @@ export function useWorkspacesController(): WorkspaceWorkbenchController {
           body: JSON.stringify({
             expected_current_owner_version: owner.version,
             expected_target_version:
-              members.find((item) => item.id === targetMembershipId)?.version ?? 1,
+              members.find((item) => item.id === targetMembershipId)?.version ??
+              1,
             expected_workspace_version: selectedWorkspace.version,
             previous_owner_role: "admin",
             target_membership_id: targetMembershipId,

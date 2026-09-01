@@ -48,15 +48,15 @@
 
 ## 执行记录
 
-| 时间 | 操作 | 结果 |
-| --- | --- | --- |
-| 2026-08-27 05:10 | Review 独立验收通过，创建 Exam 子计划 | Product Owner 明确回复 `Review 独立验收通过`；Exam 解锁，后续其他路由不并行启动 |
-| 2026-08-27 14:27 | 恢复真实验收 API 运行基线 | 复用持久化 PostgreSQL 实际密码 `logion-b1-db-password`，修正 8080 allowed origin / WebAuthn RP；API health 通过 |
-| 2026-08-27 14:29 | 修复 Browser 测试匹配遗漏 | `playwright.config.ts` 将 `exam-workbench.spec.ts` 纳入 authenticated project；此前“无测试可执行”不再可能静默发生 |
-| 2026-08-27 14:31 | 真实 Exam 任务与四断点验收 | 真实 Session/API/Vault/sync-v1 完成创建考试、科目、大纲、模考、成绩；`320/390/1024/1440` overflow、几何、唯一 primary、Axe、键盘、焦点、reduced-motion 全通过 |
-| 2026-08-27 14:32 | 修复并复验无障碍缺陷 | 选中行成功标签对比度从 `4.35:1` 提升到 AA；覆盖率进度条补齐 `role=progressbar` 与 value 属性；最终镜像 Browser `1 passed / 9.4s` |
-| 2026-08-27 14:36 | 生成 Exam 一致性报告并恢复正式注册模式 | 报告写入 `reports/ui-refactor/exam-conformance.md`；API 已恢复 `invite`，直接注册返回 `410 AUTH_REGISTRATION_UPGRADE_REQUIRED` |
-| 2026-08-27 14:42 | Exam 独立验收通过 | Product Owner 明确回复 `验收通过`；Exam 三栏工作台、真实任务链、四断点和证据限制获批准，允许关闭子计划并解锁父计划步骤 9 |
+| 时间             | 操作                                   | 结果                                                                                                                                                          |
+| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-27 05:10 | Review 独立验收通过，创建 Exam 子计划  | Product Owner 明确回复 `Review 独立验收通过`；Exam 解锁，后续其他路由不并行启动                                                                               |
+| 2026-08-27 14:27 | 恢复真实验收 API 运行基线              | 复用持久化 PostgreSQL 实际密码 `logion-b1-db-password`，修正 8080 allowed origin / WebAuthn RP；API health 通过                                               |
+| 2026-08-27 14:29 | 修复 Browser 测试匹配遗漏              | `playwright.config.ts` 将 `exam-workbench.spec.ts` 纳入 authenticated project；此前“无测试可执行”不再可能静默发生                                             |
+| 2026-08-27 14:31 | 真实 Exam 任务与四断点验收             | 真实 Session/API/Vault/sync-v1 完成创建考试、科目、大纲、模考、成绩；`320/390/1024/1440` overflow、几何、唯一 primary、Axe、键盘、焦点、reduced-motion 全通过 |
+| 2026-08-27 14:32 | 修复并复验无障碍缺陷                   | 选中行成功标签对比度从 `4.35:1` 提升到 AA；覆盖率进度条补齐 `role=progressbar` 与 value 属性；最终镜像 Browser `1 passed / 9.4s`                              |
+| 2026-08-27 14:36 | 生成 Exam 一致性报告并恢复正式注册模式 | 报告写入 `reports/ui-refactor/exam-conformance.md`；API 已恢复 `invite`，直接注册返回 `410 AUTH_REGISTRATION_UPGRADE_REQUIRED`                                |
+| 2026-08-27 14:42 | Exam 独立验收通过                      | Product Owner 明确回复 `验收通过`；Exam 三栏工作台、真实任务链、四断点和证据限制获批准，允许关闭子计划并解锁父计划步骤 9                                      |
 
 ## 完成条件
 

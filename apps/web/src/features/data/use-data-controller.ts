@@ -117,9 +117,8 @@ export function useDataController(): DataControllerResult {
   const loadData = useCallback(async (selectedWorkspaceId: string) => {
     setLoading(true);
     try {
-      const result = await integrationCapabilityService.loadPortability(
-        selectedWorkspaceId,
-      );
+      const result =
+        await integrationCapabilityService.loadPortability(selectedWorkspaceId);
       setExports(result.exports);
       setImports(result.imports);
       setSpaces(result.privateSpaces);
@@ -130,12 +129,27 @@ export function useDataController(): DataControllerResult {
       );
       setDataWorkspaceId(selectedWorkspaceId);
       setSelection((current) => {
-        if (current?.kind === "exports" && result.exports.some((item) => item.id === current.id)) return current;
-        if (current?.kind === "imports" && result.imports.some((item) => item.id === current.id)) return current;
+        if (
+          current?.kind === "exports" &&
+          result.exports.some((item) => item.id === current.id)
+        )
+          return current;
+        if (
+          current?.kind === "imports" &&
+          result.imports.some((item) => item.id === current.id)
+        )
+          return current;
         const first = result.exports[0] ?? result.imports[0];
-        return first ? { kind: result.exports.length ? "exports" : "imports", id: first.id } : null;
+        return first
+          ? {
+              kind: result.exports.length ? "exports" : "imports",
+              id: first.id,
+            }
+          : null;
       });
-      setDataState(result.exports.length || result.imports.length ? "ready" : "empty");
+      setDataState(
+        result.exports.length || result.imports.length ? "ready" : "empty",
+      );
       setLastLoadedAt(new Date().toISOString());
       setStatus("数据边界已读取；导出和导入都需要显式确认。");
       return true;
@@ -158,7 +172,8 @@ export function useDataController(): DataControllerResult {
     try {
       const next = await integrationCapabilityService.listWorkspaces();
       setWorkspaces(next);
-      const selected = next.find((item) => item.id === workspaceId)?.id ?? next[0]?.id ?? "";
+      const selected =
+        next.find((item) => item.id === workspaceId)?.id ?? next[0]?.id ?? "";
       setWorkspaceId(selected);
       if (!selected) {
         setDataState("empty");
@@ -184,7 +199,8 @@ export function useDataController(): DataControllerResult {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const updateNetworkState = () => setNetworkOffline(!window.navigator.onLine);
+    const updateNetworkState = () =>
+      setNetworkOffline(!window.navigator.onLine);
     updateNetworkState();
     window.addEventListener("online", updateNetworkState);
     window.addEventListener("offline", updateNetworkState);
@@ -218,86 +234,113 @@ export function useDataController(): DataControllerResult {
     [loadData, workspaceId],
   );
 
-  const commands = useMemo<DataControllerResult["commands"]>(() => ({
-    cancelExport: (item) => runMutation(
-      () => integrationCapabilityService.cancelExport(workspaceId, item.id, item.version),
-      "导出任务已取消；未完成的产物不会保留。",
-    ),
-    commitImport: (item, spaceId) => runMutation(
-      () => integrationCapabilityService.commitImport(workspaceId, item.id, {
-        expected_version: item.version,
-        target_space_id: spaceId,
-      }),
-      "导入已在单个事务中完成；所有对象均使用新 ID。",
-    ),
-    createExport: (confirmation) => runMutation(
-      () => integrationCapabilityService.createExport(workspaceId, {
-        confirmation,
-        id: secureRandomUuid(),
-      }),
-      "导出已进入后台队列；完成后会出现在列表中。",
-    ),
-    load,
-    previewImport: (input) => runMutation(
-      () => integrationCapabilityService.previewImport(workspaceId, {
-        ...input,
-        id: secureRandomUuid(),
-      }),
-      "导入源已安全解析；请检查计数和警告后再确认写入。",
-    ),
-    requestAccountDeletion: (confirmation) => runMutation(
-      () => browserApiClient.request("/api/v1/account-deletion", {
-        body: JSON.stringify({ confirmation }),
-        csrf: true,
-        method: "POST",
-      }),
-      "删除请求已提交；正在前往可恢复的删除状态页。",
-    ),
-    selectImport: (id) => {
-      setTab("imports");
-      setSelection({ kind: "imports", id });
-    },
-    selectExport: (id) => {
-      setTab("exports");
-      setSelection({ kind: "exports", id });
-    },
-    selectTab: (nextTab) => {
-      setTab(nextTab);
-      setSelection((current) => {
-        if (current?.kind === nextTab) return current;
-        const first = nextTab === "exports" ? exports[0] : imports[0];
-        return first ? { kind: nextTab, id: first.id } : null;
-      });
-    },
-    selectWorkspace: (id) => {
-      setWorkspaceId(id);
-      void loadData(id);
-    },
-  }), [exports, imports, load, loadData, runMutation, workspaceId]);
+  const commands = useMemo<DataControllerResult["commands"]>(
+    () => ({
+      cancelExport: (item) =>
+        runMutation(
+          () =>
+            integrationCapabilityService.cancelExport(
+              workspaceId,
+              item.id,
+              item.version,
+            ),
+          "导出任务已取消；未完成的产物不会保留。",
+        ),
+      commitImport: (item, spaceId) =>
+        runMutation(
+          () =>
+            integrationCapabilityService.commitImport(workspaceId, item.id, {
+              expected_version: item.version,
+              target_space_id: spaceId,
+            }),
+          "导入已在单个事务中完成；所有对象均使用新 ID。",
+        ),
+      createExport: (confirmation) =>
+        runMutation(
+          () =>
+            integrationCapabilityService.createExport(workspaceId, {
+              confirmation,
+              id: secureRandomUuid(),
+            }),
+          "导出已进入后台队列；完成后会出现在列表中。",
+        ),
+      load,
+      previewImport: (input) =>
+        runMutation(
+          () =>
+            integrationCapabilityService.previewImport(workspaceId, {
+              ...input,
+              id: secureRandomUuid(),
+            }),
+          "导入源已安全解析；请检查计数和警告后再确认写入。",
+        ),
+      requestAccountDeletion: (confirmation) =>
+        runMutation(
+          () =>
+            browserApiClient.request("/api/v1/account-deletion", {
+              body: JSON.stringify({ confirmation }),
+              csrf: true,
+              method: "POST",
+            }),
+          "删除请求已提交；正在前往可恢复的删除状态页。",
+        ),
+      selectImport: (id) => {
+        setTab("imports");
+        setSelection({ kind: "imports", id });
+      },
+      selectExport: (id) => {
+        setTab("exports");
+        setSelection({ kind: "exports", id });
+      },
+      selectTab: (nextTab) => {
+        setTab(nextTab);
+        setSelection((current) => {
+          if (current?.kind === nextTab) return current;
+          const first = nextTab === "exports" ? exports[0] : imports[0];
+          return first ? { kind: nextTab, id: first.id } : null;
+        });
+      },
+      selectWorkspace: (id) => {
+        setWorkspaceId(id);
+        void loadData(id);
+      },
+    }),
+    [exports, imports, load, loadData, runMutation, workspaceId],
+  );
 
   const visibleExports = dataWorkspaceId === workspaceId ? exports : [];
   const visibleImports = dataWorkspaceId === workspaceId ? imports : [];
-  const selectedExport = selection?.kind === "exports" ? visibleExports.find((item) => item.id === selection.id) ?? null : null;
-  const selectedImport = selection?.kind === "imports" ? visibleImports.find((item) => item.id === selection.id) ?? null : null;
-  const selectedWorkspace = workspaces.find((item) => item.id === workspaceId) ?? null;
-  const selectedSpace = spaces.find((item) => item.id === targetSpaceId) ?? null;
+  const selectedExport =
+    selection?.kind === "exports"
+      ? (visibleExports.find((item) => item.id === selection.id) ?? null)
+      : null;
+  const selectedImport =
+    selection?.kind === "imports"
+      ? (visibleImports.find((item) => item.id === selection.id) ?? null)
+      : null;
+  const selectedWorkspace =
+    workspaces.find((item) => item.id === workspaceId) ?? null;
+  const selectedSpace =
+    spaces.find((item) => item.id === targetSpaceId) ?? null;
   const effectiveDataState = networkOffline ? "offline" : dataState;
   const effectiveStatus = networkOffline
     ? "当前设备处于离线状态；连接恢复后可以重新读取数据边界。"
     : status;
-  const mutationBlocked = networkOffline
-    || dataState === "loading"
-    || dataState === "offline"
-    || dataState === "permission"
-    || dataState === "recent-auth"
-    || dataState === "conflict"
-    || dataState === "error";
+  const mutationBlocked =
+    networkOffline ||
+    dataState === "loading" ||
+    dataState === "offline" ||
+    dataState === "permission" ||
+    dataState === "recent-auth" ||
+    dataState === "conflict" ||
+    dataState === "error";
 
   return {
     capabilities: {
       canDeleteAccount: !mutationBlocked,
       canExport: Boolean(selectedWorkspace) && !mutationBlocked,
-      canImport: Boolean(selectedWorkspace && selectedSpace) && !mutationBlocked,
+      canImport:
+        Boolean(selectedWorkspace && selectedSpace) && !mutationBlocked,
     },
     commands,
     context: {

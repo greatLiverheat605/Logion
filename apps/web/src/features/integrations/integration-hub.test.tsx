@@ -146,9 +146,15 @@ describe("IntegrationHub", () => {
     );
 
     expect(await screen.findByTestId("integrations-summary")).toBeTruthy();
-    expect(container.querySelector('[data-testid="integrations-calendar"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="integrations-open-format"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="integrations-deferred"]')).toBeTruthy();
+    expect(
+      container.querySelector('[data-testid="integrations-calendar"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-testid="integrations-open-format"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-testid="integrations-deferred"]'),
+    ).toBeTruthy();
 
     const calendarMetric = await screen.findByText("有效日历 Feed");
     expect(calendarMetric.parentElement?.textContent).toContain("11 个已撤销");

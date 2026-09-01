@@ -290,7 +290,9 @@ function CategoryMaster({
                 {template.visibility === "official" ? (
                   <ProductTag tone="default">官方</ProductTag>
                 ) : null}
-                <ProductTag tone={template.status === "active" ? "good" : "warn"}>
+                <ProductTag
+                  tone={template.status === "active" ? "good" : "warn"}
+                >
                   {template.status === "active" ? "可用" : "撤回"}
                 </ProductTag>
               </span>
@@ -718,7 +720,8 @@ function InstallSheet({
           <strong>{context.selectedSpace?.name ?? "尚未选择"}</strong>
           <span>安装范围</span>
           <strong>
-            {templateGraph(template).phases} 个阶段 · {templateGraph(template).tasks} 个任务
+            {templateGraph(template).phases} 个阶段 ·{" "}
+            {templateGraph(template).tasks} 个任务
           </strong>
           <span>写入策略</span>
           <strong>创建独立对象，不会覆盖现有内容</strong>
@@ -1157,35 +1160,31 @@ export function TemplatesWorkbench({
   const closeSheet = (open: boolean) => {
     if (!open) setSheet(null);
   };
-  const stateAction =
-    context.recentAuthRequired ? (
-      <a
-        className={styles.noticeAction}
-        href="/auth/login?next=/app/templates"
-      >
-        重新认证
-      </a>
-    ) : context.templateState === "error" ? (
-      <button
-        className={styles.noticeAction}
-        onClick={() => void actions.loadContext()}
-        type="button"
-      >
-        重试读取
-      </button>
-    ) : context.templateState === "needs-context" ? (
-      <a className={styles.noticeAction} href="#templates-context">
-        选择 Workspace / Space
-      </a>
-    ) : (
-      <button
-        className={styles.noticeAction}
-        onClick={() => void actions.synchronize()}
-        type="button"
-      >
-        刷新模板目录
-      </button>
-    );
+  const stateAction = context.recentAuthRequired ? (
+    <a className={styles.noticeAction} href="/auth/login?next=/app/templates">
+      重新认证
+    </a>
+  ) : context.templateState === "error" ? (
+    <button
+      className={styles.noticeAction}
+      onClick={() => void actions.loadContext()}
+      type="button"
+    >
+      重试读取
+    </button>
+  ) : context.templateState === "needs-context" ? (
+    <a className={styles.noticeAction} href="#templates-context">
+      选择 Workspace / Space
+    </a>
+  ) : (
+    <button
+      className={styles.noticeAction}
+      onClick={() => void actions.synchronize()}
+      type="button"
+    >
+      刷新模板目录
+    </button>
+  );
   const primaryLabel = context.selectedTemplate ? "安装独立副本" : "创建模板";
   const primaryAction = context.selectedTemplate
     ? () => openSheet("install")

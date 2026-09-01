@@ -20,20 +20,30 @@ import {
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
-test("Self-study advances a real inbox item into a route, project and deliverable", async ({ accountState, page }) => {
+test("Self-study advances a real inbox item into a route, project and deliverable", async ({
+  accountState,
+  page,
+}) => {
   test.setTimeout(300_000);
   const manifest = loadGlmTargetManifest();
-  const vaultPassphrase = process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;
+  const vaultPassphrase =
+    process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;
   const runtimeProblems: string[] = [];
   page.on("console", (entry) => {
-    if (entry.text() === "Service Worker registration blocked by Playwright") return;
-    if (["error", "warning"].includes(entry.type())) runtimeProblems.push(`${entry.type()}: ${entry.text()}`);
+    if (entry.text() === "Service Worker registration blocked by Playwright")
+      return;
+    if (["error", "warning"].includes(entry.type()))
+      runtimeProblems.push(`${entry.type()}: ${entry.text()}`);
   });
-  page.on("pageerror", (error) => runtimeProblems.push(`pageerror: ${error.message}`));
+  page.on("pageerror", (error) =>
+    runtimeProblems.push(`pageerror: ${error.message}`),
+  );
 
   await page.goto("/app/self-study", { waitUntil: "domcontentloaded" });
   await waitForWorkbenchReady(page, "/app/self-study");
-  const unlock = page.getByRole("button", { exact: true, name: "解锁资料" }).first();
+  const unlock = page
+    .getByRole("button", { exact: true, name: "解锁资料" })
+    .first();
   if (await unlock.isVisible()) {
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地学习资料" });
@@ -62,9 +72,14 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
   await routeSheet.getByLabel("路线目标").fill("形成可复核的系统设计能力。");
   await routeSheet.getByRole("button", { name: "新建学习路线" }).click();
   await expect(routeSheet).toHaveCount(0);
-  await expect(page.getByTestId("self-study-projects")).toContainText(routeTitle);
+  await expect(page.getByTestId("self-study-projects")).toContainText(
+    routeTitle,
+  );
 
-  await page.getByTestId("self-study-projects").getByRole("button", { name: new RegExp(routeTitle) }).click();
+  await page
+    .getByTestId("self-study-projects")
+    .getByRole("button", { name: new RegExp(routeTitle) })
+    .click();
   await page.getByRole("button", { name: "新建项目", exact: true }).click();
   const projectSheet = page.getByRole("dialog", { name: "新建学习项目" });
   await projectSheet.getByLabel("所属路线").selectOption({ label: routeTitle });
@@ -72,24 +87,44 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
   await projectSheet.getByLabel("预期成果").fill("完成一份可复核的设计说明。");
   await projectSheet.getByRole("button", { name: "新建学习项目" }).click();
   await expect(projectSheet).toHaveCount(0);
-  await expect(page.getByTestId("self-study-projects")).toContainText(projectTitle);
+  await expect(page.getByTestId("self-study-projects")).toContainText(
+    projectTitle,
+  );
 
-  await page.getByTestId("self-study-projects").getByRole("button", { name: new RegExp(projectTitle) }).click();
-  await page.getByRole("button", { name: "记录成果", exact: true }).first().click();
+  await page
+    .getByTestId("self-study-projects")
+    .getByRole("button", { name: new RegExp(projectTitle) })
+    .click();
+  await page
+    .getByRole("button", { name: "记录成果", exact: true })
+    .first()
+    .click();
   const deliverableSheet = page.getByRole("dialog", { name: "记录已完成成果" });
-  await deliverableSheet.getByLabel("所属项目").selectOption({ label: projectTitle });
+  await deliverableSheet
+    .getByLabel("所属项目")
+    .selectOption({ label: projectTitle });
   await deliverableSheet.getByLabel("成果名称").fill(deliverableTitle);
-  await deliverableSheet.getByLabel("完成证据摘要").fill("完成设计说明并通过人工复核。");
-  await deliverableSheet.getByRole("button", { name: "记录已完成成果" }).click();
+  await deliverableSheet
+    .getByLabel("完成证据摘要")
+    .fill("完成设计说明并通过人工复核。");
+  await deliverableSheet
+    .getByRole("button", { name: "记录已完成成果" })
+    .click();
   await expect(deliverableSheet).toHaveCount(0);
-  await expect(page.getByTestId("self-study-deliverables")).toContainText(deliverableTitle);
+  await expect(page.getByTestId("self-study-deliverables")).toContainText(
+    deliverableTitle,
+  );
 
   for (const viewport of WORKBENCH_VIEWPORTS) {
     await page.setViewportSize(viewport);
     await waitForWorkbenchReady(page, "/app/self-study");
     await page.evaluate(() => {
       window.scrollTo(0, 0);
-      document.querySelectorAll<HTMLElement>(".app-content, .app-nav-scroll, .workbench-master, .workbench-main, .workbench-inspector").forEach((element) => element.scrollTo(0, 0));
+      document
+        .querySelectorAll<HTMLElement>(
+          ".app-content, .app-nav-scroll, .workbench-master, .workbench-main, .workbench-inspector",
+        )
+        .forEach((element) => element.scrollTo(0, 0));
     });
     await assertNoHorizontalOverflow(page, "/app/self-study", viewport);
     await assertWorkbenchViewportFill(page, "/app/self-study", viewport);
@@ -109,5 +144,8 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
     await assertReducedMotion(page, "/app/self-study", viewport);
   }
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  expect(runtimeProblems, "Self-study must not emit browser warnings or errors").toEqual([]);
+  expect(
+    runtimeProblems,
+    "Self-study must not emit browser warnings or errors",
+  ).toEqual([]);
 });

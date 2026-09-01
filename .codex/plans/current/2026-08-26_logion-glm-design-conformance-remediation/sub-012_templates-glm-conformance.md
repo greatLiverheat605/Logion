@@ -103,10 +103,10 @@ Templates Workbench
 
 ## 变更记录
 
-| 时间 | 操作 | 结果 |
-| --- | --- | --- |
-| 2026-08-27 18:55 | Collaboration PO 独立验收通过，创建 sub-012 | PO 原文 `Collaboration 独立验收通过`；关闭 sub-011 独立验收门并解锁 Templates；开始冻结 Templates 副作用与 GLM 差异 |
-| 2026-08-27 20:00 | Templates 实现、真实任务与四断点证据完成 | Category Master / Detail Main / Inspector 与 Create/Import/Install/Share/Revoke Sheets 完成；真实模板版本、独立安装、非法/合法导入、一次性分享、撤销闭环通过；四断点、Axe、键盘/焦点、reduced-motion、overflow、唯一 primary、runtime console 全通过 |
-| 2026-08-27 20:06 | Templates 技术验收收口，等待 Product Owner 独立验收 | 新增 [templates-conformance.md](../../../../reports/ui-refactor/templates-conformance.md)，记录 After 截图哈希、真实镜像、API/权限证据及缺口；补齐只读 Goals GET 以支持来源目标读取；尚未关闭 sub-012 或解锁父计划步骤 10 |
-| 2026-08-27 22:58 | 收口官方目录审计与最新镜像重验 | 安装审计新增 `source_scope`（官方模板为 `official_catalog`）；真实 API 集成断言通过；重建无源码挂载 Web/API 镜像并强制重建容器；Templates Playwright `1 passed (15.8s)`，Web `60 files / 230 tests`、typecheck、lint、API ruff 通过；仍等待 Product Owner 独立验收 |
-| 2026-08-27 23:10 | Templates Product Owner 独立验收通过 | PO 原文 `Templates 独立验收通过`；关闭 Templates 独立验收门，允许父计划进入步骤 10；全量路由完成后统一提交 GLM 验收，随后再进行最终 review，当前不归档父计划 |
+| 时间             | 操作                                                | 结果                                                                                                                                                                                                                                                               |
+| ---------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-27 18:55 | Collaboration PO 独立验收通过，创建 sub-012         | PO 原文 `Collaboration 独立验收通过`；关闭 sub-011 独立验收门并解锁 Templates；开始冻结 Templates 副作用与 GLM 差异                                                                                                                                                |
+| 2026-08-27 20:00 | Templates 实现、真实任务与四断点证据完成            | Category Master / Detail Main / Inspector 与 Create/Import/Install/Share/Revoke Sheets 完成；真实模板版本、独立安装、非法/合法导入、一次性分享、撤销闭环通过；四断点、Axe、键盘/焦点、reduced-motion、overflow、唯一 primary、runtime console 全通过               |
+| 2026-08-27 20:06 | Templates 技术验收收口，等待 Product Owner 独立验收 | 新增 [templates-conformance.md](../../../../reports/ui-refactor/templates-conformance.md)，记录 After 截图哈希、真实镜像、API/权限证据及缺口；补齐只读 Goals GET 以支持来源目标读取；尚未关闭 sub-012 或解锁父计划步骤 10                                          |
+| 2026-08-27 22:58 | 收口官方目录审计与最新镜像重验                      | 安装审计新增 `source_scope`（官方模板为 `official_catalog`）；真实 API 集成断言通过；重建无源码挂载 Web/API 镜像并强制重建容器；Templates Playwright `1 passed (15.8s)`，Web `60 files / 230 tests`、typecheck、lint、API ruff 通过；仍等待 Product Owner 独立验收 |
+| 2026-08-27 23:10 | Templates Product Owner 独立验收通过                | PO 原文 `Templates 独立验收通过`；关闭 Templates 独立验收门，允许父计划进入步骤 10；全量路由完成后统一提交 GLM 验收，随后再进行最终 review，当前不归档父计划                                                                                                       |

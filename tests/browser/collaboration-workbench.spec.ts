@@ -126,7 +126,9 @@ test("Collaboration completes shared review, feedback and immutable snapshot wor
   await rubricSheet.getByLabel("验收标准").fill("说明证据来源\n给出下一步动作");
   await rubricSheet.getByRole("button", { name: "创建 Rubric" }).click();
   await expect(rubricSheet).toHaveCount(0);
-  await expect(queue.getByRole("button", { name: "创建 Rubric", exact: true })).toBeEnabled();
+  await expect(
+    queue.getByRole("button", { name: "创建 Rubric", exact: true }),
+  ).toBeEnabled();
 
   await page.locator('[data-workbench-primary="true"]:visible').click();
   const reviewSheet = page.getByRole("dialog", { name: "发起审阅" });

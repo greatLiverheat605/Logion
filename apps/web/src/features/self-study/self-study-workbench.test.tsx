@@ -8,7 +8,11 @@ import {
   type SelfStudyWorkbenchProps,
 } from "./self-study-workbench";
 
-function entity(entityType: string, id: string, payload: Record<string, unknown>): LocalEntity {
+function entity(
+  entityType: string,
+  id: string,
+  payload: Record<string, unknown>,
+): LocalEntity {
   return {
     workspace_id: "workspace-1",
     entity_type: entityType,
@@ -29,11 +33,20 @@ function entity(entityType: string, id: string, payload: Record<string, unknown>
 function props(): SelfStudyWorkbenchProps {
   const track = {
     entity: entity("learning_track", "track-1", {}),
-    payload: { objective: "建立稳定的系统设计能力", space_id: "space-1", title: "分布式系统" },
+    payload: {
+      objective: "建立稳定的系统设计能力",
+      space_id: "space-1",
+      title: "分布式系统",
+    },
   };
   const project = {
     entity: entity("study_project", "project-1", {}),
-    payload: { intended_outcome: "完成一份可复核设计说明", space_id: "space-1", title: "一致性模型复盘", track_id: "track-1" },
+    payload: {
+      intended_outcome: "完成一份可复核设计说明",
+      space_id: "space-1",
+      title: "一致性模型复盘",
+      track_id: "track-1",
+    },
   };
   const inbox = {
     entity: entity("inbox_item", "inbox-1", {}),
@@ -41,7 +54,13 @@ function props(): SelfStudyWorkbenchProps {
   };
   const deliverable = {
     entity: entity("deliverable", "deliverable-1", {}),
-    payload: { completed_at: "2026-08-26T10:00:00.000Z", evidence_summary: "完成结构化笔记", project_id: "project-1", space_id: "space-1", title: "复盘笔记" },
+    payload: {
+      completed_at: "2026-08-26T10:00:00.000Z",
+      evidence_summary: "完成结构化笔记",
+      project_id: "project-1",
+      space_id: "space-1",
+      title: "复盘笔记",
+    },
   };
   return {
     actions: {
@@ -85,7 +104,13 @@ function props(): SelfStudyWorkbenchProps {
       deliverables: [deliverable],
       inbox: [inbox],
       projects: [project],
-      summary: { deliverableCount: 1, orphanProjectCount: 0, projectCount: 1, projectCoverage: 100, trackCount: 1 },
+      summary: {
+        deliverableCount: 1,
+        orphanProjectCount: 0,
+        projectCount: 1,
+        projectCoverage: 100,
+        trackCount: 1,
+      },
       tracks: [track],
     },
   };

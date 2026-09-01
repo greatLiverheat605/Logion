@@ -63,7 +63,11 @@ test("Planning completes real goal, task and offline sync workflows", async ({
   await expect(page.getByTestId("planning-goals")).toBeAttached();
   await page.setViewportSize(WORKBENCH_VIEWPORTS[2]);
   await waitForWorkbenchReady(page, "/app/planning");
-  await assertWorkbenchViewportFill(page, "/app/planning", WORKBENCH_VIEWPORTS[2]);
+  await assertWorkbenchViewportFill(
+    page,
+    "/app/planning",
+    WORKBENCH_VIEWPORTS[2],
+  );
 
   const unlockTrigger = page.getByRole("button", {
     exact: true,

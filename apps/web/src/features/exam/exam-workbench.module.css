@@ -261,7 +261,9 @@
   color: #0f5f3b;
 }
 
-:global(:root[data-theme="dark"]) .examRow[data-selected="true"] :global(.product-tag.tone-good) {
+:global(:root[data-theme="dark"])
+  .examRow[data-selected="true"]
+  :global(.product-tag.tone-good) {
   color: #79e6b7;
 }
 

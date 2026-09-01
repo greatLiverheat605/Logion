@@ -5,7 +5,11 @@ import type { LocalEntity } from "@logion/offline";
 
 import { ExamWorkbench, type ExamWorkbenchProps } from "./exam-workbench";
 
-function entity(entityType: string, id: string, payload: Record<string, unknown>): LocalEntity {
+function entity(
+  entityType: string,
+  id: string,
+  payload: Record<string, unknown>,
+): LocalEntity {
   return {
     workspace_id: "workspace-1",
     entity_type: entityType,

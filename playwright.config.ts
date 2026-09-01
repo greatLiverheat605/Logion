@@ -6,7 +6,8 @@ import {
   shouldRunAuthenticated,
 } from "./tests/browser/e2e-environment";
 
-const publicTests = /(?:public-accessibility|public-flows-conformance|pwa-offline)\.spec\.ts/;
+const publicTests =
+  /(?:public-accessibility|public-flows-conformance|pwa-offline)\.spec\.ts/;
 const authenticatedTests =
   /(?:authenticated-accessibility|authenticated-shell|auth-public-flow|persona-system|prototype-productization|integration-hub|today-workbench|search-workbench|records-workbench|planning-workbench|review-workbench|exam-workbench|self-study-workbench|research-workbench|collaboration-workbench|templates-workbench)\.spec\.ts/;
 

@@ -69,9 +69,11 @@ test("Templates completes real version, install, import and share workflows", as
     await expect(officialRow).toBeVisible();
     await officialRow.click();
     await expect(
-      page.getByTestId("templates-source-details").getByText("Logion 官方目录", {
-        exact: true,
-      }),
+      page
+        .getByTestId("templates-source-details")
+        .getByText("Logion 官方目录", {
+          exact: true,
+        }),
     ).toBeVisible();
     await expect(
       page
@@ -94,7 +96,9 @@ test("Templates completes real version, install, import and share workflows", as
     const officialInstallSheet = page.getByRole("dialog", {
       name: "安装独立模板副本",
     });
-    await expect(officialInstallSheet.getByText("不会覆盖现有内容")).toBeVisible();
+    await expect(
+      officialInstallSheet.getByText("不会覆盖现有内容"),
+    ).toBeVisible();
     const startDate = officialInstallSheet.getByLabel("安装起始日期");
     if (await startDate.count()) await startDate.fill("2027-01-05");
     await officialInstallSheet
@@ -159,7 +163,10 @@ test("Templates completes real version, install, import and share workflows", as
   await waitForWorkbenchReady(page, "/app/templates");
   await expect(page.getByTestId("templates-category-master")).toBeVisible();
   await page.getByRole("button", { name: /仅自己的模板/ }).click();
-  const tenantTemplate = page.getByTestId("templates-list").getByRole("button").first();
+  const tenantTemplate = page
+    .getByTestId("templates-list")
+    .getByRole("button")
+    .first();
   await expect(tenantTemplate).toBeVisible();
   await tenantTemplate.click();
 
@@ -239,7 +246,7 @@ test("Templates completes real version, install, import and share workflows", as
       buffer: Buffer.from(JSON.stringify(validPackage), "utf8"),
       mimeType: "application/json",
       name: `${marker}-valid.json`,
-  });
+    });
   await importSheet.getByRole("button", { name: "校验并导入" }).click();
   await expect(importSheet).toHaveCount(0);
   await expect(

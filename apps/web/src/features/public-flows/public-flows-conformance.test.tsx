@@ -25,8 +25,17 @@ vi.mock("@/features/auth/use-fragment-token", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
-    <a href={href} {...props}>{children}</a>
+  default: ({
+    children,
+    href,
+    ...props
+  }: {
+    children: ReactNode;
+    href: string;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
 }));
 
@@ -62,14 +71,18 @@ describe("public flow GLM structure", () => {
       expires_at: "2026-09-23T00:00:00Z",
     });
     render(<PublicShareView token="share-token" />);
-    await waitFor(() => expect(screen.getByTestId("share-metadata")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("share-metadata")).toBeTruthy(),
+    );
     expect(screen.getByTestId("share-snapshot")).toBeTruthy();
     expect(screen.getByTestId("share-state")).toBeTruthy();
   });
 
   it("renders deletion impact, permission, confirmation and recovery regions", async () => {
     render(<AccountDeletionRecovery />);
-    await waitFor(() => expect(screen.getByTestId("deletion-impact")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByTestId("deletion-impact")).toBeTruthy(),
+    );
     expect(screen.getByTestId("deletion-permission")).toBeTruthy();
     expect(screen.getByTestId("deletion-confirmation")).toBeTruthy();
     expect(screen.getByTestId("deletion-recovery")).toBeTruthy();

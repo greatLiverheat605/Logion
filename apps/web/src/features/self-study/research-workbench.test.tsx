@@ -9,7 +9,11 @@ import {
 } from "./research-workbench";
 import { buildMetricComparison } from "./research-workbench-model";
 
-function entity(entityType: string, id: string, payload: Record<string, unknown>): LocalEntity {
+function entity(
+  entityType: string,
+  id: string,
+  payload: Record<string, unknown>,
+): LocalEntity {
   return {
     workspace_id: "workspace-1",
     entity_type: entityType,
@@ -119,7 +123,15 @@ function props(): ResearchWorkbenchProps {
     data: {
       comparison: buildMetricComparison(
         [{ id: "run-1", title: "基准运行" }],
-        [{ id: "metric-1", name: "p95 latency", runId: "run-1", unit: "ms", value: 42 }],
+        [
+          {
+            id: "metric-1",
+            name: "p95 latency",
+            runId: "run-1",
+            unit: "ms",
+            value: 42,
+          },
+        ],
       ),
       coverage: 100,
       visibleClaims: [claim],

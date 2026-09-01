@@ -144,17 +144,17 @@ Collaboration Workbench
 
 ## 变更记录
 
-| 时间 | 操作 | 结果 |
-| --- | --- | --- |
-| 2026-08-27 15:50 | Self-study PO 独立验收通过，创建 sub-011 | Research/Collaboration 解锁并保持串行；Templates 继续锁定 |
-| 2026-08-27 16:12 | 步骤 1：冻结 Research / Collaboration 副作用与 GLM 差异 | 新增正式语义契约与 characterization tests；MCP C5 已完成，88/100 |
-| 2026-08-27 16:38 | 步骤 2：Research Workbench 实现与旧主体清理 | 新增 route-specific Workbench、Sheet、Inspector、组件测试和浏览器规格；57 files / 218 tests、typecheck、lint、Docker c8 通过 |
-| 2026-08-27 17:06 | 步骤 3：Research 真实任务、四断点与质量修复 | 使用显式本地测试账号完成问题→论文→声明→反馈→实验→指标链路；修复选中行 AA 对比度并补齐解锁自动焦点；`c11` 无挂载镜像、四断点截图、Axe/键盘/焦点/reduced-motion/overflow/唯一 primary/runtime console 全部通过，等待 PO 独立验收 |
-| 2026-08-27 17:17 | Research 独立验收通过，启动 Collaboration | PO 原文 `Research 独立验收通过`；关闭 Research 门并解锁 Collaboration，Templates 继续锁定 |
-| 2026-08-27 17:45 | 步骤 4：Collaboration 共享审阅工作台完成 | 新增 route-specific Review Master / Rubric & Feedback Main / Member Inspector；Shared Space 双重过滤、角色能力、不可变快照确认与恢复路径保留；typecheck、lint、220 tests、build 通过 |
-| 2026-08-27 17:45 | 步骤 5：Collaboration 真实任务与四断点证据完成 | `c12` 无挂载 Web 镜像；真实 Rubric → Review → Feedback → PUBLISH Snapshot 闭环通过；320/390/1024/1440、Axe、键盘/焦点、reduced-motion、overflow、唯一 primary、runtime console 全通过；报告与截图哈希已归档，等待 PO 独立验收 |
-| 2026-08-27 18:49 | 步骤 5：清理诊断并复核最终镜像 | 删除 Collaboration 诊断日志、恢复 300 秒超时；最终无挂载 `logion-web:dev` 重新构建并强制重建 Web/proxy（依赖链同步修复 API origin/WebAuthn 配置）；直接登录 200，真实 Rubric → Review → Feedback → PUBLISH Snapshot 与四断点无障碍规格再次通过；报告已更新最终 digest 与截图哈希，继续等待 PO 独立验收 |
-| 2026-08-27 18:55 | Collaboration Product Owner 独立验收通过 | PO 原文 `Collaboration 独立验收通过`；Research/Collaboration 两条路由均关闭独立验收门，允许启动 Templates `sub-012`，本子计划完成 |
+| 时间             | 操作                                                    | 结果                                                                                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-27 15:50 | Self-study PO 独立验收通过，创建 sub-011                | Research/Collaboration 解锁并保持串行；Templates 继续锁定                                                                                                                                                                                                                                              |
+| 2026-08-27 16:12 | 步骤 1：冻结 Research / Collaboration 副作用与 GLM 差异 | 新增正式语义契约与 characterization tests；MCP C5 已完成，88/100                                                                                                                                                                                                                                       |
+| 2026-08-27 16:38 | 步骤 2：Research Workbench 实现与旧主体清理             | 新增 route-specific Workbench、Sheet、Inspector、组件测试和浏览器规格；57 files / 218 tests、typecheck、lint、Docker c8 通过                                                                                                                                                                           |
+| 2026-08-27 17:06 | 步骤 3：Research 真实任务、四断点与质量修复             | 使用显式本地测试账号完成问题→论文→声明→反馈→实验→指标链路；修复选中行 AA 对比度并补齐解锁自动焦点；`c11` 无挂载镜像、四断点截图、Axe/键盘/焦点/reduced-motion/overflow/唯一 primary/runtime console 全部通过，等待 PO 独立验收                                                                         |
+| 2026-08-27 17:17 | Research 独立验收通过，启动 Collaboration               | PO 原文 `Research 独立验收通过`；关闭 Research 门并解锁 Collaboration，Templates 继续锁定                                                                                                                                                                                                              |
+| 2026-08-27 17:45 | 步骤 4：Collaboration 共享审阅工作台完成                | 新增 route-specific Review Master / Rubric & Feedback Main / Member Inspector；Shared Space 双重过滤、角色能力、不可变快照确认与恢复路径保留；typecheck、lint、220 tests、build 通过                                                                                                                   |
+| 2026-08-27 17:45 | 步骤 5：Collaboration 真实任务与四断点证据完成          | `c12` 无挂载 Web 镜像；真实 Rubric → Review → Feedback → PUBLISH Snapshot 闭环通过；320/390/1024/1440、Axe、键盘/焦点、reduced-motion、overflow、唯一 primary、runtime console 全通过；报告与截图哈希已归档，等待 PO 独立验收                                                                          |
+| 2026-08-27 18:49 | 步骤 5：清理诊断并复核最终镜像                          | 删除 Collaboration 诊断日志、恢复 300 秒超时；最终无挂载 `logion-web:dev` 重新构建并强制重建 Web/proxy（依赖链同步修复 API origin/WebAuthn 配置）；直接登录 200，真实 Rubric → Review → Feedback → PUBLISH Snapshot 与四断点无障碍规格再次通过；报告已更新最终 digest 与截图哈希，继续等待 PO 独立验收 |
+| 2026-08-27 18:55 | Collaboration Product Owner 独立验收通过                | PO 原文 `Collaboration 独立验收通过`；Research/Collaboration 两条路由均关闭独立验收门，允许启动 Templates `sub-012`，本子计划完成                                                                                                                                                                      |
 
 ## 完成条件
 

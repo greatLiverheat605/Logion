@@ -7,9 +7,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const request = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/client", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/client")>(
-    "@/lib/api/client",
-  );
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/client")>(
+      "@/lib/api/client",
+    );
   return { ...actual, browserApiClient: { request } };
 });
 
@@ -99,7 +100,8 @@ describe("Templates workbench", () => {
     expect(
       screen.getByRole("link", { name: "重新认证" }).getAttribute("href"),
     ).toBe("/auth/login?next=/app/templates");
-    expect(screen.queryByText("当前角色或 Space 权限不允许此操作。"))
-      .toBeNull();
+    expect(
+      screen.queryByText("当前角色或 Space 权限不允许此操作。"),
+    ).toBeNull();
   });
 });

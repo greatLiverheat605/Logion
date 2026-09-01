@@ -37,9 +37,9 @@
 
 ## 执行记录
 
-| 时间 | 操作 | 结果 |
-| --- | --- | --- |
-| 2026-08-28 | D3 AI 与 Integrations Workbench 实现 | AI 改为运行/草稿审查与 Provider/模型设置双视图；Integrations 改为能力目录 + 详情主区 + Inspector；旧 ProductPanel 主体和迁移注释移除，导入/导出重复提交入口收敛到操作栏唯一 primary。 |
-| 2026-08-28 | D3 route-specific 合同与回归 | 新增 AI Workbench Vitest，覆盖结构、唯一 primary、Sheet、credential 不入 DOM、草稿批准 submitter；Integrations 测试覆盖 capability 切换、Calendar token、Private Space 导入、导出认证、取消与 request ID。 |
-| 2026-08-28 | D3 发布门 | `pnpm --filter @logion/web lint` 通过；全量 Vitest `63 files / 238 tests` 通过；`pnpm --filter @logion/web build` 通过并生成 35 页；MCP `verify_task` 评分 90/100 完成。 |
-| 2026-08-28 | 证据边界 | 真实登录 Session、320/390/1024/1440 走查、Axe、键盘/焦点、reduced-motion、overflow、runtime console 和 GLM/PO 统一签字待 Gate 2，不用静态结果冒充。 |
+| 时间       | 操作                                 | 结果                                                                                                                                                                                                       |
+| ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-28 | D3 AI 与 Integrations Workbench 实现 | AI 改为运行/草稿审查与 Provider/模型设置双视图；Integrations 改为能力目录 + 详情主区 + Inspector；旧 ProductPanel 主体和迁移注释移除，导入/导出重复提交入口收敛到操作栏唯一 primary。                      |
+| 2026-08-28 | D3 route-specific 合同与回归         | 新增 AI Workbench Vitest，覆盖结构、唯一 primary、Sheet、credential 不入 DOM、草稿批准 submitter；Integrations 测试覆盖 capability 切换、Calendar token、Private Space 导入、导出认证、取消与 request ID。 |
+| 2026-08-28 | D3 发布门                            | `pnpm --filter @logion/web lint` 通过；全量 Vitest `63 files / 238 tests` 通过；`pnpm --filter @logion/web build` 通过并生成 35 页；MCP `verify_task` 评分 90/100 完成。                                   |
+| 2026-08-28 | 证据边界                             | 真实登录 Session、320/390/1024/1440 走查、Axe、键盘/焦点、reduced-motion、overflow、runtime console 和 GLM/PO 统一签字待 Gate 2，不用静态结果冒充。                                                        |

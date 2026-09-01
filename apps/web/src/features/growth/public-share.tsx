@@ -29,9 +29,15 @@ function SnapshotValue({ value }: { value: unknown }): ReactNode {
   if (Array.isArray(value)) {
     return value.length ? (
       <ul>
-        {value.map((item, index) => <li key={index}><SnapshotValue value={item} /></li>)}
+        {value.map((item, index) => (
+          <li key={index}>
+            <SnapshotValue value={item} />
+          </li>
+        ))}
       </ul>
-    ) : "（空）";
+    ) : (
+      "（空）"
+    );
   }
   if (value !== null && typeof value === "object") {
     return (
@@ -39,14 +45,17 @@ function SnapshotValue({ value }: { value: unknown }): ReactNode {
         {Object.entries(value as Record<string, unknown>).map(([key, item]) => (
           <div className={styles.snapshotRow} key={key}>
             <span className={styles.snapshotKey}>{key}</span>
-            <div className={styles.snapshotValue}><SnapshotValue value={item} /></div>
+            <div className={styles.snapshotValue}>
+              <SnapshotValue value={item} />
+            </div>
           </div>
         ))}
       </div>
     );
   }
   if (typeof value === "boolean") return value ? "是" : "否";
-  if (value === null || value === undefined || value === "") return "（未填写）";
+  if (value === null || value === undefined || value === "")
+    return "（未填写）";
   return String(value);
 }
 
@@ -82,10 +91,16 @@ export function PublicShareView({ token }: { token: string }) {
   if (failed && !pending) {
     return (
       <PublicFlowShell>
-        <PublicFlowState icon="404" title="此分享不存在、已过期或已被撤销" tone="warning">
+        <PublicFlowState
+          icon="404"
+          title="此分享不存在、已过期或已被撤销"
+          tone="warning"
+        >
           <p>公开读取统一返回 404，不泄露私有对象是否曾经存在。</p>
           <div className={styles.actions}>
-            <Link className={styles.primaryLink} href="/">返回首页</Link>
+            <Link className={styles.primaryLink} href="/">
+              返回首页
+            </Link>
           </div>
         </PublicFlowState>
       </PublicFlowShell>
@@ -134,7 +149,9 @@ export function PublicShareView({ token }: { token: string }) {
             {Object.entries(snapshot).map(([key, value]) => (
               <div className={styles.snapshotRow} key={key}>
                 <span className={styles.snapshotKey}>{key}</span>
-                <div className={styles.snapshotValue}><SnapshotValue value={value} /></div>
+                <div className={styles.snapshotValue}>
+                  <SnapshotValue value={value} />
+                </div>
               </div>
             ))}
           </div>
@@ -142,9 +159,12 @@ export function PublicShareView({ token }: { token: string }) {
 
         <section className={styles.region} data-testid="share-state">
           <p className={styles.notice}>
-            快照创建后不可变更；链接到期或被撤销后统一不可访问。高熵 Token 只在创建时返回一次。
+            快照创建后不可变更；链接到期或被撤销后统一不可访问。高熵 Token
+            只在创建时返回一次。
           </p>
-          <p className={styles.subtleCode}>metadata: no-referrer · noindex, nofollow</p>
+          <p className={styles.subtleCode}>
+            metadata: no-referrer · noindex, nofollow
+          </p>
           <nav aria-label="分享恢复" className={styles.linkRow}>
             <Link href="/">返回首页</Link>
             <Link href="/auth/login">登录 Logion</Link>

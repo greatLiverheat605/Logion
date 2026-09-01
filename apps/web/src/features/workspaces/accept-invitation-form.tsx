@@ -80,7 +80,9 @@ export function AcceptInvitationForm() {
           description="邀请令牌只从地址片段读取，并会在读取后从地址栏移除。"
         />
         <PublicFlowState icon="!" title="缺少或无效的邀请链接" tone="warning">
-          <p>请从邀请邮件中的按钮进入。链接过期或被撤销时，不会显示任何工作区信息。</p>
+          <p>
+            请从邀请邮件中的按钮进入。链接过期或被撤销时，不会显示任何工作区信息。
+          </p>
           <div className={styles.actions}>
             <PublicFlowLink href="/auth/login" primary>
               返回登录
@@ -104,7 +106,9 @@ export function AcceptInvitationForm() {
           <dl className={styles.metaList}>
             <div className={styles.metaRow}>
               <dt>链接状态</dt>
-              <dd><span className={styles.badge}>令牌格式已验证</span></dd>
+              <dd>
+                <span className={styles.badge}>令牌格式已验证</span>
+              </dd>
             </div>
             <div className={styles.metaRow}>
               <dt>目标 Workspace</dt>
@@ -120,18 +124,26 @@ export function AcceptInvitationForm() {
         <section className={styles.region} data-testid="invite-role">
           <h2>成员权限</h2>
           <p className={styles.muted}>
-            角色不会由链接参数决定。接受动作会在服务端检查邀请是否仍为 pending、账户是否已验证，以及 Workspace 是否仍可加入。
+            角色不会由链接参数决定。接受动作会在服务端检查邀请是否仍为
+            pending、账户是否已验证，以及 Workspace 是否仍可加入。
           </p>
           <p className={`${styles.notice} ${styles.noticeWarning}`}>
-            个人内容仍保留在你的私有 Space；加入 Workspace 不会扩大现有对象的可见范围。
+            个人内容仍保留在你的私有 Space；加入 Workspace
+            不会扩大现有对象的可见范围。
           </p>
         </section>
 
         <section className={styles.region} data-testid="invite-action">
           <h2>完成加入</h2>
           {requestId ? (
-            <div className={`${styles.notice} ${styles.noticeWarning}`} role="alert">
-              <p>邀请未被接受。请检查邮箱验证、链接有效期和 Workspace 权限后重试。</p>
+            <div
+              className={`${styles.notice} ${styles.noticeWarning}`}
+              role="alert"
+            >
+              <p>
+                邀请未被接受。请检查邮箱验证、链接有效期和 Workspace
+                权限后重试。
+              </p>
               <p className={styles.subtleCode}>请求编号：{requestId}</p>
             </div>
           ) : null}
@@ -148,7 +160,11 @@ export function AcceptInvitationForm() {
           </div>
         </section>
 
-        <nav aria-label="邀请恢复" className={styles.linkRow} data-testid="invite-recovery">
+        <nav
+          aria-label="邀请恢复"
+          className={styles.linkRow}
+          data-testid="invite-recovery"
+        >
           <span>未验证邮箱？</span>
           <Link href="/auth/login">先登录并完成验证</Link>
           <Link href="/auth/register">创建新账户</Link>

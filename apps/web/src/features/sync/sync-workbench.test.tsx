@@ -51,7 +51,9 @@ function outboxEntry(): OutboxEntry {
   } as OutboxEntry;
 }
 
-function props(overrides: Partial<SyncWorkbenchProps> = {}): SyncWorkbenchProps {
+function props(
+  overrides: Partial<SyncWorkbenchProps> = {},
+): SyncWorkbenchProps {
   return {
     accessIssue: null,
     attachments: [],
@@ -136,7 +138,9 @@ describe("SyncWorkbench", () => {
     expect(screen.getByTestId("sync-inspector")).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "重试次数" })).toBeTruthy();
     expect(screen.getByText("NETWORK_OFFLINE")).toBeTruthy();
-    expect(document.querySelectorAll('[data-workbench-primary="true"]')).toHaveLength(1);
+    expect(
+      document.querySelectorAll('[data-workbench-primary="true"]'),
+    ).toHaveLength(1);
     expect(document.body.textContent).not.toContain("真实同步拓扑与设备");
     expect(document.body.textContent).not.toContain("同步队列诊断");
   });
@@ -145,18 +149,30 @@ describe("SyncWorkbench", () => {
     render(<SyncWorkbench {...props({ conflicts: [conflict()] })} />);
 
     expect(screen.getByRole("button", { name: "处理冲突" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "复制本地版本为新对象" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "复制本地版本为新对象" }),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "暂不处理" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "1 项待处理" }).getAttribute("href")).toBe("/app/sync?tab=conflict");
+    expect(
+      screen.getByRole("link", { name: "1 项待处理" }).getAttribute("href"),
+    ).toBe("/app/sync?tab=conflict");
   });
 
   it("shows loading, permission and capability state exits", () => {
-    const rendered = render(<SyncWorkbench {...props({ accessIssue: "permission", loading: false, deviceId: "" })} />);
+    const rendered = render(
+      <SyncWorkbench
+        {...props({ accessIssue: "permission", loading: false, deviceId: "" })}
+      />,
+    );
 
     expect(screen.getByTestId("sync-access-state")).toBeTruthy();
     expect(screen.getByRole("button", { name: "重新读取" })).toBeTruthy();
     rendered.unmount();
-    render(<SyncWorkbench {...props({ accessIssue: null, loading: false, deviceId: "" })} />);
+    render(
+      <SyncWorkbench
+        {...props({ accessIssue: null, loading: false, deviceId: "" })}
+      />,
+    );
     expect(screen.getByTestId("sync-capability-disabled")).toBeTruthy();
   });
 });

@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceWorkbenchController } from "./use-workspaces-controller";
-import { SpacesWorkbench, WorkspaceGovernanceWorkbench } from "./workspace-workbench";
+import {
+  SpacesWorkbench,
+  WorkspaceGovernanceWorkbench,
+} from "./workspace-workbench";
 
 function controller(): WorkspaceWorkbenchController {
   const workspace = {
@@ -92,7 +95,9 @@ describe("workspace route-specific workbenches", () => {
   });
 
   it("renders spaces as a directory with access inspector", () => {
-    const html = renderToStaticMarkup(<SpacesWorkbench controller={controller()} />);
+    const html = renderToStaticMarkup(
+      <SpacesWorkbench controller={controller()} />,
+    );
 
     expect(html).toContain('data-testid="spaces-directory-master"');
     expect(html).toContain('data-testid="spaces-access-main"');

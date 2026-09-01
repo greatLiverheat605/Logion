@@ -98,9 +98,7 @@ test.describe("authenticated shell", () => {
     await page.goto("/app/audit", { waitUntil: "domcontentloaded" });
     await waitForWorkbenchReady(page, "/app/audit");
 
-    const results = await new AxeBuilder({ page })
-      .withTags(wcagTags)
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
     expect(results.violations).toEqual([]);
   });
 

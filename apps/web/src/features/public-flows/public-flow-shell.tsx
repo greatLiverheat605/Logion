@@ -68,8 +68,13 @@ export function PublicFlowState({
     error: styles.stateError,
   }[tone];
   return (
-    <section className={`${styles.state} ${toneClass}`} role={tone === "error" ? "alert" : "status"}>
-      <div aria-hidden="true" className={styles.stateIcon}>{icon}</div>
+    <section
+      className={`${styles.state} ${toneClass}`}
+      role={tone === "error" ? "alert" : "status"}
+    >
+      <div aria-hidden="true" className={styles.stateIcon}>
+        {icon}
+      </div>
       <div>
         <h2>{title}</h2>
         <div className={styles.stateBody}>{children}</div>
@@ -88,7 +93,10 @@ export function PublicFlowLink({
   primary?: boolean;
 }>) {
   return (
-    <a className={primary ? styles.primaryLink : styles.secondaryLink} href={href}>
+    <a
+      className={primary ? styles.primaryLink : styles.secondaryLink}
+      href={href}
+    >
       {children}
     </a>
   );

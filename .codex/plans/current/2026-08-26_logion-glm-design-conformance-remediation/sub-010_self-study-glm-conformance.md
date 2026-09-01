@@ -61,13 +61,13 @@ Self-study Workbench
 
 ## 执行记录
 
-| 时间 | 操作 | 结果 |
-| --- | --- | --- |
-| 2026-08-27 14:42 | Exam 独立验收通过，解锁步骤 9 | Product Owner 明确回复 `验收通过`；Exam 子计划关闭，后续按 Self-study → Research/Collaboration 顺序推进 |
-| 2026-08-27 14:45 | 创建 Self-study 子计划 | 锁定真实副作用、GLM 布局树和三步交付边界；Research、Collaboration、Templates 暂不改动 |
-| 2026-08-27 15:21 | 完成 Self-study Workbench 接线与静态验证 | 新增 Inbox / Board / Timeline / Inspector 视图、Radix Sheet、真实提交成功返回值；Web typecheck、lint、Self-study 与共享 Workbench 测试通过；真实 Browser 已确认登录但 Vault 仍锁定 |
-| 2026-08-27 15:41 | 完成真实 Self-study 任务与四断点证据 | 手动解锁后真实创建 1 条 Inbox、1 条路线、1 个项目、1 项成果；Inspector/Timeline 回显父依赖与 `100%` 进度；320/390/1024/1440 无横溢出、唯一 primary、三 Tabs、无 console 告警；同步两次进入 offline，Outbox 保留；截图与 SHA-256 已归档；live Axe/键盘/焦点/reduced-motion 用例因正式 invite 模式 `410` 在 global setup 阶段阻断，未冒充页面通过 |
-| 2026-08-27 15:50 | Self-study 独立 PO 验收通过 | Product Owner 原文 `Self-study 独立验收通过`；Inbox → 路线 → 项目 → 成果工作台、真实任务证据和已登记的 offline/Playwright 证据边界获批准；允许启动 Research/Collaboration，Templates 继续锁定 |
+| 时间             | 操作                                     | 结果                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-27 14:42 | Exam 独立验收通过，解锁步骤 9            | Product Owner 明确回复 `验收通过`；Exam 子计划关闭，后续按 Self-study → Research/Collaboration 顺序推进                                                                                                                                                                                                                                         |
+| 2026-08-27 14:45 | 创建 Self-study 子计划                   | 锁定真实副作用、GLM 布局树和三步交付边界；Research、Collaboration、Templates 暂不改动                                                                                                                                                                                                                                                           |
+| 2026-08-27 15:21 | 完成 Self-study Workbench 接线与静态验证 | 新增 Inbox / Board / Timeline / Inspector 视图、Radix Sheet、真实提交成功返回值；Web typecheck、lint、Self-study 与共享 Workbench 测试通过；真实 Browser 已确认登录但 Vault 仍锁定                                                                                                                                                              |
+| 2026-08-27 15:41 | 完成真实 Self-study 任务与四断点证据     | 手动解锁后真实创建 1 条 Inbox、1 条路线、1 个项目、1 项成果；Inspector/Timeline 回显父依赖与 `100%` 进度；320/390/1024/1440 无横溢出、唯一 primary、三 Tabs、无 console 告警；同步两次进入 offline，Outbox 保留；截图与 SHA-256 已归档；live Axe/键盘/焦点/reduced-motion 用例因正式 invite 模式 `410` 在 global setup 阶段阻断，未冒充页面通过 |
+| 2026-08-27 15:50 | Self-study 独立 PO 验收通过              | Product Owner 原文 `Self-study 独立验收通过`；Inbox → 路线 → 项目 → 成果工作台、真实任务证据和已登记的 offline/Playwright 证据边界获批准；允许启动 Research/Collaboration，Templates 继续锁定                                                                                                                                                   |
 
 ## 完成条件
 

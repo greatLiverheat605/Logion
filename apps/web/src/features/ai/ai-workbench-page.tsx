@@ -13,9 +13,7 @@ import { AIRunCenter } from "./run-center";
 type AIView = "runs" | "settings";
 
 function viewFromHash(hash: string): AIView {
-  return hash.includes("ai-provider-center")
-    ? "settings"
-    : "runs";
+  return hash.includes("ai-provider-center") ? "settings" : "runs";
 }
 
 function hashForView(view: AIView): string {
@@ -37,13 +35,21 @@ export function AIWorkbenchPage() {
     setView(nextView);
     const nextHash = hashForView(nextView);
     if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, "", `${window.location.pathname}${nextHash}`);
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${nextHash}`,
+      );
     }
   };
 
   return (
     <main id="main-content" className="app-route-stack">
-      <nav className="system-workbench-nav" aria-label="AI 路由中心分区" data-testid="ai-mode">
+      <nav
+        className="system-workbench-nav"
+        aria-label="AI 路由中心分区"
+        data-testid="ai-mode"
+      >
         <strong>AI 路由中心</strong>
         <WorkbenchTabs
           label="AI 工作区视图"

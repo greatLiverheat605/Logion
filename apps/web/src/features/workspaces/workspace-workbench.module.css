@@ -290,7 +290,8 @@
 
 .dangerZone {
   background: color-mix(in srgb, var(--text-danger) 7%, var(--bg-surface));
-  border-top: 2px solid color-mix(in srgb, var(--text-danger) 38%, var(--border));
+  border-top: 2px solid
+    color-mix(in srgb, var(--text-danger) 38%, var(--border));
 }
 
 .moveSection {

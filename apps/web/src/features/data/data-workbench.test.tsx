@@ -5,7 +5,9 @@ import { DataWorkbench } from "./data-workbench";
 import type { DataControllerResult } from "./use-data-controller";
 import type { DataImport } from "@/features/integrations/integration-capability-model";
 
-function controller(overrides: Partial<DataControllerResult["context"]> = {}): DataControllerResult {
+function controller(
+  overrides: Partial<DataControllerResult["context"]> = {},
+): DataControllerResult {
   const workspace = {
     created_at: "2026-08-26T12:00:00.000Z",
     id: "workspace-1",
@@ -91,7 +93,9 @@ function controller(overrides: Partial<DataControllerResult["context"]> = {}): D
 
 describe("data sovereignty workbench", () => {
   it("renders export master, data view main and isolated danger inspector", () => {
-    const html = renderToStaticMarkup(<DataWorkbench controller={controller()} />);
+    const html = renderToStaticMarkup(
+      <DataWorkbench controller={controller()} />,
+    );
 
     expect(html).toContain('data-testid="data-master"');
     expect(html).toContain('data-testid="data-main"');

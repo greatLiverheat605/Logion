@@ -1,14 +1,21 @@
 /** @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const request = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/client", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/client")>(
-    "@/lib/api/client",
-  );
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/client")>(
+      "@/lib/api/client",
+    );
   return { ...actual, browserApiClient: { request } };
 });
 
@@ -65,7 +72,9 @@ describe("AI governance workbench", () => {
 
     expect(screen.getByText("DRAFT REVIEW")).toBeTruthy();
     expect(screen.getByText("发送边界")).toBeTruthy();
-    expect(container.querySelectorAll('[data-workbench-primary="true"]')).toHaveLength(1);
+    expect(
+      container.querySelectorAll('[data-workbench-primary="true"]'),
+    ).toHaveLength(1);
     expect(container.querySelector('[data-testid="ai-drafts"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="ai-review"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="ai-source"]')).toBeTruthy();
@@ -79,8 +88,12 @@ describe("AI governance workbench", () => {
 
     expect(screen.getByText("模型连接与任务路由")).toBeTruthy();
     expect(container.querySelector('[data-testid="ai-provider"]')).toBeTruthy();
-    expect(container.querySelectorAll('[data-workbench-primary="true"]')).toHaveLength(1);
-    fireEvent.click(screen.getAllByRole("button", { name: "新增 Provider" })[0]!);
+    expect(
+      container.querySelectorAll('[data-workbench-primary="true"]'),
+    ).toHaveLength(1);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "新增 Provider" })[0]!,
+    );
 
     expect(await screen.findByRole("dialog")).toBeTruthy();
     expect(screen.getByLabelText("API 密钥").getAttribute("value")).toBeNull();
@@ -107,7 +120,9 @@ describe("AI governance workbench", () => {
     await waitFor(() =>
       expect(screen.getAllByText(/需要重新认证/).length).toBeGreaterThan(0),
     );
-    expect(screen.getAllByText(/request-recent-auth/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/request-recent-auth/).length).toBeGreaterThan(
+      0,
+    );
     expect(
       screen.getByRole("link", { name: "重新认证" }).getAttribute("href"),
     ).toBe("/auth/login?next=/app/ai");
@@ -218,7 +233,8 @@ describe("AI governance workbench", () => {
 
     await waitFor(() =>
       expect(
-        screen.getAllByText(/当前角色无权使用 AI；请联系 Workspace 管理员/).length,
+        screen.getAllByText(/当前角色无权使用 AI；请联系 Workspace 管理员/)
+          .length,
       ).toBeGreaterThan(0),
     );
     expect(screen.queryByText(/或需要重新验证身份/)).toBeNull();

@@ -252,10 +252,10 @@ test.describe("prototype productization", () => {
     ).toBeVisible();
 
     await page.goto("/app/sync");
+    await expect(page.getByRole("heading", { name: "同步诊断" })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "同步诊断" }),
+      page.getByRole("tablist", { name: "同步诊断视图" }),
     ).toBeVisible();
-    await expect(page.getByRole("tablist", { name: "同步诊断视图" })).toBeVisible();
     await expect(page.getByTestId("sync-master")).toBeVisible();
 
     await page.goto("/app/security");

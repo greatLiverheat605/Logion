@@ -36,9 +36,7 @@ export class LogionApiError extends Error {
   }
 }
 
-export function isRecentAuthRequired(
-  error: unknown,
-): error is LogionApiError {
+export function isRecentAuthRequired(error: unknown): error is LogionApiError {
   return (
     typeof error === "object" &&
     error !== null &&
