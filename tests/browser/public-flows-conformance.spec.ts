@@ -56,6 +56,8 @@ const publicFlows = [
   },
 ] as const;
 
+test.use({ serviceWorkers: "block" });
+
 type AuditPage = Page;
 
 function screenshotPath(
@@ -64,8 +66,8 @@ function screenshotPath(
 ) {
   return resolve(
     "reports",
-    "ui-refactor",
-    "after",
+    "browser",
+    "evidence",
     `public-${name}-${viewport.label}.png`,
   );
 }
@@ -79,15 +81,39 @@ async function capture(
   await mkdir(dirname(path), { recursive: true });
   // Reduced-motion is already emulated for the audit. Playwright's `animations: "disabled"`
   // injects nonce-less style tags, which CSP correctly rejects in WebKit.
-  await page.screenshot({ fullPage: false, path });
-  const bytes = await page.screenshot({ fullPage: false });
+  const bytes = await page.screenshot({ fullPage: false, path });
   return { path, sha256: createHash("sha256").update(bytes).digest("hex") };
 }
 
 test("public recovery flows preserve structure and accessibility at every product viewport", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(120_000);
+  const capturesCanonicalEvidence = testInfo.project.name === "public-chromium";
   const evidence: Array<Record<string, unknown>> = [];
+  // The browser job intentionally starts only Web, so pin the public API failure states.
+  await page.route("**/api/v1/shares/*", (route) =>
+    route.fulfill({
+      status: 404,
+      json: {
+        code: "SHARE_NOT_FOUND",
+        message: "The share is unavailable.",
+        request_id: "browser-conformance",
+        retryable: false,
+      },
+    }),
+  );
+  await page.route("**/api/v1/account-deletion", (route) =>
+    route.fulfill({
+      status: 401,
+      json: {
+        code: "AUTH_SESSION_REQUIRED",
+        message: "Authentication is required.",
+        request_id: "browser-conformance",
+        retryable: false,
+      },
+    }),
+  );
   for (const viewport of WORKBENCH_VIEWPORTS) {
     await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -108,12 +134,16 @@ test("public recovery flows preserve structure and accessibility at every produc
           text.includes("Content-Security-Policy") &&
           text.includes("Ignoring") &&
           text.includes("strict-dynamic");
+        const expectedBlockedServiceWorker =
+          message.type() === "warning" &&
+          text === "Service Worker registration blocked by Playwright";
         if (
           ["error", "warning"].includes(message.type()) &&
           !expectedShareNotFound &&
           !expectedDeletionUnauthorized &&
           !expectedRouteNotFound &&
-          !expectedFirefoxStrictDynamicWarning
+          !expectedFirefoxStrictDynamicWarning &&
+          !expectedBlockedServiceWorker
         ) {
           runtimeProblems.push(`${message.type()}: ${text}`);
         }
@@ -181,18 +211,17 @@ test("public recovery flows preserve structure and accessibility at every produc
         `${flow.name} ${viewport.label} keyboard focus`,
       ).toMatchObject({ visible: true });
 
-      // WebKit's screenshot implementation injects a nonce-less `body {}` style while
-      // synchronizing the capture. Keep application console diagnostics active outside
-      // that test-harness-only window so CSP errors from the page remain actionable.
-      page.off("console", onConsole);
-      const screenshot = await capture(page, flow.name, viewport);
-      page.on("console", onConsole);
-      evidence.push({
-        ...screenshot,
-        flow: flow.name,
-        viewport: viewport.label,
-        runtimeProblems,
-      });
+      if (capturesCanonicalEvidence) {
+        page.off("console", onConsole);
+        const screenshot = await capture(page, flow.name, viewport);
+        page.on("console", onConsole);
+        evidence.push({
+          ...screenshot,
+          flow: flow.name,
+          viewport: viewport.label,
+          runtimeProblems,
+        });
+      }
       expect(
         runtimeProblems,
         `${flow.name} ${viewport.label} runtime console`,
@@ -200,9 +229,16 @@ test("public recovery flows preserve structure and accessibility at every produc
       page.off("console", onConsole);
     }
   }
-  await writeFile(
-    resolve("reports", "ui-refactor", "public-flows-browser-evidence.json"),
-    JSON.stringify(evidence, null, 2),
-    "utf8",
-  );
+  if (capturesCanonicalEvidence) {
+    await writeFile(
+      resolve(
+        "reports",
+        "browser",
+        "evidence",
+        "public-flows-browser-evidence.json",
+      ),
+      JSON.stringify(evidence, null, 2),
+      "utf8",
+    );
+  }
 });

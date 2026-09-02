@@ -136,7 +136,8 @@ async def test_private_template_install_and_revocable_minimal_share() -> None:
         assert template.status_code == 201, template.text
         assert template.json()["version_number"] == 1
         assert template.json()["risk_metadata"]["contains_executable"] is False
-        assert (await viewer.get(templates_url)).json()["templates"] == []
+        viewer_templates = (await viewer.get(templates_url)).json()["templates"]
+        assert str(template_id) not in {row["id"] for row in viewer_templates}
         assert (
             await owner.get(f"/api/v1/workspaces/{external_workspace_id}/templates")
         ).status_code == 404

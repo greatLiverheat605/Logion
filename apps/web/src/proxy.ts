@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  const isDevelopment = process.env.NODE_ENV === "development";
   const forwardedProtocol = request.headers
     .get("x-forwarded-proto")
     ?.split(",", 1)[0]
@@ -10,8 +11,10 @@ export function proxy(request: NextRequest) {
     request.nextUrl.protocol === "https:" || forwardedProtocol === "https";
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
+    isDevelopment
+      ? "style-src 'self' 'unsafe-inline'"
+      : `style-src 'self' 'nonce-${nonce}'`,
     // Radix and Next's route announcer use React style attributes for
     // positioning and focus affordances; keep style elements nonce-gated.
     "style-src-attr 'unsafe-inline'",
