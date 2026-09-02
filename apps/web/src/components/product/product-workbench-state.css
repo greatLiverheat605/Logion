@@ -27,3 +27,163 @@
   margin-top: 0.2rem;
   color: var(--text-secondary);
 }
+
+.product-operational-state {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border-block: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-muted) 72%, var(--bg-surface));
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+}
+
+.product-operational-state-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.product-operational-state.tone-info .product-operational-state-icon {
+  color: var(--primary);
+}
+
+.product-operational-state.tone-good .product-operational-state-icon {
+  color: var(--text-success);
+}
+
+.product-operational-state.tone-warn .product-operational-state-icon {
+  color: var(--text-warning);
+}
+
+.product-operational-state.tone-bad .product-operational-state-icon {
+  color: var(--text-danger);
+}
+
+.product-operational-state-copy {
+  min-width: 0;
+}
+
+.product-operational-state-copy header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.product-operational-state-copy h3,
+.product-operational-impact {
+  margin: 0;
+}
+
+.product-operational-state-copy h3 {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.product-operational-description,
+.product-operational-impact,
+.product-operational-request {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.product-operational-description {
+  margin-top: 0.25rem;
+}
+
+.product-operational-impact {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.product-operational-impact strong {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+}
+
+.product-operational-request {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.product-operational-state-action {
+  align-self: center;
+}
+
+.product-operational-recovery {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.product-operational-recovery:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.product-operational-recovery:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 50%, transparent);
+  outline-offset: 2px;
+}
+
+.product-operational-recovery:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .product-operational-state[data-operational-state="loading"]
+    .product-operational-state-icon
+    svg {
+    animation: product-operational-spin 1.2s linear infinite;
+  }
+}
+
+@keyframes product-operational-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (max-width: 680px) {
+  .product-operational-state {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .product-operational-state-action {
+    grid-column: 1 / -1;
+  }
+
+  .product-operational-recovery {
+    min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-operational-recovery {
+    transition: none;
+  }
+}

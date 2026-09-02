@@ -5,10 +5,7 @@ export const e2eBaseUrl = new URL(
 );
 export const isLoopbackRealStack =
   ["127.0.0.1", "localhost"].includes(e2eBaseUrl.hostname) &&
-  e2eBaseUrl.port !== "" &&
-  Number.isInteger(Number(e2eBaseUrl.port)) &&
-  Number(e2eBaseUrl.port) > 0 &&
-  Number(e2eBaseUrl.port) < 65_536;
+  e2eBaseUrl.port === "8080";
 export const configuredCredentials =
   process.env.LOGION_E2E_EMAIL && process.env.LOGION_E2E_PASSWORD
     ? {
@@ -16,17 +13,13 @@ export const configuredCredentials =
         password: process.env.LOGION_E2E_PASSWORD,
       }
     : null;
-const explicitlyProvisionAccounts =
-  process.env.LOGION_E2E_PROVISION_ACCOUNTS === "true";
 export const canProvisionAccounts =
   isLoopbackRealStack &&
-  (explicitlyProvisionAccounts ||
-    (!process.env.CI && e2eBaseUrl.port === "8080"));
+  (process.env.LOGION_E2E_PROVISION_ACCOUNTS === "true" || !process.env.CI);
 export const shouldRunAuthenticated =
   canProvisionAccounts || configuredCredentials !== null;
 export const requiresAuthenticatedGate =
   process.env.LOGION_E2E_REQUIRE_AUTHENTICATED === "true";
-export const authenticatedWorkerCount = 1;
 export const authenticationStateDirectory = resolve("test-results", ".auth");
 export const authenticationManifestPath = resolve(
   authenticationStateDirectory,

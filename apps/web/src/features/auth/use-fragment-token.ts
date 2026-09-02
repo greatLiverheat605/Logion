@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,256}$/;
 
@@ -15,8 +15,11 @@ export function consumeFragmentToken(
 
 export function useFragmentToken(): string | null {
   const [token, setToken] = useState<string | null>(null);
+  const consumed = useRef(false);
 
   useEffect(() => {
+    if (consumed.current) return;
+    consumed.current = true;
     const candidate = consumeFragmentToken(window.location.hash, () =>
       window.history.replaceState(null, "", window.location.pathname),
     );

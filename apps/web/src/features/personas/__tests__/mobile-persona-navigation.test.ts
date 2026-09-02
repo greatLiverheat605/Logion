@@ -1,104 +1,73 @@
 import { describe, expect, it } from "vitest";
 
-import { BUILTIN_PERSONAS } from "../persona-definitions";
-import {
-  DESK_MOBILE_AREAS,
-  mobileDeskNavigation,
-} from "../mobile-persona-navigation";
+import { ALL_ROUTES, BUILTIN_PERSONAS } from "../persona-definitions";
+import { mobileNavigationForPersona } from "../mobile-persona-navigation";
 
-describe("mobileDeskNavigation", () => {
-  it("always returns exactly 5 stable area entries regardless of persona", () => {
-    for (const persona of BUILTIN_PERSONAS) {
-      const nav = mobileDeskNavigation(persona);
-      expect(nav).toHaveLength(5);
-    }
-    // Also stable for null persona and custom personas.
-    expect(mobileDeskNavigation(null)).toHaveLength(5);
+describe("mobileNavigationForPersona", () => {
+  it.each([
+    [
+      "exam",
+      ["今日", "备考", "复习", "错题"],
+      ["/app/today", "/app/exam", "/app/review", "/app/records"],
+    ],
+    [
+      "self",
+      ["今日", "计划", "自学", "记录"],
+      ["/app/today", "/app/planning", "/app/self-study", "/app/records"],
+    ],
+    [
+      "research",
+      ["今日", "计划", "自学", "复习"],
+      ["/app/today", "/app/planning", "/app/self-study", "/app/review"],
+    ],
+    [
+      "mentor",
+      ["今日", "计划", "空间", "审计"],
+      ["/app/today", "/app/planning", "/app/spaces", "/app/audit"],
+    ],
+  ] as const)("uses the fixed %s 4-slot mapping", (id, labels, routes) => {
+    const persona = BUILTIN_PERSONAS.find((item) => item.id === id);
+    expect(persona).toBeDefined();
+    const navigation = mobileNavigationForPersona(persona!);
+
+    expect(navigation.primary.map((item) => item.label)).toEqual(labels);
+    expect(navigation.primary.map((item) => item.href)).toEqual(routes);
+    expect(navigation.overflow.map((item) => item.href)).toEqual(
+      persona!.routes.filter((route) => !routes.includes(route as never)),
+    );
     expect(
-      mobileDeskNavigation({
-        description: "x",
-        icon: "🎯",
-        id: "custom-x",
-        isBuiltin: false,
-        name: "自定义",
-        routes: ["/app/today", "/app/settings"],
-      }),
-    ).toHaveLength(5);
+      [...navigation.primary, ...navigation.overflow].every((item) =>
+        ALL_ROUTES.includes(item.href),
+      ),
+    ).toBe(true);
   });
 
-  it("the 5 area labels and order are frozen", () => {
-    const nav = mobileDeskNavigation(null);
-    expect(nav.map((item) => item.label)).toEqual([
-      "今天",
-      "工作台",
-      "知识库",
-      "协作空间",
-      "系统中心",
-    ]);
-    expect(nav.find((item) => item.area === "workbench")?.href).toBe(
+  it("uses the first four custom routes and sends the remainder to more", () => {
+    const routes = [
       "/app/today",
-    );
-  });
-
-  it("the 5 area IDs and icons are stable", () => {
-    const nav = mobileDeskNavigation(null);
-    expect(nav.map((item) => item.area)).toEqual([
-      "today",
-      "workbench",
-      "knowledge",
-      "collaboration",
-      "system",
-    ]);
-    // Icons match DESK_MOBILE_AREAS.
-    expect(nav.map((item) => item.icon)).toEqual(
-      DESK_MOBILE_AREAS.map((entry) => entry.icon),
-    );
-  });
-
-  it("today, collaboration and system entries have stable routes across personas", () => {
-    for (const persona of BUILTIN_PERSONAS) {
-      const nav = mobileDeskNavigation(persona);
-      const byArea = Object.fromEntries(nav.map((item) => [item.area, item]));
-      expect(byArea.today?.href).toBe("/app/today");
-      expect(byArea.collaboration?.href).toBe("/app/workspaces");
-      expect(byArea.system?.href).toBe("/app/settings");
-    }
-  });
-
-  it("fixed personas keep their Workbench-specific entries", () => {
-    const expected = {
-      self: "/app/self-study",
-      research: "/app/research",
-      exam: "/app/exam",
-      mentor: "/app/collaboration",
-    } as const;
-    for (const persona of BUILTIN_PERSONAS) {
-      const nav = mobileDeskNavigation(persona);
-      const workbench = nav.find((item) => item.area === "workbench");
-      expect(workbench?.href).toBe(
-        expected[persona.id as keyof typeof expected],
-      );
-    }
-  });
-
-  it("persona only affects default route, not authorization — entries are always 5", () => {
-    // Even a persona with very few routes still sees all 5 mobile entries;
-    // the default route is chosen from the persona's visible routes, but the
-    // entry count and labels never change.
-    const minimalPersona = {
-      description: "minimal",
+      "/app/exam",
+      "/app/templates",
+      "/app/settings",
+      "/app/profile",
+      "/app/help",
+    ];
+    const navigation = mobileNavigationForPersona({
+      id: "custom-123e4567-e89b-42d3-a456-426614174000",
+      name: "自定义",
       icon: "🎯",
-      id: "custom-min" as const,
+      description: "自定义移动入口",
       isBuiltin: false,
-      name: "最小",
-      routes: ["/app/today"],
-    };
-    const nav = mobileDeskNavigation(minimalPersona);
-    expect(nav).toHaveLength(5);
-    // Workbench fails closed to Today instead of inventing a visible route.
-    expect(nav.find((item) => item.area === "today")?.href).toBe("/app/today");
-    expect(nav.find((item) => item.area === "workbench")?.href).toBe(
-      "/app/today",
+      routes,
+    });
+
+    expect(navigation.primary.map((item) => item.href)).toEqual(
+      routes.slice(0, 4),
+    );
+    expect(navigation.overflow.map((item) => item.href)).toEqual(
+      routes.slice(4),
+    );
+    expect([...navigation.primary, ...navigation.overflow]).not.toContainEqual(
+      expect.objectContaining({ href: "/app/research" }),
     );
   });
 });

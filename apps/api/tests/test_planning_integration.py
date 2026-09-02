@@ -74,6 +74,15 @@ async def test_private_goal_plan_creation_publication_and_tenant_boundaries() ->
         assert created.json()["goal_status"] == "draft"
         assert created.json()["phases"][0]["id"] == str(phase_id)
 
+        listed = await owner.get(
+            f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/goals"
+        )
+        assert listed.status_code == 200, listed.text
+        assert [item["goal_id"] for item in listed.json()["goals"]] == [
+            payload["goal_id"]
+        ]
+        assert listed.json()["goals"][0]["phases"][0]["id"] == str(phase_id)
+
         duplicate = await owner.post(
             f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/goals",
             headers={"X-CSRF-Token": csrf},
@@ -115,6 +124,10 @@ async def test_private_goal_plan_creation_publication_and_tenant_boundaries() ->
             json={**payload, "goal_id": str(uuid4()), "plan_id": str(uuid4())},
         )
         assert cross_tenant.status_code == 404
+        cross_tenant_read = await other.get(
+            f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/goals"
+        )
+        assert cross_tenant_read.status_code == 404
 
     async with session_factory() as db:
         assert await db.get(LearningGoal, UUID(str(payload["goal_id"]))) is not None

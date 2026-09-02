@@ -40,7 +40,10 @@ tmp/
 artifacts/
 playwright-report/
 test-results/
-reports/
+reports/*
+!reports/ui-refactor/
+reports/ui-refactor/*
+!reports/ui-refactor/glm-target-manifest.json
 apps/mobile/android/.gradle/
 apps/mobile/android/local.properties
 apps/mobile/android/**/build/

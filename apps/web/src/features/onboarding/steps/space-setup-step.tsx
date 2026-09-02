@@ -8,13 +8,22 @@ import {
 } from "../onboarding-setup-service";
 
 interface SpaceSetupStepProps {
-  onNext: (spaceId: string) => void;
+  initialSelected?: string | null;
+  onBack: () => void;
+  onNext: (space: OnboardingSpace) => void;
+  onSelectionChange: (space: OnboardingSpace | null) => void;
   workspaceId: string;
 }
 
-export function SpaceSetupStep({ onNext, workspaceId }: SpaceSetupStepProps) {
+export function SpaceSetupStep({
+  initialSelected = null,
+  onBack,
+  onNext,
+  onSelectionChange,
+  workspaceId,
+}: SpaceSetupStepProps) {
   const [spaces, setSpaces] = useState<OnboardingSpace[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialSelected ?? "");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +54,7 @@ export function SpaceSetupStep({ onNext, workspaceId }: SpaceSetupStepProps) {
       const space = await onboardingSetupService.createSpace(workspaceId, name);
       setSpaces((current) => [...current, space]);
       setSelected(space.id);
+      onSelectionChange(space);
       form.reset();
     } catch {
       setError("空间未能创建，请重试。");
@@ -54,10 +64,16 @@ export function SpaceSetupStep({ onNext, workspaceId }: SpaceSetupStepProps) {
   }
 
   return (
-    <section aria-labelledby="space-setup-title" className="onboarding-step">
+    <section
+      aria-labelledby="space-setup-title"
+      className="onboarding-step"
+      data-testid="onboarding-step"
+    >
       <header>
         <p className="eyebrow">STEP 3 · REQUIRED</p>
-        <h1 id="space-setup-title">创建或选择空间</h1>
+        <h1 id="space-setup-title" tabIndex={-1}>
+          创建或选择空间
+        </h1>
         <p>空间决定具体内容的可见范围。引导阶段创建的空间默认仅自己可见。</p>
       </header>
       <div className="onboarding-form">
@@ -67,7 +83,13 @@ export function SpaceSetupStep({ onNext, workspaceId }: SpaceSetupStepProps) {
             disabled={loading || pending}
             id="onboarding-space"
             value={selected}
-            onChange={(event) => setSelected(event.target.value)}
+            onChange={(event) => {
+              const spaceId = event.target.value;
+              setSelected(spaceId);
+              onSelectionChange(
+                spaces.find((space) => space.id === spaceId) ?? null,
+              );
+            }}
           >
             <option value="">请选择空间</option>
             {spaces.map((space) => (
@@ -100,7 +122,15 @@ export function SpaceSetupStep({ onNext, workspaceId }: SpaceSetupStepProps) {
           {error}
         </p>
       ) : null}
-      <div className="onboarding-actions">
+      <div className="onboarding-actions" data-testid="onboarding-recovery">
+        <button
+          className="secondary-button"
+          disabled={pending}
+          type="button"
+          onClick={onBack}
+        >
+          上一步
+        </button>
         {error && spaces.length === 0 ? (
           <button
             className="secondary-button"
@@ -112,9 +142,13 @@ export function SpaceSetupStep({ onNext, workspaceId }: SpaceSetupStepProps) {
         ) : null}
         <button
           className="primary-action"
+          data-workbench-primary="true"
           disabled={!selected || loading || pending}
           type="button"
-          onClick={() => onNext(selected)}
+          onClick={() => {
+            const selectedSpace = spaces.find((space) => space.id === selected);
+            if (selectedSpace) onNext(selectedSpace);
+          }}
         >
           继续
         </button>

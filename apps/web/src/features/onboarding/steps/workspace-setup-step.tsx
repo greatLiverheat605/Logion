@@ -8,12 +8,20 @@ import {
 } from "../onboarding-setup-service";
 
 interface WorkspaceSetupStepProps {
-  onNext: (workspaceId: string) => void;
+  initialSelected?: string | null;
+  onBack: () => void;
+  onNext: (workspace: OnboardingWorkspace) => void;
+  onSelectionChange: (workspace: OnboardingWorkspace | null) => void;
 }
 
-export function WorkspaceSetupStep({ onNext }: WorkspaceSetupStepProps) {
+export function WorkspaceSetupStep({
+  initialSelected = null,
+  onBack,
+  onNext,
+  onSelectionChange,
+}: WorkspaceSetupStepProps) {
   const [workspaces, setWorkspaces] = useState<OnboardingWorkspace[]>([]);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialSelected ?? "");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +52,7 @@ export function WorkspaceSetupStep({ onNext }: WorkspaceSetupStepProps) {
       const workspace = await onboardingSetupService.createWorkspace(name);
       setWorkspaces((current) => [...current, workspace]);
       setSelected(workspace.id);
+      onSelectionChange(workspace);
       form.reset();
     } catch {
       setError("工作区未能创建，请重试。");
@@ -56,10 +65,13 @@ export function WorkspaceSetupStep({ onNext }: WorkspaceSetupStepProps) {
     <section
       aria-labelledby="workspace-setup-title"
       className="onboarding-step"
+      data-testid="onboarding-step"
     >
       <header>
         <p className="eyebrow">STEP 2 · REQUIRED</p>
-        <h1 id="workspace-setup-title">创建或选择工作区</h1>
+        <h1 id="workspace-setup-title" tabIndex={-1}>
+          创建或选择工作区
+        </h1>
         <p>工作区承载学习内容和协作边界。请选择已有工作区，或现在新建一个。</p>
       </header>
       <div className="onboarding-form">
@@ -69,7 +81,14 @@ export function WorkspaceSetupStep({ onNext }: WorkspaceSetupStepProps) {
             disabled={loading || pending}
             id="onboarding-workspace"
             value={selected}
-            onChange={(event) => setSelected(event.target.value)}
+            onChange={(event) => {
+              const workspaceId = event.target.value;
+              setSelected(workspaceId);
+              onSelectionChange(
+                workspaces.find((workspace) => workspace.id === workspaceId) ??
+                  null,
+              );
+            }}
           >
             <option value="">请选择工作区</option>
             {workspaces.map((workspace) => (
@@ -101,7 +120,15 @@ export function WorkspaceSetupStep({ onNext }: WorkspaceSetupStepProps) {
           {error}
         </p>
       ) : null}
-      <div className="onboarding-actions">
+      <div className="onboarding-actions" data-testid="onboarding-recovery">
+        <button
+          className="secondary-button"
+          disabled={pending}
+          type="button"
+          onClick={onBack}
+        >
+          上一步
+        </button>
         {error && workspaces.length === 0 ? (
           <button
             className="secondary-button"
@@ -113,9 +140,15 @@ export function WorkspaceSetupStep({ onNext }: WorkspaceSetupStepProps) {
         ) : null}
         <button
           className="primary-action"
+          data-workbench-primary="true"
           disabled={!selected || loading || pending}
           type="button"
-          onClick={() => onNext(selected)}
+          onClick={() => {
+            const selectedWorkspace = workspaces.find(
+              (workspace) => workspace.id === selected,
+            );
+            if (selectedWorkspace) onNext(selectedWorkspace);
+          }}
         >
           继续
         </button>

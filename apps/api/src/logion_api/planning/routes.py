@@ -17,6 +17,7 @@ from logion_api.identity.dependencies import (
 from logion_api.planning.dependencies import PlanningServiceDependency
 from logion_api.planning.schemas import (
     GoalPlanCreateRequest,
+    GoalPlanListResponse,
     GoalPlanResponse,
     PhaseResponse,
     PlanPublishRequest,
@@ -132,6 +133,30 @@ async def create_goal_plan(
     )
     await db.commit()
     return response(aggregate)
+
+
+@router.get(
+    "",
+    response_model=GoalPlanListResponse,
+    operation_id="planning_goal_list",
+    responses=ERRORS,
+)
+async def list_goal_plans(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    planning: PlanningServiceDependency,
+) -> GoalPlanListResponse:
+    aggregates = await planning.list_goals(
+        db,
+        context,
+        workspace_id,
+        space_id,
+        request_id=request_id(request),
+    )
+    return GoalPlanListResponse(goals=[response(aggregate) for aggregate in aggregates])
 
 
 @router.post(

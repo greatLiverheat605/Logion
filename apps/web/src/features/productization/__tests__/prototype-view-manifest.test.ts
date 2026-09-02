@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 import { ALL_ROUTES } from "@/features/personas/persona-definitions";
 
 import {
+  APP_PRODUCT_ROUTES,
   PROTOTYPE_VIEW_IDS,
   PROTOTYPE_VIEW_TARGETS,
+  PUBLIC_FLOW_ROUTES,
   SECONDARY_PRODUCT_ROUTES,
 } from "../prototype-view-manifest";
 
@@ -19,6 +21,13 @@ const APP_ROUTE_DIRECTORY = fileURLToPath(
 function pageFile(route: string): string {
   const relativeRoute = route.replace(/^\/app\/?/, "");
   return resolve(APP_ROUTE_DIRECTORY, relativeRoute, "page.tsx");
+}
+
+const APP_DIRECTORY = resolve(APP_ROUTE_DIRECTORY, "..");
+
+function publicPageFile(route: string): string {
+  const relativeRoute = route.replace(/^\//, "");
+  return resolve(APP_DIRECTORY, relativeRoute, "page.tsx");
 }
 
 describe("prototype productization manifest", () => {
@@ -81,5 +90,23 @@ describe("prototype productization manifest", () => {
       status: "existing",
     });
     expect(SECONDARY_PRODUCT_ROUTES).toContain("/app/integrations");
+  });
+
+  it("freezes all twenty-one application routes without duplicates", () => {
+    expect(APP_PRODUCT_ROUTES).toHaveLength(21);
+    expect(new Set(APP_PRODUCT_ROUTES).size).toBe(21);
+
+    for (const route of APP_PRODUCT_ROUTES) {
+      expect(existsSync(pageFile(route))).toBe(true);
+    }
+  });
+
+  it("tracks only public flows that exist in the formal Next router", () => {
+    expect(PUBLIC_FLOW_ROUTES).toContain("/auth/callback");
+    expect(PUBLIC_FLOW_ROUTES).not.toContain("/auth/passkey");
+
+    for (const route of PUBLIC_FLOW_ROUTES) {
+      expect(existsSync(publicPageFile(route))).toBe(true);
+    }
   });
 });

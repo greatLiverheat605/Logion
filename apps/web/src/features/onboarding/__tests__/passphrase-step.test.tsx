@@ -26,7 +26,7 @@ describe("PassphraseStep", () => {
   it("initializes or unlocks the encrypted local vault before advancing", async () => {
     unlock.mockResolvedValue({});
     const onNext = vi.fn();
-    render(<PassphraseStep onNext={onNext} />);
+    render(<PassphraseStep onBack={vi.fn()} onNext={onNext} />);
 
     fireEvent.change(screen.getByLabelText("本机口令"), {
       target: { value: "local-secret-123" },
@@ -44,7 +44,7 @@ describe("PassphraseStep", () => {
 
   it("does not write or advance when confirmation differs", () => {
     const onNext = vi.fn();
-    render(<PassphraseStep onNext={onNext} />);
+    render(<PassphraseStep onBack={vi.fn()} onNext={onNext} />);
 
     fireEvent.change(screen.getByLabelText("本机口令"), {
       target: { value: "local-secret-123" },

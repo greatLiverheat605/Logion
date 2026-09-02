@@ -9,7 +9,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -19,8 +18,10 @@ import {
   COMMAND_GROUPS,
   COMMAND_ITEMS,
   commandItemMatches,
+  DEFAULT_NAV_ITEM,
   isCommandItemVisible,
-  navGroupsForPersona,
+  NAV_GROUPS,
+  NAV_ITEMS,
 } from "@/components/app-shell/app-navigation";
 import { requestOperationalCommand } from "@/components/app-shell/app-operational-events";
 import { AppOperationalTools } from "@/components/app-shell/app-operational-tools";
@@ -31,55 +32,33 @@ import {
   NOTIFICATION_CENTER_UPDATED_EVENT,
   notificationSummary,
 } from "@/features/engagement/notification-center-model";
-import { useInspector } from "@/features/desk/command-feedback-context";
-import { createMediaQueryStore } from "@/features/desk/media-query-store";
-import {
-  contextBarDescriptor,
-  routeArea,
-} from "@/features/desk/route-manifest";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
-import { mobileDeskNavigation } from "@/features/personas/mobile-persona-navigation";
+import { mobileNavigationForPersona } from "@/features/personas/mobile-persona-navigation";
 import { usePersona } from "@/features/personas/persona-context";
-import { WorkbenchSwitcher } from "@/features/workbenches/workbench-switcher";
-import { useWorkbench } from "@/features/workbenches/workbench-context";
 import { browserApiClient } from "@/lib/api/client";
 
-type Overlay = "command" | "notifications";
+type Overlay = "command" | "mobile-more" | "notifications";
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Notification = components["schemas"]["NotificationResponse"];
 
-/**
- * SSR-safe media query for tablet/mobile widths. On the client it subscribes
- * to `matchMedia("(max-width: 64rem)")`; during SSR it returns false. Below
- * 64rem the Inspector cannot be a non-modal sidebar (no room) so it becomes a
- * modal sheet with a full focus contract.
- *
- * The subscribe function registers `onStoreChange` as the MediaQueryList change
- * listener (see {@link createMediaQueryStore}) so React is notified when the
- * viewport crosses the breakpoint while the Inspector is open.
- */
-const inspectorMobileStore = createMediaQueryStore("(max-width: 64rem)");
-
-function useIsInspectorMobile() {
-  return useSyncExternalStore(
-    inspectorMobileStore.subscribe,
-    inspectorMobileStore.getSnapshot,
-    inspectorMobileStore.getServerSnapshot,
-  );
-}
+const WORKSPACE_ROLE_LABEL: Readonly<Record<Workspace["role"], string>> = {
+  admin: "管理员",
+  contributor: "贡献者",
+  editor: "编辑者",
+  owner: "所有者",
+  reviewer: "审阅者",
+  viewer: "查看者",
+};
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { state: session } = useSession();
   const { phase: vaultPhase } = useVaultSession();
-  const { inspector, closeInspector } = useInspector();
-  const isInspectorMobile = useIsInspectorMobile();
   const {
     activePersona,
     isLoading: personaLoading,
     isRouteVisible,
   } = usePersona();
-  const { activeWorkbench, phase: workbenchPhase } = useWorkbench();
   const [menuOpen, setMenuOpen] = useState(false);
   const [online, setOnline] = useState(true);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -91,6 +70,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     unread: number;
     workspaceId: string;
     workspaceName: string;
+    workspaceRole: Workspace["role"] | null;
   }>({
     latest: [],
     status: "loading",
@@ -98,26 +78,27 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     unread: 0,
     workspaceId: "",
     workspaceName: "",
+    workspaceRole: null,
   });
   const commandButtonRef = useRef<HTMLButtonElement>(null);
-  const inspectorPathRef = useRef(pathname);
-  const inspectorPersonaRef = useRef(activePersona?.id ?? null);
 
-  // Area-based sidebar: all 5 areas are always shown (they are top-level
-  // navigation groupings, not individual routes). Highlight is driven by
-  // reverse-lookup from the current pathname to its area. Sidebar hrefs are
-  // persona-aware so e.g. exam persona's 工作台 links to /app/exam.
-  const currentArea = useMemo(() => routeArea(pathname), [pathname]);
-  const contextBar = useMemo(() => contextBarDescriptor(pathname), [pathname]);
-  const navGroups = useMemo(
-    () => navGroupsForPersona(activePersona),
+  const visibleNavGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => isRouteVisible(item.href)),
+      })).filter((group) => group.items.length > 0),
+    [isRouteVisible],
+  );
+  const mobileNavigation = useMemo(
+    () =>
+      activePersona === null
+        ? { overflow: [], primary: [] }
+        : mobileNavigationForPersona(activePersona),
     [activePersona],
   );
-
-  const mobileNav = useMemo(
-    () => mobileDeskNavigation(activePersona),
-    [activePersona],
-  );
+  const current =
+    NAV_ITEMS.find((item) => item.href === pathname) ?? DEFAULT_NAV_ITEM;
   const commandResults = COMMAND_ITEMS.filter(
     (item) =>
       isCommandItemVisible(item, activePersona, isRouteVisible) &&
@@ -161,6 +142,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             unread: 0,
             workspaceId: "",
             workspaceName: "",
+            workspaceRole: null,
           });
           return;
         }
@@ -175,6 +157,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           status: "ready",
           workspaceId: workspace.id,
           workspaceName: workspace.name,
+          workspaceRole: workspace.role,
         });
       } catch {
         setNotificationState((current) => ({
@@ -227,31 +210,12 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  useEffect(() => {
-    // Details belong to the current route; never leave a graph/evidence
-    // selection visible after navigation to a different work area.
-    if (inspectorPathRef.current === pathname) return;
-    inspectorPathRef.current = pathname;
-    closeInspector();
-  }, [closeInspector, pathname]);
-
-  useEffect(() => {
-    if (vaultPhase !== "locked") return;
-    closeInspector();
-  }, [closeInspector, vaultPhase]);
-
-  useEffect(() => {
-    const personaId = activePersona?.id ?? null;
-    if (inspectorPersonaRef.current === personaId) return;
-    inspectorPersonaRef.current = personaId;
-    closeInspector();
-  }, [activePersona?.id, closeInspector]);
-
   return (
-    <div className={`app-shell-frame${inspector ? " has-inspector" : ""}`}>
+    <div className="app-shell-frame">
       <aside
         aria-label="主导航"
         className={`app-sidebar${menuOpen ? " open" : ""}`}
+        data-testid="app-sidebar"
       >
         <Link
           className="app-brand"
@@ -271,23 +235,33 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           onClick={closeTransientUi}
         >
           <span className="workspace-line">
-            <strong>当前工作区</strong>
+            <strong>
+              {notificationState.status === "loading"
+                ? "正在读取工作区"
+                : notificationState.workspaceName || "选择工作区"}
+            </strong>
             <AppIcon aria-hidden="true" name="chevron-down" size={15} />
           </span>
-          <span className="workspace-privacy">私有优先 · 点击选择或管理</span>
+          <span className="workspace-privacy">
+            {notificationState.workspaceName && notificationState.workspaceRole
+              ? `${WORKSPACE_ROLE_LABEL[notificationState.workspaceRole]} · 点击切换或管理`
+              : notificationState.status === "error"
+                ? "工作区读取失败 · 点击管理"
+                : "点击选择或管理"}
+          </span>
         </Link>
         <nav className="app-nav-scroll">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <section className="app-nav-group" key={group.label}>
               <h2 className="app-nav-label">{group.label}</h2>
               {group.items.map((item) => {
-                const active = currentArea === item.area;
+                const active = pathname === item.href;
                 return (
                   <Link
                     aria-current={active ? "page" : undefined}
                     className={`app-nav-link${active ? " active" : ""}`}
                     href={item.href}
-                    key={item.area}
+                    key={item.href}
                     onClick={closeTransientUi}
                   >
                     <span aria-hidden="true" className="app-nav-icon">
@@ -303,23 +277,21 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <div className="app-sidebar-foot">
           <Link
             aria-label={
-              activeWorkbench
-                ? `当前工作台：${activeWorkbench.name}，前往工作台设置`
-                : "工作台加载中"
+              activePersona
+                ? `当前画像：${activePersona.name}，前往画像设置`
+                : "画像加载中"
             }
             className="persona-indicator"
             href="/app/settings"
             onClick={closeTransientUi}
           >
             <span aria-hidden="true" className="persona-indicator-icon">
-              {activeWorkbench?.icon ?? "…"}
+              {activePersona?.icon ?? "…"}
             </span>
             <span>
-              <strong>{activeWorkbench?.name ?? "工作台加载中"}</strong>
+              <strong>{activePersona?.name ?? "画像加载中"}</strong>
               <small>
-                {personaLoading || workbenchPhase === "loading"
-                  ? "正在同步偏好"
-                  : activeWorkbench?.description}
+                {personaLoading ? "正在同步偏好" : activePersona?.description}
               </small>
             </span>
           </Link>
@@ -347,7 +319,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
       ) : null}
 
       <div className="app-main-shell">
-        <header className="app-topbar">
+        <header className="app-topbar" data-testid="app-topbar">
           <div className="app-top-left">
             <button
               aria-expanded={menuOpen}
@@ -358,26 +330,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             >
               <AppIcon name="menu" />
             </button>
-            <span className="app-crumb">
-              {contextBar.areaLabel ? (
-                <span className="desk-context-area">
-                  {contextBar.areaLabel}
-                </span>
-              ) : null}
-              {contextBar.areaLabel && contextBar.subView ? (
-                <span aria-hidden="true" className="desk-context-sep">
-                  /
-                </span>
-              ) : null}
-              {contextBar.subView ? (
-                <span className="desk-context-subview">
-                  {contextBar.subView}
-                </span>
-              ) : null}
-              {!contextBar.areaLabel && !contextBar.subView ? (
-                <span className="desk-context-area">Logion</span>
-              ) : null}
-            </span>
+            <span className="app-crumb">{current.label}</span>
             <span
               className={`app-system-status ${online ? "online" : "offline"}`}
             >
@@ -421,31 +374,38 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </header>
         <div
           className="app-content"
+          data-testid="app-main"
           key={vaultPhase === "unlocked" ? "vault-unlocked" : "vault-locked"}
         >
-          {currentArea === "workbench" ? <WorkbenchSwitcher /> : null}
           {children}
         </div>
       </div>
 
       <nav aria-label="移动端导航" className="bottom-nav">
-        {mobileNav.map((item) => {
-          const active = currentArea === item.area;
-          return (
-            <Link
-              aria-current={active ? "page" : undefined}
-              className={active ? "active" : ""}
-              href={item.href}
-              key={item.area}
-              onClick={closeTransientUi}
-            >
-              <b aria-hidden="true">
-                <AppIcon name={item.icon} size={18} />
-              </b>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        {mobileNavigation.primary.map((item) => (
+          <Link
+            aria-current={pathname === item.href ? "page" : undefined}
+            className={pathname === item.href ? "active" : ""}
+            href={item.href}
+            key={item.href}
+            onClick={closeTransientUi}
+          >
+            <b aria-hidden="true">
+              <AppIcon name={item.icon} size={18} />
+            </b>
+            <span>{item.label}</span>
+          </Link>
+        ))}
+        <button
+          aria-expanded={overlay === "mobile-more"}
+          type="button"
+          onClick={() => setOverlay("mobile-more")}
+        >
+          <b aria-hidden="true">
+            <AppIcon name="more" size={18} />
+          </b>
+          <span>更多</span>
+        </button>
       </nav>
 
       {overlay === "command" ? (
@@ -514,6 +474,34 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </AppModal>
       ) : null}
 
+      {overlay === "mobile-more" ? (
+        <AppModal
+          eyebrow="PERSONA NAVIGATION"
+          title="更多"
+          onClose={() => setOverlay(null)}
+        >
+          <div className="app-command-results">
+            {mobileNavigation.overflow.map((item) => (
+              <Link
+                className="app-command-result"
+                href={item.href}
+                key={item.href}
+                onClick={closeTransientUi}
+              >
+                <span aria-hidden="true">
+                  <AppIcon name={item.icon} size={17} />
+                </span>
+                <strong>{item.label}</strong>
+                <span>打开</span>
+              </Link>
+            ))}
+            {mobileNavigation.overflow.length === 0 ? (
+              <p className="app-empty-note">当前画像没有更多入口。</p>
+            ) : null}
+          </div>
+        </AppModal>
+      ) : null}
+
       {overlay === "notifications" ? (
         <AppModal
           eyebrow="NOTIFICATION CENTER"
@@ -556,33 +544,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             打开搜索、通知与日历
           </Link>
         </AppModal>
-      ) : null}
-
-      {inspector ? (
-        isInspectorMobile ? (
-          <AppModal
-            eyebrow="详情面板"
-            onClose={closeInspector}
-            title={inspector.title}
-          >
-            <div className="desk-inspector-body">{inspector.body}</div>
-          </AppModal>
-        ) : (
-          <aside aria-label="详情面板" className="desk-inspector">
-            <div className="desk-inspector-head">
-              <span className="desk-inspector-title">{inspector.title}</span>
-              <button
-                aria-label="关闭详情面板"
-                className="app-icon-button"
-                type="button"
-                onClick={closeInspector}
-              >
-                <AppIcon name="close" />
-              </button>
-            </div>
-            <div className="desk-inspector-body">{inspector.body}</div>
-          </aside>
-        )
       ) : null}
     </div>
   );

@@ -1,0 +1,142 @@
+[
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-invite-320x640.png",
+    "sha256": "7e028fc94f1795f3e95bc648b56b47024fca72420afd281b19cecd2484544b6b",
+    "flow": "invite",
+    "viewport": "320x640",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-share-invalid-320x640.png",
+    "sha256": "e73815270e15db6990753a2b04bee4458e0f8545882c189bd86afa6cdb230e87",
+    "flow": "share-invalid",
+    "viewport": "320x640",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-deletion-unauthenticated-320x640.png",
+    "sha256": "28bef9bb72e9ca0bcb0eb80a37dd107704c6116d617936cfff589eda95121522",
+    "flow": "deletion-unauthenticated",
+    "viewport": "320x640",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-offline-320x640.png",
+    "sha256": "d1a79d8259d4bcb7d4a3805b9275cf241e3d564da503fca2cbafef6bafc7b656",
+    "flow": "offline",
+    "viewport": "320x640",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-not-found-320x640.png",
+    "sha256": "9ca2c7a5ff2d5c37177b45055ffa9fb648261b5d695a7fef1b95f90a9744fb8f",
+    "flow": "not-found",
+    "viewport": "320x640",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-invite-390x844.png",
+    "sha256": "a1427406a31022a791ce6c1cac1eb7ec2045e86d0b45811b537c7acd693ffb15",
+    "flow": "invite",
+    "viewport": "390x844",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-share-invalid-390x844.png",
+    "sha256": "73b867450ae24177b6caa60c9f784cb0787ebeac45b8814603a1e817c1b13eaf",
+    "flow": "share-invalid",
+    "viewport": "390x844",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-deletion-unauthenticated-390x844.png",
+    "sha256": "342ef70692ce750c3966ab9c4a55f4c03681f1165a81cf9bbc049c21d4972a01",
+    "flow": "deletion-unauthenticated",
+    "viewport": "390x844",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-offline-390x844.png",
+    "sha256": "5114ad00fc4e803aa189b5e366c9569afd802621ef5cad319e02c6b14c47c6c1",
+    "flow": "offline",
+    "viewport": "390x844",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-not-found-390x844.png",
+    "sha256": "3794d9284259216986d3936acdeca3ef22e9c4f6c204fe91a39dfbeb9f3ce86a",
+    "flow": "not-found",
+    "viewport": "390x844",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-invite-1024x768.png",
+    "sha256": "ef8c9ed61901b69fd92ee21e19ec1b63be5f407b4a9d8192c7680f1904ab2829",
+    "flow": "invite",
+    "viewport": "1024x768",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-share-invalid-1024x768.png",
+    "sha256": "da9bff69e6239918338548a35266d7c57ec9016690578d75eb0d6aa4bf6682e8",
+    "flow": "share-invalid",
+    "viewport": "1024x768",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-deletion-unauthenticated-1024x768.png",
+    "sha256": "7aa084e14a2c330ef06dd455070fc177c33199a2459a1c968a7a6449785752e6",
+    "flow": "deletion-unauthenticated",
+    "viewport": "1024x768",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-offline-1024x768.png",
+    "sha256": "33ade7f5591a2c84beae0b7ea80e6275a8797bd4264e4dcf218ca399fd6d8a2c",
+    "flow": "offline",
+    "viewport": "1024x768",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-not-found-1024x768.png",
+    "sha256": "f4099eab6f4622f0daa30156f205a4156a33de55a13dff7e0e8dc8b6d0e09b4f",
+    "flow": "not-found",
+    "viewport": "1024x768",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-invite-1440x900.png",
+    "sha256": "573fa3a6080aa6e4ea06c1a64806d8a561b3f2b74192963e5fc317b38f9504ec",
+    "flow": "invite",
+    "viewport": "1440x900",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-share-invalid-1440x900.png",
+    "sha256": "9a8ef3716c61ed2257d9480eb17c26a466f131d659e509f2a37fed74b25cda28",
+    "flow": "share-invalid",
+    "viewport": "1440x900",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-deletion-unauthenticated-1440x900.png",
+    "sha256": "bc9111aaf9fec129829d6aaf84fbfeeeda6cb92aecc3b59edbb2a1699f27b742",
+    "flow": "deletion-unauthenticated",
+    "viewport": "1440x900",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-offline-1440x900.png",
+    "sha256": "4cf75b673283987d572482e872398e32cd4e3446bdd32ce99f4f83d72296ca5f",
+    "flow": "offline",
+    "viewport": "1440x900",
+    "runtimeProblems": []
+  },
+  {
+    "path": "C:\\Users\\Administrator\\.codex\\worktrees\\25db\\ai_study\\reports\\ui-refactor\\after\\public-not-found-1440x900.png",
+    "sha256": "cf3336aedb548f3578415b60fab7caac17806d2c469d9279650a4b3a63f5303f",
+    "flow": "not-found",
+    "viewport": "1440x900",
+    "runtimeProblems": []
+  }
+]

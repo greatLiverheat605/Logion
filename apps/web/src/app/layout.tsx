@@ -2,9 +2,11 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
+import { RuntimeStyleNonce } from "@/components/runtime-style-nonce";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 
 import "./globals.css";
+import "./public-flow.css";
 
 export const metadata: Metadata = {
   title: "Logion",
@@ -38,6 +40,7 @@ export default async function RootLayout({
         />
       </head>
       <body>
+        <RuntimeStyleNonce nonce={nonce} />
         <a className="skip-link" href="#main-content">
           跳到主要内容
         </a>

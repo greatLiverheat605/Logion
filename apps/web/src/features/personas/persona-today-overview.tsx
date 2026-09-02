@@ -7,7 +7,6 @@ import { useMemo, useRef, useState } from "react";
 import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
 import { AppModal } from "@/components/app-shell/app-modal";
 import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
-import { useOptionalWorkbench } from "@/features/workbenches/workbench-context";
 
 import {
   buildPersonaDashboard,
@@ -197,21 +196,6 @@ export function PersonaTodayOverview({
 }) {
   const { activePersona, allPersonas, isLoading, setActivePersona } =
     usePersona();
-  const workbench = useOptionalWorkbench();
-  const workbenchReady = workbench?.phase === "ready";
-  const switchOptions = workbenchReady
-    ? workbench.options.map((option) => ({
-        description: option.description,
-        id: option.ref,
-        isBuiltin: option.kind === "fixed",
-        name: option.name,
-      }))
-    : allPersonas.map((persona) => ({
-        description: persona.description,
-        id: persona.id,
-        isBuiltin: persona.isBuiltin,
-        name: persona.name,
-      }));
   const switchButtonRef = useRef<HTMLButtonElement>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -230,11 +214,7 @@ export function PersonaTodayOverview({
     setPendingId(personaId);
     setError(false);
     try {
-      if (workbenchReady) {
-        await workbench.selectWorkbench(personaId);
-      } else {
-        await setActivePersona(personaId);
-      }
+      await setActivePersona(personaId);
       setDialogOpen(false);
     } catch {
       setError(true);
@@ -246,7 +226,6 @@ export function PersonaTodayOverview({
   const controls = (
     <button
       className="secondary-button"
-      data-testid="persona-switcher-trigger"
       ref={switchButtonRef}
       type="button"
       onClick={() => setDialogOpen(true)}
@@ -378,12 +357,8 @@ export function PersonaTodayOverview({
             画像只调整导航与首页结构，不改变任何工作区权限。
           </p>
           <div className="persona-switcher-list">
-            {switchOptions.map((persona) => {
-              const selected =
-                persona.id ===
-                (workbenchReady
-                  ? workbench.activeWorkbench?.ref
-                  : activePersona.id);
+            {allPersonas.map((persona) => {
+              const selected = persona.id === activePersona.id;
               return (
                 <button
                   aria-pressed={selected}

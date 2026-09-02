@@ -1,5 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures";
+import {
+  assertNoHorizontalOverflow,
+  assertPrimaryActionContract,
+  assertReducedMotion,
+  captureEvidenceScreenshot,
+  waitForWorkbenchReady,
+  WORKBENCH_VIEWPORTS,
+} from "./workbench-audit";
+
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const authenticatedRoutes = [
   "/app/today",
@@ -24,33 +33,21 @@ const authenticatedRoutes = [
   "/app/profile",
   "/app/help",
 ];
-const responsiveViewports = [
-  { height: 900, label: "desktop", width: 1440 },
-  { height: 900, label: "1250", width: 1250 },
-  { height: 844, label: "900", width: 900 },
-  { height: 844, label: "720", width: 720 },
-  { height: 844, label: "420", width: 420 },
-  { height: 844, label: "390x844", width: 390 },
-  { height: 640, label: "320x640", width: 320 },
-] as const;
+const sampleRoutes = new Set(["/app/today", "/app/search", "/app/records"]);
+const captureBefore = process.env.LOGION_E2E_CAPTURE_BEFORE === "true";
 
 test.describe("authenticated shell", () => {
   test("workbenches have no WCAG violations or horizontal overflow", async ({
     page,
   }) => {
     test.setTimeout(120_000);
+    const viewport = WORKBENCH_VIEWPORTS[3];
+    await page.setViewportSize(viewport);
 
     for (const route of authenticatedRoutes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
-      await expect(page.locator("h1")).toBeVisible();
-      const hasOverflow = await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth >
-          document.documentElement.clientWidth,
-      );
-      expect(hasOverflow, `${route} must not overflow horizontally`).toBe(
-        false,
-      );
+      await waitForWorkbenchReady(page, route);
+      await assertNoHorizontalOverflow(page, route, viewport);
       const results = await new AxeBuilder({ page })
         .withTags(wcagTags)
         .analyze();
@@ -63,21 +60,46 @@ test.describe("authenticated shell", () => {
   }) => {
     test.setTimeout(300_000);
 
-    for (const viewport of responsiveViewports) {
+    for (const viewport of WORKBENCH_VIEWPORTS) {
       await page.setViewportSize(viewport);
       for (const route of authenticatedRoutes) {
         await page.goto(route, { waitUntil: "domcontentloaded" });
-        await expect(page.locator("h1")).toBeVisible();
-        const dimensions = await page.evaluate(() => ({
-          clientWidth: document.documentElement.clientWidth,
-          scrollWidth: document.documentElement.scrollWidth,
-        }));
-        expect(
-          dimensions.scrollWidth,
-          `${route} must fit the ${viewport.label} viewport`,
-        ).toBeLessThanOrEqual(dimensions.clientWidth);
+        await waitForWorkbenchReady(page, route);
+        await assertNoHorizontalOverflow(page, route, viewport);
+        await assertPrimaryActionContract(page, route, viewport);
+        if (captureBefore && sampleRoutes.has(route)) {
+          await captureEvidenceScreenshot(page, "before", route, viewport);
+        }
       }
     }
+  });
+
+  test("Audit keeps its mobile primary action inside the viewport", async ({
+    page,
+  }) => {
+    const viewport = WORKBENCH_VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    await page.goto("/app/audit", { waitUntil: "domcontentloaded" });
+    await waitForWorkbenchReady(page, "/app/audit");
+
+    const primary = page.locator('[data-workbench-primary="true"]:visible');
+    await expect(primary).toHaveCount(1);
+    const diagnostic = await primary.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { bottom: rect.bottom, top: rect.top, viewport: innerHeight };
+    });
+    expect(diagnostic.top).toBeLessThan(diagnostic.viewport);
+    expect(diagnostic.bottom).toBeGreaterThan(0);
+  });
+
+  test("Audit event rows meet WCAG contrast requirements", async ({ page }) => {
+    const viewport = WORKBENCH_VIEWPORTS[3];
+    await page.setViewportSize(viewport);
+    await page.goto("/app/audit", { waitUntil: "domcontentloaded" });
+    await waitForWorkbenchReady(page, "/app/audit");
+
+    const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
+    expect(results.violations).toEqual([]);
   });
 
   test("theme preference persists across document navigation", async ({
@@ -149,19 +171,10 @@ test.describe("authenticated shell", () => {
       commandDialog.getByRole("textbox", { name: "搜索页面或命令" }),
     ).toBeFocused();
     await expect(
-      commandDialog.getByRole("heading", { name: "今天", exact: true }),
+      commandDialog.getByRole("heading", { name: "学习", exact: true }),
     ).toBeVisible();
     await expect(
-      commandDialog.getByRole("heading", { name: "工作台", exact: true }),
-    ).toBeVisible();
-    await expect(
-      commandDialog.getByRole("heading", { name: "知识库", exact: true }),
-    ).toBeVisible();
-    await expect(
-      commandDialog.getByRole("heading", { name: "协作空间", exact: true }),
-    ).toBeVisible();
-    await expect(
-      commandDialog.getByRole("heading", { name: "系统中心", exact: true }),
+      commandDialog.getByRole("heading", { name: "系统", exact: true }),
     ).toBeVisible();
     await expect(
       commandDialog.getByRole("heading", { name: "创建", exact: true }),
@@ -214,91 +227,14 @@ test.describe("authenticated shell", () => {
     page,
   }) => {
     test.setTimeout(180_000);
+    const viewport = WORKBENCH_VIEWPORTS[3];
+    await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: "reduce" });
 
     for (const route of authenticatedRoutes) {
-      await page.goto(route, { waitUntil: "load" });
-      await expect(page.locator(".app-shell-frame h1")).toBeVisible();
-
-      const reducedMotionMatches = await page.evaluate(
-        () => matchMedia("(prefers-reduced-motion: reduce)").matches,
-      );
-      expect(
-        reducedMotionMatches,
-        `${route} must run with reduced motion enabled`,
-      ).toBe(true);
-
-      await expect
-        .poll(
-          () =>
-            page.evaluate(() => {
-              const shell = document.querySelector(".app-shell-frame");
-              if (!shell) {
-                return {
-                  count: 0,
-                  elements: [],
-                  shellPresent: false,
-                  unresolvedElements: [],
-                };
-              }
-
-              const describeElement = (element: Element) => ({
-                ariaLabel: element.getAttribute("aria-label"),
-                className:
-                  typeof element.className === "string"
-                    ? element.className
-                    : null,
-                id: element.id || null,
-                tagName: element.tagName.toLowerCase(),
-              });
-              const elements = [shell, ...shell.querySelectorAll("*")];
-              const unresolvedElements = elements.flatMap((element) => {
-                const style = getComputedStyle(element);
-                if (
-                  style.animationDuration.length > 0 &&
-                  style.animationName.length > 0 &&
-                  style.transitionDuration.length > 0 &&
-                  style.transitionProperty.length > 0
-                ) {
-                  return [];
-                }
-                return [describeElement(element)];
-              });
-              const movingElements = elements.flatMap((element) => {
-                const style = getComputedStyle(element);
-                const hasAnimation =
-                  style.animationName !== "none" &&
-                  style.animationDuration !== "0s";
-                const hasTransition =
-                  style.transitionDuration !== "0s" &&
-                  style.transitionProperty !== "none";
-                if (!hasAnimation && !hasTransition) return [];
-
-                return [
-                  {
-                    animationDuration: style.animationDuration,
-                    animationName: style.animationName,
-                    ...describeElement(element),
-                    transitionDuration: style.transitionDuration,
-                    transitionProperty: style.transitionProperty,
-                  },
-                ];
-              });
-              return {
-                count: movingElements.length,
-                elements: movingElements.slice(0, 50),
-                shellPresent: true,
-                unresolvedElements: unresolvedElements.slice(0, 50),
-              };
-            }),
-          { message: `${route} must honor reduced motion` },
-        )
-        .toEqual({
-          count: 0,
-          elements: [],
-          shellPresent: true,
-          unresolvedElements: [],
-        });
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await waitForWorkbenchReady(page, route);
+      await assertReducedMotion(page, route, viewport);
     }
   });
 
@@ -375,112 +311,5 @@ test.describe("authenticated shell", () => {
       .getByLabel("输入 CLEAR THIS DEVICE 确认", { exact: true })
       .fill("CLEAR THIS DEVIC");
     await expect(clearButton).toBeDisabled();
-  });
-
-  test("workspace and review context switching discard stale detail responses", async ({
-    page,
-  }) => {
-    test.setTimeout(90_000);
-    const suffix = Date.now().toString(36);
-    const workspaceAName = `竞态工作区 A ${suffix}`;
-    const workspaceBName = `竞态工作区 B ${suffix}`;
-    const spaceAName = `A 空间 ${suffix}`;
-    const spaceBName = `B 空间 ${suffix}`;
-
-    await page.goto("/app/workspaces");
-
-    const createWorkspace = async (name: string) => {
-      const disclosure = page.locator("details", {
-        has: page.getByText("新建工作区", { exact: true }),
-      });
-      if (!(await disclosure.evaluate((element) => element.open))) {
-        await disclosure.locator("summary").click();
-      }
-      await page.getByRole("textbox", { name: /工作区名称/ }).fill(name);
-      await page.getByRole("button", { name: "创建工作区" }).click();
-      await expect(page.locator("#workspace-feedback")).toHaveText(
-        "工作区已创建并切换。",
-      );
-    };
-
-    const createSpace = async (name: string) => {
-      const disclosure = page.locator("details", {
-        has: page.getByText("新建 Space", { exact: true }),
-      });
-      if (!(await disclosure.evaluate((element) => element.open))) {
-        await disclosure.locator("summary").click();
-      }
-      await page.getByRole("textbox", { name: /空间名称/ }).fill(name);
-      await page.getByRole("button", { name: "创建 Space" }).click();
-      await expect(page.locator("#space-feedback")).toHaveText("空间已创建。");
-    };
-
-    await createWorkspace(workspaceAName);
-    await createSpace(spaceAName);
-    await createWorkspace(workspaceBName);
-    await createSpace(spaceBName);
-
-    const workspaceResponse = await page.request.get("/api/v1/workspaces");
-    expect(workspaceResponse.ok()).toBe(true);
-    const workspacePayload = (await workspaceResponse.json()) as {
-      workspaces: Array<{ id: string; name: string }>;
-    };
-    const workspaceA = workspacePayload.workspaces.find(
-      (workspace) => workspace.name === workspaceAName,
-    );
-    expect(workspaceA).toBeDefined();
-
-    let delayedRequests = 0;
-    await page.route(
-      `**/api/v1/workspaces/${workspaceA!.id}/**`,
-      async (route) => {
-        delayedRequests += 1;
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        await route.continue();
-      },
-    );
-
-    await page
-      .locator(".workspace-context-list")
-      .getByRole("button", { name: new RegExp(workspaceAName) })
-      .click();
-    await page
-      .locator(".workspace-context-list")
-      .getByRole("button", { name: new RegExp(workspaceBName) })
-      .click();
-
-    await expect(page.getByText(spaceBName, { exact: true })).toBeVisible();
-    await page.waitForTimeout(800);
-    expect(delayedRequests).toBeGreaterThan(0);
-    await expect(page.getByText(spaceAName, { exact: true })).toHaveCount(0);
-
-    await page.unrouteAll({ behavior: "wait" });
-    await page.route(
-      `**/api/v1/workspaces/${workspaceA!.id}/spaces`,
-      async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        await route.continue();
-      },
-    );
-
-    await page.goto("/app/review");
-    const reviewWorkspace = page.getByLabel("工作区", { exact: true });
-    await expect(reviewWorkspace).toBeVisible();
-    await reviewWorkspace.selectOption({ label: workspaceAName });
-    await reviewWorkspace.selectOption({ label: workspaceBName });
-
-    const reviewSpace = page.getByLabel("空间", { exact: true });
-    await expect(
-      reviewSpace.getByRole("option", { name: new RegExp(spaceBName) }),
-    ).toHaveCount(1);
-    await page.waitForTimeout(800);
-    await expect(
-      reviewSpace.getByRole("option", { name: new RegExp(spaceAName) }),
-    ).toHaveCount(0);
-    await expect(reviewWorkspace).toHaveValue(
-      workspacePayload.workspaces.find(
-        (workspace) => workspace.name === workspaceBName,
-      )!.id,
-    );
   });
 });

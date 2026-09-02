@@ -1,0 +1,781 @@
+.root {
+  min-width: 0;
+  min-height: calc(100dvh - var(--topbar-height));
+  background: var(--bg-app);
+}
+
+.root :global(.workbench-frame) {
+  min-height: calc(100dvh - var(--topbar-height));
+  border: 0;
+  border-radius: 0;
+}
+
+.secondaryButton,
+.primaryButton,
+.masterCreate,
+.masterNav button,
+.masterList button,
+.providerDetail button,
+.dataList button,
+.tableRow button,
+.sheetActions button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.secondaryButton,
+.primaryButton {
+  padding: 0 0.7rem;
+}
+
+.primaryButton {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.secondaryButton:hover:not(:disabled),
+.masterCreate:hover:not(:disabled),
+.masterNav button:hover:not(:disabled),
+.masterList button:hover:not(:disabled),
+.providerDetail button:hover:not(:disabled),
+.dataList button:hover:not(:disabled),
+.tableRow button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.secondaryButton:disabled,
+.primaryButton:disabled,
+.masterCreate:disabled,
+.masterNav button:disabled,
+.masterList button:disabled,
+.providerDetail button:disabled,
+.dataList button:disabled,
+.tableRow button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.secondaryButton:focus-visible,
+.primaryButton:focus-visible,
+.masterCreate:focus-visible,
+.masterNav button:focus-visible,
+.masterList button:focus-visible,
+.providerDetail button:focus-visible,
+.dataList button:focus-visible,
+.tableRow button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.masterPane,
+.mainPane,
+.inspectorPane {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.masterPane {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+}
+
+.paneHeading {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.9rem 0.85rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.paneHeading strong,
+.dataSection h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.eyebrow {
+  color: var(--text-tertiary);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.masterNav {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.masterNav button {
+  justify-content: flex-start;
+  min-height: 2.2rem;
+  padding: 0 0.6rem;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.masterNav button :global(.product-tag) {
+  margin-left: auto;
+}
+
+.masterNavActive,
+.selectedRow {
+  border-color: var(--accent-border) !important;
+  background: var(--accent-surface) !important;
+  color: var(--accent-text) !important;
+}
+
+.masterList {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.masterList button {
+  display: grid;
+  width: 100%;
+  min-height: 3.75rem;
+  grid-template-columns: 0.5rem minmax(0, 1fr);
+  justify-content: stretch;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.masterList button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.masterList strong,
+.masterList small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.masterList strong {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+}
+
+.masterList small {
+  color: var(--text-tertiary);
+  font-size: 0.66rem;
+}
+
+.providerDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-top: 0.25rem;
+  border-radius: 50%;
+  background: var(--text-danger);
+}
+
+.providerDot[data-enabled="true"] {
+  background: var(--text-success);
+}
+
+.masterCreate {
+  margin: 0.7rem;
+  background: var(--bg-muted);
+}
+
+.composerTrigger {
+  margin: 0.7rem;
+}
+
+.composerTrigger summary {
+  list-style: none;
+  padding: 0.55rem 0.75rem;
+  text-align: center;
+}
+
+.composerTrigger summary::-webkit-details-marker {
+  display: none;
+}
+
+.queueList {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.queueItem {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--border-weak);
+}
+
+.queueRow {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.5rem;
+  padding: 0.7rem 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.queueRow:hover {
+  background: var(--bg-hover);
+}
+
+.queueRow > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.queueRow strong,
+.queueRow small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.queueRow strong {
+  font-size: 0.74rem;
+}
+
+.queueRow small {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+}
+
+.queueIcon {
+  color: var(--accent-text);
+}
+
+.inlineDanger {
+  align-self: center;
+  min-height: 1.75rem;
+  padding: 0 0.45rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-danger);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.inlineDanger:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.reviewForm,
+.confirmation {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.reviewForm label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.reviewForm textarea,
+.reviewForm input {
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.reviewForm textarea {
+  min-height: 16rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.68rem;
+}
+
+.confirmation {
+  padding: 0.8rem;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-surface);
+}
+
+.confirmationHeader,
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.confirmationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.confirmationGrid > div {
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid var(--accent-border);
+  background: color-mix(in srgb, var(--bg-surface) 72%, transparent);
+}
+
+.confirmationGrid dt {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+}
+
+.confirmationGrid dd {
+  margin: 0.2rem 0 0;
+  color: var(--text-primary);
+  font-size: 0.69rem;
+  overflow-wrap: anywhere;
+}
+
+.consent,
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.consent input,
+.checkRow input {
+  flex: 0 0 auto;
+  margin-top: 0.18rem;
+}
+
+.sheetForm {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sheetForm label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.sheetForm input,
+.sheetForm textarea {
+  width: 100%;
+  min-height: 2.15rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.sheetForm textarea {
+  min-height: 8rem;
+}
+
+.sheetForm input[type="checkbox"],
+.sheetForm .checkRow input {
+  width: 1rem;
+  min-height: 1rem;
+}
+
+.sheetActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+}
+
+.sheetActions button {
+  min-height: 2.1rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.sheetActions button:focus-visible,
+.inlineDanger:focus-visible,
+.queueRow:focus-visible,
+.composerTrigger summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.sheetActions .primaryButton {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+@media (max-width: 720px) {
+  .masterNav button {
+    min-height: 2.75rem;
+  }
+
+  .confirmationGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mainPane {
+  background: var(--bg-surface);
+}
+
+.toolbarLead {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.reauthAction {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  margin-left: 0.65rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.reauthAction:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.reauthAction:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.dataSection {
+  min-width: 0;
+  padding: 1.05rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.8rem;
+}
+
+.sectionHeader > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.muted,
+.inspectorCopy {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.providerDetail {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+
+.providerDetail > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.providerDetail strong,
+.providerDetail span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.providerDetail strong {
+  color: var(--text-primary);
+  font-size: 0.83rem;
+}
+
+.providerDetail span {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.dataTable {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.tableHead,
+.tableRow {
+  display: grid;
+  min-width: 0;
+  grid-template-columns:
+    minmax(10rem, 1.4fr) minmax(10rem, 1fr) minmax(5rem, 0.5fr)
+    auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.tableHead {
+  background: var(--bg-muted);
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.tableRow {
+  border-top: 1px solid var(--border-weak);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.tableRow > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.tableRow strong,
+.tableRow small {
+  overflow-wrap: anywhere;
+}
+
+.tableRow strong {
+  color: var(--text-primary);
+}
+
+.tableRow small {
+  color: var(--text-tertiary);
+}
+
+.dataList {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+}
+
+.dataList li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem 0.8rem;
+  border-top: 1px solid var(--border-weak);
+}
+
+.dataList li:first-child {
+  border-top: 0;
+}
+
+.dataList li > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.dataList strong,
+.dataList small {
+  overflow-wrap: anywhere;
+}
+
+.dataList strong {
+  color: var(--text-primary);
+  font-size: 0.74rem;
+}
+
+.dataList small {
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.inspectorPane {
+  background: var(--bg-muted);
+}
+
+.kvList {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.kvList > div {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+.kvList dt {
+  color: var(--text-tertiary);
+  font-size: 0.67rem;
+}
+
+.kvList dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.stateWarn {
+  padding: 0.55rem 0.65rem;
+  border-left: 2px solid var(--text-warning);
+  background: color-mix(in srgb, var(--text-warning) 10%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.sheetForm {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sheetForm label,
+.checkRow {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.sheetForm input,
+.sheetForm textarea,
+.sheetForm select {
+  width: 100%;
+  min-height: 2.15rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.sheetForm input[type="checkbox"] {
+  width: 1rem;
+  min-height: 1rem;
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.sheetActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+}
+
+.sheetActions button {
+  padding: 0 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .providerDetail,
+  .dataList li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tableHead {
+    display: none;
+  }
+
+  .tableRow {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

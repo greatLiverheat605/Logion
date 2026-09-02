@@ -7,16 +7,16 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { authenticationManifestPath } from "./e2e-environment";
+import { authenticationManifestPath, e2eBaseUrl } from "./e2e-environment";
 
 interface AuthenticatedFixtures {
+  authenticatedContext: BrowserContext;
+  authenticatedPage: Page;
   page: Page;
 }
 
 interface AuthenticatedWorkerFixtures {
   accountState: { email: string; password: string; path: string };
-  authenticatedContext: BrowserContext;
-  authenticatedPage: Page;
 }
 
 interface Setting {
@@ -88,27 +88,50 @@ async function openAuthenticatedApp(
   page: Page,
   account: { email: string; password: string },
 ): Promise<void> {
+  const login = async (): Promise<void> => {
+    const response = await page.request.post("/api/v1/auth/login", {
+      data: {
+        device_name: "Browser E2E recovery",
+        email: account.email,
+        password: account.password,
+      },
+      headers: { Origin: e2eBaseUrl.origin },
+    });
+    if (response.status() !== 200) {
+      throw new Error(
+        `Authenticated browser recovery failed with status ${response.status()}.`,
+      );
+    }
+  };
+
+  await page.goto("about:blank");
+  const csrf = (await page.context().cookies(e2eBaseUrl.origin)).find(
+    (cookie) => cookie.name === "logion_csrf",
+  )?.value;
+  const refresh = csrf
+    ? await page.request.post("/api/v1/auth/refresh", {
+        headers: {
+          Origin: e2eBaseUrl.origin,
+          "X-CSRF-Token": csrf,
+        },
+      })
+    : null;
+  if (refresh === null || [401, 403].includes(refresh.status())) {
+    await login();
+  } else if (refresh.status() !== 200) {
+    throw new Error(
+      `Authenticated browser refresh failed with status ${refresh.status()}.`,
+    );
+  }
   await page.goto("/app/today");
   const shell = page.locator(".app-shell-frame");
   const anonymous = page.getByRole("heading", { name: "需要登录" });
   await expect(shell.or(anonymous)).toBeVisible();
-  if (await shell.isVisible()) return;
-
-  const login = await page.request.post("/api/v1/auth/login", {
-    data: {
-      device_name: "Browser E2E recovery",
-      email: account.email,
-      password: account.password,
-    },
-    headers: { Origin: new URL(page.url()).origin },
-  });
-  if (login.status() !== 200) {
-    throw new Error(
-      `Authenticated browser recovery failed with status ${login.status()}.`,
-    );
+  if (await anonymous.isVisible()) {
+    await login();
+    await page.goto("/app/today");
   }
-  await page.goto("/app/today");
-  await expect(page.locator(".app-shell-frame")).toBeVisible();
+  await expect(shell).toBeVisible();
 }
 
 export const test = base.extend<
@@ -145,7 +168,7 @@ export const test = base.extend<
         await context.close();
       }
     },
-    { scope: "worker" },
+    { scope: "test" },
   ],
   authenticatedPage: [
     async ({ authenticatedContext }, use) => {
@@ -156,7 +179,7 @@ export const test = base.extend<
         await page.close();
       }
     },
-    { scope: "worker" },
+    { scope: "test" },
   ],
   page: async (
     { accountState, authenticatedContext, authenticatedPage: page },

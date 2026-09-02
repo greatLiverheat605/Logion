@@ -41,6 +41,9 @@ type CaptureType = "inbox_item" | "note";
 type FeedbackTone = "error" | "loading" | "success" | "warning";
 type RetryAction = "context" | "focus" | "sync";
 
+export const GLOBAL_CAPTURE_TRIGGER_CLASS =
+  "app-icon-button app-capture-trigger";
+
 const subscribeToClient = () => () => undefined;
 const getClientSnapshot = () => true;
 const getServerSnapshot = () => false;
@@ -750,14 +753,13 @@ export function AppOperationalTools() {
       </button>
       <button
         aria-label="打开快速捕获"
-        className="app-primary-button"
+        className={GLOBAL_CAPTURE_TRIGGER_CLASS}
         ref={captureButtonRef}
         title="打开快速捕获"
         type="button"
         onClick={() => openOverlay("capture")}
       >
         <AppIcon name="plus" size={17} />
-        <span className="top-action-label">捕获</span>
       </button>
 
       {mounted

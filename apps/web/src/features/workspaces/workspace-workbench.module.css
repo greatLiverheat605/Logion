@@ -1,0 +1,438 @@
+.page {
+  min-width: 0;
+  padding: 0;
+}
+
+.masterPane,
+.mainPane {
+  min-width: 0;
+  min-height: 100%;
+}
+
+.masterPane {
+  padding: 0.9rem;
+  background: var(--bg-surface);
+}
+
+.mainPane {
+  background: var(--bg-surface);
+}
+
+.masterHeading,
+.sectionHeader,
+.toolbarNote,
+.sheetActions,
+.actionHint,
+.compactList li,
+.dangerActions {
+  display: flex;
+  align-items: center;
+}
+
+.masterHeading,
+.sectionHeader {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.masterHeading {
+  padding: 0 0.2rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.masterHeading h2,
+.sectionHeader h2 {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+.masterHeading > span,
+.sectionHeader > span {
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+}
+
+.kicker {
+  color: var(--text-tertiary);
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.masterPane > [class*="headless-select"] {
+  width: 100%;
+  margin: 0.8rem 0;
+}
+
+.workspaceList,
+.memberList,
+.inviteList,
+.compactList {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.workspaceList {
+  gap: 0.2rem;
+}
+
+.workspaceList button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.workspaceList button:hover,
+.workspaceList button:focus-visible,
+.workspaceList .selectedRow {
+  border-color: var(--accent-border);
+  background: var(--bg-selected);
+}
+
+.workspaceIcon,
+.avatar {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--primary);
+}
+
+.avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.privateIcon {
+  color: var(--text-success);
+}
+
+.sharedIcon {
+  color: var(--primary);
+}
+
+.rowCopy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.12rem;
+}
+
+.rowCopy strong,
+.rowCopy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowCopy strong {
+  font-size: 0.76rem;
+}
+
+.rowCopy span {
+  color: var(--text-tertiary);
+  font-size: 0.66rem;
+}
+
+.toolbarNote {
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.tabSection {
+  min-width: 0;
+  padding: 1rem 1.1rem 1.3rem;
+}
+
+.sectionHeader {
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.memberList,
+.inviteList {
+  gap: 0.15rem;
+  margin-top: 0.35rem;
+}
+
+.memberRow,
+.inviteRow {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border-weak);
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.inviteRow {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.roleText {
+  min-width: 5rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.token {
+  max-width: 13rem;
+  padding: 0.25rem 0.4rem;
+  overflow: hidden;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-surface);
+  color: var(--accent-text);
+  font-size: 0.64rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inlineState,
+.inspectorStatus,
+.lede,
+.dangerZone p,
+.disabledNote,
+.actionHint {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.inlineState {
+  padding: 1rem 0;
+}
+
+.kvList,
+.detailGrid {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.kvList > div,
+.detailGrid > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border-weak);
+}
+
+.kvList dt,
+.kvList dd,
+.detailGrid dt,
+.detailGrid dd {
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.kvList dt,
+.detailGrid dt {
+  color: var(--text-tertiary);
+}
+
+.kvList dd,
+.detailGrid dd {
+  max-width: 68%;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.compactList {
+  gap: 0.25rem;
+}
+
+.compactList li {
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.3rem 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.compactList li > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compactList .avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.62rem;
+}
+
+.dangerZone {
+  background: color-mix(in srgb, var(--text-danger) 7%, var(--bg-surface));
+  border-top: 2px solid
+    color-mix(in srgb, var(--text-danger) 38%, var(--border));
+}
+
+.moveSection {
+  padding: 1rem 1.1rem 1.3rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-muted);
+}
+
+.moveSection h2 {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+}
+
+.moveSection button {
+  margin-top: 0.45rem;
+}
+
+.dangerActions {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dangerActions button,
+.dangerButton {
+  border-color: color-mix(in srgb, var(--text-danger) 42%, var(--border));
+  color: var(--text-danger);
+}
+
+.disabledNote {
+  display: block;
+  flex-basis: 100%;
+  color: var(--text-tertiary);
+}
+
+.sheetForm {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sheetForm label,
+.sheetForm legend {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.sheetForm input:not([type="radio"]),
+.nativeSelect {
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.sheetForm fieldset {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.sheetForm fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 500;
+}
+
+.sheetActions {
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.45rem;
+}
+
+.primaryButton {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.dangerCopy {
+  padding: 0.7rem;
+  border-left: 2px solid var(--text-danger);
+  background: color-mix(in srgb, var(--text-danger) 8%, var(--bg-muted));
+  color: var(--text-danger);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 719px) {
+  .page {
+    width: 100%;
+  }
+
+  .masterPane {
+    padding: 0.8rem;
+  }
+
+  .tabSection {
+    padding: 0.9rem 0.85rem 1.1rem;
+  }
+
+  .memberRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .memberRow > :last-child {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .inviteRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .inviteRow .token {
+    grid-column: 1 / -1;
+    max-width: 100%;
+  }
+
+  .detailGrid > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .kvList dd,
+  .detailGrid dd {
+    max-width: 100%;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page * {
+    transition-duration: 0.01ms !important;
+  }
+}

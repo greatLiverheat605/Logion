@@ -2,9 +2,10 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import re
 import zipfile
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -50,6 +51,7 @@ from logion_api.workspaces.permissions import Permission
 from logion_api.workspaces.service import WorkspaceService
 
 EXPORT_SCHEMA = "logion-export-v1"
+LOGGER = logging.getLogger(__name__)
 SHARED_MODELS = (
     LearningGoal,
     LearningPlan,
@@ -318,6 +320,7 @@ class PortabilityService:
                 )
                 await db.commit()
         except Exception:  # noqa: BLE001
+            LOGGER.exception("data export generation failed", extra={"export_id": str(export_id)})
             async with session_factory() as db:
                 row = await db.scalar(
                     select(DataExportJob).where(DataExportJob.id == export_id).with_for_update()
@@ -405,7 +408,7 @@ class PortabilityService:
             if key in OMITTED_COLUMNS:
                 continue
             value = getattr(row, key)
-            if isinstance(value, (datetime,)):
+            if isinstance(value, date):
                 result[key] = value.isoformat()
             elif isinstance(value, UUID):
                 result[key] = str(value)

@@ -60,6 +60,19 @@ describe("public authentication API", () => {
         platform: "web",
       }),
     ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
+    await expect(
+      client({
+        status: "mfa_required",
+        challenge_token: "secret",
+        expires_at: "2026-01-02",
+        methods: [],
+      }).api.login({
+        email: "a@example.com",
+        password: "x",
+        device_name: "web",
+        platform: "web",
+      }),
+    ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
   });
 
   it("uses CSRF for logout and expected recovery payloads", async () => {

@@ -1,7 +1,7 @@
 import io
 import json
 import zipfile
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -9,6 +9,7 @@ from logion_api.config import Settings
 from logion_api.content.models import Note
 from logion_api.content.yjs_documents import state_from_markdown
 from logion_api.errors import APIError
+from logion_api.planning.models import LearningGoal
 from logion_api.portability.crypto import ExportArtifactCipher
 from logion_api.portability.models import DataExportJob
 from logion_api.portability.service import PortabilityService
@@ -90,3 +91,24 @@ def test_export_record_keeps_markdown_and_excludes_internal_crdt_state() -> None
     assert record["markdown_body"] == "Readable Markdown"
     assert "yjs_state" not in record
     assert "yjs_generation" not in record
+
+
+def test_export_record_serializes_dates_for_json() -> None:
+    actor_id = uuid4()
+    goal = LearningGoal(
+        id=uuid4(),
+        workspace_id=uuid4(),
+        space_id=uuid4(),
+        title="Dated goal",
+        description="",
+        desired_outcome="Portable target date",
+        weekly_minutes=60,
+        target_date=date(2026, 9, 30),
+        created_by=actor_id,
+        updated_by=actor_id,
+    )
+
+    record = PortabilityService._record(goal)
+
+    assert record["target_date"] == "2026-09-30"
+    json.dumps(record)

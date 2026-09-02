@@ -58,7 +58,7 @@ class TemplateFromGoalCreate(Strict):
 
 class TemplatePackageResponse(Strict):
     id: UUID
-    workspace_id: UUID
+    workspace_id: UUID | None
     template_key: UUID
     version_number: int
     name: str
@@ -73,7 +73,7 @@ class TemplatePackageResponse(Strict):
     content_hash: str
     risk_metadata: dict[str, object]
     object_graph: dict[str, object]
-    visibility: Literal["private", "workspace"]
+    visibility: Literal["private", "workspace", "official"]
     status: Literal["active", "withdrawn"]
     created_at: datetime
 

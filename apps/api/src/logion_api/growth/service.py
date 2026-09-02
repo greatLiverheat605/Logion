@@ -7,9 +7,10 @@ from datetime import UTC, datetime, time, timedelta
 from uuid import UUID, uuid5
 
 from pydantic import ValidationError
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 from uuid6 import uuid7
 
 from logion_api.config import Settings
@@ -37,6 +38,19 @@ from logion_api.workspaces.permissions import Permission
 from logion_api.workspaces.service import WorkspaceService
 
 URL_PATTERN = re.compile(r"https?://[^\s<>'\"]+", re.IGNORECASE)
+
+
+def template_scope_clause(workspace_id: UUID, user_id: UUID) -> ColumnElement[bool]:
+    return or_(
+        TemplatePackage.visibility == "official",
+        and_(
+            TemplatePackage.workspace_id == workspace_id,
+            or_(
+                TemplatePackage.visibility == "workspace",
+                TemplatePackage.created_by == user_id,
+            ),
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -329,13 +343,10 @@ class GrowthService:
                 await db.scalars(
                     select(TemplatePackage)
                     .where(
-                        TemplatePackage.workspace_id == workspace_id,
-                        or_(
-                            TemplatePackage.visibility == "workspace",
-                            TemplatePackage.created_by == context.user.id,
-                        ),
+                        template_scope_clause(workspace_id, context.user.id),
                     )
                     .order_by(
+                        (TemplatePackage.visibility == "official").desc(),
                         TemplatePackage.template_key,
                         TemplatePackage.version_number.desc(),
                     )
@@ -358,12 +369,8 @@ class GrowthService:
         template = await db.scalar(
             select(TemplatePackage).where(
                 TemplatePackage.id == payload.template_id,
-                TemplatePackage.workspace_id == workspace_id,
                 TemplatePackage.status == "active",
-                or_(
-                    TemplatePackage.visibility == "workspace",
-                    TemplatePackage.created_by == context.user.id,
-                ),
+                template_scope_clause(workspace_id, context.user.id),
             )
         )
         if template is None:
@@ -515,6 +522,13 @@ class GrowthService:
                 metadata={
                     "template_id": str(template.id),
                     "template_version": template.version_number,
+                    "template_scope": template.visibility,
+                    "source_scope": (
+                        "official_catalog"
+                        if template.visibility == "official"
+                        else f"{template.visibility}_catalog"
+                    ),
+                    "template_content_hash": template.content_hash,
                 },
             )
         )
