@@ -65,6 +65,16 @@ describe("exam workbench model", () => {
     expect(payload.status).toBe("planning");
     expect(payload.timezone).toBe("Asia/Shanghai");
     expect(payload.exam_at).toMatch(/^2026-11-07T01:00:00\.000Z$/);
+    expect(
+      buildExamPayload({
+        dateStatus: "scheduled",
+        examAt: "2026-11-07T09:00",
+        scoreScaleMax: "",
+        targetScore: "",
+        title: "New York exam",
+        timezone: "America/New_York",
+      }).exam_at,
+    ).toBe("2026-11-07T14:00:00.000Z");
     expect(validateExamScorePair("80", "")).toBe("目标分与满分必须成对填写。");
     expect(validateExamScorePair("120", "100")).toBe("目标分不能高于满分。");
     expect(validateExamScorePair("80", "100")).toBeNull();

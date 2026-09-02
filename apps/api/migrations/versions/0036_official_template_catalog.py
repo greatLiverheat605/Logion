@@ -364,11 +364,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    ids = (str(DAILY_TEMPLATE_ID), str(RESEARCH_TEMPLATE_ID))
+    ids = [DAILY_TEMPLATE_ID, RESEARCH_TEMPLATE_ID]
     bind = op.get_bind()
     bind.execute(
         sa.text("DELETE FROM template_packages WHERE id = ANY(CAST(:ids AS uuid[]))"),
-        {"ids": "{" + ",".join(ids) + "}"},
+        {"ids": ids},
     )
     remaining = bind.execute(
         sa.text("SELECT count(*) FROM template_packages WHERE visibility = 'official'")

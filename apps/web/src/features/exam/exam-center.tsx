@@ -20,7 +20,11 @@ import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { LogionApiError, type ApiClient } from "@/lib/api/client";
 
 import { ExamWorkbench } from "./exam-workbench";
-import { examCoverageRate, normalizeExamScores } from "./exam-workbench-model";
+import {
+  buildExamPayload,
+  examCoverageRate,
+  normalizeExamScores,
+} from "./exam-workbench-model";
 import { useExamController } from "./use-exam-controller";
 
 export type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -370,23 +374,18 @@ export function ExamCenter() {
     if (db === null || localVault === null) return false;
     const form = event.currentTarget;
     const data = new FormData(form);
-    const examAt = String(data.get("exam_at") ?? "");
-    const targetScore = String(data.get("target_score") ?? "");
-    const scale = String(data.get("score_scale_max") ?? "");
     const now = new Date().toISOString();
     try {
       const payload: ExamPayload = {
         space_id: spaceId,
-        title: String(data.get("title") ?? "").trim(),
-        date_status: dateStatus,
-        exam_at:
-          dateStatus === "scheduled" && examAt
-            ? new Date(examAt).toISOString()
-            : null,
-        timezone: dateStatus === "scheduled" ? EXAM_TIMEZONE : null,
-        target_score: targetScore ? Number(targetScore) : null,
-        score_scale_max: scale ? Number(scale) : null,
-        status: "planning",
+        ...buildExamPayload({
+          dateStatus,
+          examAt: String(data.get("exam_at") ?? ""),
+          scoreScaleMax: String(data.get("score_scale_max") ?? ""),
+          targetScore: String(data.get("target_score") ?? ""),
+          timezone: EXAM_TIMEZONE,
+          title: String(data.get("title") ?? ""),
+        }),
       };
       await new ProtectedOfflineRepository(db, localVault).commitMutation({
         operation_id: crypto.randomUUID(),

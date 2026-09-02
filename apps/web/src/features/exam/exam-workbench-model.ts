@@ -35,6 +35,39 @@ export interface ExamPayloadInput {
   timezone: string;
 }
 
+function localDateTimeToISOString(value: string, timezone: string): string {
+  const wallTime = new Date(`${value}Z`);
+  if (!Number.isFinite(wallTime.getTime())) {
+    throw new RangeError("Invalid exam date");
+  }
+
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: timezone,
+      year: "numeric",
+    })
+      .formatToParts(wallTime)
+      .map(({ type, value: part }) => [type, part]),
+  );
+  const projectedWallTime = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+    wallTime.getUTCMilliseconds(),
+  );
+  const offset = projectedWallTime - wallTime.getTime();
+  return new Date(wallTime.getTime() - offset).toISOString();
+}
+
 export function buildExamPayload(input: ExamPayloadInput) {
   const targetScore = input.targetScore.trim();
   const scoreScaleMax = input.scoreScaleMax.trim();
@@ -42,7 +75,7 @@ export function buildExamPayload(input: ExamPayloadInput) {
     date_status: input.dateStatus,
     exam_at:
       input.dateStatus === "scheduled" && input.examAt
-        ? new Date(input.examAt).toISOString()
+        ? localDateTimeToISOString(input.examAt, input.timezone)
         : null,
     score_scale_max: scoreScaleMax ? Number(scoreScaleMax) : null,
     status: "planning" as const,
