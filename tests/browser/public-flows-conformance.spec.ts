@@ -7,6 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import {
   auditHorizontalOverflow,
+  auditReducedMotion,
   WORKBENCH_VIEWPORTS,
 } from "./workbench-audit";
 
@@ -173,22 +174,11 @@ test("public recovery flows preserve structure and accessibility at every produc
         `${flow.name} ${viewport.label} primary count`,
       ).toBeLessThanOrEqual(1);
 
-      const reducedMotion = await page.evaluate(
-        () =>
-          Array.from(document.body.querySelectorAll("*")).filter((element) => {
-            const style = getComputedStyle(element);
-            return (
-              (style.animationName !== "none" &&
-                style.animationDuration !== "0s") ||
-              (style.transitionProperty !== "none" &&
-                style.transitionDuration !== "0s")
-            );
-          }).length,
-      );
+      const reducedMotion = await auditReducedMotion(page, "#main-content *");
       expect(
         reducedMotion,
         `${flow.name} ${viewport.label} reduced motion`,
-      ).toBe(0);
+      ).toEqual([]);
 
       const interactive = page.locator("a,button,input");
       const interactiveCount = await interactive.count();

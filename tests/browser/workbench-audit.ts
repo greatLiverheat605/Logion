@@ -190,52 +190,53 @@ export async function assertPrimaryActionContract(
   ).toBe(true);
 }
 
+export async function auditReducedMotion(page: Page, selector: string) {
+  return page.locator(selector).evaluateAll((elements) => {
+    const durationMs = (value: string) =>
+      Math.max(
+        ...value.split(",").map((part) => {
+          const duration = part.trim();
+          if (duration.endsWith("ms")) return Number.parseFloat(duration);
+          if (duration.endsWith("s")) return Number.parseFloat(duration) * 1000;
+          return 0;
+        }),
+      );
+    const selectorFor = (element: Element) => {
+      if (element.id) return `#${CSS.escape(element.id)}`;
+      return `${element.tagName.toLowerCase()}${Array.from(element.classList)
+        .slice(0, 2)
+        .map((value) => `.${CSS.escape(value)}`)
+        .join("")}`;
+    };
+
+    return elements
+      .flatMap((element) => {
+        const style = getComputedStyle(element);
+        const animationMs = durationMs(style.animationDuration);
+        const transitionMs = durationMs(style.transitionDuration);
+        const isMoving =
+          (style.animationName !== "none" && animationMs > 1) ||
+          (style.transitionProperty !== "none" && transitionMs > 1);
+        return isMoving
+          ? [
+              {
+                animation: `${style.animationName} ${style.animationDuration}`,
+                selector: selectorFor(element),
+                transition: `${style.transitionProperty} ${style.transitionDuration}`,
+              },
+            ]
+          : [];
+      })
+      .slice(0, 8);
+  });
+}
+
 export async function assertReducedMotion(
   page: Page,
   route: string,
   viewport: WorkbenchViewport,
 ) {
-  const moving = await page
-    .locator(".app-shell-frame *")
-    .evaluateAll((elements) => {
-      const durationMs = (value: string) =>
-        Math.max(
-          ...value.split(",").map((part) => {
-            const duration = part.trim();
-            if (duration.endsWith("ms")) return Number.parseFloat(duration);
-            if (duration.endsWith("s"))
-              return Number.parseFloat(duration) * 1000;
-            return 0;
-          }),
-        );
-      const selectorFor = (element: Element) => {
-        if (element.id) return `#${CSS.escape(element.id)}`;
-        return `${element.tagName.toLowerCase()}${Array.from(element.classList)
-          .slice(0, 2)
-          .map((value) => `.${CSS.escape(value)}`)
-          .join("")}`;
-      };
-
-      return elements
-        .flatMap((element) => {
-          const style = getComputedStyle(element);
-          const animationMs = durationMs(style.animationDuration);
-          const transitionMs = durationMs(style.transitionDuration);
-          const isMoving =
-            (style.animationName !== "none" && animationMs > 1) ||
-            (style.transitionProperty !== "none" && transitionMs > 1);
-          return isMoving
-            ? [
-                {
-                  animation: `${style.animationName} ${style.animationDuration}`,
-                  selector: selectorFor(element),
-                  transition: `${style.transitionProperty} ${style.transitionDuration}`,
-                },
-              ]
-            : [];
-        })
-        .slice(0, 8);
-    });
+  const moving = await auditReducedMotion(page, ".app-shell-frame *");
   expect(
     moving,
     `${auditLabel(route, viewport)} does not honor reduced motion: ${JSON.stringify(moving)}`,

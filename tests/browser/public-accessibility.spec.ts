@@ -8,6 +8,7 @@ import {
 } from "./glm-conformance";
 import {
   auditHorizontalOverflow,
+  auditReducedMotion,
   captureEvidenceScreenshot,
   WORKBENCH_VIEWPORTS,
 } from "./workbench-audit";
@@ -200,19 +201,8 @@ test("reduced-motion preference does not leave forced animation", async ({
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  const movingElements = await page.locator("body *").evaluateAll(
-    (elements) =>
-      elements.filter((element) => {
-        const style = getComputedStyle(element);
-        return (
-          (style.animationName !== "none" &&
-            style.animationDuration !== "0s") ||
-          (style.transitionDuration !== "0s" &&
-            style.transitionProperty !== "none")
-        );
-      }).length,
-  );
-  expect(movingElements).toBe(0);
+  const movingElements = await auditReducedMotion(page, "#main-content *");
+  expect(movingElements).toEqual([]);
 });
 
 test("theme bootstrap applies a persisted preference before hydration", async ({

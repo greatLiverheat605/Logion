@@ -206,8 +206,9 @@
   border-radius: 7px;
   background: var(--surface-3);
   color: var(--text-2);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .state h2 {
