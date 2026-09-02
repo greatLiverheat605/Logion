@@ -31,7 +31,14 @@ class Note(Base):
             name="fk_note_task_workspace",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_note_space_scope",
+            ondelete="CASCADE",
+        ),
         UniqueConstraint("id", "workspace_id", name="uq_note_workspace"),
+        UniqueConstraint("id", "workspace_id", "space_id", name="uq_note_scope"),
         Index("ix_notes_workspace_space_updated", "workspace_id", "space_id", "updated_at"),
     )
 
@@ -64,12 +71,19 @@ class Resource(Base):
             name="fk_resource_task_workspace",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_resource_space_scope",
+            ondelete="CASCADE",
+        ),
         CheckConstraint("resource_type IN ('link','pdf_index')", name="ck_resources_type"),
         CheckConstraint(
             "page_count IS NULL OR page_count BETWEEN 1 AND 100000", name="ck_resources_pages"
         ),
         CheckConstraint("jsonb_typeof(page_index) = 'array'", name="ck_resources_page_index"),
         UniqueConstraint("id", "workspace_id", name="uq_resource_workspace"),
+        UniqueConstraint("id", "workspace_id", "space_id", name="uq_resource_scope"),
         Index("ix_resources_workspace_space_updated", "workspace_id", "space_id", "updated_at"),
     )
 

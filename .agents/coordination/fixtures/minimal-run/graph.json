@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "runId": "run-minimal",
+  "nodes": [
+    {
+      "id": "run-minimal",
+      "type": "run",
+      "label": "Minimal coordination fixture",
+      "data": {}
+    },
+    {
+      "id": "invariant-single-writer",
+      "type": "invariant",
+      "label": "Windows coordinator is the only ledger writer",
+      "data": {}
+    },
+    {
+      "id": "decision-local-graph",
+      "type": "decision",
+      "label": "Use a local JSON graph",
+      "data": { "status": "accepted" }
+    },
+    {
+      "id": "task-ui",
+      "type": "task",
+      "label": "Prepare bounded UI fixture",
+      "data": {}
+    },
+    {
+      "id": "task-review",
+      "type": "task",
+      "label": "Review bounded UI fixture",
+      "data": {}
+    },
+    {
+      "id": "file-service-worker",
+      "type": "file",
+      "label": "Service worker registration component",
+      "data": {
+        "path": "apps/web/src/components/service-worker-registration.tsx"
+      }
+    },
+    {
+      "id": "handoff-ui",
+      "type": "handoff",
+      "label": "UI fixture handoff",
+      "data": { "path": "handoffs/task-ui.json" }
+    },
+    {
+      "id": "handoff-review",
+      "type": "handoff",
+      "label": "Review fixture handoff",
+      "data": { "path": "handoffs/task-review.json" }
+    },
+    {
+      "id": "observation-ui-fixture",
+      "type": "check",
+      "label": "Synthetic UI fixture observation",
+      "data": {
+        "status": "passed",
+        "observed": "Synthetic coordinator observation: the minimal Run validates with every required handoff evidence field.",
+        "command": "pnpm agent:state:validate -- .agents/coordination/fixtures/minimal-run",
+        "evidenceRoleId": "codex",
+        "acceptanceCheckId": "criterion-ui-fixture",
+        "observationPath": "observations/observation-ui-fixture.json",
+        "completionEventId": "event-ui-completed",
+        "handoffSha256": "89638a1c4ac9da9f05ecc71081337f8ac21728fe1db97bf5d98545ad00863f87"
+      }
+    },
+    {
+      "id": "observation-review-fixture",
+      "type": "check",
+      "label": "Synthetic review fixture observation",
+      "data": {
+        "status": "passed",
+        "observed": "Synthetic coordinator observation: the minimal Run validates and the read-only handoff reports no changed files.",
+        "command": "pnpm agent:state:validate -- .agents/coordination/fixtures/minimal-run",
+        "evidenceRoleId": "codex",
+        "acceptanceCheckId": "criterion-review-fixture",
+        "observationPath": "observations/observation-review-fixture.json",
+        "completionEventId": "event-review-completed",
+        "handoffSha256": "17115fb87beeea6405b7082ed66b827af98c435d5e464245a7f2d19e9b133301"
+      }
+    },
+    {
+      "id": "model-kimi",
+      "type": "model",
+      "label": "Kimi K3",
+      "data": { "roleId": "kimi", "modelId": "kimi-k3" }
+    },
+    {
+      "id": "model-deepseek",
+      "type": "model",
+      "label": "DeepSeek V4 Flash",
+      "data": {
+        "roleId": "deepseek",
+        "modelId": "opencode-go/deepseek-v4-flash"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-run-ui",
+      "from": "run-minimal",
+      "to": "task-ui",
+      "type": "includes"
+    },
+    {
+      "id": "edge-run-review",
+      "from": "run-minimal",
+      "to": "task-review",
+      "type": "includes"
+    },
+    {
+      "id": "edge-invariant-ui",
+      "from": "invariant-single-writer",
+      "to": "task-ui",
+      "type": "constrains"
+    },
+    {
+      "id": "edge-decision-ui",
+      "from": "decision-local-graph",
+      "to": "task-ui",
+      "type": "authorizes"
+    },
+    {
+      "id": "edge-ui-file",
+      "from": "task-ui",
+      "to": "file-service-worker",
+      "type": "touches"
+    },
+    {
+      "id": "edge-ui-check",
+      "from": "task-ui",
+      "to": "observation-ui-fixture",
+      "type": "verified-by"
+    },
+    {
+      "id": "edge-ui-handoff",
+      "from": "task-ui",
+      "to": "handoff-ui",
+      "type": "reported-by"
+    },
+    {
+      "id": "edge-ui-model",
+      "from": "task-ui",
+      "to": "model-kimi",
+      "type": "uses-model"
+    },
+    {
+      "id": "edge-review-dependency",
+      "from": "task-review",
+      "to": "task-ui",
+      "type": "depends-on"
+    },
+    {
+      "id": "edge-review-file",
+      "from": "task-review",
+      "to": "file-service-worker",
+      "type": "touches"
+    },
+    {
+      "id": "edge-review-check",
+      "from": "task-review",
+      "to": "observation-review-fixture",
+      "type": "verified-by"
+    },
+    {
+      "id": "edge-review-handoff",
+      "from": "task-review",
+      "to": "handoff-review",
+      "type": "reported-by"
+    },
+    {
+      "id": "edge-review-model",
+      "from": "task-review",
+      "to": "model-deepseek",
+      "type": "uses-model"
+    }
+  ]
+}

@@ -6,12 +6,15 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from logion_api.config import Settings
+from logion_api.content.attachment_routes import require_attachment_feature
 from logion_api.content.attachment_schemas import AttachmentInit
 from logion_api.content.attachment_storage import (
     AttachmentStorageError,
     FilesystemAttachmentStorage,
     detect_mime,
 )
+from logion_api.errors import APIError
 from pydantic import ValidationError
 
 
@@ -74,7 +77,7 @@ async def test_storage_stages_inspects_finalizes_and_rejects_oversize(tmp_path: 
     assert inspection.detected_mime == "application/pdf"
 
     storage_key = f"{uuid4()}/{uuid4()}"
-    await storage.finalize(staging_key, storage_key)
+    await storage.finalize(staging_key, storage_key, hashlib.sha256(content).hexdigest())
     verified_path = storage.verified_path(storage_key)
     assert verified_path.read_bytes() == content
     if os.name != "nt":
@@ -88,6 +91,32 @@ async def test_storage_stages_inspects_finalizes_and_rejects_oversize(tmp_path: 
 
     with pytest.raises(AttachmentStorageError, match="ATTACHMENT_SIZE_MISMATCH"):
         await storage.write_staging("b" * 32, chunks(b"too large"), maximum_bytes=2)
+    assert list((tmp_path / "staging").glob("*.part")) == []
+
+
+@pytest.mark.asyncio
+async def test_storage_quarantines_without_leaving_staging_residue(tmp_path: Path) -> None:
+    quarantine_root = tmp_path / "quarantine"
+    storage = FilesystemAttachmentStorage(str(tmp_path / "attachments"), str(quarantine_root))
+    staging_key = "c" * 32
+    quarantine_key = "d" * 64
+    content = b"controlled quarantine fixture"
+    await storage.write_staging(staging_key, chunks(content), maximum_bytes=1024)
+
+    await storage.quarantine(staging_key, quarantine_key)
+
+    quarantined = quarantine_root / quarantine_key[:2] / quarantine_key
+    assert quarantined.read_bytes() == content
+    assert not (tmp_path / "attachments" / "staging" / f"{staging_key}.part").exists()
+    quarantined.unlink()
+
+
+@pytest.mark.asyncio
+async def test_attachment_feature_boundary_is_closed_by_default() -> None:
+    with pytest.raises(APIError) as raised:
+        await require_attachment_feature(Settings())
+    assert raised.value.code == "KNOWLEDGE_ATTACHMENT_INGEST_DISABLED"
+    assert raised.value.status_code == 404
 
 
 def test_text_mime_rejects_binary_and_json_requires_valid_document() -> None:

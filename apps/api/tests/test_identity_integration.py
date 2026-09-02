@@ -39,6 +39,12 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert me.status_code == 200
         assert me.json()["email"] == email
 
+        current_session = await client.get("/api/v1/auth/session")
+        assert current_session.status_code == 200
+        assert current_session.headers["cache-control"] == "no-store"
+        assert current_session.json()["user"]["email"] == email
+        assert current_session.json()["session_expires_at"] == register.json()["session_expires_at"]
+
         devices = await client.get("/api/v1/auth/devices")
         assert devices.status_code == 200
         assert len(devices.json()["devices"]) == 1

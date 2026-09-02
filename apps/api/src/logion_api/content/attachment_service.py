@@ -1,5 +1,6 @@
 import secrets
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from pathlib import Path
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.config import Settings
+from logion_api.content.attachment_scanner import AttachmentScanner, AttachmentScannerError
 from logion_api.content.attachment_schemas import AttachmentInit
 from logion_api.content.attachment_storage import (
     AttachmentStorageError,
@@ -31,10 +33,12 @@ class AttachmentService:
         settings: Settings,
         workspaces: WorkspaceService,
         storage: FilesystemAttachmentStorage,
+        scanner: AttachmentScanner,
     ) -> None:
         self._settings = settings
         self._workspaces = workspaces
         self._storage = storage
+        self._scanner = scanner
 
     async def _authorize_write(
         self,
@@ -256,8 +260,39 @@ class AttachmentService:
                 raise AttachmentStorageError("ATTACHMENT_SIZE_MISMATCH")
             if inspection.sha256 != row.expected_sha256:
                 raise AttachmentStorageError("ATTACHMENT_HASH_MISMATCH")
+            scan = await self._scanner.scan(
+                self._storage.staging_path(row.staging_key),
+                maximum_bytes=self._settings.attachment_max_bytes,
+            )
+            if scan.size_bytes != inspection.size_bytes or scan.sha256 != inspection.sha256:
+                raise AttachmentStorageError("ATTACHMENT_SCAN_CONTENT_CHANGED")
             storage_key = f"{workspace_id}/{row.id}"
-            await self._storage.finalize(row.staging_key, storage_key)
+            await self._storage.finalize(row.staging_key, storage_key, inspection.sha256)
+        except AttachmentScannerError as exc:
+            failure_code = exc.code
+            if failure_code == "ATTACHMENT_MALWARE_FOUND":
+                try:
+                    await self._storage.quarantine(row.staging_key, secrets.token_hex(32))
+                except AttachmentStorageError:
+                    failure_code = "ATTACHMENT_QUARANTINE_FAILED"
+            db.add(
+                new_audit_event(
+                    request_id=request_id,
+                    event_type="attachment.scan_blocked",
+                    result="failure",
+                    actor_id=context.user.id,
+                    workspace_id=workspace_id,
+                    target_type="attachment",
+                    target_id=row.id,
+                    metadata={
+                        "failure_code": failure_code,
+                        "size_bytes": row.size_bytes,
+                        "declared_mime": row.declared_mime,
+                    },
+                )
+            )
+            await self._fail(db, row, failure_code)
+            raise self._scan_error(failure_code) from exc
         except AttachmentStorageError as exc:
             await self._fail(db, row, str(exc))
             raise self._invalid(str(exc)) from exc
@@ -350,13 +385,17 @@ class AttachmentService:
             raise self._not_found()
         return row
 
-    @staticmethod
-    async def _fail(db: AsyncSession, row: Attachment, code: str) -> None:
+    async def _fail(self, db: AsyncSession, row: Attachment, code: str) -> None:
         row.status = "failed"
         row.failure_code = code[:64]
         row.version += 1
         row.updated_at = utc_now()
         await db.flush()
+        # Failed verification must not leave a reusable staging object. The
+        # cleanup is best-effort; a future bounded residue sweep can retry it
+        # if the filesystem is temporarily unavailable.
+        with suppress(OSError, AttachmentStorageError):
+            await self._storage.discard_staging(row.staging_key)
 
     @staticmethod
     def _not_found() -> APIError:
@@ -369,3 +408,12 @@ class AttachmentService:
     @staticmethod
     def _invalid(code: str) -> APIError:
         return APIError(code=code, message="Attachment verification failed.", status_code=422)
+
+    @staticmethod
+    def _scan_error(code: str) -> APIError:
+        status_code = 422 if code == "ATTACHMENT_MALWARE_FOUND" else 503
+        return APIError(
+            code=code,
+            message="Attachment scanning could not approve this content.",
+            status_code=status_code,
+        )

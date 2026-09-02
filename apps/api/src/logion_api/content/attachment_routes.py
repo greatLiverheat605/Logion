@@ -1,8 +1,8 @@
-from typing import cast
+from typing import Annotated, cast
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 from fastapi.responses import FileResponse
 
 from logion_api.content.attachment_dependencies import AttachmentServiceDependency
@@ -25,12 +25,21 @@ from logion_api.identity.dependencies import (
     request_id,
     require_trusted_origin,
 )
+from logion_api.knowledge_space.errors import attachment_ingest_disabled_error
 
 router = APIRouter(
     prefix="/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments",
     tags=["attachments"],
 )
 ERROR = {"model": ErrorResponse}
+
+
+async def require_attachment_feature(settings: SettingsDependency) -> None:
+    if not settings.knowledge_space_attachment_ingest_enabled:
+        raise attachment_ingest_disabled_error()
+
+
+AttachmentFeatureBoundary = Annotated[None, Depends(require_attachment_feature)]
 
 
 def attachment_response(row: Attachment) -> AttachmentResponse:
@@ -88,6 +97,7 @@ async def initiate_attachment(
     space_id: UUID,
     payload: AttachmentInit,
     request: Request,
+    _feature: AttachmentFeatureBoundary,
     context: AuthContextDependency,
     db: DatabaseSession,
     identity: IdentityServiceDependency,
@@ -121,6 +131,7 @@ async def upload_attachment_content(
     space_id: UUID,
     attachment_id: UUID,
     request: Request,
+    _feature: AttachmentFeatureBoundary,
     context: AuthContextDependency,
     db: DatabaseSession,
     identity: IdentityServiceDependency,
@@ -169,6 +180,7 @@ async def complete_attachment(
     attachment_id: UUID,
     payload: AttachmentComplete,
     request: Request,
+    _feature: AttachmentFeatureBoundary,
     context: AuthContextDependency,
     db: DatabaseSession,
     identity: IdentityServiceDependency,
@@ -208,6 +220,7 @@ async def download_attachment_content(
     space_id: UUID,
     attachment_id: UUID,
     request: Request,
+    _feature: AttachmentFeatureBoundary,
     context: AuthContextDependency,
     db: DatabaseSession,
     attachments: AttachmentServiceDependency,

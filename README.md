@@ -3,11 +3,11 @@
 [![Main candidate](https://github.com/greatLiverheat605/Logion/actions/workflows/main.yml/badge.svg)](https://github.com/greatLiverheat605/Logion/actions/workflows/main.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**离线优先、证据驱动的学习与研究操作系统。**
+**面向学习、研究与协作的自适应认知作业空间。**
 
 Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前状态：`0.1.0` 封闭发布候选。核心产品与安全边界已实现；公开生产部署仍需完成域名/TLS、真实邮件、异机加密备份、告警、实体设备和观察期验收。
+> 当前状态：仓库清单版本仍为 `0.1.0`；受控 prerelease 仍运行已观察通过的 `0.2.0-rc7`。C7 修复 PR #220 的 fast/integration/browser 门禁已通过，当前等待 GLM 整体复审，尚未进入 Production；flags 默认关闭，真实邮件、实体设备、生产备份和流量切换仍未授权。
 
 ## 为什么是 Logion
 
@@ -72,8 +72,10 @@ Logion 把目标、计划、任务、专注会话、笔记、证据、人工验�
 
 ## 产品界面
 
-- 12 条画像主路由保持稳定；低频能力使用二级工作台和命令面板。
-- Desktop 使用应用侧边栏；移动端按画像显示 4 个主要入口加“更多”。
+- Adaptive Desk 使用五个稳定区域：今天、工作台、知识库、协作空间、系统中心。
+- 21 条正式业务 URL 保持可深链和兼容；全局搜索与历史知识原型不扩张一级导航。
+- Desktop 使用五区侧边栏、44px 上下文栏、命令面板和按需 Inspector；移动端保持相同五区入口，并将图谱降级为可操作节点列表与详情层。
+- Persona 只调整工作台和知识库的默认入口，不改变 Workspace Role、Space 权限或服务端授权。
 - 每个页面区分 loading、empty、error、权限、离线和真实就绪状态，不用演示数据伪造成功。
 - 支持浅色/深色主题、键盘焦点、reduced-motion 和 320 CSS px 起的响应式布局。
 
@@ -232,7 +234,7 @@ pnpm ci:fast
 LOGION_E2E_BASE_URL=http://127.0.0.1:3000 pnpm test:browser
 ```
 
-该命令只运行公共页面、PWA、响应式和可访问性项目，不访问 API。认证真实栈必须使用隔离的 8080 Compose 环境；先为该测试栈设置 `LOGION_REGISTRATION_MODE=open`、`LOGION_LEGACY_REGISTRATION_ENABLED=true`，并把测试注册及登录限额设置为足够的隔离值（连续运行建议 100），再执行：
+该命令只运行公共页面、PWA、响应式和可访问性项目，不访问 API。认证真实栈必须使用隔离的回环地址，默认是 8080 Compose 环境；若 8080 被占用，可显式使用其他回环端口，但不能使用远程地址自动建号。先为该测试栈设置 `LOGION_REGISTRATION_MODE=open`、`LOGION_LEGACY_REGISTRATION_ENABLED=true`，并把测试注册及登录限额设置为足够的隔离值（连续运行建议 100），再执行：
 
 ```bash
 LOGION_E2E_BASE_URL=http://127.0.0.1:8080 \
@@ -256,6 +258,9 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 - [项目功能全景](docs/product/PROJECT_FUNCTION_MAP.md)
 - [用户指南](docs/user-guide.md)
+- [V20-15 RC8 修复候选与发布证据](docs/development/V020_V15_PRERELEASE_RC8_EVIDENCE.md)
+- [V20-15 RC7 受控 prerelease 证据](docs/development/V020_V15_PRERELEASE_RC7_EVIDENCE.md)
+- [版本状态快照](docs/development/V020_STATUS.md)
 - [下一版本产品与技术路线](docs/product/NEXT_VERSION_ROADMAP.md)
 - [全仓代码审查与问题台账](docs/reviews/PROJECT_CODE_REVIEW_2026-08-01.md)
 - [互操作中心 v1](docs/features/interoperability-hub.md)
@@ -269,15 +274,9 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 ## 近期方向
 
-下一补丁版本优先解决：
+当前主线是观察 `0.2.0-rc7` 的受控 prerelease；C7 修复 PR #220 已通过 fast/integration/browser 门禁，包含 Today 工作区切换竞态防护和隔离反向代理 DELETE body 门验收，当前等待 GLM `PASS / P0=0 / P1=0`。Production 发布和流量切换仍需更高一级审批。
 
-1. Today/Review/Sync 等巨型模块拆分和统一 Vault 刷新 Hook；
-2. Today、Records、Review 的离线冷启动和页面级离线能力说明；
-3. 核心视觉回归、实体设备门禁与 20 次认证矩阵稳定性观察。
-
-Worker 公平调度、真实 readiness、独立心跳、聚合积压指标和每 worker 隔离的认证 E2E 门禁已经进入 v0.1.1。本轮实际结果为 `pnpm ci:fast` 全绿、真实栈认证 27/27 通过、完整浏览器矩阵 91 通过/6 个 PWA 预期跳过；长期稳定性仍以 CI 连续观察为准。
-
-之后再进入学习洞察、论文研读、个人移动端候选和 Connector/Automation v2。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
+后续产品迭代优先处理 Today/Review/Sync 大型模块拆分、页面级离线能力说明、实体设备验收和认知工作台的真实用户验证。Connector/Automation v2、共享写入、附件、本地 Worker 和 AI Acceptance 仍需独立设计与生产准入。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
 
 ## 明确范围与限制
 

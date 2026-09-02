@@ -17,6 +17,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -522,42 +523,114 @@ export function useTodayController(): TodayControllerResult {
   const [dashboardRecords, setDashboardRecords] = useState<
     PersonaDashboardRecord[]
   >([]);
+  const contextRequestRef = useRef<AbortController | null>(null);
+  const spacesRequestRef = useRef<AbortController | null>(null);
+  const dataRequestIdRef = useRef(0);
+  const currentWorkspaceIdRef = useRef(workspaceId);
+
+  const resetWorkspaceData = useCallback(() => {
+    dataRequestIdRef.current += 1;
+    setSpaces([]);
+    setMembers([]);
+    setMembersAvailable(false);
+    setSpaceId("");
+    setSelectedTaskId("");
+    setTasks([]);
+    setSessions([]);
+    setGoals([]);
+    setEvidence([]);
+    setVerifications([]);
+    setNotes([]);
+    setResources([]);
+    setConflictCount(0);
+    setDashboardRecords([]);
+    setDashboardPhase("idle");
+  }, []);
+
+  const selectWorkspace = useCallback(
+    (nextWorkspaceId: string) => {
+      if (nextWorkspaceId === currentWorkspaceIdRef.current) return;
+      spacesRequestRef.current?.abort();
+      currentWorkspaceIdRef.current = nextWorkspaceId;
+      resetWorkspaceData();
+      setContextPhase("loading");
+      setWorkspaceId(nextWorkspaceId);
+    },
+    [resetWorkspaceData],
+  );
 
   const loadContext = useCallback(async () => {
+    contextRequestRef.current?.abort();
+    const controller = new AbortController();
+    contextRequestRef.current = controller;
     setContextPhase("loading");
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         browserApiClient.request<{ workspaces: TodayWorkspace[] }>(
           "/api/v1/workspaces",
+          { signal: controller.signal },
         ),
-        browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
+        browserApiClient.request<{ devices: Device[] }>(
+          "/api/v1/auth/devices",
+          { signal: controller.signal },
+        ),
       ]);
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(workspaceResult.workspaces);
-      setWorkspaceId((current) =>
-        workspaceResult.workspaces.some((item) => item.id === current)
-          ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
-      );
+      const nextWorkspaceId = workspaceResult.workspaces.some(
+        (item) => item.id === currentWorkspaceIdRef.current,
+      )
+        ? currentWorkspaceIdRef.current
+        : (workspaceResult.workspaces[0]?.id ?? "");
+      if (nextWorkspaceId !== currentWorkspaceIdRef.current) {
+        spacesRequestRef.current?.abort();
+        resetWorkspaceData();
+      }
+      currentWorkspaceIdRef.current = nextWorkspaceId;
+      setWorkspaceId(nextWorkspaceId);
       setDeviceId(currentDevice?.id ?? "");
       setStatus(currentDevice ? "请解锁本地资料。" : "未找到当前设备。");
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        contextRequestRef.current !== controller
+      ) {
+        return;
+      }
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (contextRequestRef.current === controller) {
+        contextRequestRef.current = null;
+      }
     }
-  }, []);
+  }, [resetWorkspaceData]);
 
   const loadSpaces = useCallback(async (selectedWorkspace: string) => {
+    spacesRequestRef.current?.abort();
+    const controller = new AbortController();
+    spacesRequestRef.current = controller;
+    setContextPhase("loading");
     try {
       const [spaceResult, memberResult] = await Promise.all([
         browserApiClient.request<{ spaces: TodaySpace[] }>(
-          `/api/v1/workspaces/${selectedWorkspace}/spaces`,
+          `/api/v1/workspaces/${encodeURIComponent(selectedWorkspace)}/spaces`,
+          { signal: controller.signal },
         ),
         browserApiClient
           .request<{
             members: Member[];
-          }>(`/api/v1/workspaces/${selectedWorkspace}/members`)
+          }>(
+            `/api/v1/workspaces/${encodeURIComponent(selectedWorkspace)}/members`,
+            { signal: controller.signal },
+          )
           .catch((error: unknown) => {
             if (error instanceof LogionApiError && error.status === 403) {
               return null;
@@ -565,6 +638,13 @@ export function useTodayController(): TodayControllerResult {
             throw error;
           }),
       ]);
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selectedWorkspace
+      ) {
+        return;
+      }
       setSpaces(spaceResult.spaces);
       setMembers(memberResult?.members ?? []);
       setMembersAvailable(memberResult !== null);
@@ -575,21 +655,51 @@ export function useTodayController(): TodayControllerResult {
       );
       setContextPhase("ready");
     } catch (error) {
+      if (
+        controller.signal.aborted ||
+        spacesRequestRef.current !== controller ||
+        currentWorkspaceIdRef.current !== selectedWorkspace
+      ) {
+        return;
+      }
       setSpaces([]);
       setMembers([]);
       setMembersAvailable(false);
       setSpaceId("");
       setStatus(errorMessage(error));
       setContextPhase("error");
+    } finally {
+      if (spacesRequestRef.current === controller) {
+        spacesRequestRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => void loadContext());
+    let active = true;
+    queueMicrotask(() => {
+      if (active) void loadContext();
+    });
+    return () => {
+      active = false;
+      contextRequestRef.current?.abort();
+      dataRequestIdRef.current += 1;
+    };
   }, [loadContext]);
 
   useEffect(() => {
-    if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
+    let active = true;
+    if (workspaceId) {
+      queueMicrotask(() => {
+        if (active) void loadSpaces(workspaceId);
+      });
+    } else {
+      spacesRequestRef.current?.abort();
+    }
+    return () => {
+      active = false;
+      spacesRequestRef.current?.abort();
+    };
   }, [loadSpaces, workspaceId]);
 
   async function bootstrap(
@@ -654,7 +764,9 @@ export function useTodayController(): TodayControllerResult {
     db = database.current,
     localVault = vault.current,
   ): Promise<void> {
-    if (db === null || localVault === null || !workspaceId) return;
+    const targetWorkspaceId = workspaceId;
+    if (db === null || localVault === null || !targetWorkspaceId) return;
+    const requestId = ++dataRequestIdRef.current;
     setDashboardPhase("loading");
     const entityRows = await Promise.all(
       [
@@ -669,13 +781,13 @@ export function useTodayController(): TodayControllerResult {
       ].map((entityType) =>
         db.entities
           .where("[workspace_id+entity_type]")
-          .equals([workspaceId, entityType])
+          .equals([targetWorkspaceId, entityType])
           .toArray(),
       ),
     );
     const openConflicts = await db.conflicts
       .where("[workspace_id+status]")
-      .equals([workspaceId, "open"])
+      .equals([targetWorkspaceId, "open"])
       .count();
     const [
       taskRows = [],
@@ -732,6 +844,12 @@ export function useTodayController(): TodayControllerResult {
         dashboardRows.map((item) => decrypted<JsonObject>(localVault, item)),
       ),
     ]);
+    if (
+      dataRequestIdRef.current !== requestId ||
+      currentWorkspaceIdRef.current !== targetWorkspaceId
+    ) {
+      return;
+    }
     setTasks(nextTasks);
     setSessions(nextSessions);
     setGoals(nextGoals);
@@ -783,12 +901,16 @@ export function useTodayController(): TodayControllerResult {
     const db = database.current;
     const localVault = vault.current;
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     queueMicrotask(() => {
       void refresh(db, localVault)
-        .then(() =>
-          setStatus("本地资料已在应用内解锁；完成会话不会自动验收任务。"),
-        )
+        .then(() => {
+          if (currentWorkspaceIdRef.current === targetWorkspaceId) {
+            setStatus("本地资料已在应用内解锁；完成会话不会自动验收任务。");
+          }
+        })
         .catch((error: unknown) => {
+          if (currentWorkspaceIdRef.current !== targetWorkspaceId) return;
           setDashboardPhase("error");
           setStatus(errorMessage(error));
         });
@@ -1320,7 +1442,7 @@ export function useTodayController(): TodayControllerResult {
       loadContext,
       setSelectedTaskId,
       setSpaceId,
-      setWorkspaceId,
+      setWorkspaceId: selectWorkspace,
       startSession,
       submitEvidence,
       synchronize,

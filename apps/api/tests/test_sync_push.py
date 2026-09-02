@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from logion_api.sync.push import canonical_hash
+from logion_api.sync.push import SyncPushService, canonical_hash
 from logion_api.sync.schemas import PushRequest, SyncOperation
 from pydantic import ValidationError
 
@@ -71,3 +71,73 @@ def test_canonical_hash_is_stable_for_key_order_and_unicode() -> None:
     assert canonical_hash({"number": 1e-7}) == (
         "sha256:eca50befb60e7b39badf0c1ba912952ed7d996a16e94031801cd0fd4094f1bb8"
     )
+
+
+def test_push_handlers_are_registered_by_entity_family() -> None:
+    dependencies = [object() for _ in range(11)]
+    service = SyncPushService(*dependencies)  # type: ignore[arg-type]
+
+    expected_operations = {
+        "workspace": {("space", "create")},
+        "planning": {("learning_goal", "create")},
+        "execution": {
+            ("task", "create"),
+            ("task", "update"),
+            ("study_session", "create"),
+            ("study_session", "update"),
+        },
+        "content": {
+            ("note", "create"),
+            ("note", "update"),
+            ("note_document_update", "update"),
+            ("resource", "create"),
+            ("resource", "update"),
+        },
+        "evidence": {("evidence", "create"), ("verification", "update")},
+        "memory": {
+            ("topic", "create"),
+            ("topic_dependency", "create"),
+            ("mastery", "create"),
+            ("mastery", "update"),
+            ("quiz_item", "create"),
+            ("quiz_attempt", "create"),
+            ("error_pattern", "update"),
+            ("audit_review", "create"),
+            ("audit_review", "update"),
+            ("review_finding", "create"),
+            ("review_finding", "update"),
+        },
+        "exams": {
+            ("exam", "create"),
+            ("exam_subject", "create"),
+            ("syllabus_node", "create"),
+            ("mock_exam", "create"),
+            ("score_record", "create"),
+        },
+        "self_study": {
+            ("learning_track", "create"),
+            ("study_project", "create"),
+            ("inbox_item", "create"),
+            ("deliverable", "create"),
+        },
+        "research": {
+            ("paper_record", "create"),
+            ("research_claim", "create"),
+            ("research_question", "create"),
+            ("experiment_run", "create"),
+            ("metric_record", "create"),
+            ("research_feedback", "create"),
+        },
+        "collaboration": {
+            ("rubric", "create"),
+            ("group_review", "create"),
+            ("group_feedback", "create"),
+            ("report_snapshot", "create"),
+        },
+    }
+
+    assert {
+        family: set(handlers) for family, handlers in service._handlers.items()
+    } == expected_operations
+    assert service._handler_for("task", "create").__name__ == "_create_task"  # type: ignore[union-attr]
+    assert service._handler_for("task", "delete") is None

@@ -9,10 +9,12 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
     String,
+    Text,
     UniqueConstraint,
     Uuid,
     text,
@@ -365,6 +367,7 @@ class AIOutputDraft(Base):
     __tablename__ = "ai_output_drafts"
     __table_args__ = (
         CheckConstraint("status IN ('pending','accepted','rejected')", name="ck_ai_draft_status"),
+        UniqueConstraint("id", "workspace_id", name="uq_ai_output_draft_workspace"),
         Index("ix_ai_draft_workspace_created", "workspace_id", "created_at"),
     )
 
@@ -395,3 +398,73 @@ class AIOutputDraft(Base):
         DateTime(timezone=True), nullable=False, default=utc_now
     )
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AIOutputDraftCandidate(Base):
+    """A bounded, user-reviewable knowledge proposal emitted by an AI draft.
+
+    Candidates are deliberately separate from ``structured_output``.  The latter is
+    provider-shaped presentation data, while this table carries the exact scoped
+    evidence and target versions that an acceptance transaction is allowed to apply.
+    No provider is called while candidates are accepted.
+    """
+
+    __tablename__ = "ai_output_draft_candidates"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["draft_id", "workspace_id"],
+            ["ai_output_drafts.id", "ai_output_drafts.workspace_id"],
+            name="fk_ai_draft_candidate_draft_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["source_excerpt_id", "workspace_id", "space_id"],
+            ["source_excerpts.id", "source_excerpts.workspace_id", "source_excerpts.space_id"],
+            name="fk_ai_draft_candidate_excerpt_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "target_type IN ('topic','quiz_item','research_claim','note')",
+            name="ck_ai_draft_candidate_target_type",
+        ),
+        CheckConstraint(
+            "relationship_kind IN "
+            "('source','definition','support','contradiction','example','derivation')",
+            name="ck_ai_draft_candidate_relationship",
+        ),
+        CheckConstraint("target_version >= 1", name="ck_ai_draft_candidate_target_version"),
+        CheckConstraint("excerpt_version >= 1", name="ck_ai_draft_candidate_excerpt_version"),
+        CheckConstraint(
+            "source_version_key IS NOT NULL "
+            "AND char_length(btrim(source_version_key)) BETWEEN 1 AND 512",
+            name="ck_ai_draft_candidate_source_version_key",
+        ),
+        CheckConstraint(
+            "excerpt_sha256 ~ '^[0-9a-f]{64}$'",
+            name="ck_ai_draft_candidate_excerpt_hash",
+        ),
+        CheckConstraint(
+            "relation_note IS NULL OR (char_length(relation_note) <= 2000 "
+            "AND octet_length(relation_note) <= 8192)",
+            name="ck_ai_draft_candidate_note_bounds",
+        ),
+        UniqueConstraint("id", "workspace_id", name="uq_ai_draft_candidate_workspace"),
+        Index("ix_ai_draft_candidate_draft", "workspace_id", "space_id", "draft_id", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    draft_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    source_excerpt_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    relationship_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    relation_note: Mapped[str | None] = mapped_column(Text)
+    target_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    excerpt_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    excerpt_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_version_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )

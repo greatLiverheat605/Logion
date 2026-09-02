@@ -21,7 +21,10 @@ import {
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { useSession } from "@/features/auth/session-provider";
-import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
+import {
+  offlineCapabilityMessage,
+  offlineUnlockMessage,
+} from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { LogionApiError, type ApiClient } from "@/lib/api/client";
 
@@ -279,7 +282,7 @@ export function OfflineSyncCenter() {
       setStatus("本地资料已解锁；冲突正文只在当前页面内存中显示。");
       event.currentTarget.reset();
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(offlineUnlockMessage(error) ?? userMessage(error));
     }
   }
 

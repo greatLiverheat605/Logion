@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "handoffId": "handoff-ui",
+  "taskId": "task-ui",
+  "outcome": "succeeded",
+  "baseCommit": "ebf93ee192598430393f93e9313665c36446f84e",
+  "workingBranch": "codex/fixture-kimi-ui",
+  "changedFiles": ["apps/web/src/components/service-worker-registration.tsx"],
+  "commandsActuallyRun": ["git diff --check"],
+  "checks": [
+    {
+      "id": "worker-check-ui",
+      "name": "Worker diff check",
+      "status": "passed",
+      "command": "git diff --check",
+      "observed": "Synthetic worker report: the bounded fixture diff has no whitespace errors.",
+      "evidenceRoleId": "kimi",
+      "acceptanceCheckId": null
+    }
+  ],
+  "unrunChecks": [
+    {
+      "name": "Product test suite",
+      "reason": "This is a synthetic schema fixture, not a product change."
+    }
+  ],
+  "knownRisks": [
+    "Synthetic fixture results are not product acceptance evidence."
+  ],
+  "workingTreeStatus": "Synthetic fixture state; no live worktree claim.",
+  "suggestedNextAction": "Validate the fixture with the agent-state checker."
+}

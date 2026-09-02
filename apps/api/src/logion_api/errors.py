@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException, Request, status
@@ -26,6 +27,7 @@ class APIError(Exception):
         details: dict[str, Any] | None = None,
         retryable: bool = False,
         clear_auth_cookies: bool = False,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
@@ -34,6 +36,7 @@ class APIError(Exception):
         self.details = details or {}
         self.retryable = retryable
         self.clear_auth_cookies = clear_auth_cookies
+        self.headers = dict(headers or {})
 
 
 def _request_id(request: Request) -> str:
@@ -48,7 +51,14 @@ async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
         retryable=exc.retryable,
         request_id=_request_id(request),
     )
-    response = JSONResponse(status_code=exc.status_code, content=payload.model_dump())
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content=payload.model_dump(),
+        headers={
+            **exc.headers,
+            **({"Cache-Control": "private, no-store"} if _is_local_worker(request) else {}),
+        },
+    )
     if exc.clear_auth_cookies:
         settings = get_settings()
         response.headers["Cache-Control"] = "no-store"
@@ -72,9 +82,11 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         details={"errors": errors},
         request_id=_request_id(request),
     )
+    headers = {"Cache-Control": "private, no-store"} if _is_local_worker(request) else None
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=payload.model_dump(),
+        headers=headers,
     )
 
 
@@ -84,8 +96,15 @@ async def http_error_handler(request: Request, exc: HTTPException) -> JSONRespon
         message=str(exc.detail),
         request_id=_request_id(request),
     )
+    headers = dict(exc.headers or {})
+    if _is_local_worker(request):
+        headers.setdefault("Cache-Control", "private, no-store")
     return JSONResponse(
         status_code=exc.status_code,
         content=payload.model_dump(),
-        headers=exc.headers,
+        headers=headers,
     )
+
+
+def _is_local_worker(request: Request) -> bool:
+    return request.url.path.startswith("/api/v1/local-worker")

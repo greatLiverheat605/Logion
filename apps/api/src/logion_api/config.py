@@ -1,5 +1,6 @@
 import base64
 import binascii
+import ipaddress
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlparse
@@ -91,11 +92,19 @@ class Settings(BaseSettings):
     content_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
     content_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     attachment_root: str = Field(default=".data/attachments", min_length=1, max_length=4096)
+    attachment_quarantine_root: str = Field(
+        default=".data/attachment-quarantine", min_length=1, max_length=4096
+    )
     attachment_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
     attachment_user_quota_bytes: int = Field(
         default=500 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024 * 1024
     )
     attachment_write_limit_per_hour: int = Field(default=120, ge=1, le=5000)
+    attachment_scanner_enabled: bool = False
+    attachment_scanner_host: str = Field(default="127.0.0.1", min_length=1, max_length=45)
+    attachment_scanner_port: int = Field(default=3310, ge=1, le=65535)
+    attachment_scanner_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    attachment_scanner_chunk_bytes: int = Field(default=65536, ge=1024, le=1024 * 1024)
     evidence_per_space_quota: int = Field(default=100000, ge=1, le=1000000)
     verification_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
     topic_per_space_quota: int = Field(default=50000, ge=1, le=1000000)
@@ -128,6 +137,51 @@ class Settings(BaseSettings):
     account_deletion_grace_days: int = Field(default=14, ge=1, le=30)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    workbench_custom_api_enabled: bool = False
+    workbench_delete_api_enabled: bool = False
+    workbench_read_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    workbench_definition_create_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_definition_replace_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_definition_archive_limit_per_hour: int = Field(default=30, ge=1, le=5000)
+    workbench_definition_restore_limit_per_hour: int = Field(default=30, ge=1, le=5000)
+    workbench_definition_delete_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_import_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_export_limit_per_hour: int = Field(default=10, ge=1, le=1000)
+    workbench_link_create_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_link_patch_limit_per_hour: int = Field(default=120, ge=1, le=10000)
+    workbench_link_delete_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_link_reorder_limit_per_hour: int = Field(default=60, ge=1, le=5000)
+    workbench_rate_limit_window_seconds: int = Field(default=3600, ge=60, le=3600)
+    workbench_active_definition_limit: int = Field(default=20, ge=1, le=100)
+    workbench_total_definition_limit: int = Field(default=50, ge=1, le=500)
+    workbench_link_limit: int = Field(default=500, ge=1, le=500)
+    workbench_link_attributes_limit_bytes: int = Field(default=16 * 1024, ge=1024, le=16 * 1024)
+    workbench_request_body_limit_bytes: int = Field(default=256 * 1024, ge=1024, le=256 * 1024)
+    workbench_import_body_limit_bytes: int = Field(
+        default=2 * 1024 * 1024, ge=1024, le=2 * 1024 * 1024
+    )
+    workbench_export_response_limit_bytes: int = Field(
+        default=2 * 1024 * 1024, ge=1024, le=2 * 1024 * 1024
+    )
+    workbench_cursor_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    workbench_impact_active_key_id: str | None = Field(default=None, max_length=64)
+    workbench_impact_previous_key_id: str | None = Field(default=None, max_length=64)
+    workbench_impact_keys: dict[str, SecretStr] = Field(default_factory=dict)
+    knowledge_space_api_enabled: bool = False
+    knowledge_space_shared_writes_enabled: bool = False
+    knowledge_space_ai_acceptance_enabled: bool = False
+    knowledge_space_deletion_enabled: bool = False
+    # These capabilities have independent admission gates and remain
+    # fail-closed even when the read-only knowledge-space API is enabled.
+    knowledge_space_attachment_ingest_enabled: bool = False
+    knowledge_space_local_worker_enabled: bool = False
+    local_worker_write_limit_per_hour: int = Field(default=60, ge=1, le=1000)
+    local_worker_lease_seconds: int = Field(default=120, ge=30, le=600)
+    knowledge_cursor_active_key_id: str | None = Field(default=None, max_length=64)
+    knowledge_cursor_previous_key_id: str | None = Field(default=None, max_length=64)
+    knowledge_cursor_keys: dict[str, SecretStr] = Field(default_factory=dict)
+    knowledge_cursor_ttl_seconds: int = Field(default=900, ge=60, le=900)
+    knowledge_cursor_clock_skew_seconds: int = Field(default=300, ge=0, le=300)
     totp_active_encryption_key_id: str = Field(
         default="development-v1",
         min_length=1,
@@ -234,6 +288,98 @@ class Settings(BaseSettings):
         secret = self.secret_key.get_secret_value()
         if len(secret) < 32:
             raise ValueError("LOGION_SECRET_KEY must contain at least 32 characters")
+        try:
+            scanner_address = ipaddress.ip_address(self.attachment_scanner_host)
+        except ValueError as exc:
+            raise ValueError("LOGION_ATTACHMENT_SCANNER_HOST must be a literal IP address") from exc
+        if not scanner_address.is_loopback:
+            raise ValueError("LOGION_ATTACHMENT_SCANNER_HOST must be loopback")
+        if self.knowledge_space_shared_writes_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_SHARED_WRITES_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_deletion_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError("LOGION_KNOWLEDGE_SPACE_DELETION_ENABLED requires the main API flag")
+        if self.knowledge_space_deletion_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_DELETION_ENABLED is reserved until deletion is wired"
+            )
+        if self.knowledge_space_ai_acceptance_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_AI_ACCEPTANCE_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_attachment_ingest_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_ATTACHMENT_INGEST_ENABLED requires the main API flag"
+            )
+        if self.knowledge_space_attachment_ingest_enabled and not self.attachment_scanner_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_ATTACHMENT_INGEST_ENABLED requires the scanner flag"
+            )
+        if self.knowledge_space_local_worker_enabled and not self.knowledge_space_api_enabled:
+            raise ValueError(
+                "LOGION_KNOWLEDGE_SPACE_LOCAL_WORKER_ENABLED requires the main API flag"
+            )
+        if self.workbench_delete_api_enabled and not self.workbench_custom_api_enabled:
+            raise ValueError(
+                "LOGION_WORKBENCH_DELETE_API_ENABLED requires the main Workbench API flag"
+            )
+        if self.workbench_custom_api_enabled:
+            active_impact_key_id = self.workbench_impact_active_key_id
+            if not active_impact_key_id or active_impact_key_id not in self.workbench_impact_keys:
+                raise ValueError(
+                    "LOGION_WORKBENCH_IMPACT_ACTIVE_KEY_ID must select a configured key"
+                )
+        if (
+            self.workbench_impact_previous_key_id is not None
+            and self.workbench_impact_previous_key_id == self.workbench_impact_active_key_id
+        ):
+            raise ValueError("The active and previous Workbench impact key IDs must differ")
+        if (
+            self.workbench_impact_previous_key_id is not None
+            and self.workbench_impact_previous_key_id not in self.workbench_impact_keys
+        ):
+            raise ValueError("LOGION_WORKBENCH_IMPACT_PREVIOUS_KEY_ID must select a configured key")
+        for key_id, impact_key in self.workbench_impact_keys.items():
+            if not 1 <= len(key_id) <= 64 or any(
+                character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+                for character in key_id
+            ):
+                raise ValueError(
+                    "LOGION_WORKBENCH_IMPACT_KEYS key IDs must use 1-64 safe characters"
+                )
+            if len(impact_key.get_secret_value().encode("utf-8")) < 32:
+                raise ValueError(
+                    f"LOGION_WORKBENCH_IMPACT_KEYS key {key_id} must contain at least 32 bytes"
+                )
+        if self.knowledge_space_api_enabled:
+            active_cursor_key_id = self.knowledge_cursor_active_key_id
+            if not active_cursor_key_id or active_cursor_key_id not in self.knowledge_cursor_keys:
+                raise ValueError(
+                    "LOGION_KNOWLEDGE_CURSOR_ACTIVE_KEY_ID must select a configured key"
+                )
+        if (
+            self.knowledge_cursor_previous_key_id is not None
+            and self.knowledge_cursor_previous_key_id == self.knowledge_cursor_active_key_id
+        ):
+            raise ValueError("The active and previous knowledge cursor key IDs must differ")
+        if (
+            self.knowledge_cursor_previous_key_id is not None
+            and self.knowledge_cursor_previous_key_id not in self.knowledge_cursor_keys
+        ):
+            raise ValueError("LOGION_KNOWLEDGE_CURSOR_PREVIOUS_KEY_ID must select a configured key")
+        for key_id, cursor_key in self.knowledge_cursor_keys.items():
+            if not 1 <= len(key_id) <= 64 or any(
+                character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+                for character in key_id
+            ):
+                raise ValueError(
+                    "LOGION_KNOWLEDGE_CURSOR_KEYS key IDs must use 1-64 safe characters"
+                )
+            if len(cursor_key.get_secret_value().encode("utf-8")) < 32:
+                raise ValueError(
+                    f"LOGION_KNOWLEDGE_CURSOR_KEYS key {key_id} must contain at least 32 bytes"
+                )
         if self.totp_active_encryption_key_id not in self.totp_encryption_keys:
             raise ValueError("LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID must select a configured key")
         for key_id, encoded_key in self.totp_encryption_keys.items():

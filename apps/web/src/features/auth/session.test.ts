@@ -43,15 +43,15 @@ describe("session coordinator", () => {
     };
     const authApi = createAuthApi(client);
 
-    await expect(authApi.me()).rejects.toMatchObject({
+    await expect(authApi.current()).rejects.toMatchObject({
       code: "WEB_API_RESPONSE_INVALID",
       status: 200,
     });
   });
 
-  it("rotates a verified session so its exact expiry can be scheduled", async () => {
+  it("uses the current session expiry without rotating during bootstrap", async () => {
     const authApi = {
-      me: vi.fn().mockResolvedValue(user),
+      current: vi.fn().mockResolvedValue(authResponse),
       refresh: vi.fn().mockResolvedValue(authResponse),
     };
     const coordinator = createSessionCoordinator(authApi);
@@ -61,13 +61,13 @@ describe("session coordinator", () => {
       sessionExpiresAt: authResponse.session_expires_at,
       user,
     });
-    expect(authApi.me).toHaveBeenCalledTimes(1);
-    expect(authApi.refresh).toHaveBeenCalledTimes(1);
+    expect(authApi.current).toHaveBeenCalledTimes(1);
+    expect(authApi.refresh).not.toHaveBeenCalled();
   });
 
   it("refreshes once after access expiry and returns the rotated session", async () => {
     const authApi = {
-      me: vi.fn().mockRejectedValue(unauthorized()),
+      current: vi.fn().mockRejectedValue(unauthorized()),
       refresh: vi.fn().mockResolvedValue(authResponse),
     };
     const coordinator = createSessionCoordinator(authApi);
@@ -86,7 +86,7 @@ describe("session coordinator", () => {
       resolveRefresh = resolve;
     });
     const authApi = {
-      me: vi.fn(),
+      current: vi.fn().mockRejectedValue(unauthorized()),
       refresh: vi.fn().mockReturnValue(pending),
     };
     const coordinator = createSessionCoordinator(authApi);
@@ -94,14 +94,16 @@ describe("session coordinator", () => {
     const first = coordinator.refresh();
     const second = coordinator.refresh();
     expect(first).toBe(second);
-    expect(authApi.refresh).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(authApi.refresh).toHaveBeenCalledTimes(1);
+    });
     resolveRefresh?.(authResponse);
     await expect(first).resolves.toMatchObject({ status: "authenticated" });
   });
 
   it("routes refresh rotation through the cross-tab coordinator", async () => {
     const authApi = {
-      me: vi.fn(),
+      current: vi.fn().mockRejectedValue(unauthorized()),
       refresh: vi.fn().mockResolvedValue(authResponse),
     };
     const run = vi.fn();
@@ -120,9 +122,56 @@ describe("session coordinator", () => {
     expect(authApi.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("lets only one coordinator rotate an expiring shared session", async () => {
+    const nextAuthResponse: AuthResponse = {
+      ...authResponse,
+      session_expires_at: "2026-07-20T00:30:00Z",
+    };
+    let activeSession = authResponse;
+    let lockTail: Promise<void> = Promise.resolve();
+    const crossTab = {
+      run<T>(operation: () => Promise<T>): Promise<T> {
+        const result = lockTail.then(operation);
+        lockTail = result.then(
+          () => undefined,
+          () => undefined,
+        );
+        return result;
+      },
+    };
+    const authApi = {
+      current: vi.fn().mockImplementation(async () => activeSession),
+      refresh: vi.fn().mockImplementation(async () => {
+        activeSession = nextAuthResponse;
+        return activeSession;
+      }),
+    };
+    const firstCoordinator = createSessionCoordinator(authApi, crossTab);
+    const secondCoordinator = createSessionCoordinator(authApi, crossTab);
+
+    await Promise.all([
+      firstCoordinator.bootstrap(),
+      secondCoordinator.bootstrap(),
+    ]);
+    const [first, second] = await Promise.all([
+      firstCoordinator.refresh(),
+      secondCoordinator.refresh(),
+    ]);
+
+    expect(first).toMatchObject({
+      sessionExpiresAt: nextAuthResponse.session_expires_at,
+      status: "authenticated",
+    });
+    expect(second).toMatchObject({
+      sessionExpiresAt: nextAuthResponse.session_expires_at,
+      status: "authenticated",
+    });
+    expect(authApi.refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("treats rejected refresh credentials as anonymous", async () => {
     const authApi = {
-      me: vi.fn().mockRejectedValue(unauthorized()),
+      current: vi.fn().mockRejectedValue(unauthorized()),
       refresh: vi.fn().mockRejectedValue(unauthorized()),
     };
     const coordinator = createSessionCoordinator(authApi);
@@ -134,7 +183,9 @@ describe("session coordinator", () => {
 
   it("redacts unexpected failures into a minimal public error state", async () => {
     const authApi = {
-      me: vi.fn().mockRejectedValue(new Error("database credentials leaked")),
+      current: vi
+        .fn()
+        .mockRejectedValue(new Error("database credentials leaked")),
       refresh: vi.fn(),
     };
     const coordinator = createSessionCoordinator(authApi);

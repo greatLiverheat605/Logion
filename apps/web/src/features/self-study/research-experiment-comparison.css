@@ -33,6 +33,34 @@
   border-bottom: 0;
 }
 
+.product-evidence-relations {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.product-evidence-relations article {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.product-evidence-relations p,
+.product-evidence-relations small {
+  margin: 0;
+}
+
+.product-evidence-relations small {
+  color: var(--text-muted);
+}
+
+.product-evidence-relations .product-action-link {
+  justify-self: start;
+}
+
 @media (max-width: 720px) {
   .product-experiment-comparison {
     grid-template-columns: 1fr;
