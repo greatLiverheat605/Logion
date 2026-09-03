@@ -1,12 +1,13 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-09-03（Asia/Shanghai）。
-> 当前阶段：**GLM Gate 2、发布增量复审、Main candidate、Nightly 与 Full capacity 已在同一 RC8 产品源码 SHA 上通过；Release candidate `0.2.0-rc8` 尚未触发。RC7 仍运行于受控 prerelease，Production 发布、真实受邀邮件、实体移动设备验收、至少 24 小时 RC8 观察和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**GLM Gate 2、发布增量复审、Main candidate、Nightly、Full capacity 与 Release candidate `0.2.0-rc8` 已在同一 RC8 产品源码 SHA 上通过。RC7 仍运行于受控 prerelease；RC8 尚未部署，Production 发布、真实受邀邮件、实体移动设备验收、至少 24 小时 RC8 观察和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > RC8 产品源码固定为 `91a02697e193c712c4e0aac7f9f4024daed93fe3`；Main candidate run
-> `33732478569`、Nightly run `33732517630` 与 Full capacity run `33735531223` 均成功并绑定该产品 SHA。
+> `33732478569`、Nightly run `33732517630`、Full capacity run `33735531223` 与 Release candidate run
+> `33740072308` 均成功并绑定该产品 SHA。
 > 本次状态归档的文档提交 SHA 与产品源码 SHA 不得混淆。受控 prerelease 当前仍运行 RC7；该状态不等于
-> RC8 已生成、已部署或已获得 Production 发布批准。
+> RC8 已部署或已获得 Production 发布批准。
 
 ## GLM Gate 2 收口与 RC8 候选就绪（2026-09-03）
 
@@ -34,9 +35,16 @@
   `100000` AI runs 全部命中预期，所有查询通过，最慢 `notes_recent p95=5.291ms`。capacity profile
   SHA-256 为 `15db3da761f17a0ef4d5b1cbbc4605d56a6af952a2289bc27d2b5bce2d0431d8`；
   `production_equivalent_approved=false` 保持不变，不把 GitHub runner 结果视为生产容量批准。
-- 下一门固定为：使用同一产品 SHA、Main candidate run `33732478569` 和 Full capacity run
-  `33735531223` 触发 `0.2.0-rc8` Release candidate。Release candidate 全绿后仍只进入受控 prerelease；
-  Production、流量切换、回滚点清理与敏感能力启用继续需要用户另行明确批准。
+- Release candidate [33740072308](https://github.com/greatLiverheat605/Logion/actions/runs/33740072308) 于
+  `2026-09-03T09:52:21Z` 成功，工作流实际检出产品 SHA `91a0269`，完成 `ci:fast`、Full capacity
+  evidence 复核、不可变镜像 smoke、空环境恢复、旧客户端/restored-epoch 兼容、Browser/PWA/WCAG
+  `179 passed / 12 skipped / 0 failed`、5%/25%/100% rollout rehearsal、证据上传与 Compose 卷清理。
+  RC artifact `release-candidate-0.2.0-rc8-91a0269...` 的 GitHub digest 为
+  `sha256:e6e62a903447489d85524096d62fc7739c7ab6f744b6d24d035fc1ed63299fbc`。
+- 下一门固定为：另行批准后把 RC8 部署到受控 prerelease，先生成并校验生产切换前备份，保留 RC7
+  回滚目录、旧镜像和数据卷，再完成真实 Session 冒烟、邀请邮件、实体移动设备与至少 24 小时观察。
+  Release workflow 的 rollout 仅为合成 rehearsal，`production_approval_granted=false`；Production、流量切换、
+  回滚点清理与敏感能力启用继续需要用户另行明确批准。
 
 ## 历史：C7 修复候选与 RC8 前置门（2026-08-21）
 

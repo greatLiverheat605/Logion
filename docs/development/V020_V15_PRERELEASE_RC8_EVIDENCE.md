@@ -1,18 +1,18 @@
 # V20-15 RC8 修复候选与发布证据
 
 > 更新时间：2026-09-03（Asia/Shanghai）。
-> 本文件是 RC8 进入发布门禁前的证据索引，不代表候选已发布、已部署或已获得 Production 授权。
+> 本文件是 RC8 发布与部署门禁的证据索引，不代表候选已部署或已获得 Production 授权。
 
 ## 当前结论
 
 - RC7 仍是受控 prerelease 的运行版本；RC8 产品源码已固定为
-  `91a02697e193c712c4e0aac7f9f4024daed93fe3`，尚未生成或部署 `0.2.0-rc8`。
-- GLM Gate 2、Gate 2 后增量只读复审、Main candidate、Nightly 与 Full capacity 已通过；增量复审结论为
-  `PASS / P0=0 / P1=0 / P2=0 / P3=0`。
+  `91a02697e193c712c4e0aac7f9f4024daed93fe3`；`0.2.0-rc8` Release candidate 已生成并通过，尚未部署。
+- GLM Gate 2、Gate 2 后增量只读复审、Main candidate、Nightly、Full capacity 与 Release candidate 已通过；
+  增量复审结论为 `PASS / P0=0 / P1=0 / P2=0 / P3=0`。
 - `workbench_delete_api_enabled` 与其它敏感 Workbench 能力继续默认关闭；本轮没有启用删除路由、生产
   flag、生产凭据或生产访问。
-- 下一发布门是使用同一产品 SHA 与已验证的 Main/Capacity run 触发 `0.2.0-rc8` Release candidate。
-  Production、流量切换、真实受邀邮件、实体移动设备验收和至少 24 小时 RC8 观察仍未获完成结论。
+- 下一门是另行批准 RC8 受控 prerelease 部署、生产切换前备份与真实环境验收。Production、流量切换、
+  真实受邀邮件、实体移动设备验收和至少 24 小时 RC8 观察仍未获完成结论。
 
 ## 修复候选身份
 
@@ -27,9 +27,10 @@ RC8 产品源码由 GLM Gate 2 合并、安全门修复与 Nightly 修复三次 
 | Main candidate             | `33732478569` / success                                            |
 | Nightly assurance          | `33732517630` / success                                            |
 | Full capacity              | `33735531223` / success                                            |
-| Release candidate          | `0.2.0-rc8` 待触发                                                 |
+| Release candidate          | `33740072308` / `0.2.0-rc8` / success                              |
 | Candidate manifest SHA-256 | `931e70667728b8f670907ebfe5f29c402939075cde8bdf43165099c8e0cd8fc8` |
 | Capacity profile SHA-256   | `15db3da761f17a0ef4d5b1cbbc4605d56a6af952a2289bc27d2b5bce2d0431d8` |
+| RC artifact SHA-256        | `e6e62a903447489d85524096d62fc7739c7ab6f744b6d24d035fc1ed63299fbc` |
 | Alembic head               | `0040_merge_gate2_heads`                                           |
 
 ## 2026-09-03 Gate 2 与增量复审
@@ -73,6 +74,24 @@ RC8 产品源码由 GLM Gate 2 合并、安全门修复与 Nightly 修复三次 
   - Backup：`sha256:c35dbfe9153ff8e5bb635bc53d05f599290d97d3aeeb14e06276701806070281`
 - compatibility 固定为 migration head `0040_merge_gate2_heads`、offline schema `4`、`sync-v1`；OpenAPI、
   pnpm lock 与 uv lock 均由 manifest hash 绑定。
+
+## 2026-09-03 Release candidate 证据
+
+- Release candidate [33740072308](https://github.com/greatLiverheat605/Logion/actions/runs/33740072308) 于
+  `2026-09-03T09:39:39Z` 触发、`2026-09-03T09:52:21Z` 成功结束，job `rc` 用时 `12m36s`。
+  workflow 输入固定为 version `0.2.0-rc8`、source SHA `91a02697e193c712c4e0aac7f9f4024daed93fe3`、
+  Main candidate run `33732478569` 与 Full capacity run `33735531223`；checkout 日志确认实际检出该产品 SHA。
+- `pnpm ci:fast`、Main/Capacity artifact 下载与信任校验、candidate manifest/source 校验、四个 digest-pinned
+  镜像 smoke、空环境恢复、旧客户端/restored-epoch 兼容全部通过。
+- Browser/PWA/WCAG 真实矩阵为 `179 passed / 12 skipped / 0 failed`，Templates 在 session age `392s`
+  时真实创建响应为 `201`。5%/25%/100% rollout policy 三段 rehearsal 均通过；证据明确
+  `changes_traffic=false`、`production_approval_granted=false`，没有改变真实流量。
+- RC artifact 名为
+  `release-candidate-0.2.0-rc8-91a02697e193c712c4e0aac7f9f4024daed93fe3`，artifact ID `9887778322`，
+  大小 `1707927` bytes，GitHub digest 为
+  `sha256:e6e62a903447489d85524096d62fc7739c7ab6f744b6d24d035fc1ed63299fbc`，归档时未过期。
+- Compose volumes 已由 workflow 清理，证据上传成功。唯一 annotation 是 `docker/login-action@v3` 目标
+  Node.js 20 的上游弃用 warning；GitHub 强制其在 Node.js 24 运行，job 结论仍为 success。
 
 ## 已有参考证据
 
@@ -126,9 +145,8 @@ RC8 产品源码由 GLM Gate 2 合并、安全门修复与 Nightly 修复三次 
 7. 至少 24 小时受控 prerelease 观察窗口、健康检查、错误率、重启/OOM、备份和告警结果。
 8. GLM 对完整版本 diff 的只读复审结论：必须为 `PASS`，且 `P0=0 / P1=0`。
 
-当前完成状态：第 1 项的 Main candidate/Full capacity 已完成，Release candidate 待触发；第 2～5 项的候选侧
-证据已由 Main candidate artifact 核验；第 8 项已完成。第 6～7 项属于 RC8 生成并部署到受控 prerelease 后的
-执行门，当前不得写成通过。
+当前完成状态：第 1～5 项与第 8 项已完成。第 6～7 项属于 RC8 部署到受控 prerelease 后的执行门，
+当前不得写成通过。
 
 ## 回滚约束
 
@@ -139,7 +157,6 @@ RC8 产品源码由 GLM Gate 2 合并、安全门修复与 Nightly 修复三次 
 
 ## 当前阻塞项
 
-- `0.2.0-rc8` Release candidate 尚未触发，完整 RC artifact 尚未生成。
 - RC8 尚未部署到受控 prerelease；生产切换前备份、至少 24 小时观察、真实受邀邮件与实体移动设备验收未完成。
 - `production_equivalent_approved=false`；生产式硬件与真实流量容量验证未获人工签字。
 - Production 发布批准尚未申请，也未执行生产操作、流量切换、回滚点清理或敏感能力启用。
