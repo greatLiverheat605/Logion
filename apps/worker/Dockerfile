@@ -1,10 +1,12 @@
 FROM ghcr.io/astral-sh/uv:0.11.29 AS uv
-FROM python:3.12.13-alpine3.24 AS runtime
+FROM python:3.12.14-alpine3.24 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
+
+RUN apk add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0'
 
 COPY --from=uv /uv /uvx /bin/
 WORKDIR /app
