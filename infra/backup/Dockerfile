@@ -1,10 +1,10 @@
-FROM postgres:17.10-alpine
+FROM postgres:17.10-alpine3.24
 
 COPY backup.sh /usr/local/bin/logion-backup
 COPY verify-backup.sh /usr/local/bin/logion-verify-backup
 COPY restore-backup.sh /usr/local/bin/logion-restore-backup
 COPY backup_crypto.py backup_bundle.py /usr/local/lib/logion/
-RUN apk add --no-cache python3 py3-cryptography \
+RUN apk add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' python3 py3-cryptography \
     && rm -f /usr/local/bin/gosu \
     && chmod 0555 /usr/local/bin/logion-backup /usr/local/bin/logion-verify-backup \
       /usr/local/bin/logion-restore-backup /usr/local/lib/logion/*.py \

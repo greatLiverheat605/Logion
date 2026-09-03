@@ -1,7 +1,9 @@
-FROM node:24.18.0-alpine3.24 AS base
+FROM node:24.18.1-alpine3.24 AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+RUN apk add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' \
+    && corepack enable \
+    && corepack prepare pnpm@11.9.0 --activate
 WORKDIR /app
 
 FROM base AS dependencies
@@ -21,13 +23,14 @@ COPY packages/contracts packages/contracts
 COPY packages/offline packages/offline
 RUN pnpm --filter @logion/web build
 
-FROM node:24.18.0-alpine3.24 AS runtime
+FROM node:24.18.1-alpine3.24 AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 WORKDIR /app
-RUN rm -rf /usr/local/lib/node_modules/npm \
+RUN apk add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' \
+    && rm -rf /usr/local/lib/node_modules/npm \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx \
     && addgroup --system --gid 10001 logion \
     && adduser --system --uid 10001 --ingroup logion logion
