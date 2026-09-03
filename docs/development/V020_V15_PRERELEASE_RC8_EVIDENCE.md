@@ -1,18 +1,43 @@
 # V20-15 RC8 修复候选与发布证据
 
 > 更新时间：2026-09-03（Asia/Shanghai）。
-> 本文件是 RC8 发布与部署门禁的证据索引，不代表候选已部署或已获得 Production 授权。
+> 本文件是 RC8 发布与部署门禁的证据索引。RC8 已部署到受控 prerelease，但未获得 Production 授权。
 
 ## 当前结论
 
-- RC7 仍是受控 prerelease 的运行版本；RC8 产品源码已固定为
-  `91a02697e193c712c4e0aac7f9f4024daed93fe3`；`0.2.0-rc8` Release candidate 已生成并通过，尚未部署。
+- RC8 已在受控 prerelease 运行；产品源码精确为
+  `91a02697e193c712c4e0aac7f9f4024daed93fe3`，迁移头为 `0040_merge_gate2_heads`。RC7 回滚目录、旧镜像、
+  数据卷和服务器端加密备份继续保留。
 - GLM Gate 2、Gate 2 后增量只读复审、Main candidate、Nightly、Full capacity 与 Release candidate 已通过；
   增量复审结论为 `PASS / P0=0 / P1=0 / P2=0 / P3=0`。
 - `workbench_delete_api_enabled` 与其它敏感 Workbench 能力继续默认关闭；本轮没有启用删除路由、生产
   flag、生产凭据或生产访问。
-- 下一门是另行批准 RC8 受控 prerelease 部署、生产切换前备份与真实环境验收。Production、流量切换、
-  真实受邀邮件、实体移动设备验收和至少 24 小时 RC8 观察仍未获完成结论。
+- Production、流量切换、真实受邀邮件和实体移动设备验收仍未获完成结论。Product Owner 已明确跳过本次
+  24 小时 prerelease 观察并批准延期 BitLocker 异机复制；该一次性例外不构成 Production 发布或异地灾备通过。
+
+## 2026-09-03 受控 prerelease 部署证据
+
+- Product Owner 批准将 RC8 部署到受控 prerelease，保留 RC7 回滚点、不切换 Production 流量，并明确跳过
+  本次 24 小时观察；随后批准本次延期 BitLocker 异机复制。服务器备份、备份卷、部署证据、RC7 目录和旧镜像
+  继续保留。
+- 维护窗口开始时间为 `2026-09-03T12:01:31Z`，候选启动时间为 `2026-09-03T12:02:46Z`。活动源码为
+  `91a02697e193c712c4e0aac7f9f4024daed93fe3`，RC7 回滚目录为
+  `/opt/logion.before-rc8-20260903T120129Z`。
+- 切换前备份 `logion-20260903T105542Z-beta-v1.backup` 的 SHA-256 为
+  `45816a576712db57cf55664f084891d52548f18cdaf3782155a9981e57f7ef3c`。加密校验和隔离恢复通过，恢复头为
+  `0038_local_worker_protocol`；候选 API 对该恢复副本执行 `0038 -> 0039/0036 -> 0040` 演练通过，演练库已删除。
+- 正式数据库随后迁移到 `0040_merge_gate2_heads`。Web/API/Worker/Backup 的运行引用逐一匹配本文件固定 digest；
+  API readiness 的 application/database/redis 均为 `ok`，其余有健康检查的服务均 healthy，全部运行容器
+  `OOMKilled=false`、`RestartCount=0`，候选启动后的严重日志计数为 0。
+- 8080 继续只监听 `127.0.0.1`；公网 `/health` 返回 HTTP 200，并包含 HSTS、CSP、frame、content-type、
+  referrer、permissions 与 cross-origin 安全头。敏感能力保持默认关闭，注册模式保持 `invite`，bootstrap Owner 为空。
+- RC8 启动后加密备份 `logion-20260903T120503Z-beta-v1.backup` 已通过结构、认证和 checksum 校验；SHA-256 为
+  `4d886e9cc986f106fe12a97d37369ab863fc56c3b5960889e8fb792a87da2e04`，manifest 明确绑定 RC8 source 和 `0040`。
+- 真实既有账号 Session 已完成 Today、Audit、Records 与 390px 抽屉导航只读冒烟。Today 正确回显 Personal
+  workspace、Private Space、owner、Persona、Vault 和 Sync；Audit 从 loading 进入 `50 / 50` 时间线；Records
+  进入专用 Vault locked 恢复状态。390px 页面 `scrollWidth=390`，导航触发器和 9 行抽屉入口均至少 `44px`，
+  抽屉可导航到 Audit；移动筛选区展开后 searchbox 可见且可交互。浏览器 error/warning 为 0，反向代理记录到
+  3 次 Audit HTTP 200。
 
 ## 修复候选身份
 
@@ -145,8 +170,8 @@ RC8 产品源码由 GLM Gate 2 合并、安全门修复与 Nightly 修复三次 
 7. 至少 24 小时受控 prerelease 观察窗口、健康检查、错误率、重启/OOM、备份和告警结果。
 8. GLM 对完整版本 diff 的只读复审结论：必须为 `PASS`，且 `P0=0 / P1=0`。
 
-当前完成状态：第 1～5 项与第 8 项已完成。第 6～7 项属于 RC8 部署到受控 prerelease 后的执行门，
-当前不得写成通过。
+当前完成状态：第 1～6 项与第 8 项已完成。第 7 项的 24 小时观察由 Product Owner 对本次 prerelease 部署明确
+豁免，但该豁免不满足 Production 发布观察；真实 Session 冒烟已完成。
 
 ## 回滚约束
 
@@ -157,6 +182,7 @@ RC8 产品源码由 GLM Gate 2 合并、安全门修复与 Nightly 修复三次 
 
 ## 当前阻塞项
 
-- RC8 尚未部署到受控 prerelease；生产切换前备份、至少 24 小时观察、真实受邀邮件与实体移动设备验收未完成。
+- 真实受邀邮件、实体移动设备验收和 BitLocker 异机副本尚未完成；24 小时观察仅对本次 prerelease 部署获豁免，
+  不得据此关闭 Production 观察门。
 - `production_equivalent_approved=false`；生产式硬件与真实流量容量验证未获人工签字。
 - Production 发布批准尚未申请，也未执行生产操作、流量切换、回滚点清理或敏感能力启用。

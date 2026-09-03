@@ -1,13 +1,36 @@
 # v0.2.0 当前进度快照
 
 > 更新时间：2026-09-03（Asia/Shanghai）。
-> 当前阶段：**GLM Gate 2、发布增量复审、Main candidate、Nightly、Full capacity 与 Release candidate `0.2.0-rc8` 已在同一 RC8 产品源码 SHA 上通过。RC7 仍运行于受控 prerelease；RC8 尚未部署，Production 发布、真实受邀邮件、实体移动设备验收、至少 24 小时 RC8 观察和流量切换仍未完成，敏感生产能力继续关闭**。
+> 当前阶段：**GLM Gate 2、发布增量复审、Main candidate、Nightly、Full capacity 与 Release candidate `0.2.0-rc8` 已在同一 RC8 产品源码 SHA 上通过。RC8 已部署到受控 prerelease；RC7 回滚目录、旧镜像、数据卷和服务器加密备份继续保留。Production 发布、真实受邀邮件、实体移动设备验收和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
 > RC8 产品源码固定为 `91a02697e193c712c4e0aac7f9f4024daed93fe3`；Main candidate run
 > `33732478569`、Nightly run `33732517630`、Full capacity run `33735531223` 与 Release candidate run
 > `33740072308` 均成功并绑定该产品 SHA。
-> 本次状态归档的文档提交 SHA 与产品源码 SHA 不得混淆。受控 prerelease 当前仍运行 RC7；该状态不等于
-> RC8 已部署或已获得 Production 发布批准。
+> 本次状态归档的文档提交 SHA 与产品源码 SHA 不得混淆。受控 prerelease 当前运行 RC8；该状态不等于
+> 已获得 Production 发布批准或已切换 Production 流量。
+
+## RC8 受控 prerelease 部署（2026-09-03）
+
+- Product Owner 批准立即部署 RC8 到受控 prerelease、跳过本次 24 小时部署前观察、保留 RC7 回滚点且不切换
+  Production 流量；随后又明确批准本次延期 BitLocker 异机复制。该例外不改变 Production 发布门，也不允许
+  删除服务器备份、旧目录、旧镜像或数据卷。
+- 维护窗口从 `2026-09-03T12:01:31Z` 开始，RC8 于 `2026-09-03T12:02:46Z` 启动。活动源码精确为
+  `91a02697e193c712c4e0aac7f9f4024daed93fe3`，Alembic 从 `0038_local_worker_protocol` 升到
+  `0040_merge_gate2_heads`；升级前已使用新鲜备份在隔离临时数据库完成同路径迁移演练，临时数据库随后删除。
+- RC7 源码目录保留为 `/opt/logion.before-rc8-20260903T120129Z`。数据库、Redis、附件和备份数据卷未删除或替换；
+  不允许对非空数据库执行 downgrade。
+- 切换前加密备份为 `logion-20260903T105542Z-beta-v1.backup`，SHA-256 为
+  `45816a576712db57cf55664f084891d52548f18cdaf3782155a9981e57f7ef3c`，隔离恢复与结构校验通过。RC8
+  启动后备份为 `logion-20260903T120503Z-beta-v1.backup`，SHA-256 为
+  `4d886e9cc986f106fe12a97d37369ab863fc56c3b5960889e8fb792a87da2e04`，manifest 绑定 RC8 source 与 `0040`。
+- Web/API/Worker/Backup 四个运行镜像均精确匹配 RC8 manifest；API application/database/redis readiness 为
+  `ok`，其余有健康检查的服务均 healthy，全部容器 `OOMKilled=false`、`RestartCount=0`。8080 继续只绑定
+  `127.0.0.1`，公网 `/health` 返回 HTTP 200 且安全响应头完整，候选启动后的严重日志计数为 0。
+- 真实既有账号 Session 已完成 Today、Audit、Records 与 390px 移动导航只读冒烟：Today 回显 Workspace、Space、
+  owner、Persona、Vault 与 Sync；Audit 从 loading 进入 `50 / 50` 时间线；Records 正确进入 Vault locked 恢复状态。
+  390px 页面无横向溢出，导航触发器与 9 行抽屉入口均至少 `44px`，抽屉可导航到 Audit，筛选 searchbox 可见且
+  可交互。浏览器 error/warning 为 0，反向代理记录到 3 次 Audit HTTP 200。BitLocker 异机副本按用户批准延期；
+  服务器端两份加密备份、备份卷和部署证据继续保留。
 
 ## GLM Gate 2 收口与 RC8 候选就绪（2026-09-03）
 
