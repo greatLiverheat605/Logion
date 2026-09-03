@@ -36,6 +36,7 @@ async function csrfHeaders(page: Page) {
 }
 
 test("Templates completes real version, install, import and share workflows", async ({
+  accountState,
   page,
 }) => {
   test.setTimeout(300_000);
@@ -163,12 +164,10 @@ test("Templates completes real version, install, import and share workflows", as
   await waitForWorkbenchReady(page, "/app/templates");
   await expect(page.getByTestId("templates-category-master")).toBeVisible();
   await page.getByRole("button", { name: /仅自己的模板/ }).click();
-  const tenantTemplate = page
-    .getByTestId("templates-list")
-    .getByRole("button")
-    .first();
-  await expect(tenantTemplate).toBeVisible();
-  await tenantTemplate.click();
+  await page.getByRole("searchbox", { name: "搜索模板" }).fill(marker);
+  await expect(
+    page.getByTestId("templates-list").getByRole("button"),
+  ).toHaveCount(0);
 
   const createTrigger = page.locator('[data-template-sheet="create"]').first();
   await expect(createTrigger).toBeEnabled();
@@ -184,7 +183,21 @@ test("Templates completes real version, install, import and share workflows", as
   await createSheet.getByLabel("作者显示名").fill("Logion E2E");
   await createSheet.getByLabel("许可证").fill("CC-BY-4.0");
   await createSheet.getByLabel("适用人群").fill("self-study,research");
+  const createTemplateResponsePromise = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      request.method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/workspaces/${workspaceId}/templates/from-goal`
+    );
+  });
   await createSheet.getByRole("button", { name: "创建版本" }).click();
+  const createTemplateResponse = await createTemplateResponsePromise;
+  const createTemplateBody = await createTemplateResponse.text();
+  console.info(
+    `[templates] session_age_seconds=${Math.floor((Date.now() - accountState.authenticatedAt) / 1000)} create_status=${createTemplateResponse.status()}`,
+  );
+  expect(createTemplateResponse.status(), createTemplateBody).toBe(201);
   await expect(createSheet).toHaveCount(0);
   await expect(
     page.getByRole("heading", {

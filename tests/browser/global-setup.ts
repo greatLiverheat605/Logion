@@ -24,7 +24,12 @@ async function seedAccount(
   email: string,
   password: string,
   provision: boolean,
-): Promise<{ email: string; password: string; path: string }> {
+): Promise<{
+  authenticatedAt: number;
+  email: string;
+  password: string;
+  path: string;
+}> {
   const origin = e2eBaseUrl.origin;
   const api = await request.newContext({
     baseURL: origin,
@@ -52,6 +57,7 @@ async function seedAccount(
         `Authenticated browser fixture setup failed with status ${authentication.status()}.`,
       );
     }
+    const authenticatedAt = Date.now();
 
     const currentResponse = await api.get("/api/v1/users/me/settings");
     if (!currentResponse.ok()) {
@@ -107,7 +113,7 @@ async function seedAccount(
       `worker-${index}.json`,
     );
     await api.storageState({ path: statePath });
-    return { email, password, path: statePath };
+    return { authenticatedAt, email, password, path: statePath };
   } finally {
     await api.dispose();
   }
@@ -119,7 +125,12 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   await mkdir(authenticationStateDirectory, { recursive: true });
 
   const count = configuredCredentials === null ? config.workers : 1;
-  const accounts: Array<{ email: string; password: string; path: string }> = [];
+  const accounts: Array<{
+    authenticatedAt: number;
+    email: string;
+    password: string;
+    path: string;
+  }> = [];
   for (let index = 0; index < count; index += 1) {
     const credentials = configuredCredentials ?? {
       email: `browser-worker-${randomUUID()}@example.com`,

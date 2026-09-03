@@ -74,7 +74,7 @@ test.describe("authenticated shell", () => {
     }
   });
 
-  test("Audit keeps its mobile primary action inside the viewport", async ({
+  test("Audit preserves its mobile primary contract and filter command bar", async ({
     page,
   }) => {
     const viewport = WORKBENCH_VIEWPORTS[0];
@@ -82,14 +82,20 @@ test.describe("authenticated shell", () => {
     await page.goto("/app/audit", { waitUntil: "domcontentloaded" });
     await waitForWorkbenchReady(page, "/app/audit");
 
-    const primary = page.locator('[data-workbench-primary="true"]:visible');
-    await expect(primary).toHaveCount(1);
-    const diagnostic = await primary.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return { bottom: rect.bottom, top: rect.top, viewport: innerHeight };
-    });
-    expect(diagnostic.top).toBeLessThan(diagnostic.viewport);
-    expect(diagnostic.bottom).toBeGreaterThan(0);
+    await assertPrimaryActionContract(page, "/app/audit", viewport);
+    const primaryCount = await page
+      .locator('[data-workbench-primary="true"]:visible')
+      .count();
+    if (primaryCount === 0) {
+      await page.getByRole("button", { exact: true, name: "审计筛选" }).click();
+      const filterCommandBar = page.getByTestId("audit-filters");
+      await expect(filterCommandBar).toBeVisible();
+      const searchbox = filterCommandBar.getByRole("searchbox", {
+        name: "搜索事件",
+      });
+      await expect(searchbox).toBeVisible();
+      await expect(searchbox).toBeEnabled();
+    }
   });
 
   test("Audit event rows meet WCAG contrast requirements", async ({ page }) => {

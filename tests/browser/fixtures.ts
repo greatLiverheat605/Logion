@@ -16,7 +16,12 @@ interface AuthenticatedFixtures {
 }
 
 interface AuthenticatedWorkerFixtures {
-  accountState: { email: string; password: string; path: string };
+  accountState: {
+    authenticatedAt: number;
+    email: string;
+    password: string;
+    path: string;
+  };
 }
 
 interface Setting {
@@ -86,7 +91,7 @@ async function resetPersona(page: Page): Promise<boolean> {
 
 async function openAuthenticatedApp(
   page: Page,
-  account: { email: string; password: string },
+  account: { authenticatedAt: number; email: string; password: string },
 ): Promise<void> {
   const login = async (): Promise<void> => {
     const response = await page.request.post("/api/v1/auth/login", {
@@ -102,6 +107,7 @@ async function openAuthenticatedApp(
         `Authenticated browser recovery failed with status ${response.status()}.`,
       );
     }
+    account.authenticatedAt = Date.now();
   };
 
   await page.goto("about:blank");
@@ -143,7 +149,12 @@ export const test = base.extend<
       const manifest = JSON.parse(
         readFileSync(authenticationManifestPath, "utf-8"),
       ) as {
-        accounts: Array<{ email: string; password: string; path: string }>;
+        accounts: Array<{
+          authenticatedAt: number;
+          email: string;
+          password: string;
+          path: string;
+        }>;
       };
       const account = manifest.accounts[workerInfo.parallelIndex];
       if (!account) {

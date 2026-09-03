@@ -15,6 +15,40 @@ const appShellSource = readFileSync(
   "utf8",
 );
 
+function contrastRatio(foreground: string, background: string) {
+  const luminance = (value: string) => {
+    const channels = value
+      .slice(1)
+      .match(/.{2}/g)!
+      .map((channel) => Number.parseInt(channel, 16) / 255)
+      .map((channel) =>
+        channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4,
+      );
+    return (
+      0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!
+    );
+  };
+  const values = [luminance(foreground), luminance(background)].sort(
+    (left, right) => right - left,
+  );
+  return (values[0]! + 0.05) / (values[1]! + 0.05);
+}
+
+function themeTokens(selector: string) {
+  const block = globalStyles.match(
+    new RegExp(`${selector} \\{([\\s\\S]*?)\\n\\}`),
+  )?.[1];
+  if (!block) throw new Error(`Missing theme block: ${selector}`);
+  return new Map(
+    Array.from(block.matchAll(/--([\w-]+):\s*(#[\da-f]{6});/gi), (match) => [
+      match[1],
+      match[2],
+    ]),
+  );
+}
+
 describe("GLM shared visual contract", () => {
   it("freezes the approved light and dark token values", () => {
     for (const token of [
@@ -24,7 +58,7 @@ describe("GLM shared visual contract", () => {
       "--surface-3: #e7eaef",
       "--border: #dfe3ea",
       "--text: #1f2733",
-      "--text-3: #626d7a",
+      "--text-3: #535e69",
       "--accent: #3056d3",
       "--bg: #0e1116",
       "--surface: #151a21",
@@ -40,6 +74,23 @@ describe("GLM shared visual contract", () => {
     expect(globalStyles).toContain("--radius-sm: 0.25rem");
     expect(globalStyles).toContain("--radius-md: 0.375rem");
     expect(globalStyles).toContain("--radius-lg: 0.625rem");
+  });
+
+  it("keeps tertiary text readable on every light and dark surface", () => {
+    for (const [selector, theme] of [
+      [':root,\\s*:root\\[data-theme="light"\\]', "light"],
+      [':root\\[data-theme="dark"\\]', "dark"],
+    ] as const) {
+      const tokens = themeTokens(selector);
+      const text = tokens.get("text-3")!;
+      for (const surface of ["surface", "surface-2", "surface-3"] as const) {
+        const background = tokens.get(surface)!;
+        expect(
+          contrastRatio(text, background),
+          `${theme} --text-3 on --${surface}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 
   it("uses the approved Shell geometry and a quiet page background", () => {
