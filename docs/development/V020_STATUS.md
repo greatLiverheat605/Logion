@@ -1,14 +1,44 @@
 # v0.2.0 当前进度快照
 
-> 更新时间：2026-08-21（Asia/Shanghai）。
-> 当前阶段：**RC7 仍运行于受控 prerelease；C7 修复 PR #220 已通过 fast/integration/browser 门禁，Today 工作区竞态修复、隔离反向代理 DELETE body 门验收和 RC8 证据索引已完成，当前等待 GLM 整体复审。Production 发布、真实受邀邮件、实体移动设备验收和流量切换仍未完成，敏感生产能力继续关闭**。
+> 更新时间：2026-09-03（Asia/Shanghai）。
+> 当前阶段：**GLM Gate 2、发布增量复审、Main candidate、Nightly 与 Full capacity 已在同一 RC8 产品源码 SHA 上通过；Release candidate `0.2.0-rc8` 尚未触发。RC7 仍运行于受控 prerelease，Production 发布、真实受邀邮件、实体移动设备验收、至少 24 小时 RC8 观察和流量切换仍未完成，敏感生产能力继续关闭**。
 > 正式实现状态：**V20-08/V20-09 与 V20-10 服务端、前端首版均已进入 `codex/v020-integration`；知识空间 API、Shared Write、Deletion、Attachment、Local Worker、Provider、sync-v1 与 AI Acceptance 生产开关继续默认关闭**。
-> 当前文档主线：`origin/main=692abfa2f6e1aaae57655628dc8533ba62f0bbdf`。RC7 实际产品源码为
-> `480adc721600243308fa7b5a32200044efd88f07`；Main candidate run `31672956241`、Full capacity run
-> `31673689291` 与 Release candidate `0.2.0-rc7` run `31673881951` 均成功并绑定该产品 SHA。文档主线 SHA
-> 与运行产品 SHA 不得混淆。受控 prerelease 当前运行 RC7；该状态不等于 Production 发布。
+> RC8 产品源码固定为 `91a02697e193c712c4e0aac7f9f4024daed93fe3`；Main candidate run
+> `33732478569`、Nightly run `33732517630` 与 Full capacity run `33735531223` 均成功并绑定该产品 SHA。
+> 本次状态归档的文档提交 SHA 与产品源码 SHA 不得混淆。受控 prerelease 当前仍运行 RC7；该状态不等于
+> RC8 已生成、已部署或已获得 Production 发布批准。
 
-## C7 修复候选与 RC8 前置门（2026-08-21）
+## GLM Gate 2 收口与 RC8 候选就绪（2026-09-03）
+
+- GLM Gate 2 经 PR [#227](https://github.com/greatLiverheat605/Logion/pull/227) 合入 `main`，合并提交为
+  `809054f30c908ee92210d538f3a1178e42bbcce9`。Product Owner 于 `2026-08-29T00:41:13+08:00`
+  签字通过；签字文件 Git blob OID 为 `f3faa981f2d164c7692045a73246f9d56846e71a`，规范化文件内容
+  SHA-256 为 `45152093ed5fa8c60d4ed03f2de73262b22780d82a040235a75b0223aba676f1`。该文件在
+  `809054f..91a0269` 间无变化。
+- 候选安全修复 PR [#228](https://github.com/greatLiverheat605/Logion/pull/228) 将四个最终镜像的
+  `libcrypto3/libssl3` 约束提升到 `>=3.5.8-r0`，并修复 `fast-uri` 高危依赖；Nightly 阻塞修复 PR
+  [#229](https://github.com/greatLiverheat605/Logion/pull/229) 对齐 Audit 零 primary 合同、提高 light
+  `--text-3` 对比度并修正 Templates 空租户前置。最终 RC8 产品源码为
+  `91a02697e193c712c4e0aac7f9f4024daed93fe3`。
+- 对 `809054f..91a0269` 的独立只读增量复审结论为 **PASS，P0=0 / P1=0 / P2=0 / P3=0**；
+  `packages/contracts`、API/OpenAPI、权限、sync、migration、数据库及 recent-auth 服务端语义均无变化。
+- Main candidate [33732478569](https://github.com/greatLiverheat605/Logion/actions/runs/33732478569) 成功完成
+  `ci:fast`、四镜像构建、不可变候选 smoke、provenance、Trivy、CodeQL 与 SBOM。candidate manifest
+  SHA-256 为 `931e70667728b8f670907ebfe5f29c402939075cde8bdf43165099c8e0cd8fc8`；migration head 为
+  `0040_merge_gate2_heads`，offline schema 为 `4`，同步协议保持 `sync-v1`。
+- Nightly [33732517630](https://github.com/greatLiverheat605/Logion/actions/runs/33732517630) 全链成功；浏览器
+  结果为 `178 passed / 12 skipped / 1 flaky / 0 failed`。唯一 flaky 是范围外的 public Firefox 密码管理器
+  用例首次运行 30 秒超时、retry 通过；Templates 在 session age `416s` 时创建响应仍为 `201`。
+- Full capacity [33735531223](https://github.com/greatLiverheat605/Logion/actions/runs/33735531223) 成功；
+  `100000` tasks、`1000000` events、`50000` notes/resources、`10000` attachments、`5000` papers 与
+  `100000` AI runs 全部命中预期，所有查询通过，最慢 `notes_recent p95=5.291ms`。capacity profile
+  SHA-256 为 `15db3da761f17a0ef4d5b1cbbc4605d56a6af952a2289bc27d2b5bce2d0431d8`；
+  `production_equivalent_approved=false` 保持不变，不把 GitHub runner 结果视为生产容量批准。
+- 下一门固定为：使用同一产品 SHA、Main candidate run `33732478569` 和 Full capacity run
+  `33735531223` 触发 `0.2.0-rc8` Release candidate。Release candidate 全绿后仍只进入受控 prerelease；
+  Production、流量切换、回滚点清理与敏感能力启用继续需要用户另行明确批准。
+
+## 历史：C7 修复候选与 RC8 前置门（2026-08-21）
 
 - GLM 首轮整体审核返回 `FAIL`，原因是 Today 工作区切换竞态、DELETE body 反向代理真实验收证据缺失，以及 RC8 发布证据未归档；P0=0、P1=3。三项均已进入当前修复范围。
 - TodayCenter 已增加 context/Spaces/本地数据请求的取消和最新请求身份守卫，并新增快速 workspace 切换回归；定向测试为 `13 passed`。
