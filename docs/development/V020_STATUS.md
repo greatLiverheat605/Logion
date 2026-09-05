@@ -863,3 +863,12 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - Product Owner 已批准进入 I2 任务包准备；任务包为 `docs/coordination/mainline-handoff/09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md`。
 - I2 冻结研究证据实验台、考试覆盖指挥台和领域集成回归三条线；基线为 `6e448ac01dc78b94f600658f2574a51cce1cca64`，正式代码施工尚未开始。
 - I2 仍禁止 API、contracts、数据库、迁移、权限、SessionBoundary、生产配置和敏感 Feature Flag 改动；每轮施工必须独立对抗复审。
+
+## v0.2.1 T-00 本地实现断点（2026-09-05）
+
+- T-00 执行分支为 `dev/T-00-expose-build-sha`，本地基准、`main` 与缓存的 `origin/main` 均为 `37e2e005d5594da31daade87d67a4ea183283b06`。`git fetch origin` 因 GitHub SSH 公钥认证失败而未取得远端更新，因此没有把缓存引用冒充最新远端观察。
+- Web `/health` 已改为在请求期读取 `LOGION_VERSION`，缺失时返回 `unknown`；Compose 已向 Web 服务传入该变量；相邻 Vitest 覆盖 40 位 SHA、缺失变量和 `no-store`。未修改 Nginx、API、Worker、Dockerfile、release workflow 或生产 runbook。
+- 已观察通过定向 Vitest、Web lint/typecheck、root lint、root build、`pnpm contracts:check`、Compose 配置校验、`git diff --check`、Next standalone 运行时 SHA smoke，以及完整 `pnpm test`：Python `550 passed, 77 deselected`，Web `79 files / 292 tests`，offline `55`，contracts `12`，mobile `4`。
+- `pnpm ci:fast` 未记为通过：Prettier 会扫描 17 个既有未跟踪 Markdown 文件并失败；root mypy 仍在既有 Worker 邮件模块的第三方包 typing metadata 处失败。T-00 未修改这些无关文件。
+- 2026-09-05 再次观察公网 `https://logion.work/health` 为 HTTP 200、`Cache-Control: no-store`，但版本仍是 `0.1.0`。生产 API readiness version、四个已部署镜像 digest 与候选 manifest 对照均为 `not_run`，原因是当前会话没有获授权的生产连接上下文；因此未判定线上是 RC7、RC8 或其他版本。
+- 本地 Run `run-v021-t00-expose-build-sha` 保持未验收并阻塞于生产证据。没有 commit、push、PR、deploy、流量切换或生产能力变更。
