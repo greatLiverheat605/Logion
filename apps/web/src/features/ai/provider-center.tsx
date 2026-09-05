@@ -43,6 +43,37 @@ function requestSuffix(error: LogionApiError): string {
     : `（请求编号：${error.requestId}）`;
 }
 
+function dnsErrorText(code: string, details?: unknown): string | null {
+  if (
+    code !== "AI_PROVIDER_DNS_UNRESOLVABLE" &&
+    code !== "AI_PROVIDER_DNS_BLOCKED"
+  ) {
+    return null;
+  }
+  const hostname =
+    details &&
+    typeof details === "object" &&
+    "hostname" in details &&
+    typeof details.hostname === "string" &&
+    details.hostname.trim()
+      ? details.hostname
+      : null;
+  if (code === "AI_PROVIDER_DNS_UNRESOLVABLE") {
+    return `无法解析 Provider 域名${hostname ? `（${hostname}）` : ""}，请检查服务端网络或 Provider 配置；可重试。`;
+  }
+  if (
+    details &&
+    typeof details === "object" &&
+    "resolved_count" in details &&
+    typeof details.resolved_count === "number" &&
+    Number.isInteger(details.resolved_count) &&
+    details.resolved_count > 0
+  ) {
+    return "Provider 域名解析结果包含非公网地址，连接已阻止。";
+  }
+  return "Provider DNS 检查未通过，请检查服务端网络或 Provider 配置。";
+}
+
 function errorText(error: unknown) {
   if (isRecentAuthRequired(error)) {
     return `需要重新认证后继续此操作${requestSuffix(error)}。`;
@@ -50,8 +81,9 @@ function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
     if (error.code === "AI_PROVIDER_URL_BLOCKED")
       return "Base URL 必须是公开 HTTPS 地址，且不能指向本机、私网或内部域名。";
-    if (error.code === "AI_PROVIDER_DNS_BLOCKED")
-      return "Provider 域名解析结果包含非公网地址，连接已阻止。";
+    const dnsMessage = dnsErrorText(error.code, error.details);
+    if (dnsMessage)
+      return `${dnsMessage}（${error.code}）${requestSuffix(error)}`;
     if (error.code === "AI_PROVIDER_AUTH_FAILED")
       return "Provider 拒绝了密钥，请更新凭据后重试。";
     if (error.code.startsWith("AI_PROVIDER_"))
@@ -665,7 +697,7 @@ export function ProviderCenter() {
                             : "缺失"}{" "}
                           · 最近检查 {selectedProvider.last_health_status}
                           {selectedProvider.last_health_error_code
-                            ? ` · ${selectedProvider.last_health_error_code}`
+                            ? ` · ${dnsErrorText(selectedProvider.last_health_error_code) ?? selectedProvider.last_health_error_code}`
                             : ""}
                         </span>
                       </div>

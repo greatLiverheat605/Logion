@@ -5,7 +5,14 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
-from logion_api.ai_gateway.network import Resolver, resolve_host, resolve_public_addresses
+from logion_api.ai_gateway.network import (
+    ProviderDnsNotPublic,
+    ProviderDnsUnresolvable,
+    Resolver,
+    dns_error_details,
+    resolve_host,
+    resolve_public_addresses,
+)
 from logion_api.errors import APIError
 
 
@@ -39,12 +46,24 @@ class OpenAICompatibleDiscoveryAdapter:
         parsed = urlsplit(base_url)
         hostname = parsed.hostname
         if hostname is None:
-            raise self._error("AI_PROVIDER_DNS_BLOCKED", 422, False)
+            raise self._error("AI_PROVIDER_URL_BLOCKED", 422, False)
         port = parsed.port or 443
         try:
             addresses = await resolve_public_addresses(hostname, port, self._resolver)
-        except ValueError as exc:
-            raise self._error("AI_PROVIDER_DNS_BLOCKED", 422, False) from exc
+        except ProviderDnsUnresolvable as exc:
+            raise self._error(
+                "AI_PROVIDER_DNS_UNRESOLVABLE",
+                503,
+                True,
+                details=dns_error_details(hostname, 0),
+            ) from exc
+        except ProviderDnsNotPublic as exc:
+            raise self._error(
+                "AI_PROVIDER_DNS_BLOCKED",
+                422,
+                False,
+                details=dns_error_details(hostname, exc.resolved_count),
+            ) from exc
 
         address = str(addresses[0])
         pinned_host = f"[{address}]" if ":" in address else address
@@ -147,10 +166,17 @@ class OpenAICompatibleDiscoveryAdapter:
         return models
 
     @staticmethod
-    def _error(code: str, status_code: int, retryable: bool) -> APIError:
+    def _error(
+        code: str,
+        status_code: int,
+        retryable: bool,
+        *,
+        details: dict[str, str | int | None] | None = None,
+    ) -> APIError:
         return APIError(
             code=code,
             message="The AI Provider discovery request could not be completed.",
             status_code=status_code,
             retryable=retryable,
+            details=details,
         )

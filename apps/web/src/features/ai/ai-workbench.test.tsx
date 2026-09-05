@@ -22,8 +22,12 @@ vi.mock("@/lib/api/client", async () => {
 import { ProviderCenter } from "./provider-center";
 import { AIRunCenter } from "./run-center";
 import { AIWorkbenchPage } from "./ai-workbench-page";
+import { LogionApiError } from "@/lib/api/client";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const workspace = {
   created_at: "2026-08-01T00:00:00Z",
@@ -67,6 +71,111 @@ beforeEach(() => {
 });
 
 describe("AI governance workbench", () => {
+  it.each([
+    {
+      code: "AI_PROVIDER_DNS_UNRESOLVABLE",
+      details: { hostname: "api.example.com", resolved_count: 0 },
+      expected: "无法解析 Provider 域名（api.example.com）",
+    },
+    {
+      code: "AI_PROVIDER_DNS_UNRESOLVABLE",
+      details: undefined,
+      expected:
+        "无法解析 Provider 域名，请检查服务端网络或 Provider 配置；可重试。",
+    },
+    {
+      code: "AI_PROVIDER_DNS_UNRESOLVABLE",
+      details: { hostname: null, resolved_count: 0 },
+      expected:
+        "无法解析 Provider 域名，请检查服务端网络或 Provider 配置；可重试。",
+    },
+    {
+      code: "AI_PROVIDER_DNS_BLOCKED",
+      details: { hostname: "api.example.com", resolved_count: 2 },
+      expected: "Provider 域名解析结果包含非公网地址，连接已阻止。",
+    },
+    {
+      code: "AI_PROVIDER_DNS_BLOCKED",
+      details: undefined,
+      expected: "Provider DNS 检查未通过，请检查服务端网络或 Provider 配置。",
+    },
+    {
+      code: "AI_PROVIDER_DNS_BLOCKED",
+      details: { hostname: {}, resolved_count: "2" },
+      expected: "Provider DNS 检查未通过，请检查服务端网络或 Provider 配置。",
+    },
+  ])(
+    "distinguishes discovery DNS feedback: $code / $expected",
+    async ({ code, details, expected }) => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const fallback = request.getMockImplementation()!;
+      let lastError: string | null = null;
+      request.mockImplementation(async (path: string) => {
+        if (path.endsWith("/discover-models")) {
+          lastError = code;
+          throw new LogionApiError({
+            code,
+            details,
+            message: "Provider failed.",
+            requestId: "request-dns-check",
+            status: code === "AI_PROVIDER_DNS_UNRESOLVABLE" ? 503 : 422,
+          });
+        }
+        if (path.endsWith("/ai/providers"))
+          return {
+            providers: [
+              {
+                id: "provider-1",
+                name: "Test Provider",
+                base_url: "https://api.example.com/v1",
+                enabled: true,
+                credential_configured: true,
+                version: 1,
+                last_health_status: lastError ? "unhealthy" : "unknown",
+                last_health_error_code: lastError,
+              },
+            ],
+          };
+        return fallback(path);
+      });
+      render(<ProviderCenter />);
+      await waitFor(() =>
+        expect(
+          screen
+            .getByRole("button", { name: "测试并发现模型" })
+            .hasAttribute("disabled"),
+        ).toBe(false),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "测试并发现模型" }));
+      await waitFor(() => {
+        const feedback = document.querySelector(
+          '[aria-live="polite"]',
+        )?.textContent;
+        expect(feedback).toContain(expected);
+        expect(feedback).toContain(code);
+        expect(feedback).toContain("request-dns-check");
+      });
+      expect(document.body.textContent).not.toContain("连接检查成功");
+      if (
+        code !== "AI_PROVIDER_DNS_BLOCKED" ||
+        !details ||
+        typeof details.resolved_count !== "number"
+      ) {
+        expect(document.body.textContent).not.toContain("包含非公网地址");
+      }
+      fireEvent.click(screen.getByRole("button", { name: "刷新" }));
+      await waitFor(() =>
+        expect(screen.queryByText(/request-dns-check/)).toBeNull(),
+      );
+      expect(document.body.textContent).toContain(
+        code === "AI_PROVIDER_DNS_UNRESOLVABLE"
+          ? "无法解析 Provider 域名"
+          : "Provider DNS 检查未通过",
+      );
+      expect(document.body.textContent).not.toContain("包含非公网地址");
+    },
+  );
+
   it("exposes a route-specific workbench with one empty-state primary", () => {
     const { container } = render(<AIRunCenter />);
 

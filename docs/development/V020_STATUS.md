@@ -903,3 +903,40 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   mypy 问题处失败：`email_delivery.py` 无法取得 `alibabacloud_credentials.client/models` 的类型实现，
   并报告两个 `unused-ignore`。该聚合门没有写成通过，也未越界修改邮件模块。
 - 当前只有上述 Web 实现、组件测试和本状态文档差异；没有 commit、push、PR、merge、deploy 或生产能力变更。
+
+## v0.2.1 T-02 DNS 错误分类待审查（2026-09-05）
+
+- 用户确认 T-01 已通过 OPUS5 审查并提交为 `6547cf20e1740387f5d66921563c7f028883a40f`。
+  T-02 从该不可变基线创建 `dev/T-02-dns-error-split`，当前代码完成并交回用户审查。
+- `resolve_public_addresses` 新增两类异常：解析异常、非法解析结果及空列表属于
+  `ProviderDnsUnresolvable`；含任一非公网地址仍属于 `ProviderDnsNotPublic`。原有
+  `any(not address.is_global ...)` 公网校验、固定目标 IP、Host/SNI、禁止重定向与 `trust_env=False`
+  均保持不变，没有将无 DNS 出网或 SSRF 拦截推断成线上根因。
+- discovery 与 generation 两个 adapter 均将解析失败映射为 `AI_PROVIDER_DNS_UNRESOLVABLE` /
+  HTTP 503 / retryable；非公网结果仍为 `AI_PROVIDER_DNS_BLOCKED` / HTTP 422 / 不可重试；
+  无 hostname 的 URL 为 `AI_PROVIDER_URL_BLOCKED` / HTTP 422 / 不可重试。
+- DNS details 只包含 `hostname` 与 `resolved_count`，非公网异常仅携带数量。IP 字面量、带尾点 IP
+  或嵌入 IPv4 的 hostname 返回 `null`，不回显任何解析到的地址或原始 resolver 异常。
+  新增共享参数化测试覆盖两个 adapter、IPv4/IPv6、混合结果、解析异常/空值、取消及 URL 错误；
+  断言 details 序列化后不匹配 IPv4/IPv6 正则，并验证实际 HTTP 错误响应及失败前未创建 HTTP transport。
+- Provider 即时反馈显示可辨因文案、错误码和请求编号；旧 `DNS_BLOCKED` 缺失 details 时使用中性提示。
+  持久化健康状态没有 DNS details，因此同样使用中性提示，刷新后不会再次断言非公网原因。
+- 已实际通过：后端定向 `82` 项、完整 Python `603 passed / 77 deselected`、AI Workbench `14` 项、
+  完整 Web `80 files / 303 tests`、API mypy `174` 个文件、Web lint/typecheck、root production build、
+  `pnpm contracts:check`（零漂移）。
+- 浏览器在生产构建的 `1440px` 和 `375px` 下分别通过解析失败、非公网阻断、旧码无 details 共 `6` 个场景；
+  核对即时反馈、请求编号、无成功文案和刷新后的健康文案。认证、Provider 配置和 DNS 响应均为明确的
+  browser route mock，不作为真实 Provider 或生产 DNS 证据。临时浏览器服务已停止。
+- 配置链路核对：现有 Provider API 响应公开 `base_url` 和 `credential_configured`，不公开密钥；
+  `AIProviderService.discover_models` 将存储的 `provider.base_url` 传给 adapter。
+  步骤 5 的真实配置只读核对已尝试，但线上 Provider 页面显示“需要登录”，当前无有效浏览器会话，
+  实际存储的 `base_url` 核对为 **blocked**，未读取或解密凭据。
+- 步骤 4 运维为 **blocked**：线上版本仍未知，没有容器执行上下文，未验证 resolver 配置、出站策略、
+  DNS 出网、代理需求或真实 discover-models 200；不能据此认定生产无出网。
+- `pnpm ci:fast` 已实际执行：context guard、状态模型 `118` 项、格式、lint、Ruff、TypeScript 均通过；
+  root mypy 仍在未改动的 Worker `email_delivery.py:13/16` 处报告
+  `alibabacloud_credentials.client/models` 的两个 `import-not-found` 和两个 `unused-ignore`。
+  聚合门保持失败，未修改无关邮件模块或豁免该门禁。
+- AI 规划文档保持未跟踪且不纳入交付；本次没有 stage、commit、push、PR、merge 或部署。
+- 当前本地 Run 为 `run-v021-t02-dns-error-split`，待审查任务 `task-t02-review` 为 pending；
+  T-01 Run 保留历史完成与门禁记录。两个 Run 均通过 validator，未提前标记 T-02 accepted。
