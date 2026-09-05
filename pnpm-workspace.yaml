@@ -19,3 +19,4 @@ overrides:
 patchedDependencies:
   minimatch@3.1.5: patches/minimatch@3.1.5.patch
   minimatch@5.1.9: patches/minimatch@5.1.9.patch
+  sonner@2.0.8: patches/sonner@2.0.8.patch

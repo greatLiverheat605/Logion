@@ -88,6 +88,7 @@ export interface SyncWorkbenchProps {
   status: string;
   syncState: WorkspaceSyncState | null;
   syncing: boolean;
+  uploading?: boolean;
   unlocked: boolean;
   vaultPhase: string;
   workspaceId: string;
@@ -95,6 +96,7 @@ export interface SyncWorkbenchProps {
 }
 
 export function SyncWorkbench({
+  uploading = false,
   accessIssue,
   attachments,
   clearConfirmation,
@@ -293,7 +295,13 @@ export function SyncWorkbench({
                 )}
               </InspectorSection>
               <InspectorSection title="运行状态">
-                <p className={styles.inspectorStatus}>{status}</p>
+                <p
+                  className={styles.inspectorStatus}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {status}
+                </p>
                 <span className={styles.statusNote}>
                   {connection === "offline"
                     ? "在线后可推送 Outbox；本地读取不受阻断。"
@@ -678,10 +686,13 @@ export function SyncWorkbench({
                               <button
                                 type="button"
                                 onClick={() => onUpload(attachment)}
+                                disabled={uploading}
                               >
-                                {attachment.state === "failed"
-                                  ? "重试"
-                                  : "上传并验证"}
+                                {uploading
+                                  ? "正在上传…"
+                                  : attachment.state === "failed"
+                                    ? "重试"
+                                    : "上传并验证"}
                               </button>
                             ) : (
                               <ProductTag tone="good">已验证</ProductTag>

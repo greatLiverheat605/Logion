@@ -253,6 +253,7 @@ function RecordSheet({
     learning_track: "新建学习路线",
     study_project: "新建学习项目",
   }[kind];
+  const [pending, setPending] = useState(false);
   return (
     <WorkbenchSheet
       description={
@@ -269,8 +270,13 @@ function RecordSheet({
           >
             取消
           </button>
-          <button className={styles.primaryButton} form={formId} type="submit">
-            {title}
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : title}
           </button>
         </>
       }
@@ -282,8 +288,15 @@ function RecordSheet({
         className={styles.sheetForm}
         id={formId}
         onSubmit={async (event) => {
-          const ok = await actions.submit(event, kind);
-          if (ok) onOpenChange(false);
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          try {
+            const ok = await actions.submit(event, kind);
+            if (ok) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
         }}
       >
         {kind === "inbox_item" ? (

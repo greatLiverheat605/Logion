@@ -8,6 +8,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const request = vi.hoisted(() => vi.fn());
 
@@ -56,6 +59,7 @@ const draft = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   request.mockReset();
   window.history.replaceState(null, "", "/app/ai");
   request.mockImplementation(async (path: string) => {
@@ -71,6 +75,184 @@ beforeEach(() => {
 });
 
 describe("AI governance workbench", () => {
+  it("does not overwrite a failed post-discovery refresh with success", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fallback = request.getMockImplementation()!;
+    let discovered = false;
+    request.mockImplementation(async (path: string) => {
+      if (path.endsWith("/discover-models")) {
+        discovered = true;
+        return { model_count: 1 };
+      }
+      if (path.endsWith("/ai/providers")) {
+        if (discovered)
+          throw new LogionApiError({
+            code: "WEB_NETWORK_UNAVAILABLE",
+            status: 503,
+            requestId: "refresh-failed",
+            message: "Private detail",
+          });
+        return {
+          providers: [
+            {
+              id: "provider-1",
+              name: "Test Provider",
+              enabled: true,
+              version: 1,
+            },
+          ],
+        };
+      }
+      return fallback(path);
+    });
+    render(<ProviderCenter />);
+    const button = await screen.findByRole("button", {
+      name: "测试并发现模型",
+    });
+    await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining("refresh-failed"),
+        { duration: Infinity, closeButton: true },
+      ),
+    );
+    expect(document.body.textContent).toContain("refresh-failed");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+  it("reports successful Provider discovery through Toast and inline status", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fallback = request.getMockImplementation()!;
+    request.mockImplementation(async (path: string) => {
+      if (path.endsWith("/discover-models")) return { model_count: 2 };
+      if (path.endsWith("/ai/providers"))
+        return {
+          providers: [
+            {
+              id: "provider-1",
+              name: "Test Provider",
+              enabled: true,
+              credential_configured: true,
+              version: 1,
+            },
+          ],
+        };
+      return fallback(path);
+    });
+    render(<ProviderCenter />);
+    const button = await screen.findByRole("button", {
+      name: "测试并发现模型",
+    });
+    await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        "连接检查成功，发现 2 个模型。",
+        { duration: 3000 },
+      ),
+    );
+    expect(document.body.textContent).toContain(
+      "连接检查成功，发现 2 个模型。",
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true, "refresh"] as const)(
+    "F3 Run submission preserves inline status and emits the matching Toast (failure=%s)",
+    async (failure) => {
+      const fallback = request.getMockImplementation()!;
+      let submitted = false;
+      let finishSubmission: (() => void) | undefined;
+      request.mockImplementation(
+        async (path: string, options?: { method?: string }) => {
+          if (path.endsWith("/ai/runs") && submitted && failure === "refresh")
+            throw new LogionApiError({
+              code: "AI_REFRESH_UNAVAILABLE",
+              status: 503,
+              requestId: "request-refresh",
+              message: "Unavailable",
+            });
+          if (path.endsWith("/route-resolution-preview"))
+            return {
+              candidates: [{ provider_id: "provider-1", model_id: "model-1" }],
+              estimated_input_tokens: 10,
+              requested_output_tokens: 100,
+              budget: {
+                monthly_token_budget: null,
+                used_tokens: 0,
+                reserved_tokens: 0,
+              },
+            };
+          if (path.endsWith("/ai/runs") && options?.method === "POST") {
+            await new Promise<void>((resolve) => {
+              finishSubmission = resolve;
+            });
+            if (failure === true)
+              throw new LogionApiError({
+                code: "AI_ROUTE_UNAVAILABLE",
+                status: 503,
+                requestId: "request-run",
+                message: "Unavailable",
+              });
+            submitted = true;
+            return { status: "queued" };
+          }
+          return fallback(path);
+        },
+      );
+      render(<AIRunCenter />);
+      await waitFor(() =>
+        expect(
+          screen
+            .getByRole("button", { name: "创建结构化草稿" })
+            .hasAttribute("disabled"),
+        ).toBe(false),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "创建结构化草稿" }));
+      const dialog = screen.getByRole("dialog");
+      fireEvent.click(
+        screen.getByLabelText("我已明确选择并核对上述发送来源与内容范围"),
+      );
+      fireEvent.submit(dialog.querySelector("form")!);
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      vi.mocked(toast.success).mockClear();
+      fireEvent.click(
+        screen.getByLabelText(
+          "我确认上述数据范围、Provider、模型与预算信息，可以发送",
+        ),
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: "确认并发送到 Provider" }),
+      );
+      expect(
+        screen
+          .getByRole("button", { name: "取消发送" })
+          .hasAttribute("disabled"),
+      ).toBe(true);
+      expect(
+        screen
+          .getByRole("button", { name: "正在提交…" })
+          .hasAttribute("disabled"),
+      ).toBe(true);
+      expect(finishSubmission).toBeTypeOf("function");
+      finishSubmission!();
+      const text =
+        failure === "refresh"
+          ? "AI_REFRESH_UNAVAILABLE"
+          : failure
+            ? "AI_ROUTE_UNAVAILABLE"
+            : "AI 运行已入队";
+      await waitFor(() => expect(document.body.textContent).toContain(text));
+      expect(failure ? toast.error : toast.success).toHaveBeenCalledWith(
+        expect.stringContaining(text),
+        failure
+          ? { duration: Infinity, closeButton: true }
+          : { duration: 3000 },
+      );
+      if (failure) expect(toast.success).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([
     {
       code: "AI_PROVIDER_DNS_UNRESOLVABLE",
@@ -156,6 +338,11 @@ describe("AI governance workbench", () => {
         expect(feedback).toContain("request-dns-check");
       });
       expect(document.body.textContent).not.toContain("连接检查成功");
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining(code), {
+        duration: Infinity,
+        closeButton: true,
+      });
+      expect(toast.success).not.toHaveBeenCalled();
       if (
         code !== "AI_PROVIDER_DNS_BLOCKED" ||
         !details ||

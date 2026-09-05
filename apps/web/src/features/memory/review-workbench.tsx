@@ -1216,6 +1216,7 @@ function AuditReviewSheet({
   open: boolean;
 }>) {
   const formId = useId();
+  const [pending, setPending] = useState(false);
   return (
     <WorkbenchSheet
       description="创建草稿后，再添加发现并明确完成审查。"
@@ -1228,8 +1229,13 @@ function AuditReviewSheet({
           >
             取消
           </button>
-          <button className={styles.primaryButton} form={formId} type="submit">
-            保存审查草稿
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : "保存审查草稿"}
           </button>
         </>
       }
@@ -1241,8 +1247,15 @@ function AuditReviewSheet({
         className={styles.sheetForm}
         id={formId}
         onSubmit={async (event) => {
-          const succeeded = await actions.createAuditReview(event);
-          if (succeeded === true) onOpenChange(false);
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          try {
+            const succeeded = await actions.createAuditReview(event);
+            if (succeeded === true) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <label htmlFor={`${formId}-cadence`}>周期</label>

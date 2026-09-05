@@ -1,5 +1,8 @@
 "use client";
 
+import { feedback, feedbackErrorText } from "@/lib/feedback";
+import { incompleteSyncMessage } from "@/features/sync/sync-diagnostics";
+
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
@@ -142,11 +145,11 @@ function transport(
 function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
     if (error.status === 403 || error.status === 404) {
-      return `当前账号无权访问或修改该内容（请求编号：${error.requestId}）。`;
+      return feedbackErrorText(error, "当前账号无权访问或修改该内容。");
     }
-    return `操作未完成（请求编号：${error.requestId}）。`;
+    return feedbackErrorText(error);
   }
-  return "网络暂不可用，本地修改仍会保留并可继续编辑。";
+  return feedbackErrorText(error, "操作未完成；本地修改保留，可稍后重试。");
 }
 
 async function decrypt<T extends JsonObject>(
@@ -421,6 +424,7 @@ export function ReviewCenter() {
 
   async function unlock(event: FormEvent<HTMLFormElement>): Promise<boolean> {
     event.preventDefault();
+    const form = event.currentTarget;
     if (session.status !== "authenticated" || !workspaceId || !deviceId)
       return false;
     const passphrase = String(
@@ -431,10 +435,10 @@ export function ReviewCenter() {
       await bootstrap(db, localVault);
       await refresh(db, localVault);
       setStatus("审查数据已解锁；知识点与掌握确认支持断网编辑。");
-      event.currentTarget.reset();
+      form.reset();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       return false;
     }
   }
@@ -449,7 +453,7 @@ export function ReviewCenter() {
           .then(() => setStatus("复习资料已在应用内解锁。"))
           .catch((error: unknown) => {
             setDataPhase("error");
-            setStatus(errorMessage(error));
+            setStatus(feedback.error(errorMessage(error)));
           }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
@@ -462,7 +466,7 @@ export function ReviewCenter() {
     if (db === null || localVault === null || !workspaceId || !deviceId) return;
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(
+      const result = await new SyncClient(
         db,
         transport(request, workspaceId),
         localVault,
@@ -471,23 +475,14 @@ export function ReviewCenter() {
         .where("[workspace_id+device_id]")
         .equals([workspaceId, deviceId])
         .toArray();
-      const blocked = remaining.filter(
-        (item) => item.outbox_state === "blocked",
-      ).length;
-      const conflicted = remaining.filter(
-        (item) => item.outbox_state === "conflict",
-      ).length;
-      if (conflicted > 0) {
-        setStatus(`有 ${conflicted} 项掌握或图谱冲突等待人工处理。`);
-      } else if (blocked > 0) {
-        setStatus(`有 ${blocked} 项修改因权限、版本或输入校验未同步。`);
-      } else if (remaining.length > 0) {
-        setStatus(`仍有 ${remaining.length} 项本地修改等待网络恢复。`);
-      } else {
-        setStatus("审查数据已同步。");
-      }
+      const incomplete = incompleteSyncMessage(result, remaining);
+      setStatus(
+        incomplete
+          ? feedback.error(incomplete)
+          : feedback.success("审查数据已同步。"),
+      );
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
     } finally {
       await refresh(db, localVault);
     }
@@ -577,7 +572,7 @@ export function ReviewCenter() {
       await synchronize();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -610,7 +605,7 @@ export function ReviewCenter() {
       await synchronize();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -662,7 +657,7 @@ export function ReviewCenter() {
       setStatus("人工掌握确认已保存在本地；系统建议没有被当作确认。");
       await synchronize();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
     }
   }
@@ -694,7 +689,7 @@ export function ReviewCenter() {
       await synchronize();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -771,7 +766,7 @@ export function ReviewCenter() {
       await synchronize();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -798,7 +793,7 @@ export function ReviewCenter() {
       await synchronize();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -832,7 +827,7 @@ export function ReviewCenter() {
       setStatus("审查发现已保存在本地。 ");
       await synchronize();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
     }
   }
@@ -866,7 +861,7 @@ export function ReviewCenter() {
       setStatus("审查完成已由你明确确认并保存在本地。");
       await synchronize();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
     }
   }
@@ -885,7 +880,7 @@ export function ReviewCenter() {
       setStatus("审查发现已标记解决并等待同步。");
       await synchronize();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
     }
   }
@@ -901,7 +896,7 @@ export function ReviewCenter() {
       setStatus("错因模式已由你明确标记解决并等待同步。");
       await synchronize();
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
     }
   }

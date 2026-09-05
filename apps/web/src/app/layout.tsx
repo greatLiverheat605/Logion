@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
 import { RuntimeStyleNonce } from "@/components/runtime-style-nonce";
+import { FeedbackProvider } from "@/components/feedback/feedback-provider";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 
 import "./globals.css";
@@ -45,6 +46,7 @@ export default async function RootLayout({
           跳到主要内容
         </a>
         {children}
+        <FeedbackProvider />
         <ServiceWorkerRegistration />
       </body>
     </html>

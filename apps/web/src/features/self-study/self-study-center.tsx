@@ -1,5 +1,8 @@
 "use client";
 
+import { feedback, feedbackErrorText } from "@/lib/feedback";
+import { incompleteSyncMessage } from "@/features/sync/sync-diagnostics";
+
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
@@ -23,7 +26,7 @@ import {
 import { deriveProductWorkbenchState } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
-import { LogionApiError, type ApiClient } from "@/lib/api/client";
+import { type ApiClient } from "@/lib/api/client";
 
 import { eligibleCollaborationSpaces } from "./collaboration-workbench-model";
 import {
@@ -94,9 +97,7 @@ function transport(
   };
 }
 function errorMessage(error: unknown) {
-  return error instanceof LogionApiError
-    ? `操作未完成（请求编号：${error.requestId}）。`
-    : "网络暂不可用；内容仍保存在本机 Outbox。";
+  return feedbackErrorText(error, "操作未完成；本地内容保留，可稍后重试。");
 }
 
 function contextSelectionKey(
@@ -352,6 +353,7 @@ function OfflineLearningCenter({
   }
   async function unlock(event: FormEvent<HTMLFormElement>): Promise<boolean> {
     event.preventDefault();
+    const form = event.currentTarget;
     if (session.status !== "authenticated" || !workspaceId || !deviceId)
       return false;
     try {
@@ -362,10 +364,10 @@ function OfflineLearningCenter({
       await bootstrap(db, localVault);
       await refresh(db, localVault);
       setStatus("资料已在应用内解锁，可断网编辑并稍后同步。");
-      event.currentTarget.reset();
+      form.reset();
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       return false;
     }
   }
@@ -388,7 +390,7 @@ function OfflineLearningCenter({
           )
           .catch((error: unknown) => {
             setDataPhase("error");
-            setStatus(errorMessage(error));
+            setStatus(feedback.error(errorMessage(error)));
           }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
@@ -399,20 +401,31 @@ function OfflineLearningCenter({
       return;
     try {
       await bootstrap(database.current, vault.current);
-      await new SyncClient(
+      const result = await new SyncClient(
         database.current,
         transport(request, workspaceId),
         vault.current,
       ).synchronize(workspaceId, deviceId);
+      const remaining = await database.current.outbox
+        .where("[workspace_id+device_id]")
+        .equals([workspaceId, deviceId])
+        .toArray();
+      const incomplete = incompleteSyncMessage(result, remaining);
+      if (incomplete) {
+        setStatus(feedback.error(incomplete));
+        return;
+      }
       setStatus(
-        mode === "collaboration"
-          ? "共享审阅资料已同步。"
-          : mode === "research"
-            ? "研究资料已同步。"
-            : "自主学习资料已同步。",
+        feedback.success(
+          mode === "collaboration"
+            ? "共享审阅资料已同步。"
+            : mode === "research"
+              ? "研究资料已同步。"
+              : "自主学习资料已同步。",
+        ),
       );
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
     } finally {
       await refresh();
     }
@@ -514,10 +527,9 @@ function OfflineLearningCenter({
       }
       if (!committed) return false;
       form.reset();
-      setStatus("记录已加密保存。");
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -599,10 +611,9 @@ function OfflineLearningCenter({
       }
       if (!committed) return false;
       form.reset();
-      setStatus("研究记录已加密保存。");
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }
@@ -663,10 +674,9 @@ function OfflineLearningCenter({
       }
       if (!committed) return false;
       form.reset();
-      setStatus("共享记录已加密保存。");
       return true;
     } catch (error) {
-      setStatus(errorMessage(error));
+      setStatus(feedback.error(errorMessage(error)));
       await refresh();
       return false;
     }

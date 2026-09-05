@@ -16,6 +16,7 @@ overrides:
 patchedDependencies:
   minimatch@3.1.5: eccb9ecd4c288fb40991dd0c1a03b94699748424d4a15ace8b25facb539e27dc
   minimatch@5.1.9: 5161f69e7f2418bbee2a8ffd2f9c1c84bfe95fe3dc8ed8192e7205686ec7d92e
+  sonner@2.0.8: 343a7100b30018c1b16536d5c1f7dd40e4cf686d8014cbe8384cdb5637d13b68
 
 importers:
 
@@ -86,6 +87,9 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      sonner:
+        specifier: 2.0.8
+        version: 2.0.8(patch_hash=343a7100b30018c1b16536d5c1f7dd40e4cf686d8014cbe8384cdb5637d13b68)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
     devDependencies:
       '@logion/config':
         specifier: workspace:*
@@ -2847,6 +2851,16 @@ packages:
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
+
+  sonner@2.0.8:
+    resolution: {integrity: sha512-UM/ByIoFra8yzV75n1o0Puu0bw5U/9UNnDacrJNspekBewIfsQ3D6ez1nvlWpt7aTsO6rujQtifBpycwIivqlg==}
+    peerDependencies:
+      '@types/react': ^18.0.0 || ^19.0.0
+      react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+      react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -6095,6 +6109,13 @@ snapshots:
       side-channel-weakmap: 1.0.2
 
   siginfo@2.0.0: {}
+
+  sonner@2.0.8(patch_hash=343a7100b30018c1b16536d5c1f7dd40e4cf686d8014cbe8384cdb5637d13b68)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+    optionalDependencies:
+      '@types/react': 19.2.17
 
   source-map-js@1.2.1: {}
 

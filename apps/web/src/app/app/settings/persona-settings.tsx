@@ -1,5 +1,7 @@
 "use client";
 
+import { feedback, feedbackErrorText } from "@/lib/feedback";
+
 import Link from "next/link";
 import { type FormEvent, useRef, useState } from "react";
 
@@ -180,9 +182,13 @@ export function PersonaSettings() {
     setPendingId(persona.id);
     try {
       await setActivePersona(persona.id);
-      setStatus(`已切换到「${persona.name}」画像。`);
-    } catch {
-      setStatus("画像未能保存，请刷新数据后重试。");
+      setStatus(feedback.success(`已切换到「${persona.name}」画像。`));
+    } catch (error) {
+      setStatus(
+        feedback.error(
+          feedbackErrorText(error, "画像未能保存，请刷新数据后重试。"),
+        ),
+      );
     } finally {
       setPendingId(null);
     }
@@ -192,9 +198,13 @@ export function PersonaSettings() {
     setPendingId(persona.id);
     try {
       await deleteCustomPersona(persona.id);
-      setStatus(`已删除「${persona.name}」。`);
-    } catch {
-      setStatus("画像未能保存，请刷新数据后重试。");
+      setStatus(feedback.success(`已删除「${persona.name}」。`));
+    } catch (error) {
+      setStatus(
+        feedback.error(
+          feedbackErrorText(error, "画像未能保存，请刷新数据后重试。"),
+        ),
+      );
     } finally {
       setPendingId(null);
     }
@@ -219,9 +229,13 @@ export function PersonaSettings() {
       });
       form.reset();
       setSheetOpen(false);
-      setStatus("自定义画像已创建。");
-    } catch {
-      setStatus("画像未能保存，请刷新数据后重试。");
+      setStatus(feedback.success("自定义画像已创建。"));
+    } catch (error) {
+      setStatus(
+        feedback.error(
+          feedbackErrorText(error, "画像未能保存，请刷新数据后重试。"),
+        ),
+      );
     } finally {
       setPendingId(null);
     }

@@ -8,6 +8,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import type {
   AttachmentQueueEntry,
@@ -211,6 +214,7 @@ async function renderReadyCenter(fake: FakeDatabase): Promise<void> {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   for (const key of Object.keys(mocks.vaultSession)) {
     delete mocks.vaultSession[key];
   }
@@ -246,6 +250,11 @@ describe("OfflineSyncCenter attachment upload feedback", () => {
       expect(status).toContain("request-upload-disabled");
     });
     expect(document.body.textContent).not.toContain("完成服务器哈希验证");
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining("KNOWLEDGE_ATTACHMENT_INGEST_DISABLED"),
+      { duration: Infinity, closeButton: true },
+    );
+    expect(toast.success).not.toHaveBeenCalled();
     expect(await screen.findByRole("button", { name: "重试" })).toBeTruthy();
     expect(fake.state.rows[0]?.state).toBe("failed");
     expect(fake.state.rows[0]?.last_error_code).toBe(
@@ -274,6 +283,11 @@ describe("OfflineSyncCenter attachment upload feedback", () => {
       );
     });
     expect(fake.state.rows[0]?.state).toBe("verified");
+    expect(toast.success).toHaveBeenCalledWith(
+      "附件「research-notes.txt」上传成功，并完成服务器哈希验证。",
+      { duration: 3000 },
+    );
+    expect(toast.error).not.toHaveBeenCalled();
     expect(attachmentRequest).toHaveBeenCalledTimes(3);
   });
 

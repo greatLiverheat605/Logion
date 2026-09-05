@@ -1,0 +1,48 @@
+[data-sonner-toaster] {
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+[data-sonner-toast] {
+  overflow-wrap: anywhere;
+  max-height: min(40dvh, 20rem);
+  overflow-y: auto;
+}
+
+[data-sonner-toast] [data-content] {
+  min-width: 0;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]
+  [data-close-button] {
+  position: static;
+  transform: none;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  order: 3;
+  margin-left: auto;
+}
+
+[data-theme="dark"] [data-sonner-toaster] {
+  --normal-bg: #252528;
+  --normal-border: #505055;
+  --normal-text: #f4f4f5;
+  --success-bg: #173c2d;
+  --success-border: #327552;
+  --success-text: #b4f0c8;
+  --error-bg: #472327;
+  --error-border: #945057;
+  --error-text: #ffd0d4;
+}
+
+@media (max-width: 45rem) {
+  [data-sonner-toaster]
+    [data-sonner-toast][data-styled="true"]
+    [data-close-button] {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
+}

@@ -940,3 +940,33 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - AI 规划文档保持未跟踪且不纳入交付；本次没有 stage、commit、push、PR、merge 或部署。
 - 当前本地 Run 为 `run-v021-t02-dns-error-split`，待审查任务 `task-t02-review` 为 pending；
   T-01 Run 保留历史完成与门禁记录。两个 Run 均通过 validator，未提前标记 T-02 accepted。
+
+## T-03 方案 C 实施批准（2026-09-05）
+
+- 用户确认步骤 0 浏览器复核已通过审查，并批准方案 C：修复 F1-F4、引入 Sonner 瞬时反馈、
+  保留七个模块的 inline 状态。实施基线为 `018e8a229252b702c33840d8f74bdd1d7d7b250b`，
+  独占分支 `dev/T-03-feedback-visibility`。本地提交已获交接授权，不推送、不部署。
+- 状态：实施与验证中，尚未验收。生产身份、DNS 出网与真实读屏播报不作为本轮通过项；
+  原有默认关闭开关、CSP、认证、同步协议与 AI 安全边界保持不变。
+
+## T-03 方案 C 实施待审查（2026-09-05）
+
+- F1-F4 已修复；七模块通过统一 `feedback` API 调用 Sonner，保留 inline StatusLine。
+  错误手动关闭、成功 3 秒；移动长错误码换行、44px 关闭按钮、ARIA live 区域均已验证。
+- Sonner 固定 `2.0.8`，采用仓库已有 pnpm patch 模式关闭自动 style 注入，静态导入官方 CSS；
+  生产 CSP 未放宽。依赖评估、修复语义、测试与真实/模拟边界见
+  [`V021_T03_FEEDBACK_REVIEW.md`](./V021_T03_FEEDBACK_REVIEW.md)。
+- 最新 Web 全量 `83 files / 321 tests`、lint、typecheck、production build 均通过。
+  七模块矩阵补强成败语义与 inline 一致性断言后 `28` 场景通过；此前复用浏览器资料的运行已作废归档。
+  持久 Playwright 三档视口 `12` 项通过，
+  覆盖 F1-F4、320×568 无横向滚动和主操作不被遮挡。另补 320×568 深色 Run 失败场景通过。
+- T-01 未回归：真实默认关闭附件 404 可见具体错误码和请求编号，且不含验证成功文案；
+  verified 成功使用明确标注的 browser route mock，不作为 scanner 验收。
+- `pnpm ci:fast` 仍在既有 Worker `email_delivery.py:13/16` 的第三方依赖 typing 处失败，
+  与 T-02 状态一致；补齐锁定 Python 环境后仍为相同 4 个错误。未改无关 Worker、未豁免聚合门。
+- NVDA/VoiceOver 实际播报按照最新交接留给回归验收，生产身份与 DNS 出网继续 blocked。
+  代码已供审查；因聚合门失败，本次未 stage、commit、push、merge、PR 或 deploy。
+  AI 规划文档保持未跟踪，浏览器生成结果不纳入候选差异。
+- 最后一处 Run 提交中取消禁用已通过全量 Web 和生产构建复验，并补跑 Run 四场景及深色 320px。
+  本地 Run `run-v021-t03-feedback-visibility` 已验证，owner review 为 pending；旧 T-02 事件保留。
+  本机隔离预览暂留供审查，无推理 Worker，不作为生产环境。

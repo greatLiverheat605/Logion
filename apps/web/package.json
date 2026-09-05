@@ -24,7 +24,8 @@
     "json-canonicalize": "2.0.0",
     "next": "16.2.11",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "sonner": "2.0.8"
   },
   "devDependencies": {
     "@logion/config": "workspace:*",
