@@ -872,3 +872,34 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - `pnpm ci:fast` 未记为通过：Prettier 会扫描 17 个既有未跟踪 Markdown 文件并失败；root mypy 仍在既有 Worker 邮件模块的第三方包 typing metadata 处失败。T-00 未修改这些无关文件。
 - 2026-09-05 再次观察公网 `https://logion.work/health` 为 HTTP 200、`Cache-Control: no-store`，但版本仍是 `0.1.0`。生产 API readiness version、四个已部署镜像 digest 与候选 manifest 对照均为 `not_run`，原因是当前会话没有获授权的生产连接上下文；因此未判定线上是 RC7、RC8 或其他版本。
 - 本地 Run `run-v021-t00-expose-build-sha` 保持未验收并阻塞于生产证据。没有 commit、push、PR、deploy、流量切换或生产能力变更。
+
+## v0.2.1 T-01 本地实现收口（2026-09-05）
+
+- T-01 执行分支为 `dev/T-01-attachment-upload-truthful`，不可变基线为 T-00 本地提交
+  `8a3ee2e01ea884858a7363ba19571d0db2c1ae30`。T-00 的本地实现提交已存在，但生产 build identity
+  仍未验收；本节不把 T-00 写成生产通过。
+- 附件上传调用方现按 `uploadPending()` 的实际返回值区分 `null`、`verified` 与 `failed`；只有
+  `verified` 会显示“完成服务器哈希验证”。成功和失败反馈均使用实际处理结果的文件名，失败行保留在
+  本地队列中。Web transport 仅在当前上传生命周期内保留最后一个真实 `LogionApiError`，从而显示服务端
+  `code` 与 `requestId`；未修改 IndexedDB schema、offline wire、附件删除或生产开关。
+- 新增组件回归穿过真实 `OfflineSyncCenter`、`AttachmentQueueRepository` 与
+  `ApiAttachmentUploadTransport`：失败用例断言文件名、`KNOWLEDGE_ATTACHMENT_INGEST_DISABLED`、
+  请求编号、重试入口及“完成服务器哈希验证”缺席；成功用例断言文件名与 verified 文案；另覆盖队列竞态
+  返回 `null`。定向 Web 为 `2 files / 4 tests`，offline resilience 为 `1 file / 9 tests`；完整 Web
+  `80 files / 297 tests`、完整 offline `7 files / 55 tests`、根级测试（Python `550 passed, 77 deselected`、
+  contracts `12`、mobile `4`）、Web lint/typecheck/build、root build、`pnpm contracts:check`、Prettier、
+  Ruff、ESLint、`git diff --check` 与状态模型 `118` 项均已实际通过。
+- 浏览器清单 5.4 已在隔离本机栈复测：真实 PostgreSQL/Redis/API/Web 路径的附件 init 返回 HTTP `404` /
+  `KNOWLEDGE_ATTACHMENT_INGEST_DISABLED`，页面显示文件名、错误码和动态 request ID，失败行仍可重试，
+  且整页不含验证成功文案；随后以浏览器级 API route mock 依次返回 init/content/complete verified，只有此时
+  出现带文件名的验证成功文案。后半段仅证明真实浏览器 UI 与 transport 合同，不冒充 ClamAV/scanner 的
+  服务端成功验收。临时服务、容器和测试数据已清理。
+- 已复核 `packages/offline/src` 的 15 个 `catch (`：`bootstrap.ts:196/218/258`、
+  `database.ts:108`、`hashing.ts:65/81`、`protected-repository.ts:39`、`repository.ts:184/244`、
+  `resilience.ts:241/399`、`sync-client.ts:78`、`validation.ts:43`、`vault.ts:114`、
+  `yjs-notes.ts:291`。其中 14 处重新抛出，只有 `resilience.ts:399` 按设计写入 `failed` 后返回 entry；
+  另有不计入这 15 处的 `yjs-notes.ts:73 catch {}`，同样立即抛错。该清单必须原样进入后续 PR 描述。
+- `uv sync --all-packages --group dev --frozen` 已通过；`pnpm ci:fast` 仍在与 T-01 无关的既有 Worker
+  mypy 问题处失败：`email_delivery.py` 无法取得 `alibabacloud_credentials.client/models` 的类型实现，
+  并报告两个 `unused-ignore`。该聚合门没有写成通过，也未越界修改邮件模块。
+- 当前只有上述 Web 实现、组件测试和本状态文档差异；没有 commit、push、PR、merge、deploy 或生产能力变更。

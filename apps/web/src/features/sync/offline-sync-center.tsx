@@ -63,6 +63,29 @@ function userMessage(error: unknown): string {
   return "操作未完成；本地数据保持不变，请检查解锁状态或稍后重试。";
 }
 
+function attachmentFailureMessage(
+  attachment: AttachmentQueueEntry,
+  apiError: LogionApiError | null,
+): string {
+  const code =
+    apiError?.code ??
+    attachment.last_error_code ??
+    "OFFLINE_ATTACHMENT_UPLOAD_FAILED";
+  const request = apiError ? `；请求编号：${apiError.requestId}` : "";
+  const evidence = `（${code}${request}）`;
+
+  switch (code) {
+    case "KNOWLEDGE_ATTACHMENT_INGEST_DISABLED":
+      return `附件「${attachment.filename}」上传失败：服务端附件功能当前未开放，本地文件保留在队列中${evidence}。`;
+    case "OFFLINE_ATTACHMENT_METADATA_REQUIRED":
+      return `附件「${attachment.filename}」未上传：需补全目标对象信息，本地文件保留在队列中${evidence}。`;
+    case "OFFLINE_ATTACHMENT_VERIFICATION_FAILED":
+      return `附件「${attachment.filename}」上传失败：服务器未确认哈希，本地文件保留在队列中，请重试${evidence}。`;
+    default:
+      return `附件「${attachment.filename}」上传失败：本地文件保留在队列中，请检查错误码后重试${evidence}。`;
+  }
+}
+
 function transport(
   apiRequest: ApiClient["request"],
   workspaceId: string,
@@ -465,15 +488,22 @@ export function OfflineSyncCenter() {
     const db = database.current;
     if (db === null) return;
     const repository = new AttachmentQueueRepository(db);
+    const uploadTransport = new ApiAttachmentUploadTransport();
     try {
       if (attachment.state === "failed") {
         await repository.retry(attachment.attachment_id);
       }
-      await repository.uploadPending(
+      const result = await repository.uploadPending(
         workspaceId,
-        new ApiAttachmentUploadTransport(),
+        uploadTransport,
       );
-      setStatus("附件上传队列已处理一项，并完成服务器哈希验证。");
+      if (result === null) {
+        setStatus("附件队列中没有待上传项。");
+      } else if (result.state === "verified") {
+        setStatus(`附件「${result.filename}」上传成功，并完成服务器哈希验证。`);
+      } else {
+        setStatus(attachmentFailureMessage(result, uploadTransport.lastError));
+      }
     } catch (error) {
       setStatus(userMessage(error));
     } finally {
