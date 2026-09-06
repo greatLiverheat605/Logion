@@ -424,7 +424,7 @@ function QueuePanel({
                       ? "服务端精确匹配"
                       : "本人明确判断"}
                     {latest
-                      ? ` · 最近${formatStatus(String(latest.payload.is_correct))}`
+                      ? ` · 最近${latest.payload.is_correct === true ? "正确" : latest.payload.is_correct === false ? "错误" : "尚未判定"}`
                       : " · 尚未作答"}
                   </small>
                 </div>

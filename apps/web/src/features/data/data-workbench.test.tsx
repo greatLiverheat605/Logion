@@ -1,5 +1,8 @@
+/** @vitest-environment jsdom */
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DataWorkbench } from "./data-workbench";
 import type { DataControllerResult } from "./use-data-controller";
@@ -91,6 +94,8 @@ function controller(
   };
 }
 
+afterEach(cleanup);
+
 describe("data sovereignty workbench", () => {
   it("renders export master, data view main and isolated danger inspector", () => {
     const html = renderToStaticMarkup(
@@ -102,11 +107,51 @@ describe("data sovereignty workbench", () => {
     expect(html).toContain('data-testid="data-inspector"');
     expect(html).toContain('data-testid="data-export-detail"');
     expect(html).toContain("数据主权");
-    expect(html).toContain("创建加密导出");
+    expect(html).toContain("创建导出");
+    expect(html).toContain("下载 ZIP");
+    expect(html).not.toContain("加密数据包");
     expect(html).toContain("危险区");
     expect(html).not.toContain("product-panel");
     expect(html).not.toContain("planning-form");
     expect(html.match(/data-workbench-primary="true"/g)).toHaveLength(1);
+  });
+
+  it.each([
+    [null, "生成中"],
+    [0, "0 B"],
+    [1023, "1023 B"],
+    [1024, "1.0 KB"],
+    [1048575, "1024.0 KB"],
+    [1048576, "1.0 MB"],
+  ] as const)("renders %s bytes as %s", (bytes, label) => {
+    const value = controller();
+    const item = { ...value.context.exports[0]!, artifact_bytes: bytes };
+    const html = renderToStaticMarkup(
+      <DataWorkbench
+        controller={controller({ exports: [item], selectedExport: item })}
+      />,
+    );
+    expect(html).toContain(label);
+    expect(html).not.toContain("0.0 MB");
+  });
+
+  it("distinguishes encrypted storage from the readable download before confirmation", () => {
+    render(<DataWorkbench controller={controller()} />);
+    fireEvent.click(screen.getByRole("button", { name: "创建导出" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("服务端加密存储");
+    expect(dialog.textContent).toContain("24 小时");
+    expect(dialog.textContent).toContain("ZIP");
+    for (const format of [
+      "manifest.json",
+      "data.json",
+      "Markdown",
+      "CSV",
+      "BibTeX",
+    ]) {
+      expect(dialog.textContent).toContain(format);
+    }
+    expect(dialog.textContent).not.toContain("加密数据包");
   });
 
   it("keeps import previews bounded to private spaces", () => {

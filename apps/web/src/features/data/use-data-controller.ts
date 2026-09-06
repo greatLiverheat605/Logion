@@ -113,12 +113,15 @@ export function useDataController(): DataControllerResult {
   const [loading, setLoading] = useState(false);
   const [networkOffline, setNetworkOffline] = useState(false);
   const initialLoadStarted = useRef(false);
+  const loadGeneration = useRef(0);
 
   const loadData = useCallback(async (selectedWorkspaceId: string) => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     try {
       const result =
         await integrationCapabilityService.loadPortability(selectedWorkspaceId);
+      if (generation !== loadGeneration.current) return false;
       setExports(result.exports);
       setImports(result.imports);
       setSpaces(result.privateSpaces);
@@ -154,6 +157,7 @@ export function useDataController(): DataControllerResult {
       setStatus("数据边界已读取；导出和导入都需要显式确认。");
       return true;
     } catch (error) {
+      if (generation !== loadGeneration.current) return false;
       setExports([]);
       setImports([]);
       setSpaces([]);
@@ -163,7 +167,7 @@ export function useDataController(): DataControllerResult {
       setStatus(failure.message);
       return false;
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, []);
 
@@ -210,8 +214,50 @@ export function useDataController(): DataControllerResult {
     };
   }, []);
 
+  const hasRunningExports =
+    dataWorkspaceId === workspaceId &&
+    exports.some(
+      (item) => item.status === "queued" || item.status === "running",
+    );
+
+  useEffect(() => {
+    if (
+      !hasRunningExports ||
+      loading ||
+      networkOffline ||
+      dataState !== "ready"
+    )
+      return;
+    let timer: number | undefined;
+    const stop = () => {
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    const updateVisibility = () => {
+      stop();
+      if (document.visibilityState === "visible") {
+        timer = window.setInterval(() => void loadData(workspaceId), 5000);
+      }
+    };
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", updateVisibility);
+    };
+  }, [
+    dataState,
+    hasRunningExports,
+    loadData,
+    loading,
+    networkOffline,
+    workspaceId,
+  ]);
+
   const runMutation = useCallback(
     async (operation: () => Promise<unknown>, successMessage: string) => {
+      // 用户操作开始后，旧轮询响应不能覆盖操作结果或错误。
+      loadGeneration.current += 1;
       setLoading(true);
       try {
         await operation();

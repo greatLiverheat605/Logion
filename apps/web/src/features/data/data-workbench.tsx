@@ -43,6 +43,7 @@ function dateLabel(value: string | null | undefined) {
 function bytesLabel(value: number | null) {
   if (value === null || value === undefined) return "生成中";
   if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
@@ -65,7 +66,7 @@ function ExportRows({
     return (
       <ProductEmptyState
         title="尚未创建导出"
-        description="创建后，服务器会在后台生成加密数据包；完成后可验证校验和并下载。"
+        description="服务器在后台生成 ZIP 并加密存储；完成后可核对校验和，下载可读文件。"
       />
     );
   }
@@ -173,7 +174,7 @@ function ExportDetail({
       <header className={styles.detailHeader}>
         <div>
           <span className={styles.kicker}>EXPORT JOB</span>
-          <h2>加密导出</h2>
+          <h2>数据导出</h2>
           <p>
             {dateLabel(item.created_at)} 创建 · {item.schema_version}
           </p>
@@ -216,7 +217,7 @@ function ExportDetail({
             href={`/api/v1/workspaces/${item.workspace_id}/data-exports/${item.id}/download`}
           >
             <AppIcon name="download" size={14} />
-            下载加密数据包
+            下载 ZIP
           </a>
         ) : null}
         {item.status === "queued" || item.status === "running" ? (
@@ -362,10 +363,10 @@ function ExportSheet({
   }
   return (
     <WorkbenchSheet
-      description="导出范围绑定当前 Workspace，服务器生成加密数据包并保存 24 小时。"
+      description="服务端加密存储并保留 24 小时；下载后为可读 ZIP，包含 manifest.json、data.json、笔记 Markdown、任务 CSV 和论文 BibTeX。"
       onOpenChange={onOpenChange}
       open={open}
-      title="创建加密导出"
+      title="创建导出"
     >
       <form className={styles.sheetForm} onSubmit={submit}>
         <div className={styles.scopeBlock}>
@@ -387,7 +388,8 @@ function ExportSheet({
           required
         />
         <p className={styles.formHint}>
-          下载页会再次要求近期认证，并提供 SHA-256 校验和。
+          下载时会再次要求近期认证，并提供 SHA-256 校验和。下载后的 ZIP
+          未加密，请妥善保管。
         </p>
         <footer className={styles.sheetActions}>
           <button type="button" onClick={() => onOpenChange(false)}>
@@ -398,7 +400,7 @@ function ExportSheet({
             disabled={!controller.capabilities.canExport || controller.loading}
             type="submit"
           >
-            创建加密导出
+            创建导出
           </button>
         </footer>
       </form>
@@ -740,7 +742,7 @@ export function DataWorkbench({
                   type="button"
                 >
                   <AppIcon name="download" size={15} />
-                  创建加密导出
+                  创建导出
                 </button>
               }
               description="用可验证的导出、预览导入和隔离删除，掌握自己的数据边界。"
