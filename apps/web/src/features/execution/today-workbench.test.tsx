@@ -62,6 +62,7 @@ function controllerFixture() {
     finishSession: vi.fn(async () => true),
     loadContext: vi.fn(async () => undefined),
     setSelectedTaskId: vi.fn(),
+    reportDeletion: vi.fn(),
     setSpaceId: vi.fn(),
     setWorkspaceId: vi.fn(),
     startSession: vi.fn(async () => true),

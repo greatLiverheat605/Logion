@@ -1,4 +1,5 @@
 "use client";
+import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import Link from "next/link";
 import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
@@ -427,6 +428,16 @@ function PlanningInspector({
           当前版本只回显阶段顺序；追加阶段、强依赖与发布操作需要服务端读写合同支持后才会开放。
         </p>
       </InspectorSection>
+      <EntityDeleteAction
+        entityType="learning_goal"
+        entityId={goal.id}
+        workspaceId={controller.context.workspaceId}
+        disabled={
+          !controller.capabilities.canWrite || !controller.context.unlocked
+        }
+        onStatus={controller.commands.reportDeletion}
+        onDeleted={() => controller.commands.selectGoal(null)}
+      />
     </div>
   );
 }

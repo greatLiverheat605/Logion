@@ -136,7 +136,12 @@ export class YjsNoteRepository {
       ];
       const note = await this.database.entities.get(noteKey);
       const state = await this.database.entities.get(stateKey);
-      if (note === undefined || state === undefined) {
+      if (
+        note === undefined ||
+        state === undefined ||
+        note.deleted_at !== null ||
+        note.sync_status === "conflict"
+      ) {
         throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
       }
       const noteReference = requireReference(note);
@@ -260,6 +265,16 @@ export class YjsNoteRepository {
         this.database.outbox,
         this.database.vaultRecords,
         async () => {
+          const current = await this.database.entities.get(noteKey);
+          if (
+            !current ||
+            current.deleted_at !== null ||
+            current.sync_status === "conflict" ||
+            current.local_revision !== note.local_revision ||
+            current.server_version !== note.server_version
+          ) {
+            throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+          }
           if (
             (await this.database.outbox.get(input.operation_id)) !== undefined
           ) {

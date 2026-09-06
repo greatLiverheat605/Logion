@@ -42,6 +42,7 @@ function controller(
       createGoal: vi.fn(),
       loadContext: vi.fn(),
       selectGoal: vi.fn(),
+      reportDeletion: vi.fn(),
       setSpaceId: vi.fn(),
       setWorkspaceId: vi.fn(),
       synchronize: vi.fn(),

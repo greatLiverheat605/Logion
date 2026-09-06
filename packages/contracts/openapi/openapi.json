@@ -1721,6 +1721,20 @@
       "AppliedOperationResult": {
         "additionalProperties": false,
         "properties": {
+          "impact": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact"
+          },
           "operation_id": {
             "format": "uuid",
             "title": "Operation Id",
@@ -3477,6 +3491,41 @@
         "title": "DateFieldDefinition",
         "type": "object"
       },
+      "DeletionPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Blockers",
+            "type": "object"
+          },
+          "can_delete": {
+            "title": "Can Delete",
+            "type": "boolean"
+          },
+          "impact": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Impact",
+            "type": "object"
+          },
+          "server_version": {
+            "title": "Server Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "server_version",
+          "impact",
+          "blockers",
+          "can_delete"
+        ],
+        "title": "DeletionPreview",
+        "type": "object"
+      },
       "DeliverableCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4497,6 +4546,20 @@
       "FailedOperationResult": {
         "additionalProperties": false,
         "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
           "error_code": {
             "pattern": "^SYNC_[A-Z0-9_]{2,80}$",
             "title": "Error Code",
@@ -11167,6 +11230,18 @@
             "pattern": "^sha256:[a-f0-9]{64}$",
             "title": "Local Payload Hash",
             "type": "string"
+          },
+          "remote_deleted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Deleted At"
           },
           "remote_payload": {
             "additionalProperties": true,
@@ -38399,6 +38474,73 @@
           }
         },
         "summary": "Bootstrap",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/sync/deletion-preview/{entity_type}/{entity_id}": {
+      "get": {
+        "operationId": "sync_deletion_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entity_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "learning_goal",
+                "task",
+                "note"
+              ],
+              "title": "Entity Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Deletion",
         "tags": [
           "sync"
         ]

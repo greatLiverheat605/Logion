@@ -177,7 +177,7 @@ export function deriveRecordsViewModel({
   attachments: AttachmentQueueEntry[];
   notes: RecordsLocalView<RecordsNotePayload>[];
   resources: RecordsLocalView<RecordsResourcePayload>[];
-  selectedNoteId: string;
+  selectedNoteId: string | null;
   spaceId: string;
 }): RecordsDerivedViewModel {
   const visibleNotes = newestFirst(
@@ -190,9 +190,13 @@ export function deriveRecordsViewModel({
     .filter((item) => item.space_id === spaceId)
     .sort((left, right) => right.queued_at.localeCompare(left.queued_at));
   const selectedNote =
-    visibleNotes.find((item) => item.entity.entity_id === selectedNoteId) ??
-    visibleNotes[0] ??
-    null;
+    selectedNoteId === null
+      ? null
+      : (visibleNotes.find(
+          (item) => item.entity.entity_id === selectedNoteId,
+        ) ??
+        visibleNotes[0] ??
+        null);
 
   return {
     attachmentCount: visibleAttachments.length,
@@ -370,7 +374,8 @@ export interface RecordsControllerResult {
       noteId: string,
       input: { markdownBody: string; title: string },
     ) => Promise<boolean>;
-    selectNote: (noteId: string) => void;
+    selectNote: (noteId: string | null) => void;
+    reportDeletion: (message: string) => void;
     setSpaceId: (spaceId: string) => void;
     setWorkspaceId: (workspaceId: string) => void;
     synchronize: () => Promise<boolean>;
@@ -416,7 +421,7 @@ export function useRecordsController(): RecordsControllerResult {
   const [workspaceId, setWorkspaceIdState] = useState("");
   const [spaceId, setSpaceIdState] = useState("");
   const [deviceId, setDeviceId] = useState("");
-  const [selectedNoteId, setSelectedNoteId] = useState("");
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>("");
   const [status, setStatus] = useState("正在准备记录与资料库……");
   const [notes, setNotes] = useState<RecordsLocalView<RecordsNotePayload>[]>(
     [],
@@ -650,12 +655,14 @@ export function useRecordsController(): RecordsControllerResult {
     const localVault = vault.current;
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
     queueMicrotask(() => {
+      // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault, workspaceId)
         .then(() => {
           if (workspaceId === workspaceIdRef.current) {
-            setIssue(null);
-            setStatus(
-              "本地资料已解锁；安全预览只渲染 Markdown 结构，不执行 HTML。",
+            setStatus((current) =>
+              current === "请选择 Space 并解锁本地资料。"
+                ? "本地资料已解锁；安全预览只渲染 Markdown 结构，不执行 HTML。"
+                : current,
             );
           }
         })
@@ -1180,6 +1187,7 @@ export function useRecordsController(): RecordsControllerResult {
       renameResource,
       saveNote,
       selectNote: setSelectedNoteId,
+      reportDeletion: setStatus,
       setSpaceId,
       setWorkspaceId,
       synchronize,

@@ -1,0 +1,54 @@
+.danger {
+  color: var(--text-danger);
+  border: 1px solid currentColor;
+}
+
+.trigger,
+.actions button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.trigger,
+.actions .danger {
+  color: var(--text-danger);
+  border-color: currentColor;
+}
+
+.trigger:disabled,
+.actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.trigger:focus-visible,
+.actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 45rem) {
+  .trigger {
+    margin-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    scroll-margin-block: 5rem;
+  }
+}
+
+.body {
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}

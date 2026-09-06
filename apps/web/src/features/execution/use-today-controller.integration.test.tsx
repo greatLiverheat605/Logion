@@ -156,11 +156,17 @@ describe("Today controller Workspace isolation", () => {
     });
 
     await act(async () => {
+      result.current.commands.reportDeletion(
+        "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
+      );
       firstRead.resolve([task("workspace-1", "space-1", "stale-task-a")]);
       await firstRead.promise;
     });
 
     expect(result.current.context.workspaceId).toBe("workspace-2");
     expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe("task-b");
+    expect(result.current.context.status).toBe(
+      "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
+    );
   });
 });

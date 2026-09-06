@@ -22,12 +22,14 @@ from logion_api.memory.dependencies import MemoryServiceDependency
 from logion_api.planning.dependencies import PlanningServiceDependency
 from logion_api.research.dependencies import ResearchServiceDependency
 from logion_api.self_study.dependencies import SelfStudyServiceDependency
+from logion_api.sync.deletion import DeleteEntityType, deletion_scope
 from logion_api.sync.push import SyncPushService
 from logion_api.sync.read import InvalidChunkError, StaleSnapshotError, SyncReadService
 from logion_api.sync.schemas import (
     BootstrapRequest,
     BootstrapResponse,
     CursorExpiredControl,
+    DeletionPreview,
     PullRequest,
     PullResponse,
     PushRequest,
@@ -38,6 +40,31 @@ from logion_api.sync.service import SyncLedgerService
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/sync", tags=["sync"])
+
+
+@router.get(
+    "/deletion-preview/{entity_type}/{entity_id}",
+    response_model=DeletionPreview,
+    operation_id="sync_deletion_preview",
+)
+async def preview_deletion(
+    workspace_id: UUID,
+    entity_type: DeleteEntityType,
+    entity_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    workspaces: WorkspaceServiceDependency,
+) -> DeletionPreview:
+    scope = await deletion_scope(
+        db, workspaces, context, workspace_id, entity_type, entity_id, request_id(request)
+    )
+    return DeletionPreview(
+        server_version=scope.root.version,
+        impact=scope.impact,
+        blockers=scope.blockers,
+        can_delete=scope.root.deleted_at is None and not any(scope.blockers.values()),
+    )
 
 
 def _validate_context(
@@ -158,7 +185,7 @@ async def push(
     return PushResponse(
         workspace_id=workspace_id,
         device_id=context.device.id,
-        sync_epoch=state.sync_epoch,
+        sync_epoch=payload.sync_epoch,
         results=results,
     )
 

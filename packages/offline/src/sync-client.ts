@@ -168,9 +168,26 @@ export class SyncClient {
             ];
             const entity = await this.database.entities.get(key);
             if (entity !== undefined) {
+              const remaining = await this.database.outbox
+                .where("workspace_id")
+                .equals(state.workspace_id)
+                .filter(
+                  (item) =>
+                    item.entity_id === operation.entity_id &&
+                    (item.entity_type === entityType ||
+                      (entityType === "note" &&
+                        item.entity_type === "note_document_update")),
+                )
+                .toArray();
               await this.database.entities.update(key, {
                 server_version: result.server_version,
-                sync_status: "clean",
+                sync_status: remaining.some(
+                  (item) => item.outbox_state === "conflict",
+                )
+                  ? "conflict"
+                  : remaining.length
+                    ? "pending"
+                    : "clean",
               });
               if (operation.entity_type === "note_document_update") {
                 await this.database.entities.update(
@@ -241,7 +258,9 @@ export class SyncClient {
             if (result.status === "conflict") {
               const local = await this.database.entities.get([
                 state.workspace_id,
-                operation.entity_type,
+                operation.entity_type === "note_document_update"
+                  ? "note"
+                  : operation.entity_type,
                 operation.entity_id,
               ]);
               if (local === undefined) {
@@ -274,7 +293,9 @@ export class SyncClient {
               await this.database.entities.update(
                 [
                   state.workspace_id,
-                  operation.entity_type,
+                  operation.entity_type === "note_document_update"
+                    ? "note"
+                    : operation.entity_type,
                   operation.entity_id,
                 ],
                 { sync_status: "conflict" },
@@ -290,6 +311,22 @@ export class SyncClient {
                     ? result.error_code
                     : "SYNC_OPERATION_REJECTED",
             });
+            if (
+              result.status !== "conflict" &&
+              operation.operation_type === "delete"
+            ) {
+              await this.database.entities.update(
+                [
+                  state.workspace_id,
+                  operation.entity_type,
+                  operation.entity_id,
+                ],
+                {
+                  deleted_at: null,
+                  sync_status: "pending",
+                },
+              );
+            }
           }
         }
       },
@@ -351,38 +388,13 @@ export class SyncClient {
   ): Promise<void> {
     const protectedPayloads = new Map<string, JsonObject>();
     const sealedPayloads: VaultRecord[] = [];
-    const pendingSources = new Map<string, OutboxEntry | undefined>();
     for (const change of message.changes) {
-      const existing = await this.database.entities.get([
-        state.workspace_id,
-        change.entity_type,
-        change.entity_id,
-      ]);
-      if (existing?.sync_status === "pending") {
-        const related = await this.database.outbox
-          .where("[workspace_id+entity_type+entity_id]")
-          .equals([state.workspace_id, change.entity_type, change.entity_id])
-          .toArray();
-        pendingSources.set(
-          change.operation_id,
-          related
-            .sort(
-              (left, right) =>
-                left.queued_at.localeCompare(right.queued_at) ||
-                left.operation_id.localeCompare(right.operation_id),
-            )
-            .at(-1),
-        );
-      }
-      if (isProtectedEntityType(change.entity_type)) {
+      if (isProtectedEntityType(change.entity_type) && !change.tombstone) {
         if (this.vault === undefined) {
           throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
         }
-        const vaultId =
-          change.entity_type === "note_document_update" ||
-          existing?.sync_status === "pending"
-            ? change.operation_id
-            : change.entity_id;
+        // Remote records must never overwrite the Vault slot of an in-flight local edit.
+        const vaultId = change.operation_id;
         sealedPayloads.push(
           await this.vault.seal(
             vaultId,
@@ -413,14 +425,83 @@ export class SyncClient {
             throw new OfflineStorageError("OFFLINE_TRANSACTION_FAILED");
           }
           expected = change.sequence;
+          if (
+            change.entity_type === "note_document_state" ||
+            change.entity_type === "note_document_update"
+          ) {
+            const noteId =
+              change.entity_type === "note_document_update"
+                ? change.entity_id
+                : (change.payload as JsonObject).note_id;
+            if (typeof noteId === "string") {
+              const note = await this.database.entities.get([
+                state.workspace_id,
+                "note",
+                noteId,
+              ]);
+              if (
+                note &&
+                (note.sync_status !== "clean" || note.deleted_at !== null)
+              )
+                continue;
+            }
+          }
           const key: [string, string, string] = [
             state.workspace_id,
             change.entity_type,
             change.entity_id,
           ];
           const existing = await this.database.entities.get(key);
+          if (existing?.sync_status === "conflict") {
+            const conflicts = await this.database.conflicts
+              .where("workspace_id")
+              .equals(state.workspace_id)
+              .filter(
+                (item) =>
+                  item.entity_type === change.entity_type &&
+                  item.entity_id === change.entity_id &&
+                  item.status === "open",
+              )
+              .toArray();
+            for (const conflict of conflicts) {
+              if (change.server_version <= conflict.remote_version) continue;
+              await this.database.conflicts.update(conflict.conflict_id, {
+                remote_version: change.server_version,
+                remote_payload:
+                  protectedPayloads.get(change.operation_id) ??
+                  (change.payload as JsonObject),
+                remote_payload_hash: change.payload_hash,
+                remote_deleted_at: change.deleted_at,
+                conflict_kind: change.tombstone
+                  ? "delete_update"
+                  : conflict.conflict_kind,
+                resolution_options: change.tombstone
+                  ? ["keep_remote", "dismiss"]
+                  : conflict.resolution_options,
+                server_recorded: false,
+              });
+            }
+            continue;
+          }
           if (existing?.sync_status === "pending") {
-            const source = pendingSources.get(change.operation_id);
+            const related = await this.database.outbox
+              .where("workspace_id")
+              .equals(state.workspace_id)
+              .filter(
+                (item) =>
+                  item.entity_id === change.entity_id &&
+                  (item.entity_type === change.entity_type ||
+                    (change.entity_type === "note" &&
+                      item.entity_type === "note_document_update")),
+              )
+              .toArray();
+            const source = related
+              .sort(
+                (left, right) =>
+                  left.queued_at.localeCompare(right.queued_at) ||
+                  left.operation_id.localeCompare(right.operation_id),
+              )
+              .at(-1);
             const conflictId = uuidv5(
               `logion:pull-conflict:${state.workspace_id}:${change.operation_id}:` +
                 `${change.entity_type}:${change.entity_id}`,
@@ -438,7 +519,12 @@ export class SyncClient {
               entity_type: change.entity_type,
               entity_id: change.entity_id,
               status: "open",
-              conflict_kind: contentConflict ? "content" : "status",
+              conflict_kind:
+                change.tombstone || existing.deleted_at !== null
+                  ? "delete_update"
+                  : contentConflict
+                    ? "content"
+                    : "status",
               base_version: existing.server_version,
               local_payload: existing.payload,
               local_payload_hash: existing.payload_hash,
@@ -447,11 +533,13 @@ export class SyncClient {
                 protectedPayloads.get(change.operation_id) ??
                 (change.payload as JsonObject),
               remote_payload_hash: change.payload_hash,
-              resolution_options: ["note", "resource"].includes(
-                change.entity_type,
-              )
-                ? ["keep_local", "keep_remote", "merge", "dismiss"]
-                : ["keep_remote", "dismiss"],
+              remote_deleted_at: change.deleted_at,
+              resolution_options:
+                !change.tombstone &&
+                existing.deleted_at === null &&
+                ["note", "resource"].includes(change.entity_type)
+                  ? ["keep_local", "keep_remote", "merge", "dismiss"]
+                  : ["keep_remote", "dismiss"],
               source_operation_id: source?.operation_id ?? null,
               source_device_id: source?.device_id ?? null,
               resolution_operation_id: null,
@@ -461,10 +549,20 @@ export class SyncClient {
               resolved_at: null,
             });
             if (source !== undefined) {
-              await this.database.outbox.update(source.operation_id, {
-                outbox_state: "conflict",
-                last_error_code: "SYNC_CONFLICT",
-              });
+              await this.database.outbox
+                .where("workspace_id")
+                .equals(state.workspace_id)
+                .filter(
+                  (item) =>
+                    item.entity_id === change.entity_id &&
+                    (item.entity_type === change.entity_type ||
+                      (change.entity_type === "note" &&
+                        item.entity_type === "note_document_update")),
+                )
+                .modify({
+                  outbox_state: "conflict",
+                  last_error_code: "SYNC_CONFLICT",
+                });
             }
             await this.database.entities.update(key, {
               sync_status: "conflict",
@@ -490,6 +588,18 @@ export class SyncClient {
             sync_status: "clean",
           };
           await this.database.entities.put(entity);
+          if (change.entity_type === "note" && change.tombstone) {
+            await this.database.entities.delete([
+              state.workspace_id,
+              "note_document_state",
+              noteDocumentStateId(state.workspace_id, change.entity_id),
+            ]);
+            await this.database.entities.delete([
+              state.workspace_id,
+              "note_document_update",
+              change.entity_id,
+            ]);
+          }
         }
         if (
           message.next_cursor < expected ||

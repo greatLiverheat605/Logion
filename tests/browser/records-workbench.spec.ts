@@ -1,4 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
+import { randomUUID } from "node:crypto";
+import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 import {
@@ -18,6 +20,360 @@ import {
 } from "./workbench-audit";
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+
+async function seedDeletionScope(page: Page, referenced = false) {
+  const csrf = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "logion_csrf",
+  )!.value;
+  const post = async (path: string, data: unknown) => {
+    const response = await page.request.post(path, {
+      data,
+      headers: { Origin: new URL(page.url()).origin, "X-CSRF-Token": csrf },
+    });
+    expect(
+      response.ok(),
+      `Deletion fixture ${path}: ${response.status()}`,
+    ).toBe(true);
+    return response.json();
+  };
+  const workspaces = await (
+    await page.request.get("/api/v1/workspaces")
+  ).json();
+  const workspaceId = workspaces.workspaces[0].id;
+  const spaces = await (
+    await page.request.get(`/api/v1/workspaces/${workspaceId}/spaces`)
+  ).json();
+  const spaceId = spaces.spaces.find(
+    (space: { visibility: string }) => space.visibility === "private",
+  ).id;
+  const path = `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}`;
+  const goalId = randomUUID();
+  const taskId = randomUUID();
+  const noteId = randomUUID();
+  const marker = `T05-${randomUUID().slice(0, 8)}`;
+  await post(`${path}/goals`, {
+    goal_id: goalId,
+    plan_id: randomUUID(),
+    plan_version_id: randomUUID(),
+    title: `${marker} Goal`,
+    desired_outcome: "Deletion browser verification",
+    weekly_minutes: 60,
+    phases: [
+      {
+        id: randomUUID(),
+        title: "Verification",
+        position: 0,
+        estimated_minutes: 60,
+        acceptance_criteria: ["Atomic deletion"],
+      },
+    ],
+  });
+  await post(`${path}/tasks`, {
+    id: taskId,
+    goal_id: goalId,
+    title: `${marker} Task`,
+    planned_at: new Date().toISOString(),
+  });
+  await post(`${path}/notes`, {
+    id: noteId,
+    task_id: taskId,
+    title: `${marker} Note`,
+    markdown_body: "Recoverable note content",
+  });
+  const addReference = async () => {
+    await post(`${path}/tasks/${taskId}/transition`, {
+      expected_version: 1,
+      status: "in_progress",
+    });
+    await post(`${path}/evidence`, {
+      evidence_id: randomUUID(),
+      verification_id: randomUUID(),
+      task_id: taskId,
+      evidence_type: "note",
+      note_id: noteId,
+      summary: "Retained reference",
+    });
+  };
+  if (referenced) await addReference();
+  return { marker, path, workspaceId, goalId, taskId, noteId, addReference };
+}
+
+async function openDeletionWorkbench(
+  page: Page,
+  password: string,
+  kind: "Goal" | "Task" | "Note",
+  marker: string,
+) {
+  const route =
+    kind === "Goal" ? "planning" : kind === "Task" ? "today" : "records";
+  // Today performs the initial server bootstrap when its Vault is unlocked.
+  await page.goto("/app/today");
+  await waitForWorkbenchReady(page, "/app/today");
+  await page.getByLabel("本地资料口令").fill(password);
+  await page.getByRole("button", { name: "解锁", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "本地资料已解锁" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "立即同步", exact: true }).click();
+  await expect(
+    page.getByText("本地修改已与服务器同步。", { exact: true }).first(),
+  ).toBeVisible();
+  await page.goto(`/app/${route}`);
+  await waitForWorkbenchReady(page, `/app/${route}`);
+  if (kind === "Task") {
+    const input = page.getByLabel("本地资料口令");
+    if (await input.isVisible()) {
+      await input.fill(password);
+      await page.getByRole("button", { name: "解锁", exact: true }).click();
+    }
+  } else {
+    const trigger = page
+      .getByRole("button", { name: "解锁资料", exact: true })
+      .first();
+    if (await trigger.isVisible()) {
+      await trigger.click();
+      const unlock = page.getByRole("dialog", { name: "解锁本地资料" });
+      await unlock.getByLabel("本地口令").fill(password);
+      await unlock.getByRole("button", { name: "解锁资料" }).click();
+      await expect(unlock).toHaveCount(0);
+    }
+  }
+  const list = page.getByTestId(
+    kind === "Goal"
+      ? "planning-goals"
+      : kind === "Task"
+        ? "today-queue"
+        : "records-tree",
+  );
+  const row = list
+    .getByRole("button", { name: new RegExp(`${marker} ${kind}`) })
+    .first();
+  await expect(row).toBeVisible();
+  await row.click();
+}
+
+for (const kind of ["Goal", "Task", "Note"] as const) {
+  test(`T05 ${kind} deletion confirms scope and clears the Inspector`, async ({
+    accountState,
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    const scope = await seedDeletionScope(page);
+    await openDeletionWorkbench(
+      page,
+      process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
+      kind,
+      scope.marker,
+    );
+    const label =
+      kind === "Goal"
+        ? "删除学习目标"
+        : kind === "Task"
+          ? "删除任务"
+          : "删除笔记";
+    const trigger = page.getByRole("button", { name: label, exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "确认删除", exact: true });
+    await expect(
+      dialog.getByRole("button", { name: "取消", exact: true }),
+    ).toBeFocused();
+    await expect(
+      dialog.getByRole("button", { name: "确认删除", exact: true }),
+    ).toBeEnabled();
+    await expect(dialog).toContainText(
+      kind === "Task" ? "1 个解除任务关联的笔记" : "1 个笔记",
+    );
+    if (kind === "Goal") await expect(dialog).toContainText("1 个任务");
+    for (const width of [1440, 375, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(
+        (theme) => {
+          document.documentElement.dataset.theme = theme;
+        },
+        width === 320 ? "dark" : "light",
+      );
+      await expect(dialog).toBeVisible();
+      expect(
+        await dialog.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true);
+      const confirm = await dialog
+        .getByRole("button", { name: "确认删除", exact: true })
+        .boundingBox();
+      expect(confirm!.x).toBeGreaterThanOrEqual(0);
+      expect(confirm!.y + confirm!.height).toBeLessThanOrEqual(900);
+      await page.screenshot({
+        path: testInfo.outputPath(`delete-${kind}-${width}.png`),
+      });
+    }
+    await dialog.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await dialog.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toHaveCount(0);
+    await expect(
+      page.getByText("删除已同步。", { exact: true }).first(),
+    ).toBeVisible();
+    const entityType =
+      kind === "Goal" ? "learning_goal" : kind === "Task" ? "task" : "note";
+    const id =
+      kind === "Goal"
+        ? scope.goalId
+        : kind === "Task"
+          ? scope.taskId
+          : scope.noteId;
+    const preview = await page.request.get(
+      `/api/v1/workspaces/${scope.workspaceId}/sync/deletion-preview/${entityType}/${id}`,
+    );
+    expect(preview.ok()).toBe(true);
+    expect((await preview.json()).can_delete).toBe(false);
+  });
+}
+
+test("T05 referenced Note and unavailable preview cannot be confirmed", async ({
+  accountState,
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const scope = await seedDeletionScope(page, true);
+  await openDeletionWorkbench(
+    page,
+    process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
+    "Note",
+    scope.marker,
+  );
+  await page.setViewportSize({ width: 320, height: 568 });
+  const trigger = page.getByRole("button", { name: "删除笔记", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "确认删除", exact: true });
+  await expect(dialog.getByRole("alert")).toContainText("1 条证据引用此笔记");
+  await expect(
+    dialog.getByRole("button", { name: "确认删除", exact: true }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: testInfo.outputPath("referenced-note-320.png"),
+  });
+  await dialog.getByRole("button", { name: "取消", exact: true }).click();
+  await page.context().setOffline(true);
+  try {
+    await trigger.click();
+    await expect(dialog.getByRole("alert")).toContainText("无法核对删除范围");
+    await expect(
+      dialog.getByRole("button", { name: "确认删除", exact: true }),
+    ).toBeDisabled();
+    await page.screenshot({
+      path: testInfo.outputPath("unavailable-preview-320.png"),
+    });
+  } finally {
+    await page.context().setOffline(false);
+  }
+});
+
+test("T05 reference added after preview keeps rejection visible after local refresh", async ({
+  accountState,
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const scope = await seedDeletionScope(page);
+  await openDeletionWorkbench(
+    page,
+    process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
+    "Note",
+    scope.marker,
+  );
+  await page.getByRole("button", { name: "删除笔记", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "确认删除", exact: true });
+  await expect(
+    dialog.getByRole("button", { name: "确认删除", exact: true }),
+  ).toBeEnabled();
+  await scope.addReference();
+  await dialog.getByRole("button", { name: "确认删除", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const inline = page
+    .locator("main")
+    .getByText(/删除尚未完成.*SYNC_DELETE_BLOCKED_BY_REFERENCE/);
+  await expect(inline).toBeVisible();
+  await expect(page.getByText("删除已同步。", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId("records-tree")
+      .getByRole("button", { name: new RegExp(`${scope.marker} Note`) }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "删除笔记", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath("late-reference-refusal.png"),
+  });
+});
+
+test("Note preview exposes only safe external URLs at desktop and mobile widths", async ({
+  accountState,
+  page,
+}, testInfo) => {
+  await page.goto("/app/records");
+  await waitForWorkbenchReady(page, "/app/records");
+  await page
+    .getByRole("button", { name: "解锁资料", exact: true })
+    .first()
+    .click();
+  const unlock = page.getByRole("dialog", { name: "解锁本地资料" });
+  await unlock
+    .getByLabel("本地口令")
+    .fill(
+      process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
+    );
+  await unlock.getByRole("button", { name: "解锁资料" }).click();
+  await expect(unlock).toHaveCount(0);
+  await page.getByRole("button", { name: "新建笔记" }).click();
+  const create = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
+  await create.getByLabel("标题").fill("T-05 safe external links");
+  await create.getByRole("button", { name: "创建笔记" }).click();
+  await expect(create).toHaveCount(0);
+  const longUrl = `https://example.com/${"long-path".repeat(20)}`;
+  await page
+    .getByRole("textbox", { name: "Markdown 正文" })
+    .fill(
+      `https://example.com\nhttp://example.org\n${longUrl}\njavascript:alert(1)\ndata:text/html,unsafe\nfile:///etc/passwd\n[link](https://example.net)\n<img src=x onerror=alert(1)>`,
+    );
+  await page.getByRole("radio", { name: "安全预览" }).click();
+  const externalLinks = page.getByRole("list", { name: "笔记外部链接" });
+  const links = externalLinks.getByRole("link");
+  await expect(links).toHaveCount(3);
+  for (const link of await links.all()) {
+    await expect(link).toHaveAttribute("href", /^https?:\/\//);
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(link).toHaveAttribute("target", "_blank");
+  }
+  await expect(
+    page.locator(".product-markdown-preview a, .product-markdown-preview img"),
+  ).toHaveCount(0);
+  for (const width of [1440, 375, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width < 720) {
+      await expect
+        .poll(() =>
+          page
+            .getByTestId("app-sidebar")
+            .evaluate((element) => element.getBoundingClientRect().right),
+        )
+        .toBeLessThanOrEqual(0);
+    }
+    await externalLinks.scrollIntoViewIfNeeded();
+    await expect(externalLinks).toBeVisible();
+    expect(
+      await externalLinks.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath(`note-links-${width}.png`),
+    });
+  }
+});
 
 test("Records completes real encrypted object workflows at four breakpoints", async ({
   accountState,

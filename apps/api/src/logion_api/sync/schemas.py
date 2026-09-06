@@ -59,6 +59,7 @@ class AppliedOperationResult(StrictModel):
     retryable: Literal[False] = False
     server_version: int = Field(ge=1)
     sequence: int = Field(ge=1)
+    impact: dict[str, int] | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class FailedOperationResult(StrictModel):
@@ -66,6 +67,14 @@ class FailedOperationResult(StrictModel):
     status: Literal["rejected", "blocked_dependency"]
     retryable: bool
     error_code: Annotated[str, StringConstraints(pattern=r"^SYNC_[A-Z0-9_]{2,80}$")]
+    details: dict[str, int] | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class DeletionPreview(StrictModel):
+    server_version: int
+    impact: dict[str, int]
+    blockers: dict[str, int]
+    can_delete: bool
 
 
 class SyncConflict(StrictModel):
@@ -79,6 +88,7 @@ class SyncConflict(StrictModel):
     remote_version: int = Field(ge=1)
     remote_payload: dict[str, object]
     remote_payload_hash: Hash
+    remote_deleted_at: datetime | None = None
     resolution_options: list[Literal["keep_local", "keep_remote", "merge", "dismiss"]] = Field(
         min_length=1
     )

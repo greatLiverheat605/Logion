@@ -12,3 +12,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0028：三端薄壳移动应用（提案）](0028-thin-mobile-shells.md)
 - [ADR-0029：自适应知识空间与人工验收边界（提案）](0029-adaptive-knowledge-space.md)
 - [ADR-0030：Workbench v1 领域投影、持久化与权限边界（提案）](0030-workbench-v1.md)
+- [ADR-0031：核心实体软删除与 tombstone 同步（Accepted；活跃引用阻止删除）](0031-entity-deletion.md)

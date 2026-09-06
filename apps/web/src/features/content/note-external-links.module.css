@@ -1,0 +1,9 @@
+.links {
+  padding-inline-start: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.links a {
+  color: var(--primary);
+  text-decoration: underline;
+}

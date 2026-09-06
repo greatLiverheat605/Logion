@@ -569,7 +569,15 @@ export function SyncWorkbench({
                             </div>
                             <div>
                               <span>服务器</span>
-                              <pre>{JSON.stringify(view.remote, null, 2)}</pre>
+                              {view.conflict.remote_deleted_at ? (
+                                <p>
+                                  服务器已删除此对象。本地内容仍保留，接受删除不会恢复原身份。
+                                </p>
+                              ) : (
+                                <pre>
+                                  {JSON.stringify(view.remote, null, 2)}
+                                </pre>
+                              )}
                             </div>
                           </div>
                           <div
@@ -602,7 +610,9 @@ export function SyncWorkbench({
                                 type="button"
                                 onClick={() => onResolve(view, "keep_remote")}
                               >
-                                采用服务器版本
+                                {view.conflict.remote_deleted_at
+                                  ? "接受服务器删除"
+                                  : "采用服务器版本"}
                               </button>
                             ) : null}
                             {view.conflict.resolution_options.includes(

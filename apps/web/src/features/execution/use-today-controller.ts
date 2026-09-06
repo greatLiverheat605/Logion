@@ -197,7 +197,7 @@ const TODAY_TASK_STATUS_ORDER: Readonly<Record<TodayTaskStatus, number>> = {
 interface TodayDerivedInput {
   evidence: TodayLocalView<TodayEvidencePayload>[];
   goals: TodayLocalView<TodayGoalPayload>[];
-  selectedTaskId: string;
+  selectedTaskId: string | null;
   sessions: TodayLocalView<TodaySessionPayload>[];
   spaceId: string;
   tasks: TodayLocalView<TodayTaskPayload>[];
@@ -260,9 +260,11 @@ export function deriveTodayViewModel({
     actionableTasks.find((item) => item.payload.status === "in_progress") ??
     actionableTasks[0];
   const selectedTask =
-    queue.find((item) => item.entity.entity_id === selectedTaskId) ??
-    nextTask ??
-    queue[0];
+    selectedTaskId === null
+      ? undefined
+      : (queue.find((item) => item.entity.entity_id === selectedTaskId) ??
+        nextTask ??
+        queue[0]);
   const visibleEvidence = evidence.filter(
     (item) => item.payload.space_id === spaceId,
   );
@@ -428,7 +430,8 @@ export interface TodayControllerResult {
     ) => Promise<boolean>;
     finishSession: (input: TodayFinishSessionInput) => Promise<boolean>;
     loadContext: () => Promise<void>;
-    setSelectedTaskId: (taskId: string) => void;
+    setSelectedTaskId: (taskId: string | null) => void;
+    reportDeletion: (message: string) => void;
     setSpaceId: (spaceId: string) => void;
     setWorkspaceId: (workspaceId: string) => void;
     startSession: (taskId: string) => Promise<boolean>;
@@ -487,7 +490,7 @@ export function useTodayController(): TodayControllerResult {
   const [membersAvailable, setMembersAvailable] = useState(false);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
-  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>("");
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const online = useSyncExternalStore(
@@ -903,10 +906,15 @@ export function useTodayController(): TodayControllerResult {
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
     const targetWorkspaceId = workspaceId;
     queueMicrotask(() => {
+      // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault)
         .then(() => {
           if (currentWorkspaceIdRef.current === targetWorkspaceId) {
-            setStatus("本地资料已在应用内解锁；完成会话不会自动验收任务。");
+            setStatus((current) =>
+              current === "请解锁本地资料。"
+                ? "本地资料已在应用内解锁；完成会话不会自动验收任务。"
+                : current,
+            );
           }
         })
         .catch((error: unknown) => {
@@ -1441,6 +1449,7 @@ export function useTodayController(): TodayControllerResult {
       finishSession,
       loadContext,
       setSelectedTaskId,
+      reportDeletion: setStatus,
       setSpaceId,
       setWorkspaceId: selectWorkspace,
       startSession,

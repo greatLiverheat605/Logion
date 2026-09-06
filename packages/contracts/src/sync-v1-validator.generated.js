@@ -204,6 +204,9 @@ const schema31 = {
         remote_version: { type: "integer", minimum: 1 },
         remote_payload: { $ref: "#/$defs/payload" },
         remote_payload_hash: { $ref: "#/$defs/hash" },
+        remote_deleted_at: {
+          oneOf: [{ $ref: "#/$defs/dateTime" }, { type: "null" }],
+        },
         resolution_options: {
           type: "array",
           minItems: 1,
@@ -396,6 +399,10 @@ const schema31 = {
         retryable: { const: false },
         server_version: { type: "integer", minimum: 1 },
         sequence: { type: "integer", minimum: 1 },
+        impact: {
+          type: ["object", "null"],
+          additionalProperties: { type: "integer", minimum: 0 },
+        },
       },
     },
     conflictOperationResult: {
@@ -418,6 +425,10 @@ const schema31 = {
         status: { enum: ["rejected", "blocked_dependency"] },
         retryable: { type: "boolean" },
         error_code: { type: "string", pattern: "^SYNC_[A-Z0-9_]{2,80}$" },
+        details: {
+          type: ["object", "null"],
+          additionalProperties: { type: "integer", minimum: 0 },
+        },
       },
     },
     pushResponse: {
@@ -5055,6 +5066,10 @@ const schema93 = {
     retryable: { const: false },
     server_version: { type: "integer", minimum: 1 },
     sequence: { type: "integer", minimum: 1 },
+    impact: {
+      type: ["object", "null"],
+      additionalProperties: { type: "integer", minimum: 0 },
+    },
   },
 };
 function validate48(
@@ -5105,7 +5120,8 @@ function validate48(
               key0 === "status" ||
               key0 === "retryable" ||
               key0 === "server_version" ||
-              key0 === "sequence"
+              key0 === "sequence" ||
+              key0 === "impact"
             )
           ) {
             validate48.errors = [
@@ -5284,6 +5300,97 @@ function validate48(
                   } else {
                     var valid0 = true;
                   }
+                  if (valid0) {
+                    if (data.impact !== undefined) {
+                      let data5 = data.impact;
+                      const _errs11 = errors;
+                      if (
+                        !(
+                          data5 &&
+                          typeof data5 == "object" &&
+                          !Array.isArray(data5)
+                        ) &&
+                        data5 !== null
+                      ) {
+                        validate48.errors = [
+                          {
+                            instancePath: instancePath + "/impact",
+                            schemaPath: "#/properties/impact/type",
+                            keyword: "type",
+                            params: { type: schema93.properties.impact.type },
+                            message: "must be object,null",
+                          },
+                        ];
+                        return false;
+                      }
+                      if (errors === _errs11) {
+                        if (
+                          data5 &&
+                          typeof data5 == "object" &&
+                          !Array.isArray(data5)
+                        ) {
+                          for (const key1 in data5) {
+                            let data6 = data5[key1];
+                            const _errs14 = errors;
+                            if (
+                              !(
+                                typeof data6 == "number" &&
+                                !(data6 % 1) &&
+                                !isNaN(data6) &&
+                                isFinite(data6)
+                              )
+                            ) {
+                              validate48.errors = [
+                                {
+                                  instancePath:
+                                    instancePath +
+                                    "/impact/" +
+                                    key1
+                                      .replace(/~/g, "~0")
+                                      .replace(/\//g, "~1"),
+                                  schemaPath:
+                                    "#/properties/impact/additionalProperties/type",
+                                  keyword: "type",
+                                  params: { type: "integer" },
+                                  message: "must be integer",
+                                },
+                              ];
+                              return false;
+                            }
+                            if (errors === _errs14) {
+                              if (typeof data6 == "number" && isFinite(data6)) {
+                                if (data6 < 0 || isNaN(data6)) {
+                                  validate48.errors = [
+                                    {
+                                      instancePath:
+                                        instancePath +
+                                        "/impact/" +
+                                        key1
+                                          .replace(/~/g, "~0")
+                                          .replace(/\//g, "~1"),
+                                      schemaPath:
+                                        "#/properties/impact/additionalProperties/minimum",
+                                      keyword: "minimum",
+                                      params: { comparison: ">=", limit: 0 },
+                                      message: "must be >= 0",
+                                    },
+                                  ];
+                                  return false;
+                                }
+                              }
+                            }
+                            var valid2 = _errs14 === errors;
+                            if (!valid2) {
+                              break;
+                            }
+                          }
+                        }
+                      }
+                      var valid0 = _errs11 === errors;
+                    } else {
+                      var valid0 = true;
+                    }
+                  }
                 }
               }
             }
@@ -5352,6 +5459,9 @@ const schema97 = {
     remote_version: { type: "integer", minimum: 1 },
     remote_payload: { $ref: "#/$defs/payload" },
     remote_payload_hash: { $ref: "#/$defs/hash" },
+    remote_deleted_at: {
+      oneOf: [{ $ref: "#/$defs/dateTime" }, { type: "null" }],
+    },
     resolution_options: {
       type: "array",
       minItems: 1,
@@ -5808,113 +5918,114 @@ function validate51(
                               var valid0 = true;
                             }
                             if (valid0) {
-                              if (data.resolution_options !== undefined) {
-                                let data10 = data.resolution_options;
+                              if (data.remote_deleted_at !== undefined) {
+                                let data10 = data.remote_deleted_at;
                                 const _errs27 = errors;
-                                if (errors === _errs27) {
-                                  if (Array.isArray(data10)) {
-                                    if (data10.length < 1) {
-                                      validate51.errors = [
-                                        {
+                                const _errs28 = errors;
+                                let valid7 = false;
+                                let passing0 = null;
+                                const _errs29 = errors;
+                                const _errs30 = errors;
+                                if (errors === _errs30) {
+                                  if (errors === _errs30) {
+                                    if (typeof data10 === "string") {
+                                      if (!formats2.validate(data10)) {
+                                        const err0 = {
                                           instancePath:
-                                            instancePath +
-                                            "/resolution_options",
-                                          schemaPath:
-                                            "#/properties/resolution_options/minItems",
-                                          keyword: "minItems",
-                                          params: { limit: 1 },
+                                            instancePath + "/remote_deleted_at",
+                                          schemaPath: "#/$defs/dateTime/format",
+                                          keyword: "format",
+                                          params: { format: "date-time" },
                                           message:
-                                            "must NOT have fewer than 1 items",
-                                        },
-                                      ];
-                                      return false;
+                                            'must match format "' +
+                                            "date-time" +
+                                            '"',
+                                        };
+                                        if (vErrors === null) {
+                                          vErrors = [err0];
+                                        } else {
+                                          vErrors.push(err0);
+                                        }
+                                        errors++;
+                                      }
                                     } else {
-                                      var valid7 = true;
-                                      const len0 = data10.length;
-                                      for (let i0 = 0; i0 < len0; i0++) {
-                                        let data11 = data10[i0];
-                                        const _errs29 = errors;
-                                        if (
-                                          !(
-                                            data11 === "keep_local" ||
-                                            data11 === "keep_remote" ||
-                                            data11 === "merge" ||
-                                            data11 === "dismiss"
-                                          )
-                                        ) {
-                                          validate51.errors = [
-                                            {
-                                              instancePath:
-                                                instancePath +
-                                                "/resolution_options/" +
-                                                i0,
-                                              schemaPath:
-                                                "#/properties/resolution_options/items/enum",
-                                              keyword: "enum",
-                                              params: {
-                                                allowedValues:
-                                                  schema97.properties
-                                                    .resolution_options.items
-                                                    .enum,
-                                              },
-                                              message:
-                                                "must be equal to one of the allowed values",
-                                            },
-                                          ];
-                                          return false;
-                                        }
-                                        var valid7 = _errs29 === errors;
-                                        if (!valid7) {
-                                          break;
-                                        }
-                                      }
-                                      if (valid7) {
-                                        let i1 = data10.length;
-                                        let j0;
-                                        if (i1 > 1) {
-                                          outer0: for (; i1--; ) {
-                                            for (j0 = i1; j0--; ) {
-                                              if (
-                                                func0(data10[i1], data10[j0])
-                                              ) {
-                                                validate51.errors = [
-                                                  {
-                                                    instancePath:
-                                                      instancePath +
-                                                      "/resolution_options",
-                                                    schemaPath:
-                                                      "#/properties/resolution_options/uniqueItems",
-                                                    keyword: "uniqueItems",
-                                                    params: { i: i1, j: j0 },
-                                                    message:
-                                                      "must NOT have duplicate items (items ## " +
-                                                      j0 +
-                                                      " and " +
-                                                      i1 +
-                                                      " are identical)",
-                                                  },
-                                                ];
-                                                return false;
-                                                break outer0;
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  } else {
-                                    validate51.errors = [
-                                      {
+                                      const err1 = {
                                         instancePath:
-                                          instancePath + "/resolution_options",
-                                        schemaPath:
-                                          "#/properties/resolution_options/type",
+                                          instancePath + "/remote_deleted_at",
+                                        schemaPath: "#/$defs/dateTime/type",
                                         keyword: "type",
-                                        params: { type: "array" },
-                                        message: "must be array",
-                                      },
-                                    ];
-                                    return false;
+                                        params: { type: "string" },
+                                        message: "must be string",
+                                      };
+                                      if (vErrors === null) {
+                                        vErrors = [err1];
+                                      } else {
+                                        vErrors.push(err1);
+                                      }
+                                      errors++;
+                                    }
+                                  }
+                                }
+                                var _valid0 = _errs29 === errors;
+                                if (_valid0) {
+                                  valid7 = true;
+                                  passing0 = 0;
+                                }
+                                const _errs32 = errors;
+                                if (data10 !== null) {
+                                  const err2 = {
+                                    instancePath:
+                                      instancePath + "/remote_deleted_at",
+                                    schemaPath:
+                                      "#/properties/remote_deleted_at/oneOf/1/type",
+                                    keyword: "type",
+                                    params: { type: "null" },
+                                    message: "must be null",
+                                  };
+                                  if (vErrors === null) {
+                                    vErrors = [err2];
+                                  } else {
+                                    vErrors.push(err2);
+                                  }
+                                  errors++;
+                                }
+                                var _valid0 = _errs32 === errors;
+                                if (_valid0 && valid7) {
+                                  valid7 = false;
+                                  passing0 = [passing0, 1];
+                                } else {
+                                  if (_valid0) {
+                                    valid7 = true;
+                                    passing0 = 1;
+                                  }
+                                }
+                                if (!valid7) {
+                                  const err3 = {
+                                    instancePath:
+                                      instancePath + "/remote_deleted_at",
+                                    schemaPath:
+                                      "#/properties/remote_deleted_at/oneOf",
+                                    keyword: "oneOf",
+                                    params: { passingSchemas: passing0 },
+                                    message:
+                                      "must match exactly one schema in oneOf",
+                                  };
+                                  if (vErrors === null) {
+                                    vErrors = [err3];
+                                  } else {
+                                    vErrors.push(err3);
+                                  }
+                                  errors++;
+                                  validate51.errors = vErrors;
+                                  return false;
+                                } else {
+                                  errors = _errs28;
+                                  if (vErrors !== null) {
+                                    if (_errs28) {
+                                      vErrors.length = _errs28;
+                                    } else {
+                                      vErrors = null;
+                                    }
                                   }
                                 }
                                 var valid0 = _errs27 === errors;
@@ -5922,48 +6033,165 @@ function validate51(
                                 var valid0 = true;
                               }
                               if (valid0) {
-                                if (data.created_at !== undefined) {
-                                  let data12 = data.created_at;
-                                  const _errs30 = errors;
-                                  const _errs31 = errors;
-                                  if (errors === _errs31) {
-                                    if (errors === _errs31) {
-                                      if (typeof data12 === "string") {
-                                        if (!formats2.validate(data12)) {
+                                if (data.resolution_options !== undefined) {
+                                  let data11 = data.resolution_options;
+                                  const _errs34 = errors;
+                                  if (errors === _errs34) {
+                                    if (Array.isArray(data11)) {
+                                      if (data11.length < 1) {
+                                        validate51.errors = [
+                                          {
+                                            instancePath:
+                                              instancePath +
+                                              "/resolution_options",
+                                            schemaPath:
+                                              "#/properties/resolution_options/minItems",
+                                            keyword: "minItems",
+                                            params: { limit: 1 },
+                                            message:
+                                              "must NOT have fewer than 1 items",
+                                          },
+                                        ];
+                                        return false;
+                                      } else {
+                                        var valid9 = true;
+                                        const len0 = data11.length;
+                                        for (let i0 = 0; i0 < len0; i0++) {
+                                          let data12 = data11[i0];
+                                          const _errs36 = errors;
+                                          if (
+                                            !(
+                                              data12 === "keep_local" ||
+                                              data12 === "keep_remote" ||
+                                              data12 === "merge" ||
+                                              data12 === "dismiss"
+                                            )
+                                          ) {
+                                            validate51.errors = [
+                                              {
+                                                instancePath:
+                                                  instancePath +
+                                                  "/resolution_options/" +
+                                                  i0,
+                                                schemaPath:
+                                                  "#/properties/resolution_options/items/enum",
+                                                keyword: "enum",
+                                                params: {
+                                                  allowedValues:
+                                                    schema97.properties
+                                                      .resolution_options.items
+                                                      .enum,
+                                                },
+                                                message:
+                                                  "must be equal to one of the allowed values",
+                                              },
+                                            ];
+                                            return false;
+                                          }
+                                          var valid9 = _errs36 === errors;
+                                          if (!valid9) {
+                                            break;
+                                          }
+                                        }
+                                        if (valid9) {
+                                          let i1 = data11.length;
+                                          let j0;
+                                          if (i1 > 1) {
+                                            outer0: for (; i1--; ) {
+                                              for (j0 = i1; j0--; ) {
+                                                if (
+                                                  func0(data11[i1], data11[j0])
+                                                ) {
+                                                  validate51.errors = [
+                                                    {
+                                                      instancePath:
+                                                        instancePath +
+                                                        "/resolution_options",
+                                                      schemaPath:
+                                                        "#/properties/resolution_options/uniqueItems",
+                                                      keyword: "uniqueItems",
+                                                      params: { i: i1, j: j0 },
+                                                      message:
+                                                        "must NOT have duplicate items (items ## " +
+                                                        j0 +
+                                                        " and " +
+                                                        i1 +
+                                                        " are identical)",
+                                                    },
+                                                  ];
+                                                  return false;
+                                                  break outer0;
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    } else {
+                                      validate51.errors = [
+                                        {
+                                          instancePath:
+                                            instancePath +
+                                            "/resolution_options",
+                                          schemaPath:
+                                            "#/properties/resolution_options/type",
+                                          keyword: "type",
+                                          params: { type: "array" },
+                                          message: "must be array",
+                                        },
+                                      ];
+                                      return false;
+                                    }
+                                  }
+                                  var valid0 = _errs34 === errors;
+                                } else {
+                                  var valid0 = true;
+                                }
+                                if (valid0) {
+                                  if (data.created_at !== undefined) {
+                                    let data13 = data.created_at;
+                                    const _errs37 = errors;
+                                    const _errs38 = errors;
+                                    if (errors === _errs38) {
+                                      if (errors === _errs38) {
+                                        if (typeof data13 === "string") {
+                                          if (!formats2.validate(data13)) {
+                                            validate51.errors = [
+                                              {
+                                                instancePath:
+                                                  instancePath + "/created_at",
+                                                schemaPath:
+                                                  "#/$defs/dateTime/format",
+                                                keyword: "format",
+                                                params: { format: "date-time" },
+                                                message:
+                                                  'must match format "' +
+                                                  "date-time" +
+                                                  '"',
+                                              },
+                                            ];
+                                            return false;
+                                          }
+                                        } else {
                                           validate51.errors = [
                                             {
                                               instancePath:
                                                 instancePath + "/created_at",
                                               schemaPath:
-                                                "#/$defs/dateTime/format",
-                                              keyword: "format",
-                                              params: { format: "date-time" },
-                                              message:
-                                                'must match format "' +
-                                                "date-time" +
-                                                '"',
+                                                "#/$defs/dateTime/type",
+                                              keyword: "type",
+                                              params: { type: "string" },
+                                              message: "must be string",
                                             },
                                           ];
                                           return false;
                                         }
-                                      } else {
-                                        validate51.errors = [
-                                          {
-                                            instancePath:
-                                              instancePath + "/created_at",
-                                            schemaPath: "#/$defs/dateTime/type",
-                                            keyword: "type",
-                                            params: { type: "string" },
-                                            message: "must be string",
-                                          },
-                                        ];
-                                        return false;
                                       }
                                     }
+                                    var valid0 = _errs37 === errors;
+                                  } else {
+                                    var valid0 = true;
                                   }
-                                  var valid0 = _errs30 === errors;
-                                } else {
-                                  var valid0 = true;
                                 }
                               }
                             }
@@ -6185,7 +6413,7 @@ validate50.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema105 = {
+const schema106 = {
   type: "object",
   additionalProperties: false,
   required: ["operation_id", "status", "retryable", "error_code"],
@@ -6194,6 +6422,10 @@ const schema105 = {
     status: { enum: ["rejected", "blocked_dependency"] },
     retryable: { type: "boolean" },
     error_code: { type: "string", pattern: "^SYNC_[A-Z0-9_]{2,80}$" },
+    details: {
+      type: ["object", "null"],
+      additionalProperties: { type: "integer", minimum: 0 },
+    },
   },
 };
 const pattern13 = new RegExp("^SYNC_[A-Z0-9_]{2,80}$", "u");
@@ -6243,7 +6475,8 @@ function validate54(
               key0 === "operation_id" ||
               key0 === "status" ||
               key0 === "retryable" ||
-              key0 === "error_code"
+              key0 === "error_code" ||
+              key0 === "details"
             )
           ) {
             validate54.errors = [
@@ -6307,7 +6540,7 @@ function validate54(
                     instancePath: instancePath + "/status",
                     schemaPath: "#/properties/status/enum",
                     keyword: "enum",
-                    params: { allowedValues: schema105.properties.status.enum },
+                    params: { allowedValues: schema106.properties.status.enum },
                     message: "must be equal to one of the allowed values",
                   },
                 ];
@@ -6373,6 +6606,95 @@ function validate54(
                   var valid0 = _errs8 === errors;
                 } else {
                   var valid0 = true;
+                }
+                if (valid0) {
+                  if (data.details !== undefined) {
+                    let data4 = data.details;
+                    const _errs10 = errors;
+                    if (
+                      !(
+                        data4 &&
+                        typeof data4 == "object" &&
+                        !Array.isArray(data4)
+                      ) &&
+                      data4 !== null
+                    ) {
+                      validate54.errors = [
+                        {
+                          instancePath: instancePath + "/details",
+                          schemaPath: "#/properties/details/type",
+                          keyword: "type",
+                          params: { type: schema106.properties.details.type },
+                          message: "must be object,null",
+                        },
+                      ];
+                      return false;
+                    }
+                    if (errors === _errs10) {
+                      if (
+                        data4 &&
+                        typeof data4 == "object" &&
+                        !Array.isArray(data4)
+                      ) {
+                        for (const key1 in data4) {
+                          let data5 = data4[key1];
+                          const _errs13 = errors;
+                          if (
+                            !(
+                              typeof data5 == "number" &&
+                              !(data5 % 1) &&
+                              !isNaN(data5) &&
+                              isFinite(data5)
+                            )
+                          ) {
+                            validate54.errors = [
+                              {
+                                instancePath:
+                                  instancePath +
+                                  "/details/" +
+                                  key1.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                schemaPath:
+                                  "#/properties/details/additionalProperties/type",
+                                keyword: "type",
+                                params: { type: "integer" },
+                                message: "must be integer",
+                              },
+                            ];
+                            return false;
+                          }
+                          if (errors === _errs13) {
+                            if (typeof data5 == "number" && isFinite(data5)) {
+                              if (data5 < 0 || isNaN(data5)) {
+                                validate54.errors = [
+                                  {
+                                    instancePath:
+                                      instancePath +
+                                      "/details/" +
+                                      key1
+                                        .replace(/~/g, "~0")
+                                        .replace(/\//g, "~1"),
+                                    schemaPath:
+                                      "#/properties/details/additionalProperties/minimum",
+                                    keyword: "minimum",
+                                    params: { comparison: ">=", limit: 0 },
+                                    message: "must be >= 0",
+                                  },
+                                ];
+                                return false;
+                              }
+                            }
+                          }
+                          var valid2 = _errs13 === errors;
+                          if (!valid2) {
+                            break;
+                          }
+                        }
+                      }
+                    }
+                    var valid0 = _errs10 === errors;
+                  } else {
+                    var valid0 = true;
+                  }
                 }
               }
             }
@@ -6894,7 +7216,7 @@ validate44.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema107 = {
+const schema108 = {
   allOf: [
     { $ref: "#/$defs/baseMessage" },
     { $ref: "#/$defs/workspaceDevice" },
@@ -7313,7 +7635,7 @@ validate58.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema113 = {
+const schema114 = {
   allOf: [
     { $ref: "#/$defs/baseMessage" },
     { $ref: "#/$defs/workspaceDevice" },
@@ -7349,10 +7671,10 @@ const schema113 = {
     },
   ],
 };
-const schema120 = {
+const schema121 = {
   oneOf: [{ $ref: "#/$defs/liveChange" }, { $ref: "#/$defs/tombstoneChange" }],
 };
-const schema121 = {
+const schema122 = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -7430,7 +7752,7 @@ function validate66(
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!func1.call(schema121.properties, key0)) {
+          if (!func1.call(schema122.properties, key0)) {
             validate66.errors = [
               {
                 instancePath,
@@ -7620,7 +7942,7 @@ function validate66(
                           keyword: "enum",
                           params: {
                             allowedValues:
-                              schema121.properties.operation_type.enum,
+                              schema122.properties.operation_type.enum,
                           },
                           message: "must be equal to one of the allowed values",
                         },
@@ -7870,7 +8192,7 @@ validate66.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema128 = {
+const schema129 = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -7948,7 +8270,7 @@ function validate68(
       } else {
         const _errs1 = errors;
         for (const key0 in data) {
-          if (!func1.call(schema128.properties, key0)) {
+          if (!func1.call(schema129.properties, key0)) {
             validate68.errors = [
               {
                 instancePath,
@@ -8583,7 +8905,7 @@ function validate62(
           } else {
             const _errs4 = errors;
             for (const key0 in data) {
-              if (!func1.call(schema113.allOf[2].properties, key0)) {
+              if (!func1.call(schema114.allOf[2].properties, key0)) {
                 validate62.errors = [
                   {
                     instancePath,
@@ -8960,14 +9282,14 @@ validate62.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema135 = {
+const schema136 = {
   oneOf: [
     { $ref: "#/$defs/upgradeControl" },
     { $ref: "#/$defs/rebootstrapControl" },
     { $ref: "#/$defs/cursorExpiredControl" },
   ],
 };
-const schema136 = {
+const schema137 = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -9151,7 +9473,7 @@ function validate73(
                           keyword: "enum",
                           params: {
                             allowedValues:
-                              schema136.properties.reason_code.enum,
+                              schema137.properties.reason_code.enum,
                           },
                           message: "must be equal to one of the allowed values",
                         },
@@ -9230,7 +9552,7 @@ validate73.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema140 = {
+const schema141 = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -9482,7 +9804,7 @@ validate75.evaluated = {
   dynamicProps: false,
   dynamicItems: false,
 };
-const schema144 = {
+const schema145 = {
   type: "object",
   additionalProperties: false,
   required: [

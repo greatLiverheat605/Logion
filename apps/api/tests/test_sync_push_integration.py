@@ -90,6 +90,9 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
             "rejected",
             "blocked_dependency",
         ]
+        assert "impact" not in results[0]
+        assert "details" not in results[1]
+        assert "details" not in results[2]
 
         replay = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/push",
@@ -98,6 +101,7 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         )
         assert replay.status_code == 200, replay.text
         assert replay.json()["results"][0]["status"] == "duplicate"
+        assert "impact" not in replay.json()["results"][0]
 
         goal_entity_id = uuid4()
         goal_operation_id = uuid4()
@@ -153,6 +157,7 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         assert pull.status_code == 200, pull.text
         assert pull.json()["next_cursor"] == 1
         assert pull.json()["changes"][0]["entity_id"] == str(entity_id)
+        assert pull.json()["changes"][0]["deleted_at"] is None
 
         first_chunk = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",
@@ -172,6 +177,7 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         assert snapshot["chunk_count"] == 1
         assert str(entity_id) in {record["entity_id"] for record in snapshot["records"]}
         assert str(goal_entity_id) in {record["entity_id"] for record in snapshot["records"]}
+        assert all(record["deleted_at"] is None for record in snapshot["records"])
 
         resumed_chunk = await client.post(
             f"/api/v1/workspaces/{workspace_id}/sync/bootstrap",

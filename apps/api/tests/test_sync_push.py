@@ -5,7 +5,13 @@ from uuid import uuid4
 
 import pytest
 from logion_api.sync.push import SyncPushService, canonical_hash
-from logion_api.sync.schemas import PushRequest, SyncOperation
+from logion_api.sync.schemas import (
+    AppliedOperationResult,
+    FailedOperationResult,
+    PushRequest,
+    PushResponse,
+    SyncOperation,
+)
 from pydantic import ValidationError
 
 
@@ -73,22 +79,55 @@ def test_canonical_hash_is_stable_for_key_order_and_unicode() -> None:
     )
 
 
+@pytest.mark.parametrize("counts", [None, {}, {"evidence_count": 1, "citation_count": 0}])
+def test_push_result_serialization_omits_only_absent_counts(counts: dict[str, int] | None) -> None:
+    response = PushResponse(
+        workspace_id=uuid4(),
+        device_id=uuid4(),
+        sync_epoch=uuid4(),
+        results=[
+            AppliedOperationResult(
+                operation_id=uuid4(),
+                status="applied",
+                server_version=1,
+                sequence=1,
+                impact=counts,
+            ),
+            FailedOperationResult(
+                operation_id=uuid4(),
+                status="rejected",
+                retryable=False,
+                error_code="SYNC_DELETE_BLOCKED_BY_REFERENCE",
+                details=counts,
+            ),
+        ],
+    )
+    applied, rejected = json.loads(response.model_dump_json())["results"]
+    if counts is None:
+        assert "impact" not in applied
+        assert "details" not in rejected
+    else:
+        assert applied["impact"] == rejected["details"] == counts
+
+
 def test_push_handlers_are_registered_by_entity_family() -> None:
     dependencies = [object() for _ in range(11)]
     service = SyncPushService(*dependencies)  # type: ignore[arg-type]
 
     expected_operations = {
         "workspace": {("space", "create")},
-        "planning": {("learning_goal", "create")},
+        "planning": {("learning_goal", "create"), ("learning_goal", "delete")},
         "execution": {
             ("task", "create"),
             ("task", "update"),
+            ("task", "delete"),
             ("study_session", "create"),
             ("study_session", "update"),
         },
         "content": {
             ("note", "create"),
             ("note", "update"),
+            ("note", "delete"),
             ("note_document_update", "update"),
             ("resource", "create"),
             ("resource", "update"),
@@ -140,4 +179,5 @@ def test_push_handlers_are_registered_by_entity_family() -> None:
         family: set(handlers) for family, handlers in service._handlers.items()
     } == expected_operations
     assert service._handler_for("task", "create").__name__ == "_create_task"  # type: ignore[union-attr]
-    assert service._handler_for("task", "delete") is None
+    assert service._handler_for("task", "delete").__name__ == "_delete_task"  # type: ignore[union-attr]
+    assert service._handler_for("resource", "delete") is None

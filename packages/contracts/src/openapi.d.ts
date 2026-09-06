@@ -2485,6 +2485,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/sync/deletion-preview/{entity_type}/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Deletion */
+        get: operations["sync_deletion_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/sync/pull": {
         parameters: {
             query?: never;
@@ -3318,6 +3335,10 @@ export interface components {
         };
         /** AppliedOperationResult */
         AppliedOperationResult: {
+            /** Impact */
+            impact?: {
+                [key: string]: number;
+            } | null;
             /**
              * Operation Id
              * Format: uuid
@@ -4144,6 +4165,21 @@ export interface components {
              */
             type: "date";
         };
+        /** DeletionPreview */
+        DeletionPreview: {
+            /** Blockers */
+            blockers: {
+                [key: string]: number;
+            };
+            /** Can Delete */
+            can_delete: boolean;
+            /** Impact */
+            impact: {
+                [key: string]: number;
+            };
+            /** Server Version */
+            server_version: number;
+        };
         /** DeliverableCreateRequest */
         DeliverableCreateRequest: {
             /**
@@ -4575,6 +4611,10 @@ export interface components {
         };
         /** FailedOperationResult */
         FailedOperationResult: {
+            /** Details */
+            details?: {
+                [key: string]: number;
+            } | null;
             /** Error Code */
             error_code: string;
             /**
@@ -7502,6 +7542,8 @@ export interface components {
             entity_type: string;
             /** Local Payload Hash */
             local_payload_hash: string;
+            /** Remote Deleted At */
+            remote_deleted_at?: string | null;
             /** Remote Payload */
             remote_payload: {
                 [key: string]: unknown;
@@ -23668,6 +23710,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_deletion_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                entity_type: "learning_goal" | "task" | "note";
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionPreview"];
                 };
             };
             /** @description Validation Error */
