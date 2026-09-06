@@ -970,3 +970,77 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - 最后一处 Run 提交中取消禁用已通过全量 Web 和生产构建复验，并补跑 Run 四场景及深色 320px。
   本地 Run `run-v021-t03-feedback-visibility` 已验证，owner review 为 pending；旧 T-02 事件保留。
   本机隔离预览暂留供审查，无推理 Worker，不作为生产环境。
+
+## T-05 ADR 草案与外链部分实施（2026-09-06）
+
+- 当前分支 `dev/T-05-entity-deletion`，基线为
+  `29a2ca2fe74a4e546269ec599e90f64ea18845c3`。T-04 工作区改动保留，未混入 T-05 交付。
+- ADR-0031 已先行撰写，状态 Proposed。Resource 不存在 `note_id`，Evidence 没有 Note
+  正文快照；已请求 owner 确认级联及保留语义，删除实现依任务书 §7 保持 **blocked**。
+- 已独立实现 Note HTTP/HTTPS 外链列表，保留纯文本预览，不解释 HTML/Markdown 链接，
+  拒绝危险协议、畸形 URL、凭据和反斜杠，具备新窗口安全属性、外链提示和长链接换行。
+- 已实际通过：Web 全量 `84 files / 336 tests`、lint、typecheck、production build；
+  新增真实栈 Playwright `1 passed`，覆盖 1440/375/320px，桌面和最窄截图已查看。
+- 后端 delete、tombstone 修复、ProtectedOfflineRepository delete、三个 UI 删除入口
+  均未实施，相关删除/冲突/权限及完整浏览器回归未运行，T-05 状态为 partial。
+  详情见 [`V021_T05_ENTITY_DELETION_REVIEW.md`](./V021_T05_ENTITY_DELETION_REVIEW.md)。
+- 无 stage、commit、push、merge 或部署；AI 规划文档仍未跟踪。当前等待数据寿命决策，
+  不将 Proposed ADR 当作批准，不将 Note 外链测试通过当作删除功能验收。
+
+## T-05 方案 3 实施（2026-09-06，已由 OPUS5 审查）
+
+- Owner 已批准拒绝删除被引用的 Note，OPUS5 将 ADR-0031 定稿为 Accepted；前述
+  Proposed/blocked 段落仅保留为历史。本轮继续使用 `dev/T-05-entity-deletion` 和
+  `29a2ca2fe74a4e546269ec599e90f64ea18845c3`，无新增模型层阻塞。
+- Goal/Task/Note 软删除、事务级联、两类活跃引用拒绝、空 tombstone 权限下发、
+  Vault 删除同步与人工冲突处理、三个 UI 删除入口已实施。预检显示引用计数并禁用确认，
+  服务端同事务再次检查，拒绝时实体/ledger/audit/序号均不变化。
+- 后端删除 32 项、相关同步集成 39 项、API 默认非集成 532 项、Web 347 项、offline
+  68 项与覆盖率、contracts 13 项通过；Ruff、Web/offline lint/typecheck、contracts typecheck、
+  独立候选 production build 和四个合同生成制品字节级零漂移均通过。
+- API + Worker 完整 mypy 本次 181 个文件通过，不沿用旧四错误结论。全仓 `ci:fast`
+  未执行，不声明聚合门或全部数据库集成通过。
+- 最终真实栈浏览器 Planning/Records/Today 为 9 passed；三个删除、引用阻塞、断网
+  预检、预检后新增引用的拒绝可见性、安全外链及原有流程均通过；1440/375/320px、
+  最窄深色和 320x568 阻塞截图留在临时目录。修正了删除入口被底部导航遮挡及被动刷新覆盖反馈。
+- 详情见 `V021_T05_ENTITY_DELETION_REVIEW.md`。T-04 三文件、既有报告与 AI 文档保留，
+  不属 T-05 候选；无 stage、commit、push、merge 或部署。待 OPUS5 审查后由 owner 决定提交。
+
+## T-05 审查修复（2026-09-06，已复审并提交）
+
+- OPUS5 已确认核心实现正确，owner 授权仅修复 Push 可选字段兼容性、更正报告和追加
+  ADR 待办。基线与分支不变，仍禁止 stage、commit、push、部署；此前 39 项集成和四文件
+  生成一致性只是历史收窄检查，不能作为完整口径或合同干净树门禁通过的证据。
+- `impact`/`details` 仅在值为 None 时通过字段级 `exclude_if` 省略；删除计数保留。
+  未给 Push/Pull/bootstrap 路由启用 `exclude_none`，保留冲突与下行 tombstone 的显式空值。
+  原 memory 测试先复现失败、后原样通过；新增/补强相邻单测及 HTTP 断言。
+- 实际执行根级 `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 全部通过：
+  mypy 181 文件；Web 347、offline 68（branch 85.52%）、contracts 13、mobile 4；
+  Python 606 passed / 109 deselected。定向序列化 7 passed，memory/Push/删除集成 34 passed。
+- 完整 `-m integration apps/api/tests -q -k "sync"` 收集到 105 项；`-k` 也匹配 asyncio
+  marker，实际包含 AI routing。复用旧库首轮为 103 passed / 2 failed（AI routing 调用数为 0、
+  Audit 固定主键重复）；不删除旧数据，另建干净测试库并成功向前迁移后重跑为
+  105 passed / 535 deselected。没有修改 AI routing、Audit 或 memory 测试来消除失败。
+- 重跑 `contracts:generate` 后六个契约文件 MD5 全部一致；实际运行干净树脚本仍因
+  未提交的有意合同差异退出 1，不声称该门通过，也不通过提交规避本轮禁止 Git 写入的约束。
+- ADR-0031 保持 Accepted，追加 operation-id Vault 槽位的安全 GC 待办，本轮不实现。
+  本轮没有重跑浏览器、Worker 数据库集成、迁移往返、真机或生产检查，也未执行完整
+  `ci:fast`；详细实跑/失败/历史与未运行边界见 T-05 实施报告。无缺少凭据或模型层阻塞。
+
+## T-05 已提交（2026-09-06，OPUS5 复核）
+
+- 提交 `dd664fc feat(sync): refuse deletion of referenced Notes (T-05)`，分支
+  `dev/T-05-entity-deletion`，46 文件 +4378/-265，**未 push**。上面各段的
+  "禁止 commit""干净树门禁退出 1""未执行 ci:fast" 均为当时事实，现仅作历史保留。
+- OPUS5 复核发现 GPT 门禁链 `typecheck && lint && test && build` 漏掉 `format:check`：
+  `sync-v1.schema.json` 三处 T-05 新增行超 80 字符。已确认该文件是手写输入而非生成物，
+  `prettier --write` 后四个生成制品 MD5 不变，修复以 amend 并入同一提交。
+- 首次在提交态、且 T-04 三文件 stash 移出的隔离树上实跑完整 `pnpm ci:fast`，八门全过：
+  `guard:context`、`agent:state:check`、`format:check`、`lint`、`typecheck`（mypy 181 文件）、
+  `test`（mobile 4、contracts 13、offline 68、Web 347、Python 606 passed / 109 deselected）、
+  `build`、`contracts:check`。干净树门禁提交后退出 0，印证其为纯 `git diff --exit-code`。
+- 遗留未归属缺陷（非 T-05 引入，已逐一验证为既有）：`test_ai_routing_integration.py`
+  调用计数、`test_audit_integration.py` 固定主键在复用库上冲突、`guard:context` 与
+  `pnpm test` 重新生成 `packages/offline/coverage` 的次序陷阱（连续两次 ci:fast 必失败）。
+- 仍未执行：浏览器回归未在序列化修复后重跑、Worker 数据库集成、迁移往返、真机。
+  ADR-0031 的 Vault 槽位 GC 按设计延后。T-04 三文件保留在工作区，不属本提交。
