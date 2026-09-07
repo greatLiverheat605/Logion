@@ -507,6 +507,49 @@ export function OfflineSyncCenter() {
     }
   }
 
+  async function removeAttachment(
+    attachment: AttachmentQueueEntry,
+  ): Promise<void> {
+    try {
+      const db = database.current;
+      if (
+        db === null ||
+        !unlocked ||
+        uploading ||
+        attachment.workspace_id !== workspaceId
+      ) {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      await new AttachmentQueueRepository(db).removeFailed(
+        workspaceId,
+        attachment.attachment_id,
+      );
+      setAttachments((current) =>
+        current.filter(
+          (entry) => entry.attachment_id !== attachment.attachment_id,
+        ),
+      );
+      setStatus(
+        feedback.success(`已从本设备队列移除附件「${attachment.filename}」。`),
+      );
+    } catch (error) {
+      let message = userMessage(error);
+      try {
+        await refresh();
+        if (
+          error instanceof OfflineStorageError &&
+          error.code === "OFFLINE_INPUT_INVALID"
+        ) {
+          message = "附件已不可移除，已重新读取当前队列。";
+        }
+      } catch (refreshError) {
+        message = `${message} 队列读取失败：${userMessage(refreshError)}`;
+      }
+      setStatus(feedback.error(message));
+      throw new Error(message);
+    }
+  }
+
   async function upload(attachment: AttachmentQueueEntry) {
     const db = database.current;
     if (db === null || uploading) return;
@@ -584,6 +627,7 @@ export function OfflineSyncCenter() {
       onUpload={(attachment) => void upload(attachment)}
       onWorkspaceChange={setWorkspaceId}
       onReload={() => void loadContext()}
+      onRemoveAttachment={removeAttachment}
       outbox={outbox}
       queueSummary={queueSummary}
       status={status}

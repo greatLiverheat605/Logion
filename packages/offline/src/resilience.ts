@@ -448,20 +448,46 @@ export class AttachmentQueueRepository {
 
   async retry(attachmentId: string): Promise<void> {
     validateUuid(attachmentId);
-    const entry = await this.database.attachmentQueue.get(attachmentId);
-    if (
-      entry === undefined ||
-      entry.state !== "failed" ||
-      entry.space_id === null ||
-      entry.target_id === null ||
-      entry.target_type === null
-    ) {
-      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
-    }
-    await this.database.attachmentQueue.update(attachmentId, {
-      state: "pending_upload",
-      last_error_code: null,
-    });
+    await this.database.transaction(
+      "rw",
+      this.database.attachmentQueue,
+      async () => {
+        const entry = await this.database.attachmentQueue.get(attachmentId);
+        if (
+          entry === undefined ||
+          entry.state !== "failed" ||
+          entry.space_id === null ||
+          entry.target_id === null ||
+          entry.target_type === null
+        ) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        await this.database.attachmentQueue.update(attachmentId, {
+          state: "pending_upload",
+          last_error_code: null,
+        });
+      },
+    );
+  }
+
+  async removeFailed(workspaceId: string, attachmentId: string): Promise<void> {
+    validateUuid(workspaceId);
+    validateUuid(attachmentId);
+    await this.database.transaction(
+      "rw",
+      this.database.attachmentQueue,
+      async () => {
+        const entry = await this.database.attachmentQueue.get(attachmentId);
+        if (
+          entry === undefined ||
+          entry.workspace_id !== workspaceId ||
+          entry.state !== "failed"
+        ) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        await this.database.attachmentQueue.delete(attachmentId);
+      },
+    );
   }
 }
 

@@ -527,6 +527,13 @@
   flex: 1;
 }
 
+.attachmentList li > .attachmentActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .topology {
   min-width: 0;
   justify-content: space-between;
@@ -822,4 +829,11 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+.removalDialog {
+  isolation: isolate;
+}
+
+:global(body):has(.removalDialog) :global([data-sonner-toaster]) {
+  visibility: hidden;
 }

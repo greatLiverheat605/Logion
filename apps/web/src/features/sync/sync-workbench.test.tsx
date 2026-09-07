@@ -74,6 +74,7 @@ function props(
     onMergeOpen: vi.fn(),
     onMergeOpenChange: vi.fn(),
     onReload: vi.fn(),
+    onRemoveAttachment: vi.fn().mockResolvedValue(undefined),
     onResolve: vi.fn(),
     onSynchronize: vi.fn(),
     onUnlock: vi.fn(),

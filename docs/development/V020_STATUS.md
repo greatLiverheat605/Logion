@@ -1044,3 +1044,118 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
   `pnpm test` 重新生成 `packages/offline/coverage` 的次序陷阱（连续两次 ci:fast 必失败）。
 - 仍未执行：浏览器回归未在序列化修复后重跑、Worker 数据库集成、迁移往返、真机。
   ADR-0031 的 Vault 槽位 GC 按设计延后。T-04 三文件保留在工作区，不属本提交。
+
+## T-06 状态与文案一致性（2026-09-06，待审查）
+
+- Owner 批准五项直接修复、StudySession 先复现后修复、Mastery 只确认不派生百分比。
+  基于 `64b6d4bdc4a7890cfb2a2304acb138ba71580ee3` 创建
+  `dev/T-06-status-copy-consistency`，HEAD 不变；没有 stage、commit、push、PR 或部署。
+- 判题三态、导出 KB 档与真实 ZIP 文案、可见时条件轮询和安全 next 回跳已实施。
+  48 项定向测试通过；完整 `pnpm test` 重跑 Web 392、offline 68、contracts 13、mobile 4、
+  Python 606 passed / 109 deselected，lint/typecheck（mypy 181 文件）/build/contracts:check 通过。
+- 实际运行 `pnpm ci:fast` 在第三门因既有 `sisyphus/PROGRESS.md` 格式报警退出 1，前两门通过；
+  后五门逐项另行实跑，不宣称聚合命令或八门全过。未修改其他所有者文件规避门禁。
+- 真实本地候选浏览器 1440/320px 的六个场景通过，已人工查看截图；早期测试定位器错误、
+  全量测试首轮失败和后续实跑结果均保留在 T-06 报告，旧浏览器 JSON 不用作证据。
+- StudySession 因生产未登录且未指定测试对象保持 blocked，没有认证后的复现或代码修复。
+  Mastery 不显示百分比，但当前没有渲染 suggested_reason；范围外的重复答题阶段保留问题另行上报。
+  T-04 三文件及原报告哈希不变。详情见 `V021_T06_STATUS_COPY_REVIEW.md`。
+
+## T-06 剩余工作（2026-09-06，部分完成）
+
+- 新基线 `821a9acc77f0a13b85b1b7a05b4b4ccf4fe64e8f`，沿用 T-06 分支。
+  所有者批准 Mastery 理由显示、StudySession 先复现后修复，以及两项完成后一次提交和 push。
+  上一节基线、授权和测试结果均保留为历史，不作为本轮证据。
+- Mastery Inspector 增加非空“建议依据”，两个 level 和百分比逻辑不变。
+  定向单测 10/10，通过新增 Chromium 1440/320px 两用例，有值/无值四图已检查。
+- 本轮完整 `pnpm ci:fast` 首次实跑退出 0：八门通过，Web 397、Python 606 passed /
+  109 deselected；最终收口证据见 `V021_T06_REMAINING_REVIEW.md`。
+- 线上已实际提交一次注册确认请求，但受控邮箱未收到邮件。未进入认证后流程，开始/结束
+  会话均为 0 次；状态是认证前提 blocked，不是“未能复现”，没有 StudySession 代码修改。
+- SSH push 仍失败；现有密钥被拒绝，CLI 凭据无效，官方设备登录未成功，等待所有者恢复授权。
+  两项完成条件未满足，没有新 commit、stage、merge 或部署。
+  T-04 三文件及既有浏览器 JSON 哈希不变；新 Run 保存新基线，旧 Run 和事件未改写。
+
+## T-06 StudySession 本地复现（2026-09-07，验收中）
+
+- 当前基线为已推送的 `14fd3eb2b81869ddf967cb32b9e9fe8e2d33f2bf`，远端分支已实查一致。
+  依照新交接搭建隔离完整本地栈，以合成账号登录 Web，普通在线开始/结束已复现
+  “1 分钟 · 未结束”，reload 后仍然存在；旧线上认证阻塞结论保留为历史。
+- 实际 Pull 与 Vault 解密数据均为 completed、版本 2、1 分钟、outcome 缺失，entity clean、
+  outbox 空。根因是 Today 读取模型把命令参数误当持久字段；现于读取投影按 status 派生
+  outcome，未修改显示兜底、服务端或同步合同。修复前两个新增回归失败，修复后 Today 11 项通过。
+- 完整验收与清理继续执行，详见 `V021_T06_STUDY_SESSION_REVIEW.md`。T-04 三文件不动，
+  本轮未 stage、commit、push 或部署；新 Run 记录当前基线，旧 Run 与事件不改写。
+
+## T-06 StudySession 本地验证完成（2026-09-07，待交接审查）
+
+- 本轮完整 `pnpm ci:fast` 退出 0，八门通过：Web 399、offline 68、contracts 13、mobile 4、
+  Python 606 passed / 109 deselected，mypy 181 文件。修复前两项回归为红，最终 Today 11 项通过。
+- 真实浏览器在线/离线两种终态共四条路径、重连、reload、同设备冷读取及独立设备 bootstrap
+  均通过。仓库 Today 测试 dev 模式因 Select 警告失败，原样在 production build 下重跑
+  1 passed；四档布局/axe/人工验收通过。失败记录和未运行边界见本轮专项报告。
+- 本轮隔离库的 5 个用户、5 个 Workspace、5 个 Space、6 个 Task、14 条会话已清理，相关
+  行数均为 0；独占 Redis 清空，临时凭据删除，保留空库本地测试栈。
+- T-04 三文件哈希不变且未暂存，原有状态文档字节前缀不变，其他既有改动保留。
+  无 stage、commit、push、merge 或部署。最终 diff 经独立只读复核无新增 actionable findings。
+
+## FABLE 计划归纳补齐（2026-09-07）
+
+- 用户授权“开始补齐”后，新增 [FABLE 计划总表](./FABLE_PLAN_REGISTER.md) 和
+  [58 项回归映射](./FABLE_REGRESSION_CHECKLIST.md)。归纳覆盖 T-00–T-07（含 T-01b/T-05a）、
+  12 条 ISSUE、M0–M6、O1–O11、N1–N10、视觉 U0–U6/G1/G2、12 份旧文档及不做项。
+- 本地规划分支的 `c00d500bef56a1114ff9fbc90208244043130f8f` 包含 FABLE 全部 5 份原文；
+  从中恢复当前工作树缺失的验收摘要、UI 优化、功能演进三份正文，另从 `6365e47` 恢复 OPUS5
+  规划审查。原文内容只规范 Markdown 排版；现有主线/开发两份计划不改。此前“缺原文”的判断
+  只适用于当时当前工作树检索，不再视为原始规划丢失。
+- 项目备份还找回 RC8 58 项清单及 12 份旧开发文档；回归映射不复制个人测试账号，保留
+  全部原 ID，并标明内链/外链、Goal/Topic、ZIP/JSON、邀请邮件与既有邮件等语义差异。
+- Git 历史确认 T-00/01/02/03/05 和 T-06 六项在当前 HEAD 祖先链中；StudySession 第七项
+  仍为本地验证完成的未提交候选。`64b6d4bd` 已记录 owner 搁置 T-04/长期延后移动工作，
+  原三文件继续保护；原 M3/M5 包含 T-04 的验收门没有因此自动通过。
+- 独立补列 T-05a、通用危险操作确认框、O9/O11 未排期、真实读屏、生产 SHA/digest、
+  ingest 观察/启用决定、DNS/配置、真实邮件与版本/验收标准决定。T-05/T-06 已覆盖的
+  O3、O7 外链、O6 部分内容不重复开发；原有记录与后续遗留事项保留。
+- 本轮仅补文档和本地协调记录，未执行 58 项全量回归或生产/真机检查，不据此新增产品
+  passed 结论。无 stage、commit、push、merge 或部署；新增文档待审查。
+- 文档验证已观察通过：11 份定向 Prettier、58 个本地链接、任务/里程碑/演进编号覆盖、
+  58 个清单 ID 与 12 个补充项、旧报告 27/12/9/10 逐项归类、4 份恢复正文与 Git 原文的
+  格式化一致性、`git diff --check`、当前 Run validator。T-04 三文件哈希和此前状态文档
+  字节前缀不变、暂存区为空；独立只读复核的 3 项补充均已纳入。
+
+## T-06 审查收口与 T-05a 开始（2026-09-07）
+
+- 用户明确“开始”后，先只读复核 StudySession 三份代码：与已验证候选一致、无阻塞
+  findings，定向 diff 空白检查通过。原真实栈证据保留，不重新声称跑过相同产品门禁。
+- T-05a 按 FABLE 原范围开始：失败附件单条本地移除、明确确认与反馈；工作区/状态检查
+  与移除位于同一 Dexie 事务，retry 同步收紧事务边界。仓储 15 项、Web 定向 8 项已通过，
+  其余验证进行中，见 [T-05a 报告](./V021_T05A_ATTACHMENT_QUEUE_REVIEW.md)。
+- 当前基线、分支及既有未提交改动保留；T-04 三文件仍受保护，不恢复移动施工。
+  本轮没有生产开关、同步合同、schema 或 Git 提交/推送变更。
+
+## T-05a 本地附件移除完成验证（2026-09-07，待 Git 交付）
+
+- 实现 failed 附件单行确认移除，事务重查工作区和状态；不影响非空 Vault、实体、Outbox
+  或其他附件。跨标签页状态变化会刷新并关闭旧确认，存储失败保留行和错误。
+- 最终完整 `pnpm ci:fast` 八门通过：Web 403、offline 74、contracts 13、mobile 4、
+  Python 606 passed / 109 deselected。初轮 lint 失败及修正记录见
+  [T-05a 报告](./V021_T05A_ATTACHMENT_QUEUE_REVIEW.md)。
+- 隔离生产构建的 Chromium 回归 1 passed；真实 Note、Blob、非空 Outbox、断网上传失败、
+  取消/Escape、单项移除与 reload 持久化通过。1440/320px 确认框 axe 和焦点通过；截图发现
+  toast 遮挡后已局部修正并重跑。不是移动真机、生产 ingest 或 M5 全量验收。
+- 累计 6 个合成用户与相关测试数据已清理，91 张业务表总行数归零；独占 Redis 清空，
+  3 个失败初始化空库删除，临时认证文件和含合成口令的失败 trace 删除。
+- StudySession 技术审查已完成，FABLE 总表的 T-05a/T-06、O4、D-02 与 A-08 状态已同步。
+  12 文件与隔离候选字节一致；T-04 三文件哈希不变且不入候选，暂存区为空。全部新候选
+  仍未提交、未推送、未部署；下一步是按明确 Git 授权交付，并统一最终版本和发布验收口径。
+
+## FABLE 候选进入 Git 交付（2026-09-07）
+
+- 用户在上一轮提出 Git 交付后回复“继续”，本轮整理已经验证的 StudySession、T-05a 与
+  FABLE 文档归纳到当前开发分支。交付范围、源码摘要和版本/验收推荐稿见
+  [候选范围与后续验收](./V021_DELIVERY_SCOPE.md)；提交及远端 SHA 以实际 Git 比对为准。
+- 不纳入 T-04 三文件、其未入库报告、其他本地材料或运行证据；FABLE 中原指向未入库材料
+  的两个链接改为来源说明，避免在其他机器形成失效链接。
+- D-02/D-03/D-06 的推荐稿尚待确认，原 58 项及 27 项通过基线保留。特别指出 12.2 属于
+  原 27 项，不能在延后移动工作后仍声称“原 27 项全部零回归”；13.1 的未验部分如实保留。
+- 生产、main 合并、release、真实读屏/真机和运维验收均不从本次 Git 交付自动获得通过状态。

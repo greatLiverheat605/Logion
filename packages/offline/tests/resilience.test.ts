@@ -88,6 +88,8 @@ describe("conflict center and attachment queue", () => {
     await expect(repository.retry(ids.attachment)).rejects.toMatchObject({
       code: "OFFLINE_INPUT_INVALID",
     });
+    await repository.removeFailed(ids.workspace, ids.attachment);
+    expect(await database.attachmentQueue.get(ids.attachment)).toBeUndefined();
   });
 
   it("preserves both conflict versions and resolves explicitly", async () => {
@@ -597,6 +599,154 @@ describe("conflict center and attachment queue", () => {
       last_error_code: "OFFLINE_ATTACHMENT_VERIFICATION_FAILED",
     });
   });
+
+  it("removes only a failed attachment in the requested workspace", async () => {
+    const db = await open();
+    const repository = new AttachmentQueueRepository(db);
+    const input = {
+      attachment_id: ids.attachment,
+      workspace_id: ids.workspace,
+      space_id: ids.entity,
+      device_id: ids.device,
+      target_type: "note" as const,
+      target_id: ids.entity,
+      filename: "failed.txt",
+      media_type: "text/plain",
+      blob: new Blob(["local copy"], { type: "text/plain" }),
+    };
+    await repository.enqueue(input);
+    await repository.enqueue({ ...input, attachment_id: ids.conflict });
+    await repository.enqueue({
+      ...input,
+      attachment_id: ids.user,
+      workspace_id: ids.entity,
+    });
+    await db.attachmentQueue.update(ids.attachment, { state: "failed" });
+    const vault = new OfflineVault(db);
+    await vault.initialize(
+      ids.user,
+      "local attachment removal test passphrase",
+    );
+    await new ProtectedOfflineRepository(db, vault).commitMutation({
+      operation_id: ids.conflict,
+      protocol_version: "sync-v1",
+      workspace_id: ids.workspace,
+      device_id: ids.device,
+      entity_type: "learning_goal",
+      entity_id: ids.entity,
+      operation_type: "create",
+      base_version: 0,
+      local_revision: 1,
+      client_occurred_at: "2026-09-07T00:00:00Z",
+      created_at: "2026-09-07T00:00:00Z",
+      updated_at: "2026-09-07T00:00:00Z",
+      deleted_at: null,
+      created_by: ids.user,
+      updated_by: ids.user,
+      payload: {
+        title: "Keep this goal",
+        desired_outcome: "Keep encrypted data and Outbox",
+      },
+    });
+    const before = await Promise.all(db.tables.map((table) => table.toArray()));
+    const expectedQueue = (await db.attachmentQueue.toArray()).filter(
+      (row) => row.attachment_id !== ids.attachment,
+    );
+    await expect(
+      repository.removeFailed(ids.entity, ids.attachment),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await expect(
+      repository.removeFailed(ids.workspace, ids.entity),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await expect(
+      repository.removeFailed("invalid", ids.attachment),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await expect(
+      repository.removeFailed(ids.workspace, "invalid"),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    await repository.removeFailed(ids.workspace, ids.attachment);
+    for (const [index, table] of db.tables.entries()) {
+      expect(await table.toArray()).toEqual(
+        table.name === "attachmentQueue" ? expectedQueue : before[index],
+      );
+    }
+  });
+
+  it.each(["pending_upload", "uploading", "verified"] as const)(
+    "refuses to remove a %s attachment",
+    async (state) => {
+      const db = await open();
+      const repository = new AttachmentQueueRepository(db);
+      const entry = await repository.enqueue({
+        attachment_id: ids.attachment,
+        workspace_id: ids.workspace,
+        space_id: ids.entity,
+        device_id: ids.device,
+        target_type: "note",
+        target_id: ids.entity,
+        filename: "keep.txt",
+        media_type: "text/plain",
+        blob: new Blob(["keep"], { type: "text/plain" }),
+      });
+      await db.attachmentQueue.update(ids.attachment, { state });
+      await expect(
+        repository.removeFailed(ids.workspace, ids.attachment),
+      ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+      expect(await db.attachmentQueue.get(ids.attachment)).toEqual({
+        ...entry,
+        state,
+      });
+    },
+  );
+
+  it.each(["retry", "remove"] as const)(
+    "serializes competing connections when %s runs first",
+    async (first) => {
+      const db = await open();
+      const other = await openOfflineDatabase({
+        databaseName: db.name,
+        indexedDB,
+        IDBKeyRange,
+      });
+      try {
+        const repository = new AttachmentQueueRepository(db);
+        const competing = new AttachmentQueueRepository(other);
+        await repository.enqueue({
+          attachment_id: ids.attachment,
+          workspace_id: ids.workspace,
+          space_id: ids.entity,
+          device_id: ids.device,
+          target_type: "note",
+          target_id: ids.entity,
+          filename: "competing.txt",
+          media_type: "text/plain",
+          blob: new Blob(["keep or remove"], { type: "text/plain" }),
+        });
+        await db.attachmentQueue.update(ids.attachment, { state: "failed" });
+        const operations =
+          first === "retry"
+            ? [
+                repository.retry(ids.attachment),
+                competing.removeFailed(ids.workspace, ids.attachment),
+              ]
+            : [
+                repository.removeFailed(ids.workspace, ids.attachment),
+                competing.retry(ids.attachment),
+              ];
+        const results = await Promise.allSettled(operations);
+        expect(results[0]?.status).toBe("fulfilled");
+        expect(results[1]).toMatchObject({
+          status: "rejected",
+          reason: { code: "OFFLINE_INPUT_INVALID" },
+        });
+        const remaining = await db.attachmentQueue.get(ids.attachment);
+        if (first === "retry") expect(remaining?.state).toBe("pending_upload");
+        else expect(remaining).toBeUndefined();
+      } finally {
+        other.close();
+      }
+    },
+  );
 
   it("encrypts protected records at rest and drops the key when locked", async () => {
     const db = await open();

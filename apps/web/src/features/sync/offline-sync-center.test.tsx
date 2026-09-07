@@ -99,6 +99,11 @@ function createFakeDatabase(initial: AttachmentQueueEntry): FakeDatabase {
       state.rows[index] = { ...row, ...changes };
       return 1;
     },
+    delete: async (attachmentId: string) => {
+      state.rows = state.rows.filter(
+        (row) => row.attachment_id !== attachmentId,
+      );
+    },
     where: (index: string) => {
       if (index === "workspace_id") {
         return {
@@ -134,6 +139,11 @@ function createFakeDatabase(initial: AttachmentQueueEntry): FakeDatabase {
     }),
   };
   const database = {
+    transaction: async (
+      _mode: string,
+      _table: unknown,
+      callback: () => Promise<void>,
+    ) => callback(),
     attachmentQueue,
     conflicts: emptyWorkspaceTable,
     outbox: emptyWorkspaceTable,
@@ -210,7 +220,6 @@ async function renderReadyCenter(fake: FakeDatabase): Promise<void> {
       "research-notes.txt",
     );
   });
-  expect(screen.getByRole("button", { name: "上传并验证" })).toBeTruthy();
 }
 
 beforeEach(() => {
@@ -227,6 +236,113 @@ afterEach(() => {
 });
 
 describe("OfflineSyncCenter attachment upload feedback", () => {
+  it("removes only the confirmed failed attachment while offline without clearing the Vault or calling HTTP", async () => {
+    const failed = { ...attachment(), state: "failed" as const };
+    const fake = createFakeDatabase(failed);
+    const keep = {
+      ...attachment(),
+      attachment_id: "00000000-0000-7000-8000-000000000007",
+      filename: "keep.txt",
+    };
+    fake.state.rows.push(keep);
+    const attachmentRequest = vi.fn();
+    const api = mockApi(attachmentRequest);
+    await renderReadyCenter(fake);
+    fireEvent(window, new Event("offline"));
+    api.mockClear();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "移除附件「research-notes.txt」" }),
+    );
+    expect(screen.getByRole("dialog", { name: "移除失败附件" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(fake.state.rows).toHaveLength(2);
+    expect(toast.success).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "移除附件「research-notes.txt」" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "确认移除" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "移除失败附件" })).toBeNull(),
+    );
+    expect(fake.state.rows).toEqual([keep]);
+    expect(screen.getByTestId("sync-attachments").textContent).not.toContain(
+      "research-notes.txt",
+    );
+    expect(screen.getByTestId("sync-attachments").textContent).toContain(
+      "keep.txt",
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      "已从本设备队列移除附件「research-notes.txt」。",
+      { duration: 3000 },
+    );
+    expect(mocks.vaultSession.clearLocalData).not.toHaveBeenCalled();
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it("keeps the row and confirmation visible when local removal fails", async () => {
+    const fake = createFakeDatabase({ ...attachment(), state: "failed" });
+    mockApi(vi.fn());
+    await renderReadyCenter(fake);
+    vi.spyOn(fake.database.attachmentQueue, "delete").mockRejectedValue(
+      new Error("storage unavailable"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "移除附件「research-notes.txt」" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "确认移除" }));
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").textContent).toContain("操作未完成"),
+    );
+    expect(fake.state.rows).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(mocks.vaultSession.clearLocalData).not.toHaveBeenCalled();
+  });
+
+  it.each(["retried", "removed"] as const)(
+    "refreshes the queue and closes a stale confirmation after another tab %s the attachment",
+    async (change) => {
+      const fake = createFakeDatabase({ ...attachment(), state: "failed" });
+      mockApi(vi.fn());
+      await renderReadyCenter(fake);
+      fireEvent.click(
+        screen.getByRole("button", { name: "移除附件「research-notes.txt」" }),
+      );
+      fake.state.rows =
+        change === "removed"
+          ? []
+          : [{ ...attachment(), state: "pending_upload" }];
+
+      fireEvent.click(screen.getByRole("button", { name: "确认移除" }));
+
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("dialog", { name: "移除失败附件" }),
+        ).toBeNull(),
+      );
+      expect(
+        screen.queryByRole("button", {
+          name: "移除附件「research-notes.txt」",
+        }),
+      ).toBeNull();
+      expect(screen.getByTestId("sync-inspector").textContent).toContain(
+        "附件已不可移除，已重新读取当前队列。",
+      );
+      if (change === "retried") {
+        expect(screen.getByRole("button", { name: "上传并验证" })).toBeTruthy();
+        expect(fake.state.rows).toHaveLength(1);
+      } else {
+        expect(
+          screen.getByTestId("sync-attachments").textContent,
+        ).not.toContain("research-notes.txt");
+      }
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(mocks.vaultSession.clearLocalData).not.toHaveBeenCalled();
+    },
+  );
+
   it("keeps a failed upload visible and never reports hash verification", async () => {
     const fake = createFakeDatabase(attachment());
     const attachmentRequest = vi.fn().mockRejectedValue(

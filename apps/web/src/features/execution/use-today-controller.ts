@@ -816,9 +816,18 @@ export function useTodayController(): TodayControllerResult {
         taskRows.map((item) => decrypted<TodayTaskPayload>(localVault, item)),
       ),
       Promise.all(
-        sessionRows.map((item) =>
-          decrypted<TodaySessionPayload>(localVault, item),
-        ),
+        sessionRows.map(async (item) => {
+          const view = await decrypted<TodaySessionPayload>(localVault, item);
+          // outcome 是结束命令参数；回读投影统一以持久化的 status 为准。
+          return {
+            ...view,
+            payload: {
+              ...view.payload,
+              outcome:
+                view.payload.status === "active" ? null : view.payload.status,
+            },
+          };
+        }),
       ),
       Promise.all(
         goalRows.map((item) => decrypted<TodayGoalPayload>(localVault, item)),

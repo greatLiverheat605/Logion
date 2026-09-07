@@ -221,6 +221,10 @@ test("Today completes a real execution loop and four-breakpoint audit", async ({
     .fill("会话完成，继续提交验收证据。");
   await finishSheet.getByRole("button", { name: "保存会话" }).click();
   await expect(finishSheet).toHaveCount(0);
+  await expect(startSession).toBeVisible();
+  const sessionInspector = page.getByTestId("today-inspector");
+  await expect(sessionInspector).toContainText("· completed");
+  await expect(sessionInspector).not.toContainText("未结束");
 
   await page.getByRole("button", { name: "添加证据" }).click();
   const evidenceSheet = page.getByRole("dialog", { name: "添加任务证据" });
