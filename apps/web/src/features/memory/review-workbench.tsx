@@ -871,6 +871,12 @@ function ReviewInspector({
                 : "暂无建议"}
             </dd>
           </div>
+          {mastery?.payload.suggested_reason?.trim() && (
+            <div>
+              <dt>建议依据</dt>
+              <dd>{mastery.payload.suggested_reason}</dd>
+            </div>
+          )}
           <div>
             <dt>下次复习</dt>
             <dd>{formatDate(schedule?.payload.next_review_at)}</dd>

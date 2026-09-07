@@ -126,3 +126,44 @@ describe("latest recall result copy", () => {
     expect(html).not.toContain("最近尚未判定");
   });
 });
+
+describe("mastery suggestion reason", () => {
+  function withReason(reason: string | null | undefined) {
+    const value = props(undefined);
+    const mastery = view("mastery", "mastery-1", {
+      space_id: "space-1",
+      topic_id: "topic-1",
+      suggested_level: "practicing" as const,
+      suggested_reason: "",
+      suggested_at: null,
+      confirmed_level: "exposed" as const,
+      confirmed_at: null,
+    });
+    // 覆盖运行时的 null 和缺失字段，不只依赖合同中的 string 类型。
+    Object.assign(mastery.payload, { suggested_reason: reason });
+    value.data.mastery = [mastery];
+    return value;
+  }
+
+  it("renders the reason without changing either mastery level", () => {
+    const html = renderToStaticMarkup(
+      <ReviewWorkbench {...withReason("最近三次回忆正确，建议继续练习。")} />,
+    );
+    expect(html).toContain("<dt>建议依据</dt>");
+    expect(html).toContain("<dd>最近三次回忆正确，建议继续练习。</dd>");
+    expect(html).toContain("<dd>已经接触</dd>");
+    expect(html).toContain("<dd>正在练习</dd>");
+  });
+
+  it.each(["", null, undefined, " \n\t "])(
+    "omits the reason row for %s",
+    (reason) => {
+      const html = renderToStaticMarkup(
+        <ReviewWorkbench {...withReason(reason)} />,
+      );
+      expect(html).not.toContain("建议依据");
+      expect(html).toContain("<dd>已经接触</dd>");
+      expect(html).toContain("<dd>正在练习</dd>");
+    },
+  );
+});

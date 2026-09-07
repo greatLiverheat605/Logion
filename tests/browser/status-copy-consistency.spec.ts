@@ -1,3 +1,6 @@
+import { hashPayload } from "../../packages/offline/src/hashing";
+import type { JsonObject } from "../../packages/offline/src/types";
+
 import { expect, test } from "./fixtures";
 
 for (const width of [1440, 320]) {
@@ -187,4 +190,117 @@ for (const width of [1440, 320]) {
       });
     });
   }
+}
+
+for (const width of [1440, 320]) {
+  test(`T-06 mastery reason present and absent at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    page.setDefaultTimeout(15_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/app/review");
+    const unlock = page.getByRole("button", { name: "解锁资料", exact: true });
+    await expect(unlock).toBeVisible();
+    await unlock.click();
+    const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });
+    await sheet.getByLabel("本地口令").fill("t06-local-vault-passphrase");
+    await sheet.getByRole("button", { name: "解锁资料" }).click();
+    await expect(sheet).toHaveCount(0);
+    const title = `T06 mastery ${width} ${Date.now()}`;
+    await page.getByRole("button", { name: "新建知识点", exact: true }).click();
+    const topic = page.getByRole("dialog", { name: "新建知识点" });
+    await topic.getByLabel("名称").fill(title);
+    await topic.getByRole("button", { name: "保存知识点" }).click();
+    await expect(topic).toHaveCount(0);
+    await page.getByRole("button", { name: new RegExp(title) }).click();
+    await page.getByRole("tab", { name: /掌握与图谱/ }).click();
+    await page.getByRole("button", { name: "列表与掌握确认" }).click();
+
+    let reason = "";
+    let changed = 0;
+    // 仅注入渲染夹具，不把该用例当作后端生成建议的证据。
+    await page.route("**/sync/pull", async (route) => {
+      const response = await route.fetch();
+      if (!response.ok()) {
+        await route.fulfill({ response });
+        return;
+      }
+      const body = (await response.json()) as {
+        changes: Array<{
+          entity_type: string;
+          payload: JsonObject;
+          payload_hash: string;
+        }>;
+      };
+      for (const change of body.changes ?? []) {
+        if (change.entity_type !== "mastery") continue;
+        change.payload.suggested_reason = reason;
+        change.payload_hash = await hashPayload(change.payload);
+        changed += 1;
+      }
+      await route.fulfill({ response, json: body });
+    });
+
+    for (const present of [false, true]) {
+      reason = present
+        ? "最近三次回忆正确，建议继续练习并在真实任务中检验。长文本换行验证：".repeat(
+            5,
+          )
+        : "";
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const confirmation = page.getByLabel(`${title} 的掌握确认`);
+      await confirmation.selectOption("exposed");
+      const before = changed;
+      await confirmation
+        .locator("..")
+        .getByRole("button", { name: "确认", exact: true })
+        .click();
+      await expect.poll(() => changed).toBeGreaterThan(before);
+      const inspector = page.getByTestId("review-inspector");
+      await expect(inspector).toContainText("已经接触");
+      const label = inspector.getByText("建议依据", { exact: true });
+      if (present) {
+        await expect(label).toBeAttached();
+        await expect(inspector).toContainText(reason);
+      } else {
+        await expect(label).toHaveCount(0);
+      }
+      await page.setViewportSize({ width, height: 900 });
+      if (width === 320) {
+        await page
+          .getByRole("button", { name: "知识 Inspector", exact: true })
+          .click();
+      }
+      await expect(inspector).toBeVisible();
+      await inspector
+        .getByRole("heading", { name: title, exact: true })
+        .scrollIntoViewIfNeeded();
+      await expect(
+        inspector.getByText("我的确认", { exact: true }),
+      ).toBeInViewport();
+      await expect(
+        inspector.getByText("系统建议", { exact: true }),
+      ).toBeInViewport();
+      if (present) {
+        await expect(label).toBeInViewport();
+        const bounds = await label.locator("..").evaluate((element) => ({
+          width: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+          right: element.getBoundingClientRect().right,
+          viewport: window.innerWidth,
+        }));
+        expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width + 1);
+        expect(bounds.right).toBeLessThanOrEqual(bounds.viewport);
+      }
+      // 悬停会暂停 Toast 计时，截图前先移开鼠标。
+      await page.mouse.move(width - 1, 899);
+      await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+      await page.screenshot({
+        path: testInfo.outputPath(
+          `mastery-reason-${present ? "present" : "absent"}-${width}.png`,
+        ),
+      });
+    }
+  });
 }
