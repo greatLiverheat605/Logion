@@ -1,15 +1,15 @@
 # v0.2.1 M6 发布准备
 
-> 日期：2026-09-09。状态：M6 Git 交付已获准并执行中；M5 按批准范围通过。原批准交付树已形成提交，合并及生产切换仍按具体动作取得明确授权。
+> 日期：2026-09-09。状态：草稿 PR #233 已创建，首轮快速检查失败后修复中；M5 按批准范围通过。删除语义的旧客户端兼容门尚未关闭，合并及生产切换未批准。
 > 执行入口：[M6 计划](../../.codex/plans/current/2026-09-09_logion-m6-release.md)。验收依据：[M5 最终记录](./V021_M5_CLOSEOUT.md)。
 
 ## 固定输入与实际核验
 
-- M5 基线及远端开发分支：`bac2a4371ce6a12d6c3e9a6124104d121b0f8807`。
+- M5 历史基线：`bac2a4371ce6a12d6c3e9a6124104d121b0f8807`；已推送 PR 初始 head：`3fc558d92b593b8b6895a338e2e4ee1424cb767d`。
 - 远端 main：`37e2e005d5594da31daade87d67a4ea183283b06`，是基线祖先；开发基线领先九个提交。
 - R-14 二十三产品摘要：`84e7adfa5f2c0b33ae1bf9b34d31082d381e53c2fca4558f197511cbe35b11fc`。
 - 五十三源码测试摘要：`062f080c5d4ea894cac0c95a934545fc133a58f77fff260d0b1230b3e74d5c60`。
-- 兼容性：Alembic `0040_merge_gate2_heads`、`sync-v1`、offline schema 4；远端 main 的 offline schema 同为 4。该比较不等于已确认生产实际 schema 或完成回滚演练。
+- 兼容性身份：Alembic `0040_merge_gate2_heads`、`sync-v1`、offline schema 4；远端 main 的 offline schema 同为 4。协议名称与存储版本相同不代表 wire 相同：既有 T-05 增加删除预检与三个 Push 响应可选字段。旧客户端删除兼容门未通过，见下文；生产实际 schema 和回滚仍未验证。
 - 主树存在其他未提交修改。交付只取 M5 已验证选择和本轮准备文档；AppShell 从固定候选取基线加 D-15 五行删除，其他 T-04 改动、历史 T-04 报告和未解释目录不进入交付包。
 
 远端公开 API 只读核验：
@@ -22,7 +22,7 @@
 
 本机 GitHub CLI 未登录，公开 API 已可读取运行状态；不能据此宣称具备创建 PR 或调度工作流的认证。Git 远端读取正常。九个既有提交相对 main 涉及 113 文件，未来 PR 必须包含它们及 M5 新修复的完整差异；不能只展示新修复片段。
 
-## 本地交付包与检查结果
+## 初始本地交付包与检查结果（历史）
 
 独立 Git 副本基于上述完整 M5 基线，只暂存 72 个文件：53 份 R-14 源码测试及 19 份文档。产品与测试字节、主树 T-04 保护摘要和空暂存区均已核对。连同九个既有提交，面向 main 的完整差异为 160 个文件；已保存两组 patch、差异统计、逐文件摘要和精确 Git tree。
 
@@ -73,3 +73,34 @@
 本次授权与执行进度通过单独文档提交跟随产品提交，新增一份 Git 交付子计划。因此交付总选择为 73 文件，完整 main 差异为 161 文件；新增范围仅为必要计划记录，产品范围不扩张。推送和 PR 的真实结果以后续观察为准，不提前填写成功。
 
 本页不是部署执行结果：实际合并 SHA、同 SHA 远端制品、生产预检、恢复演练、维护切换、M6 外呼/邮件、24 小时观察均未完成，不记 passed。
+
+## PR 检查与兼容性复核
+
+已推送初始 head 并创建[草稿 PR #233](https://github.com/greatLiverheat605/Logion/pull/233)，
+面向上述 main 包含 11 提交、161 文件。首轮
+[PR checks](https://github.com/greatLiverheat605/Logion/actions/runs/34347403413)
+中 integration 与 browser 成功，fast 在 JavaScript 依赖审计失败；
+[Mobile builds](https://github.com/greatLiverheat605/Logion/actions/runs/34347402398) 成功。
+完整提交历史秘密扫描零发现。初次导出完整差异曾超过辅助脚本缓冲区，已以流式输出
+补齐并核对提交与远端；失败证据保留，不归为产品失败。
+
+本地复现 6 项依赖漏洞后，更新 Next.js/eslint-config-next 至 16.3.3、sharp 至
+0.35.4、js-yaml 至 4.3.2、Vitest 配套至 4.1.11。锁文件仅包含对应依赖闭包更新
+和 peer 解析变化；安装成功，复查审计为零漏洞。Python 审计无已知漏洞，两项本地
+workspace 包不在 PyPI，按审计工具跳过提示保留。
+
+普通冲突的 `remote_deleted_at: null` 会被 main 旧版严格校验器拒绝。
+字段级省略空值修复后，Push 序列化 9 项通过；旧版校验器实测普通冲突由拒绝转为接受，
+真正删除冲突的非空字段仍被拒绝。回归修复前 1 failed / 1 passed 的证据保留。
+本次产品与依赖已改变，R-14 只作 M5 历史证据，新候选必须重跑完整检查。
+
+删除结果的 `impact`、拒绝的 `details` 以及非空 `remote_deleted_at` 均超出旧校验器，
+不能声明任意旧客户端与新服务端混用通过。Release 工作流现有“Old-client”步骤
+实际运行当前 checkout 的 offline 测试，并未加载旧 main 校验器，不能替代跨版本实证。
+具体兼容方案与验收在[兼容性子计划](../../.codex/plans/current/2026-09-09_logion-m6-release/sub-003_old-client-compatibility.md)中列明；
+该决策关闭前 PR 保持草稿，不提出直接合并或生产发布。
+
+本次修复的完整 `pnpm ci:fast` 实际退出 0，包含 Web 430、Python 614 passed /
+120 deselected、类型检查、构建及合同生成；没有生成合同差异。Next 新 lint 规则产生
+4 条既有整页导航警告，零 lint 错误；认证/账号切换的整页重载未因升级而改动。
+这些结果绑定当前六文件修复，后续文档检查单独执行；新提交的远端 CI 仍待观察。

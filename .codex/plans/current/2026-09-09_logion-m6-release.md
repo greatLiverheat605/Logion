@@ -2,7 +2,7 @@
 
 - 状态：执行中，本地交付准备已完成；步骤 2 的提交、推送和草稿 PR 已获准并开始执行，合并及生产变更仍有独立前置条件。
 - 来源：所有者询问推进 M6，沿用自主推进、仅必要决策询问的要求；[发布准备](../../../docs/development/V021_M6_RELEASE_PREPARATION.md)。
-- 基线：`bac2a4371ce6a12d6c3e9a6124104d121b0f8807`，R-14 产品与测试摘要保持。
+- 历史基线：`bac2a4371ce6a12d6c3e9a6124104d121b0f8807`；初始交付保持 R-14，后续安全与兼容性修复另固定候选和检查。
 - M5：按批准范围通过，50/58 passed；D-15 例外、D-16/D-06 延后、D-17 豁免继续有效。
 - Run：继续在已验证 `run-v021-fable-m5` 追加准备决策，基线不变；最终 Git SHA 变化时另记录交接，不覆写历史。
 - MCP 任务工具不可用，同步本地计划和 Run，不补造任务完成或模型证明。
@@ -10,7 +10,7 @@
 ## 步骤
 
 1. 本地准备已完成：[sub-001 候选准备](2026-09-09_logion-m6-release/sub-001_candidate-preparation.md)，72 文件交付选择、160 文件完整 main 差异及摘要已保存；发布工具 21 项、133 链接、格式/秘密/范围/Run 核验通过。
-2. 执行中：[sub-002 Git 交付](2026-09-09_logion-m6-release/sub-002_git-delivery.md)，提交、推送开发分支及草稿 PR 已获准；PR 检查后另批准合并，固定实际 main SHA，取得同 SHA Main/capacity/Release 证据和四镜像 manifest。
+2. 执行中：[sub-002 Git 交付](2026-09-09_logion-m6-release/sub-002_git-delivery.md)，草稿 PR #233 已创建；修复依赖审计与普通冲突序列化，另由 [sub-003](2026-09-09_logion-m6-release/sub-003_old-client-compatibility.md)关闭删除的跨版本兼容门。之后再批准合并、固定实际 main SHA，取得同 SHA Main/capacity/Release 证据和四镜像 manifest。
 3. 待前置：生产只读预检与具体回滚方案；获得维护/停写/切换批准后生成加密备份、同步异机、独立恢复、部署并执行授权 smoke。
 4. 待部署后：至少 24 小时观察，核对资源/备份/告警/邮件/同步，取得生产完成批准；旧版本清理另遵循手册，不自动删卷。
 

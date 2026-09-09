@@ -88,7 +88,7 @@ class SyncConflict(StrictModel):
     remote_version: int = Field(ge=1)
     remote_payload: dict[str, object]
     remote_payload_hash: Hash
-    remote_deleted_at: datetime | None = None
+    remote_deleted_at: datetime | None = Field(default=None, exclude_if=lambda value: value is None)
     resolution_options: list[Literal["keep_local", "keep_remote", "merge", "dismiss"]] = Field(
         min_length=1
     )

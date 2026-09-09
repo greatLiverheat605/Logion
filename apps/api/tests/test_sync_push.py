@@ -7,9 +7,11 @@ import pytest
 from logion_api.sync.push import SyncPushService, canonical_hash
 from logion_api.sync.schemas import (
     AppliedOperationResult,
+    ConflictOperationResult,
     FailedOperationResult,
     PushRequest,
     PushResponse,
+    SyncConflict,
     SyncOperation,
 )
 from pydantic import ValidationError
@@ -108,6 +110,41 @@ def test_push_result_serialization_omits_only_absent_counts(counts: dict[str, in
         assert "details" not in rejected
     else:
         assert applied["impact"] == rejected["details"] == counts
+
+
+@pytest.mark.parametrize("deleted_at", [None, datetime(2026, 9, 9, tzinfo=UTC)])
+def test_conflict_wire_omits_absent_tombstone_for_existing_clients(
+    deleted_at: datetime | None,
+) -> None:
+    response = PushResponse(
+        workspace_id=uuid4(),
+        device_id=uuid4(),
+        sync_epoch=uuid4(),
+        results=[
+            ConflictOperationResult(
+                operation_id=uuid4(),
+                conflict=SyncConflict(
+                    conflict_id=uuid4(),
+                    conflict_kind="delete_update" if deleted_at else "content",
+                    entity_type="note",
+                    entity_id=uuid4(),
+                    base_version=1,
+                    local_payload_hash=canonical_hash({"title": "Local"}),
+                    remote_version=2,
+                    remote_payload={} if deleted_at else {"title": "Remote"},
+                    remote_payload_hash=canonical_hash({} if deleted_at else {"title": "Remote"}),
+                    remote_deleted_at=deleted_at,
+                    resolution_options=["keep_remote", "dismiss"],
+                    created_at=datetime(2026, 9, 9, tzinfo=UTC),
+                ),
+            )
+        ],
+    )
+    conflict = json.loads(response.model_dump_json())["results"][0]["conflict"]
+    if deleted_at is None:
+        assert "remote_deleted_at" not in conflict
+    else:
+        assert conflict["remote_deleted_at"] == "2026-09-09T00:00:00Z"
 
 
 def test_push_handlers_are_registered_by_entity_family() -> None:

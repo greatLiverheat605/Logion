@@ -1,5 +1,11 @@
 # T-05 实施与审查修复报告（2026-09-06，待复审）
 
+> 2026-09-09 M6 复核更正：下文“remote_deleted_at 的显式 null 需要保留”是历史判断。
+> 实际旧 main 校验器会拒绝该字段；当前修复只省略缺失的删除时间，保留非空删除时间、
+> Pull/bootstrap 的 null 以及 payload 内部空值。普通冲突跨版本校验已通过，真实删除
+> 冲突的旧客户端策略尚未通过，见 [M6 发布准备](./V021_M6_RELEASE_PREPARATION.md)。
+> 不改写以下历史测试，也不把当前客户端测试当作旧客户端验收。
+
 ## 当前交付
 
 Outcome: **review fixes implemented / review pending**。OPUS5 已确认核心逻辑正确；
