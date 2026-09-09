@@ -385,7 +385,7 @@ async def test_stale_delete_does_not_use_latest_version_from_dependency(deletion
     stale = case["operation"]("note", dependencies=[first["operation_id"]])
     result = await case["push"](stale)
     assert result["status"] == "conflict" and result["conflict"]["conflict_kind"] == "delete_update"
-    assert result["conflict"]["remote_deleted_at"] is None
+    assert "remote_deleted_at" not in result["conflict"]
 
 
 @pytest.mark.parametrize("root", ["note", "task", "learning_goal"])
