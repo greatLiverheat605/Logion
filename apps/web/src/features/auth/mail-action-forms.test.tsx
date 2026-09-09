@@ -6,6 +6,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -111,7 +112,7 @@ describe.each(flows)("mail action $name", (flow) => {
     fireEvent.click(button);
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("request-mail-expired-or-replayed");
-    expect(document.activeElement).toBe(alert);
+    await waitFor(() => expect(document.activeElement).toBe(alert));
     expect(document.body.textContent).not.toContain("Private server detail");
     expect(screen.queryByRole("status")).toBeNull();
     expect(button.disabled).toBe(false);

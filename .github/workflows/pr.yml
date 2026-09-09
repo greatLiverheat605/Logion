@@ -171,9 +171,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - name: Start isolated Web application
+      - name: Build isolated production Web application
         run: |
-          pnpm --filter @logion/web dev --hostname 127.0.0.1 --port 3000 > "$RUNNER_TEMP/logion-web.log" 2>&1 &
+          pnpm --filter @logion/web build
+          cp -R apps/web/public apps/web/.next/standalone/apps/web/public
+          cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+      - name: Start isolated Web application
+        env:
+          NODE_ENV: production
+          HOSTNAME: 127.0.0.1
+          PORT: "3000"
+        run: |
+          node apps/web/.next/standalone/apps/web/server.js > "$RUNNER_TEMP/logion-web.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/logion-web.pid"
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:3000/health >/dev/null; then
