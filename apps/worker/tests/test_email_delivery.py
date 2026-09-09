@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from urllib.parse import parse_qs
 
@@ -61,6 +62,29 @@ def test_email_templates_keep_tokens_in_url_fragments() -> None:
     assert "https://logion.example/auth/verify#token-123" in verification.text_body
     assert "https://logion.example/auth/recover#recovery-456" in recovery.text_body
     assert "?token=" not in verification.text_body + recovery.text_body
+
+
+@pytest.mark.parametrize(
+    ("purpose", "path"),
+    (("email_verification", "verify"), ("password_recovery", "recover")),
+)
+def test_action_email_exposes_copyable_link_outside_the_button(purpose: str, path: str) -> None:
+    visible_text: list[str] = []
+
+    class VisibleText(HTMLParser):
+        def handle_data(self, data: str) -> None:
+            visible_text.append(data)
+
+    token = "synthetic-mail-token-" * 3
+    message = render_email(
+        purpose, {"recipient": "person@example.com", "token": token}, "https://logion.example"
+    )
+    VisibleText().feed(message.html_body)
+    link = f"https://logion.example/auth/{path}#{token}"
+    assert link in visible_text
+    assert f'href="{link}"' in message.html_body
+    assert link in message.text_body
+    assert "?token=" not in message.html_body
 
 
 def test_email_templates_reject_unknown_or_header_injected_payloads() -> None:

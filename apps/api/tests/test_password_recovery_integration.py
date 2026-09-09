@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pyotp
@@ -503,16 +504,20 @@ async def test_expired_password_recovery_is_terminal_and_clears_payload() -> Non
         )
         assert requested.status_code == 202
         action, outbox, token = await _latest_recovery(user_id)
+        completion_time = datetime.now(UTC)
         async with session_factory() as db:
             stored_action = await db.get(IdentityActionToken, action.id)
             assert stored_action is not None
-            stored_action.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            stored_action.expires_at = completion_time - timedelta(seconds=1)
             await db.commit()
 
-        denied = await client.post(
-            "/api/v1/auth/password-recovery/completions",
-            json={"token": token, "new_password": "replacement-password-123"},
-        )
+        # Keep the expiry check deterministic when the host clock moves backwards.
+        with patch("logion_api.identity.email_verification.datetime", wraps=datetime) as clock:
+            clock.now.return_value = completion_time
+            denied = await client.post(
+                "/api/v1/auth/password-recovery/completions",
+                json={"token": token, "new_password": "replacement-password-123"},
+            )
         assert denied.status_code == 400
         assert denied.json()["code"] == "AUTH_PASSWORD_RECOVERY_INVALID"
         async with session_factory() as db:

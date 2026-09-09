@@ -40,6 +40,7 @@ import type { BuiltinPersonaId } from "@/features/personas/persona-definitions";
 import type { PersonaDashboardViewState } from "@/features/personas/persona-today-overview";
 import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 export type TodayWorkspace = components["schemas"]["WorkspaceResponse"];
 export type TodaySpace = components["schemas"]["SpaceResponse"];
@@ -479,6 +480,7 @@ export function useTodayController(): TodayControllerResult {
   const { activePersona } = usePersona();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -761,6 +763,7 @@ export function useTodayController(): TodayControllerResult {
         workspace_id: workspaceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(
@@ -1002,7 +1005,7 @@ export function useTodayController(): TodayControllerResult {
       operation_type: existing === undefined ? "create" : "update",
       payload,
       protocol_version: "sync-v1",
-      updated_at: now,
+      updated_at: mutationTimestamp(existing, now),
       updated_by: session.user.id,
       workspace_id: workspaceId,
       dependencies,

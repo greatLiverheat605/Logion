@@ -21,6 +21,7 @@ import { deriveProductWorkbenchState } from "@/components/product/product-workbe
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { LogionApiError, type ApiClient } from "@/lib/api/client";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 import {
   buildKnowledgeGraph,
@@ -169,6 +170,7 @@ export function ReviewCenter() {
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -318,6 +320,7 @@ export function ReviewCenter() {
         device_id: deviceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(
@@ -521,7 +524,7 @@ export function ReviewCenter() {
       local_revision: (existing?.local_revision ?? 0) + 1,
       client_occurred_at: now,
       created_at: existing?.created_at ?? now,
-      updated_at: now,
+      updated_at: mutationTimestamp(existing, now),
       deleted_at: null,
       created_by: existing?.created_by ?? session.user.id,
       updated_by: session.user.id,

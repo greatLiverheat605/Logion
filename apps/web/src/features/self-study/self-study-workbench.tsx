@@ -640,8 +640,10 @@ function DetailMain({
   data,
   selected,
   onOpenSheet,
+  view,
 }: {
   data: SelfStudyWorkbenchData;
+  view: "inbox" | "board";
   onOpenSheet: (
     kind: "deliverable" | "inbox_item" | "learning_track" | "study_project",
   ) => void;
@@ -653,14 +655,20 @@ function DetailMain({
         action={
           <button
             className={styles.primaryButton}
-            onClick={() => onOpenSheet("inbox_item")}
+            onClick={() =>
+              onOpenSheet(view === "board" ? "learning_track" : "inbox_item")
+            }
             type="button"
           >
-            开始捕获
+            {view === "board" ? "新建路线" : "开始捕获"}
           </button>
         }
-        description="捕获 → 分诊为路线或项目 → 留下可运行的成果证据。"
-        title="从收件箱开始"
+        description={
+          view === "board"
+            ? "尚未选择路线或项目。"
+            : "捕获 → 分诊为路线或项目 → 留下可运行的成果证据。"
+        }
+        title={view === "board" ? "路线与项目" : "从收件箱开始"}
       />
     );
   if (selected.kind === "inbox") {
@@ -1165,6 +1173,7 @@ export function SelfStudyWorkbench({
                       data={data}
                       onOpenSheet={setSheet}
                       selected={selected?.kind === "inbox" ? selected : null}
+                      view="inbox"
                     />
                   </WorkbenchTabPanel>
                   <WorkbenchTabPanel forceMount value="board">
@@ -1177,6 +1186,7 @@ export function SelfStudyWorkbench({
                           ? selected
                           : null
                       }
+                      view="board"
                     />
                   </WorkbenchTabPanel>
                   <WorkbenchTabPanel forceMount value="timeline">

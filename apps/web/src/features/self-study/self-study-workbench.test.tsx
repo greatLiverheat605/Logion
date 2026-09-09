@@ -1,5 +1,14 @@
+/** @vitest-environment jsdom */
+
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LocalEntity } from "@logion/offline";
 
@@ -117,6 +126,35 @@ function props(): SelfStudyWorkbenchProps {
 }
 
 describe("Self-study workbench", () => {
+  afterEach(cleanup);
+
+  it("switches between distinct inbox and board states and opens route creation", () => {
+    render(<SelfStudyWorkbench {...props()} />);
+    const board = screen.getByRole("tabpanel", { name: /路线与项目/ });
+    expect(
+      within(board).getByRole("button", { name: "新建路线" }),
+    ).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /收件箱/ }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(
+      within(screen.getByRole("tabpanel", { name: /收件箱/ })).getByText(
+        "从收件箱开始",
+      ),
+    ).toBeTruthy();
+    expect(board.getAttribute("data-state")).toBe("inactive");
+    fireEvent.click(screen.getByRole("button", { name: "查看路线" }));
+    fireEvent.click(
+      within(screen.getByRole("tabpanel", { name: /路线与项目/ })).getByRole(
+        "button",
+        { name: "新建路线" },
+      ),
+    );
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("dialog").textContent).toContain("路线");
+  });
+
   it("renders Inbox, Board, Timeline and Inspector with one page primary", () => {
     const html = renderToStaticMarkup(<SelfStudyWorkbench {...props()} />);
 

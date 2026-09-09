@@ -124,7 +124,7 @@ class OpenAICompatibleGenerationAdapter:
                     },
                     json=body,
                 )
-                request.extensions["sni_hostname"] = hostname.encode("ascii")
+                request.extensions["sni_hostname"] = hostname
                 response = await client.send(request, stream=True)
                 try:
                     self._validate_status(response.status_code)

@@ -90,7 +90,7 @@ class OpenAICompatibleDiscoveryAdapter:
                         "Host": original_host,
                     },
                 )
-                request.extensions["sni_hostname"] = hostname.encode("ascii")
+                request.extensions["sni_hostname"] = hostname
                 response = await client.send(request, stream=True)
                 try:
                     self._validate_status(response.status_code)

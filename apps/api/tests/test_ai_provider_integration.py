@@ -138,6 +138,34 @@ async def test_provider_credentials_are_server_only_and_workspace_scoped() -> No
             "timeout_seconds": 20,
             "max_retries": 1,
         }
+        viewer_csrf = {"X-CSRF-Token": viewer.cookies["logion_csrf"]}
+        foreign_base = f"/api/v1/workspaces/{viewer_workspace}/ai/providers"
+        for client, target, headers, expected in (
+            (viewer, base, viewer_csrf, 403),
+            (owner, foreign_base, csrf, 404),
+            (viewer, foreign_base, viewer_csrf, 404),
+        ):
+            for method, body in (("PUT", update), ("DELETE", {"expected_version": 1})):
+                denied = await client.request(
+                    method, f"{target}/{provider_id}", headers=headers, json=body
+                )
+                assert denied.status_code == expected, denied.text
+                assert first_secret not in denied.text
+        for client, target, headers, expected in (
+            (viewer, base, viewer_csrf, 403),
+            (owner, foreign_base, csrf, 404),
+        ):
+            denied = await client.post(
+                target, headers=headers, json={**payload, "id": str(uuid4())}
+            )
+            assert denied.status_code == expected, denied.text
+        async with session_factory() as db:
+            provider = await db.get(AIProvider, provider_id)
+            assert provider is not None
+            assert provider.version == 1 and provider.enabled and provider.deleted_at is None
+            assert AIProviderCredentialCipher(get_settings()).decrypt(provider) == first_secret
+            assert len((await db.scalars(select(AIProvider))).all()) == 1
+
         updated = await owner.put(f"{base}/{provider_id}", headers=csrf, json=update)
         assert updated.status_code == 200, updated.text
         assert updated.json()["version"] == 2
@@ -275,6 +303,13 @@ async def test_model_discovery_is_authorized_audited_and_idempotent() -> None:
                     headers=csrf,
                 )
             ).status_code == 404
+
+            substituted = await viewer.post(
+                f"/api/v1/workspaces/{external_workspace_id}/ai/providers/{provider_id}/discover-models",
+                headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+            )
+            assert substituted.status_code == 404
+            assert FakeDiscoveryAdapter.credentials == []
 
             first = await owner.post(discover_url, headers=csrf)
             second = await owner.post(discover_url, headers=csrf)

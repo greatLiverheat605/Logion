@@ -134,6 +134,7 @@ export function OfflineSyncCenter() {
   const {
     clearLocalData,
     database,
+    markChanged,
     lock: lockVault,
     phase: vaultPhase,
     revision: vaultRevision,
@@ -264,6 +265,7 @@ export function OfflineSyncCenter() {
         device_id: deviceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(

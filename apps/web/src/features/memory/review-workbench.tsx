@@ -1,6 +1,13 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
@@ -1303,6 +1310,13 @@ function AnswerSheet({
 }>) {
   const formId = useId();
   const [phase, setPhase] = useState<"answer" | "review">("answer");
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   if (!quiz) return null;
   return (
     <WorkbenchSheet
@@ -1372,7 +1386,9 @@ function AnswerSheet({
           const succeeded = await actions.submitQuizAttempt(event, quiz);
           if (succeeded === true) {
             // Let the submit click settle before Radix unmounts the Sheet.
-            window.setTimeout(() => onOpenChange(false), 0);
+            window.setTimeout(() => {
+              if (mounted.current) onOpenChange(false);
+            }, 0);
           }
         }}
       >
@@ -1749,14 +1765,16 @@ export function ReviewWorkbench({
         onOpenChange={setReviewOpen}
         open={reviewOpen}
       />
-      <AnswerSheet
-        actions={actions}
-        onOpenChange={(next) => {
-          if (!next) setQuiz(null);
-        }}
-        open={quiz !== null}
-        quiz={quiz}
-      />
+      {quiz ? (
+        <AnswerSheet
+          actions={actions}
+          onOpenChange={(next) => {
+            if (!next) setQuiz(null);
+          }}
+          open
+          quiz={quiz}
+        />
+      ) : null}
     </main>
   );
 }

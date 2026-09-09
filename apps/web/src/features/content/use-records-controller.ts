@@ -35,6 +35,7 @@ import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 export type RecordsWorkspace = components["schemas"]["WorkspaceResponse"];
 export type RecordsSpace = components["schemas"]["SpaceResponse"];
@@ -399,6 +400,7 @@ export function useRecordsController(): RecordsControllerResult {
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -570,8 +572,9 @@ export function useRecordsController(): RecordsControllerResult {
           },
         );
       }
+      markChanged();
     },
-    [],
+    [markChanged],
   );
 
   const refresh = useCallback(
@@ -748,7 +751,7 @@ export function useRecordsController(): RecordsControllerResult {
       operation_type: existing ? "update" : "create",
       payload,
       protocol_version: "sync-v1",
-      updated_at: now,
+      updated_at: mutationTimestamp(existing, now),
       updated_by: session.user.id,
       workspace_id: selectedWorkspace,
     });

@@ -19,6 +19,7 @@ vi.mock("@/features/personas/persona-context", () => ({
     activePersona: null,
     customPersonas: [],
     isLoading: false,
+    isRouteVisible: () => true,
     setActivePersona: choose,
     createCustomPersona: vi.fn(),
     deleteCustomPersona: vi.fn(),

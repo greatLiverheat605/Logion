@@ -1,8 +1,21 @@
+/** @vitest-environment jsdom */
+
 import type { JsonObject, LocalEntity } from "@logion/offline";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ReviewWorkbench, type ReviewWorkbenchProps } from "./review-workbench";
+
+afterEach(cleanup);
 
 function view<T extends JsonObject>(
   entityType: string,
@@ -103,6 +116,111 @@ function props(correct: boolean | null | undefined): ReviewWorkbenchProps {
     },
   };
 }
+
+describe("recall answer lifecycle", () => {
+  it("keeps a reopened draft when an earlier save finishes", async () => {
+    const value = props(undefined);
+    let finishSave!: (result: boolean) => void;
+    const pendingSave = new Promise<boolean>((resolve) => {
+      finishSave = resolve;
+    });
+    value.actions.submitQuizAttempt = vi.fn().mockReturnValue(pendingSave);
+    render(<ReviewWorkbench {...value} />);
+    const startRecall = within(screen.getByTestId("review-answer")).getByRole(
+      "button",
+      { name: "开始回忆" },
+    );
+    fireEvent.click(startRecall);
+    const first = within(screen.getByRole("dialog", { name: "主动回忆" }));
+    fireEvent.change(first.getByLabelText("我的答案"), {
+      target: { value: "第一次回答" },
+    });
+    fireEvent.click(first.getByRole("button", { name: "提交回答" }));
+    fireEvent.click(first.getByRole("button", { name: "保存答题记录" }));
+    fireEvent.click(first.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(startRecall);
+    const reopened = screen.getByRole("dialog", { name: "主动回忆" });
+    fireEvent.change(within(reopened).getByLabelText("我的答案"), {
+      target: { value: "新的未保存草稿" },
+    });
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await act(async () => finishSave(true));
+      await act(async () => vi.runOnlyPendingTimersAsync());
+      expect(screen.getByRole("dialog", { name: "主动回忆" })).toBe(reopened);
+      expect(
+        (within(reopened).getByLabelText("我的答案") as HTMLTextAreaElement)
+          .value,
+      ).toBe("新的未保存草稿");
+      expect(value.actions.submitQuizAttempt).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts the same quiz with a blank answer after a successful save", async () => {
+    const value = props(undefined);
+    value.actions.submitQuizAttempt = vi.fn().mockResolvedValue(true);
+    render(<ReviewWorkbench {...value} />);
+    const startRecall = within(screen.getByTestId("review-answer")).getByRole(
+      "button",
+      { name: "开始回忆" },
+    );
+    fireEvent.click(startRecall);
+    const answer = within(screen.getByRole("dialog", { name: "主动回忆" }));
+    fireEvent.change(answer.getByLabelText("我的答案"), {
+      target: { value: "第一次回答" },
+    });
+    fireEvent.click(answer.getByRole("button", { name: "提交回答" }));
+    fireEvent.click(answer.getByRole("button", { name: "保存答题记录" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    fireEvent.click(startRecall);
+    const reopened = within(screen.getByRole("dialog", { name: "主动回忆" }));
+    expect(reopened.getByRole("button", { name: "提交回答" })).toBeTruthy();
+    expect(
+      (reopened.getByLabelText("我的答案") as HTMLTextAreaElement).value,
+    ).toBe("");
+    expect(reopened.queryByLabelText("信心（1-5）")).toBeNull();
+    expect(value.actions.submitQuizAttempt).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an unsaved answer after failure and resets it after dismissal", async () => {
+    const value = props(undefined);
+    value.actions.submitQuizAttempt = vi.fn().mockResolvedValue(false);
+    render(<ReviewWorkbench {...value} />);
+    const startRecall = within(screen.getByTestId("review-answer")).getByRole(
+      "button",
+      { name: "开始回忆" },
+    );
+    fireEvent.click(startRecall);
+    const dialog = screen.getByRole("dialog", { name: "主动回忆" });
+    const answer = within(dialog);
+    fireEvent.change(answer.getByLabelText("我的答案"), {
+      target: { value: "待保存回答" },
+    });
+    fireEvent.click(answer.getByRole("button", { name: "提交回答" }));
+    await act(async () => {
+      fireEvent.click(answer.getByRole("button", { name: "保存答题记录" }));
+    });
+    expect(value.actions.submitQuizAttempt).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("dialog", { name: "主动回忆" })).toBe(dialog);
+    expect(answer.getByRole("button", { name: "保存答题记录" })).toBeTruthy();
+    expect(
+      (answer.getByLabelText("我的答案") as HTMLTextAreaElement).value,
+    ).toBe("待保存回答");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(startRecall);
+    const reopened = within(screen.getByRole("dialog", { name: "主动回忆" }));
+    expect(reopened.getByRole("button", { name: "提交回答" })).toBeTruthy();
+    expect(
+      (reopened.getByLabelText("我的答案") as HTMLTextAreaElement).value,
+    ).toBe("");
+  });
+});
 
 describe("latest recall result copy", () => {
   it.each([

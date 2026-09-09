@@ -176,6 +176,7 @@ export default function ProfilePage() {
             <section
               className={styles.accountSection}
               data-testid="profile-account"
+              hidden={section !== "account"}
             >
               <header className={styles.sectionHeader}>
                 <div>
@@ -225,6 +226,7 @@ export default function ProfilePage() {
             <section
               className={styles.accountSection}
               data-testid="profile-activity"
+              hidden={section !== "activity"}
             >
               <header className={styles.sectionHeader}>
                 <div>
@@ -285,6 +287,7 @@ export default function ProfilePage() {
             <section
               className={styles.accountSection}
               data-testid="profile-actions"
+              hidden={section !== "actions"}
             >
               <header className={styles.sectionHeader}>
                 <div>

@@ -251,7 +251,11 @@ export default function HelpPage() {
         }
         main={
           <div className={styles.mainPane}>
-            <section className={styles.searchSection} data-testid="help-search">
+            <section
+              className={styles.searchSection}
+              data-testid="help-search"
+              hidden={section !== "search"}
+            >
               <header className={styles.sectionHeader}>
                 <div>
                   <span className={styles.eyebrow}>HELP SEARCH</span>
@@ -304,6 +308,7 @@ export default function HelpPage() {
             <section
               className={styles.contentSection}
               data-testid="help-diagnostics"
+              hidden={section !== "diagnostics"}
             >
               <header className={styles.sectionHeader}>
                 <div>
@@ -341,6 +346,7 @@ export default function HelpPage() {
             <section
               className={styles.contentSection}
               data-testid="help-recovery"
+              hidden={section !== "recovery"}
             >
               <header className={styles.sectionHeader}>
                 <div>
@@ -392,26 +398,32 @@ export default function HelpPage() {
                 </Link>
               </div>
             </section>
-            <section className={styles.contentSection} data-testid="help-faq">
+            <section
+              className={styles.contentSection}
+              data-testid="help-faq"
+              hidden={section !== "faq"}
+            >
               <header className={styles.sectionHeader}>
                 <div>
                   <span className={styles.eyebrow}>FAQ</span>
                   <h2>常见问题</h2>
-                  <p>FAQ 与上方搜索共享筛选结果。</p>
+                  <p>FAQ 与搜索帮助共享筛选结果。</p>
                 </div>
               </header>
               <div className={styles.faqList}>
-                {normalizedQuery
-                  ? null
-                  : results.map((item) => (
-                      <details key={`faq-${item.id}`}>
-                        <summary>
-                          {item.question}
-                          <AppIcon name="chevron-down" size={15} />
-                        </summary>
-                        <p>{item.answer}</p>
-                      </details>
-                    ))}
+                {results.length ? (
+                  results.map((item) => (
+                    <details key={`faq-${item.id}`}>
+                      <summary>
+                        {item.question}
+                        <AppIcon name="chevron-down" size={15} />
+                      </summary>
+                      <p>{item.answer}</p>
+                    </details>
+                  ))
+                ) : (
+                  <p>没有匹配的帮助</p>
+                )}
               </div>
             </section>
           </div>

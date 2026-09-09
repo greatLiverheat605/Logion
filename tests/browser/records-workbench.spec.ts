@@ -310,6 +310,255 @@ test("T05 reference added after preview keeps rejection visible after local refr
   });
 });
 
+test("T05 offline Note deletion resolves a concurrent device update explicitly", async ({
+  accountState,
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const scope = await seedDeletionScope(page);
+  const password =
+    process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;
+  await openDeletionWorkbench(page, password, "Note", scope.marker);
+  const snapshot = (readPayload = false) =>
+    page.evaluate(
+      async ({ workspaceId, noteId, readPayload, passphrase }) => {
+        const result: Record<string, Record<string, unknown>[]> = {};
+        for (const { name } of await indexedDB.databases()) {
+          if (!name) continue;
+          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open(name);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          try {
+            if (!db.objectStoreNames.contains("conflicts")) continue;
+            for (const store of ["entities", "outbox", "conflicts"]) {
+              const rows = await new Promise<Record<string, unknown>[]>(
+                (resolve, reject) => {
+                  const request = db
+                    .transaction(store)
+                    .objectStore(store)
+                    .getAll();
+                  request.onsuccess = () => resolve(request.result);
+                  request.onerror = () => reject(request.error);
+                },
+              );
+              result[store] = rows.filter(
+                (row) =>
+                  row.workspace_id === workspaceId && row.entity_id === noteId,
+              );
+            }
+            if (readPayload) {
+              const read = <T>(store: string) =>
+                new Promise<T[]>((resolve, reject) => {
+                  const request = db
+                    .transaction(store)
+                    .objectStore(store)
+                    .getAll();
+                  request.onsuccess = () => resolve(request.result);
+                  request.onerror = () => reject(request.error);
+                });
+              const [metadata] = await read<{
+                salt: string;
+                iterations: number;
+              }>("vaultMetadata");
+              const records = await read<{
+                record_id: string;
+                iv: string;
+                ciphertext: string;
+              }>("vaultRecords");
+              const payload = result.entities[0].payload as {
+                encrypted_payload_ref: string;
+              };
+              const record = records.find(
+                (row) => row.record_id === payload.encrypted_payload_ref,
+              );
+              if (!metadata || !record)
+                throw new Error("Expected persisted encrypted Note");
+              const decode = (value: string) =>
+                Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+              const encoder = new TextEncoder();
+              const material = await crypto.subtle.importKey(
+                "raw",
+                encoder.encode(passphrase),
+                "PBKDF2",
+                false,
+                ["deriveKey"],
+              );
+              const key = await crypto.subtle.deriveKey(
+                {
+                  name: "PBKDF2",
+                  hash: "SHA-256",
+                  salt: decode(metadata.salt),
+                  iterations: metadata.iterations,
+                },
+                material,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["decrypt"],
+              );
+              const plaintext = await crypto.subtle.decrypt(
+                {
+                  name: "AES-GCM",
+                  iv: decode(record.iv),
+                  additionalData: encoder.encode(
+                    `${workspaceId}:${record.record_id}`,
+                  ),
+                },
+                key,
+                decode(record.ciphertext),
+              );
+              result.payloads = [
+                JSON.parse(new TextDecoder().decode(plaintext)) as Record<
+                  string,
+                  unknown
+                >,
+              ];
+            }
+          } finally {
+            db.close();
+          }
+        }
+        return result;
+      },
+      {
+        workspaceId: scope.workspaceId,
+        noteId: scope.noteId,
+        readPayload,
+        passphrase: password,
+      },
+    );
+  await expect
+    .poll(async () => (await snapshot()).entities[0]?.sync_status)
+    .toBe("clean");
+  const version = (await snapshot()).entities[0].server_version;
+  const origin = new URL(page.url()).origin;
+  const other = await browser.newContext({
+    baseURL: origin,
+    serviceWorkers: "block",
+  });
+  try {
+    const login = await other.request.post("/api/v1/auth/login", {
+      headers: { Origin: origin },
+      data: {
+        email: accountState.email,
+        password: accountState.password,
+        device_name: "Deletion conflict device B",
+      },
+    });
+    expect(login.status()).toBe(200);
+    const csrf = (await other.cookies()).find(
+      (cookie) => cookie.name === "logion_csrf",
+    )!.value;
+    await page.getByRole("button", { name: "删除笔记", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "确认删除", exact: true });
+    const confirm = dialog.getByRole("button", {
+      name: "确认删除",
+      exact: true,
+    });
+    await expect(confirm).toBeEnabled();
+    await page.context().setOffline(true);
+    await confirm.click();
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(async () => (await snapshot()).outbox.length).toBe(1);
+    await expect
+      .poll(async () => (await snapshot()).outbox[0]?.outbox_state)
+      .toBe("pending");
+    expect((await snapshot()).outbox[0]).toMatchObject({
+      operation_type: "delete",
+      base_version: version,
+    });
+    expect((await snapshot()).entities[0].deleted_at).toEqual(
+      expect.any(String),
+    );
+    await expect(page.getByText("删除已同步。", { exact: true })).toHaveCount(
+      0,
+    );
+    const remoteTitle = `${scope.marker} Note remote`;
+    const updated = await other.request.put(
+      `${scope.path}/notes/${scope.noteId}`,
+      {
+        headers: { Origin: origin, "X-CSRF-Token": csrf },
+        data: {
+          expected_version: version,
+          task_id: scope.taskId,
+          title: remoteTitle,
+          markdown_body: "Device B preserved content",
+        },
+      },
+    );
+    expect(updated.status()).toBe(200);
+    const remoteVersion = (await updated.json()).version;
+    await page.context().setOffline(false);
+    await page.goto("/app/sync");
+    const input = page.getByLabel("本地解锁口令", { exact: true });
+    await expect(input).toBeVisible();
+    await input.fill(password);
+    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await expect(input).toHaveCount(0);
+    await page.getByRole("button", { name: "立即同步", exact: true }).click();
+    await expect
+      .poll(async () => (await snapshot()).outbox[0]?.outbox_state)
+      .toBe("conflict");
+    expect((await snapshot()).conflicts[0]).toMatchObject({
+      conflict_kind: "delete_update",
+      status: "open",
+      remote_version: remoteVersion,
+    });
+    await page.getByRole("tab", { name: /冲突/ }).click();
+    const panel = page.getByTestId("sync-conflicts");
+    await expect(panel).toContainText(remoteTitle);
+    await expect(panel).toContainText("Device B preserved content");
+    await page.screenshot({
+      path: testInfo.outputPath("offline-delete-update-conflict.png"),
+    });
+    await panel
+      .getByRole("button", { name: "采用服务器版本", exact: true })
+      .click();
+    await expect.poll(async () => (await snapshot()).outbox.length).toBe(0);
+    await expect
+      .poll(
+        async () =>
+          (await snapshot()).conflicts.filter((row) => row.status === "open")
+            .length,
+      )
+      .toBe(0);
+    expect((await snapshot()).entities[0]).toMatchObject({
+      sync_status: "clean",
+      server_version: remoteVersion,
+      deleted_at: null,
+    });
+    const cold = await other.newPage();
+    await openDeletionWorkbench(cold, password, "Note", scope.marker);
+    await expect(
+      cold.getByRole("textbox", { name: "笔记标题", exact: true }),
+    ).toHaveValue(remoteTitle);
+    await expect(
+      cold.getByRole("textbox", { name: "Markdown 正文", exact: true }),
+    ).toHaveValue("Device B preserved content");
+    await page.reload();
+    // Read persisted ciphertext before unlocking or synchronizing can repair it.
+    expect((await snapshot(true)).payloads[0]).toMatchObject({
+      title: remoteTitle,
+      markdown_body: "Device B preserved content",
+    });
+    const unlock = page.getByLabel("本地解锁口令", { exact: true });
+    await unlock.fill(password);
+    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await expect(unlock).toHaveCount(0);
+    await expect.poll(async () => (await snapshot()).outbox.length).toBe(0);
+    expect((await snapshot()).entities[0]).toMatchObject({
+      sync_status: "clean",
+      server_version: remoteVersion,
+      deleted_at: null,
+    });
+  } finally {
+    await page.context().setOffline(false);
+    await other.close();
+  }
+});
+
 test("Note preview exposes only safe external URLs at desktop and mobile widths", async ({
   accountState,
   page,

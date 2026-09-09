@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/auth/session-provider", () => ({
@@ -22,10 +22,20 @@ describe("Profile workbench", () => {
 
     expect(screen.getByTestId("profile-workbench")).toBeTruthy();
     expect(screen.getByText("researcher@example.com")).toBeTruthy();
-    expect(screen.getByText("最近活动")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "账户摘要" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "最近活动" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "最近活动" }));
+    expect(screen.getByRole("heading", { name: "最近活动" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "账户摘要" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "账户入口" }));
+    expect(screen.getByRole("heading", { name: "账户入口" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "最近活动" })).toBeNull();
     expect(
       screen.getByRole("link", { name: "打开安全中心" }).getAttribute("href"),
     ).toBe("/app/security");
+    fireEvent.click(screen.getByRole("button", { name: "账户摘要" }));
+    expect(screen.getByRole("heading", { name: "账户摘要" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "打开安全中心" })).toBeNull();
     expect(document.querySelector(".product-panel")).toBeNull();
   });
 });

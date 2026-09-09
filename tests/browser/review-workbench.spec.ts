@@ -104,6 +104,29 @@ test("Review exposes the due queue, answer sheet and knowledge inspector", async
   await answerSheet.getByRole("button", { name: "保存答题记录" }).click();
   await expect(answerSheet).toHaveCount(0);
 
+  await startRecall.click();
+  await expect(answerSheet.getByLabel("我的答案")).toHaveValue("");
+  await expect(
+    answerSheet.getByRole("button", { name: "提交回答" }),
+  ).toBeVisible();
+  await expect(answerSheet.getByLabel("信心（1-5）")).toHaveCount(0);
+  await answerSheet.getByLabel("我的答案").fill("第二次回答");
+  await answerSheet.getByRole("button", { name: "提交回答" }).click();
+  await page.keyboard.press("Escape");
+  await expect(answerSheet).toHaveCount(0);
+  await startRecall.click();
+  await expect(answerSheet.getByLabel("我的答案")).toHaveValue("");
+  await answerSheet.getByLabel("我的答案").fill("取消的草稿");
+  await answerSheet.getByRole("button", { name: "取消" }).click();
+  await expect(answerSheet).toHaveCount(0);
+  await startRecall.click();
+  await expect(answerSheet.getByLabel("我的答案")).toHaveValue("");
+  await expect(
+    answerSheet.getByRole("button", { name: "提交回答" }),
+  ).toBeVisible();
+  await answerSheet.getByRole("button", { name: "取消" }).click();
+  await expect(answerSheet).toHaveCount(0);
+
   for (const viewport of WORKBENCH_VIEWPORTS) {
     await page.setViewportSize(viewport);
     await waitForWorkbenchReady(page, "/app/review");

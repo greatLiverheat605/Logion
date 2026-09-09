@@ -45,6 +45,17 @@ export async function waitForWorkbenchReady(page: Page, route: string) {
 export async function auditHorizontalOverflow(
   page: Page,
 ): Promise<HorizontalOverflowAudit> {
+  await page.evaluate(async () => {
+    await Promise.allSettled(
+      document
+        .getAnimations()
+        .filter((animation) => {
+          const endTime = animation.effect?.getComputedTiming().endTime;
+          return typeof endTime === "number" && endTime <= 2_000;
+        })
+        .map((animation) => animation.finished),
+    );
+  });
   return page.evaluate(() => {
     const root = document.documentElement;
     const viewportWidth = root.clientWidth;
@@ -72,7 +83,7 @@ export async function auditHorizontalOverflow(
           rect.left < viewportWidth && rect.right > viewportWidth + 1;
         const scrollsHorizontally =
           element.scrollWidth > element.clientWidth + 1 &&
-          !["clip", "hidden"].includes(style.overflowX);
+          ["auto", "scroll"].includes(style.overflowX);
         if (!extendsViewport && !scrollsHorizontally) return [];
         return [
           {

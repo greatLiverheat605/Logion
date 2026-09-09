@@ -9,6 +9,11 @@
   overflow-y: auto;
 }
 
+[data-sonner-toaster][data-sonner-theme="light"] {
+  --success-text: #006b2c;
+  --error-text: #b42318;
+}
+
 [data-sonner-toast] [data-content] {
   min-width: 0;
 }

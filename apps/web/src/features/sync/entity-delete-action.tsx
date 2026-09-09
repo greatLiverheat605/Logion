@@ -9,6 +9,7 @@ import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 import { feedback, feedbackErrorText } from "@/lib/feedback";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 import styles from "./entity-delete-action.module.css";
 
@@ -132,9 +133,9 @@ function DeleteDialog({
         base_version: entity.server_version,
         local_revision: entity.local_revision + 1,
         client_occurred_at: now,
-        updated_at: now,
+        updated_at: mutationTimestamp(entity, now),
         updated_by: session.user.id,
-        deleted_at: now,
+        deleted_at: mutationTimestamp(entity, now),
         payload: {},
       });
       queued = true;

@@ -6,6 +6,10 @@ import Link from "next/link";
 import { type FormEvent, useRef, useState } from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
+import {
+  COMMAND_ITEMS,
+  isCommandItemVisible,
+} from "@/components/app-shell/app-navigation";
 import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { WorkbenchSheet } from "@/components/product/headless-ui";
 import { IntegrationHubEntry } from "@/features/integrations/integration-hub-entry";
@@ -170,6 +174,7 @@ export function PersonaSettings() {
     customPersonas,
     deleteCustomPersona,
     isLoading,
+    isRouteVisible,
     setActivePersona,
   } = usePersona();
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -410,6 +415,22 @@ export function PersonaSettings() {
                   打开安全中心
                 </Link>
                 <IntegrationHubEntry />
+                {COMMAND_ITEMS.filter(
+                  (item) =>
+                    item.id === "ai" &&
+                    isCommandItemVisible(item, activePersona, isRouteVisible),
+                ).map((item) =>
+                  item.kind === "route" ? (
+                    <Link
+                      className={styles.inspectorLink}
+                      href={`${item.href}#ai-provider-center`}
+                      key={item.id}
+                    >
+                      <AppIcon name={item.icon} size={15} />
+                      AI / Provider
+                    </Link>
+                  ) : null,
+                )}
               </InspectorSection>
             </aside>
           }

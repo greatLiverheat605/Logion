@@ -54,6 +54,182 @@ async function localSnapshot(page: Page) {
   });
 }
 
+test("device wipe clears populated local stores and bootstraps unchanged server data", async ({
+  accountState,
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const passphrase =
+    process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;
+  const marker = `M5-wipe-${Date.now()}`;
+  await page.getByLabel("本地资料口令").fill(passphrase);
+  await page.getByRole("button", { name: "解锁", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "本地资料已解锁" }),
+  ).toBeVisible();
+  await page.locator('a[href="/app/records"]').first().click();
+  const existingIds = (await localSnapshot(page)).entities.map(
+    (entry) => entry.entity_id,
+  );
+  await page.getByRole("button", { name: "新建笔记", exact: true }).click();
+  const create = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
+  await create.getByLabel("标题", { exact: true }).fill(marker);
+  await create.getByRole("button", { name: "创建笔记", exact: true }).click();
+  await expect(create).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "笔记标题" })).toHaveValue(
+    marker,
+  );
+  const entities = (await localSnapshot(page)).entities;
+  const note = entities.find(
+    (entry) =>
+      entry.entity_type === "note" && !existingIds.includes(entry.entity_id),
+  );
+  expect(note).toBeDefined();
+  const syncState = (await localSnapshot(page)).syncState.find(
+    (state) => state.workspace_id === note!.workspace_id,
+  )!;
+  const readServer = async () => {
+    const response = await page.request.post(
+      `/api/v1/workspaces/${note!.workspace_id}/sync/bootstrap`,
+      {
+        headers: { Origin: new URL(page.url()).origin },
+        data: {
+          message_type: "bootstrap_request",
+          protocol_version: "sync-v1",
+          workspace_id: note!.workspace_id,
+          device_id: syncState.device_id,
+          known_sync_epoch: null,
+          snapshot_id: null,
+          chunk_index: null,
+        },
+      },
+    );
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.chunk_count).toBe(1);
+    const stored = body.records.find(
+      (entry: { entity_id: string }) => entry.entity_id === note!.entity_id,
+    );
+    expect(stored).toBeDefined();
+    expect(stored.payload.title).toBe(marker);
+    return stored;
+  };
+  const beforeServer = await readServer();
+  await page.context().setOffline(true);
+  await page
+    .getByRole("textbox", { name: "笔记标题" })
+    .fill(`${marker}-unsynced`);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByTestId("records-save-status")).toContainText("已保存");
+  await page.getByRole("button", { name: "添加附件", exact: true }).click();
+  const attachment = page.getByRole("dialog", { name: "添加笔记附件" });
+  await attachment.getByLabel("附件", { exact: true }).setInputFiles({
+    name: "wipe-fixture.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic local wipe fixture"),
+  });
+  await attachment
+    .getByRole("button", { name: "加入附件队列", exact: true })
+    .click();
+  await expect(attachment).toHaveCount(0);
+  await page.context().setOffline(false);
+  await page.locator('a[href="/app/sync"]').first().click();
+  const before = await localSnapshot(page);
+  for (const store of [
+    "entities",
+    "vaultRecords",
+    "vaultMetadata",
+    "outbox",
+    "attachmentQueue",
+  ])
+    expect(
+      before[store].length,
+      `${store} is populated before wiping`,
+    ).toBeGreaterThan(0);
+  const input = page.getByLabel("输入 CLEAR THIS DEVICE 确认", { exact: true });
+  const clear = page.getByRole("button", {
+    name: "清除此设备数据",
+    exact: true,
+  });
+  await input.fill("CLEAR THIS DEVIC");
+  await expect(clear).toBeDisabled();
+  expect(await localSnapshot(page)).toEqual(before);
+  const mutations: string[] = [];
+  page.on("request", (request) => {
+    if (
+      new URL(request.url()).pathname.startsWith("/api/") &&
+      !["GET", "HEAD"].includes(request.method())
+    )
+      mutations.push(new URL(request.url()).pathname);
+  });
+  await input.fill("CLEAR THIS DEVICE");
+  await clear.click();
+  await expect(
+    page.getByRole("button", { name: "本地资料已锁定", exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      Object.values(await localSnapshot(page)).reduce(
+        (count, rows) => count + rows.length,
+        0,
+      ),
+    )
+    .toBe(0);
+  expect(mutations).toEqual([]);
+  expect(await readServer()).toEqual(beforeServer);
+  await page.screenshot({ path: testInfo.outputPath("device-wiped.png") });
+  let releaseBootstrap!: () => void;
+  const held = new Promise<void>((resolve) => {
+    releaseBootstrap = resolve;
+  });
+  let bootstrapArrived = false;
+  await page.route("**/sync/bootstrap", async (route) => {
+    const response = await route.fetch();
+    bootstrapArrived = true;
+    await held;
+    await route.fulfill({ response });
+  });
+  try {
+    await page.getByLabel("本地解锁口令").fill(passphrase);
+    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "本地资料已解锁" }),
+    ).toBeVisible();
+    await expect.poll(() => bootstrapArrived).toBe(true);
+    await page.locator('a[href="/app/records"]').first().click();
+    await expect(
+      page.getByRole("combobox", { name: "选择 Space", exact: true }),
+    ).toBeEnabled();
+    releaseBootstrap();
+    await expect
+      .poll(async () =>
+        (await localSnapshot(page)).entities.some(
+          (entry) =>
+            entry.entity_id === note!.entity_id &&
+            entry.sync_status === "clean",
+        ),
+      )
+      .toBe(true);
+    await expect(
+      page
+        .getByTestId("records-tree")
+        .getByRole("button", { name: new RegExp(marker) }),
+    ).toBeVisible();
+    await page
+      .getByTestId("records-tree")
+      .getByRole("button", { name: new RegExp(marker) })
+      .click();
+    await expect(page.getByRole("textbox", { name: "笔记标题" })).toHaveValue(
+      marker,
+    );
+    expect(await readServer()).toEqual(beforeServer);
+    expect((await localSnapshot(page)).outbox).toHaveLength(0);
+  } finally {
+    releaseBootstrap();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
 test("T05a removes one failed local attachment offline and preserves other data", async ({
   accountState,
   page,
@@ -77,6 +253,9 @@ test("T05a removes one failed local attachment offline and preserves other data"
   await note.getByLabel("标题", { exact: true }).fill(marker);
   await note.getByRole("button", { name: "创建笔记", exact: true }).click();
   await expect(note).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "笔记标题" })).toHaveValue(
+    marker,
+  );
   for (const name of [failedName, keepName]) {
     await page.getByRole("button", { name: "添加附件", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "添加笔记附件" });
@@ -90,16 +269,31 @@ test("T05a removes one failed local attachment offline and preserves other data"
       .click();
     await expect(dialog).toHaveCount(0);
   }
+  const attachments = (await localSnapshot(page)).attachmentQueue;
+  const target = attachments.find((entry) => entry.filename === failedName)!;
+  expect(target.target_type).toBe("note");
+  expect(typeof target.target_id).toBe("string");
+  expect(
+    attachments.find((entry) => entry.filename === keepName)?.target_id,
+  ).toBe(target.target_id);
+  const pendingNote = async () =>
+    (await localSnapshot(page)).outbox.filter(
+      (entry) =>
+        entry.entity_type === "note" && entry.entity_id === target.target_id,
+    );
   await page.context().setOffline(true);
   await page
     .getByRole("textbox", { name: "笔记标题" })
     .fill(`${marker} offline`);
+  await expect(page.getByTestId("records-save-status")).toContainText("未保存");
+  await expect(
+    page.getByRole("button", { name: "保存", exact: true }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect
-    .poll(async () => (await localSnapshot(page)).outbox.length)
-    .toBeGreaterThan(0);
   await expect(page.getByTestId("records-save-status")).toContainText("已保存");
-  expect((await localSnapshot(page)).outbox.length).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await pendingNote()).length)
+    .toBeGreaterThan(0);
   await page.context().setOffline(false);
   await page.locator('a[href="/app/sync"]').first().click();
   const attachmentTab = page.getByRole("tab", { name: /附件队列/ });
@@ -115,8 +309,9 @@ test("T05a removes one failed local attachment offline and preserves other data"
   await expect(queue).toContainText(keepName);
   await page.context().setOffline(true);
   await queue
+    .getByRole("listitem")
+    .filter({ has: page.getByText(failedName, { exact: true }) })
     .getByRole("button", { name: "上传并验证", exact: true })
-    .first()
     .click();
   const remove = queue.getByRole("button", {
     name: `移除附件「${failedName}」`,
@@ -127,7 +322,7 @@ test("T05a removes one failed local attachment offline and preserves other data"
   expect(before.entities.length).toBeGreaterThan(0);
   expect(before.vaultRecords.length).toBeGreaterThan(0);
   expect(before.vaultMetadata.length).toBeGreaterThan(0);
-  expect(before.outbox.length).toBeGreaterThan(0);
+  expect(await pendingNote()).not.toHaveLength(0);
   const requests: string[] = [];
   page.on("request", (request) => {
     if (
@@ -138,7 +333,15 @@ test("T05a removes one failed local attachment offline and preserves other data"
     }
   });
 
-  for (const width of [1440, 320]) {
+  for (const [theme, width] of [
+    ["light", 1440],
+    ["light", 320],
+    ["dark", 1440],
+    ["dark", 320],
+  ] as const) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
     await page.setViewportSize({ width, height: width === 320 ? 568 : 900 });
     await remove.click();
     const dialog = page.getByRole("dialog", { name: "移除失败附件" });
@@ -161,7 +364,7 @@ test("T05a removes one failed local attachment offline and preserves other data"
     expect(accessibility.violations).toEqual([]);
     await page.screenshot({
       animations: "disabled",
-      path: testInfo.outputPath(`t05a-confirm-${width}.png`),
+      path: testInfo.outputPath(`t05a-confirm-${theme}-${width}.png`),
       fullPage: true,
     });
     if (width === 1440) await cancel.click();

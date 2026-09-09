@@ -121,6 +121,7 @@ export function ExamCenter() {
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -263,6 +264,7 @@ export function ExamCenter() {
         device_id: deviceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(

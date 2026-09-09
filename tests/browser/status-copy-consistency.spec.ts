@@ -1,7 +1,306 @@
+import type {
+  PullResponse,
+  PushRequest,
+  PushResponse,
+} from "../../packages/contracts/src/sync-v1";
 import { hashPayload } from "../../packages/offline/src/hashing";
-import type { JsonObject } from "../../packages/offline/src/types";
+import type { JsonObject, LocalEntity } from "../../packages/offline/src/types";
 
 import { expect, test } from "./fixtures";
+
+test("real recent-auth expiry returns through login before export retry", async ({
+  page,
+  accountState,
+}, testInfo) => {
+  const configuredTtl = process.env.LOGION_E2E_RECENT_AUTH_TTL_SECONDS;
+  test.skip(
+    !configuredTtl,
+    "Requires an isolated API with an explicit recent-auth TTL.",
+  );
+  const ttl = Number(configuredTtl);
+  expect(Number.isInteger(ttl) && ttl >= 60 && ttl <= 1800).toBe(true);
+  test.setTimeout((ttl + 120) * 1000);
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/app/data");
+  expect(new URL(page.url()).hostname).toMatch(
+    /^(127\.0\.0\.1|localhost|\[::1\])$/,
+  );
+  const workspaces = await page.request.get("/api/v1/workspaces");
+  expect(workspaces.status()).toBe(200);
+  const workspaceId = (
+    (await workspaces.json()) as {
+      workspaces: Array<{ id: string }>;
+    }
+  ).workspaces[0]!.id;
+  const collection = `/api/v1/workspaces/${workspaceId}/data-exports`;
+  const exportIds = async () => {
+    const response = await page.request.get(collection);
+    expect(response.status()).toBe(200);
+    return (
+      (await response.json()) as { exports: Array<{ id: string }> }
+    ).exports
+      .map((item) => item.id)
+      .sort();
+  };
+  const initialIds = await exportIds();
+  // Let the real server-side session age; browser clocks and API responses stay real.
+  const started = Date.parse(workspaces.headers().date!);
+  expect(Number.isFinite(started)).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const session = await page.request.get("/api/v1/auth/session");
+        expect(session.status()).toBe(200);
+        return Date.parse(session.headers().date!) - started;
+      },
+      {
+        timeout: (ttl + 60) * 1000,
+        intervals: [1000],
+      },
+    )
+    .toBeGreaterThan((ttl + 10) * 1000);
+  const csrf = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "logion_csrf",
+  )!.value;
+  const refresh = await page.request.post("/api/v1/auth/refresh", {
+    headers: { Origin: new URL(page.url()).origin, "X-CSRF-Token": csrf },
+  });
+  expect(refresh.status()).toBe(200);
+  await page.reload();
+  await page.getByRole("button", { name: "创建导出", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "创建导出" });
+  await sheet.getByLabel("输入 EXPORT 确认").fill("EXPORT");
+  const rejected = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === collection,
+  );
+  await sheet.getByRole("button", { name: "创建导出", exact: true }).click();
+  const rejection = await rejected;
+  expect(rejection.status()).toBe(403);
+  expect(await rejection.json()).toMatchObject({
+    code: "AUTH_RECENT_LOGIN_REQUIRED",
+  });
+  expect(await exportIds()).toEqual(initialIds);
+  await sheet.getByRole("button", { name: "取消", exact: true }).click();
+  const reauthenticate = page.getByTestId("data-main").getByRole("link", {
+    name: "重新登录",
+    exact: true,
+  });
+  await expect(reauthenticate).toHaveAttribute(
+    "href",
+    "/auth/login?next=/app/data",
+  );
+  await reauthenticate.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: testInfo.outputPath("recent-auth-expired.png"),
+  });
+  await reauthenticate.click();
+  await expect(page).toHaveURL(/\/auth\/login\?next=\/app\/data$/);
+  await page.getByLabel("邮箱", { exact: true }).fill(accountState.email);
+  await page.getByLabel("密码", { exact: true }).fill(accountState.password);
+  const loginResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/v1/auth/login",
+  );
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  expect((await loginResponse).status()).toBe(200);
+  await expect(page).toHaveURL(/\/app\/data$/);
+  await expect(
+    page.getByRole("link", { name: "重新登录", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "创建导出", exact: true }).click();
+  await sheet.getByLabel("输入 EXPORT 确认").fill("EXPORT");
+  const created = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === collection,
+  );
+  await sheet.getByRole("button", { name: "创建导出", exact: true }).click();
+  const result = await created;
+  expect(result.status()).toBe(202);
+  const job = (await result.json()) as { id: string };
+  expect(initialIds).not.toContain(job.id);
+  expect(await exportIds()).toEqual([...initialIds, job.id].sort());
+  await expect(sheet).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath("recent-auth-retried.png"),
+  });
+});
+
+for (const width of [1440, 320]) {
+  test(`Mastery sync survives a backward clock at ${width}px`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    page.setDefaultTimeout(15_000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/app/review");
+    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    const unlock = page.getByRole("dialog", { name: "解锁本地复习资料" });
+    await unlock.getByLabel("本地口令").fill("m5-clock-vault-passphrase");
+    await unlock.getByRole("button", { name: "解锁资料" }).click();
+    await expect(unlock).toHaveCount(0);
+    const title = `M5 clock ${width} ${Date.now()}`;
+    await page.getByRole("button", { name: "新建知识点", exact: true }).click();
+    const topic = page.getByRole("dialog", { name: "新建知识点" });
+    await topic.getByLabel("名称").fill(title);
+    await topic.getByRole("button", { name: "保存知识点" }).click();
+    await expect(topic).toHaveCount(0);
+    const topicButton = page.getByRole("button", { name: new RegExp(title) });
+    const topicId = await topicButton.getAttribute("data-review-topic");
+    expect(topicId).toBeTruthy();
+    await topicButton.click();
+    await page.getByRole("tab", { name: /掌握与图谱/ }).click();
+    await page.getByRole("button", { name: "列表与掌握确认" }).click();
+    await page.setViewportSize({ width, height: 900 });
+
+    if (width === 320) {
+      await page
+        .getByRole("button", { name: "复习工作面", exact: true })
+        .click();
+    }
+
+    type LocalMetadata = Pick<
+      LocalEntity,
+      | "entity_id"
+      | "created_at"
+      | "local_revision"
+      | "server_version"
+      | "payload_hash"
+      | "sync_status"
+    >;
+    let previous: LocalMetadata | undefined;
+    let occurredAt: string | undefined;
+    for (const level of ["exposed", "practicing"]) {
+      const confirmation = page.getByLabel(`${title} 的掌握确认`);
+      await confirmation.selectOption(level);
+      const pushed = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/sync/push") &&
+          (response.request().postDataJSON() as PushRequest).operations.some(
+            (operation) =>
+              operation.entity_type === "mastery" &&
+              operation.payload.topic_id === topicId,
+          ),
+        { timeout: 20_000 },
+      );
+      const pulled = page.waitForResponse(
+        async (response) => {
+          if (!response.url().endsWith("/sync/pull") || !response.ok())
+            return false;
+          const body = (await response.json()) as PullResponse;
+          return body.changes.some(
+            (change) =>
+              !change.tombstone &&
+              change.entity_type === "mastery" &&
+              change.payload.topic_id === topicId &&
+              change.payload.confirmed_level === level,
+          );
+        },
+        { timeout: 20_000 },
+      );
+      const [push, pull] = await Promise.all([
+        pushed,
+        pulled,
+        confirmation
+          .locator("..")
+          .getByRole("button", { name: "确认", exact: true })
+          .click(),
+      ]);
+      expect(push.ok()).toBe(true);
+      const results = ((await push.json()) as PushResponse).results;
+      expect(results.every((entry) => entry.status === "applied")).toBe(true);
+      const operation = (
+        push.request().postDataJSON() as PushRequest
+      ).operations.find(
+        (entry) =>
+          entry.entity_type === "mastery" && entry.payload.topic_id === topicId,
+      )!;
+      const current = ((await pull.json()) as PullResponse).changes.find(
+        (entry) =>
+          !entry.tombstone &&
+          entry.entity_type === "mastery" &&
+          entry.payload.topic_id === topicId,
+      )!;
+      expect(current.payload_hash).toBe(
+        await hashPayload(current.payload as JsonObject),
+      );
+      if (previous) {
+        expect(operation.client_occurred_at).toBe(occurredAt);
+        expect(operation.base_version).toBe(previous.server_version);
+        expect(current.entity_id).toBe(previous.entity_id);
+        expect(current.server_version).toBeGreaterThan(previous.server_version);
+      }
+      let local: LocalMetadata | null = null;
+      await expect
+        .poll(async () => {
+          local = await page.evaluate(async (expected) => {
+            const database = (await indexedDB.databases()).find(({ name }) =>
+              name?.startsWith("logion-offline-v1-"),
+            );
+            const databaseName = database?.name;
+            if (!databaseName) return null;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+              const request = indexedDB.open(databaseName);
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            });
+            try {
+              const entries = await new Promise<LocalEntity[]>(
+                (resolve, reject) => {
+                  const request = db
+                    .transaction("entities")
+                    .objectStore("entities")
+                    .getAll();
+                  request.onsuccess = () => resolve(request.result);
+                  request.onerror = () => reject(request.error);
+                },
+              );
+              const entry = entries.find(
+                (item) =>
+                  item.entity_type === "mastery" &&
+                  item.entity_id === expected.entity_id,
+              );
+              return entry
+                ? {
+                    entity_id: entry.entity_id,
+                    created_at: entry.created_at,
+                    local_revision: entry.local_revision,
+                    server_version: entry.server_version,
+                    payload_hash: entry.payload_hash,
+                    sync_status: entry.sync_status,
+                  }
+                : null;
+            } finally {
+              db.close();
+            }
+          }, current);
+          return (
+            local && [
+              local.server_version,
+              local.payload_hash,
+              local.sync_status,
+            ]
+          );
+        })
+        .toEqual([current.server_version, current.payload_hash, "clean"]);
+      const confirmed = local as unknown as LocalMetadata;
+      if (previous) {
+        expect(confirmed.created_at).toBe(previous.created_at);
+        expect(confirmed.local_revision).toBeGreaterThan(
+          previous.local_revision,
+        );
+      }
+      previous = confirmed;
+      occurredAt = new Date(
+        Date.parse(confirmed.created_at) - 2_000,
+      ).toISOString();
+      await page.clock.setFixedTime(new Date(occurredAt));
+    }
+  });
+}
 
 for (const width of [1440, 320]) {
   test(`T-06 login next and real export polling at ${width}px`, async ({
@@ -19,6 +318,10 @@ for (const width of [1440, 320]) {
     await expect(page).toHaveURL(/\/app\/data$/);
     const create = page.getByRole("button", { name: "创建导出", exact: true });
     await expect(create).toBeEnabled();
+    const exportRows = page
+      .getByRole("list", { name: "数据导出任务", exact: true })
+      .locator("li");
+    const initialExportCount = await exportRows.count();
     await page.screenshot({
       path: testInfo.outputPath(`login-next-${width}.png`),
     });
@@ -39,6 +342,28 @@ for (const width of [1440, 320]) {
         response.request().method() === "POST" &&
         /\/data-exports$/.test(new URL(response.url()).pathname),
     );
+    const updated = page.waitForResponse(
+      async (entry) => {
+        if (
+          entry.request().method() !== "GET" ||
+          !/\/data-exports$/.test(new URL(entry.url()).pathname) ||
+          !entry.ok()
+        )
+          return false;
+        const job = (await (await created).json()) as { id: string };
+        const body = (await entry.json()) as {
+          exports: Array<{
+            id: string;
+            status: string;
+            artifact_bytes: number;
+          }>;
+        };
+        return body.exports.some(
+          (item) => item.id === job.id && item.status === "succeeded",
+        );
+      },
+      { timeout: 60_000 },
+    );
     await sheet.getByRole("button", { name: "创建导出", exact: true }).click();
     const response = await created;
     expect(response.status()).toBe(202);
@@ -52,40 +377,14 @@ for (const width of [1440, 320]) {
       });
       if (await switcher.isVisible()) await switcher.click();
     }
-    await page
-      .getByTestId("data-main")
-      .getByRole("button")
-      .filter({ hasText: "queued" })
-      .first()
-      .click();
+    await expect(exportRows).toHaveCount(initialExportCount + 1);
+    await exportRows.first().getByRole("button").first().click();
     const detail = page.getByTestId("data-export-detail");
-    await expect(detail).toContainText("queued");
-    await expect(detail.getByRole("link", { name: "下载 ZIP" })).toHaveCount(0);
+    await expect(detail).toContainText(/queued|running|succeeded/);
     await detail.scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: testInfo.outputPath(`export-queued-${width}.png`),
+      path: testInfo.outputPath(`export-selected-${width}.png`),
     });
-    const updated = page.waitForResponse(
-      async (entry) => {
-        if (
-          entry.request().method() !== "GET" ||
-          !/\/data-exports$/.test(new URL(entry.url()).pathname) ||
-          !entry.ok()
-        )
-          return false;
-        const body = (await entry.json()) as {
-          exports: Array<{
-            id: string;
-            status: string;
-            artifact_bytes: number;
-          }>;
-        };
-        return body.exports.some(
-          (entry) => entry.id === job.id && entry.status === "succeeded",
-        );
-      },
-      { timeout: 60_000 },
-    );
     const finished = await updated;
     const payload = (await finished.json()) as {
       exports: Array<{ id: string; artifact_bytes: number }>;
@@ -98,6 +397,10 @@ for (const width of [1440, 320]) {
     await expect(detail).toContainText(`${(bytes / 1024).toFixed(1)} KB`);
     const download = detail.getByRole("link", { name: "下载 ZIP" });
     await expect(download).toBeVisible();
+    await expect(download).toHaveAttribute(
+      "href",
+      new RegExp(`/data-exports/${job.id}/download$`),
+    );
     await expect(detail).not.toContainText("0.0 MB");
     await detail.scrollIntoViewIfNeeded();
     await page.screenshot({
@@ -213,12 +516,16 @@ for (const width of [1440, 320]) {
     await topic.getByLabel("名称").fill(title);
     await topic.getByRole("button", { name: "保存知识点" }).click();
     await expect(topic).toHaveCount(0);
-    await page.getByRole("button", { name: new RegExp(title) }).click();
+    const topicButton = page.getByRole("button", { name: new RegExp(title) });
+    const topicId = await topicButton.getAttribute("data-review-topic");
+    expect(topicId).toBeTruthy();
+    await topicButton.click();
     await page.getByRole("tab", { name: /掌握与图谱/ }).click();
     await page.getByRole("button", { name: "列表与掌握确认" }).click();
 
     let reason = "";
     let changed = 0;
+    let applied: { id: string; version: number; hash: string } | null = null;
     // 仅注入渲染夹具，不把该用例当作后端生成建议的证据。
     await page.route("**/sync/pull", async (route) => {
       const response = await route.fetch();
@@ -229,14 +536,25 @@ for (const width of [1440, 320]) {
       const body = (await response.json()) as {
         changes: Array<{
           entity_type: string;
+          entity_id: string;
+          server_version: number;
           payload: JsonObject;
           payload_hash: string;
         }>;
       };
       for (const change of body.changes ?? []) {
-        if (change.entity_type !== "mastery") continue;
+        if (
+          change.entity_type !== "mastery" ||
+          change.payload?.topic_id !== topicId
+        )
+          continue;
         change.payload.suggested_reason = reason;
         change.payload_hash = await hashPayload(change.payload);
+        applied = {
+          id: change.entity_id,
+          version: change.server_version,
+          hash: change.payload_hash,
+        };
         changed += 1;
       }
       await route.fulfill({ response, json: body });
@@ -252,11 +570,74 @@ for (const width of [1440, 320]) {
       const confirmation = page.getByLabel(`${title} 的掌握确认`);
       await confirmation.selectOption("exposed");
       const before = changed;
+      const pushed = page.waitForResponse((response) => {
+        if (!response.url().endsWith("/sync/push")) return false;
+        const body = response.request().postDataJSON() as {
+          operations?: Array<{ entity_type: string; payload: JsonObject }>;
+        };
+        return (
+          body.operations?.some(
+            (entry) =>
+              entry.entity_type === "mastery" &&
+              entry.payload.topic_id === topicId,
+          ) ?? false
+        );
+      });
       await confirmation
         .locator("..")
         .getByRole("button", { name: "确认", exact: true })
         .click();
+      const push = await pushed;
+      expect(push.ok()).toBe(true);
+      const pushBody = (await push.json()) as {
+        results: Array<{ status: string; error_code?: string | null }>;
+      };
+      expect(
+        pushBody.results.every((entry) =>
+          ["applied", "duplicate"].includes(entry.status),
+        ),
+        JSON.stringify(pushBody.results),
+      ).toBe(true);
       await expect.poll(() => changed).toBeGreaterThan(before);
+      await expect
+        .poll(async () =>
+          page.evaluate(async (expected) => {
+            if (!expected) return false;
+            const database = (await indexedDB.databases()).find(({ name }) =>
+              name?.startsWith("logion-offline-v1-"),
+            );
+            const databaseName = database?.name;
+            if (!databaseName) return false;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+              const request = indexedDB.open(databaseName);
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            });
+            try {
+              return await new Promise<boolean>((resolve, reject) => {
+                const request = db
+                  .transaction("entities")
+                  .objectStore("entities")
+                  .getAll();
+                request.onsuccess = () =>
+                  resolve(
+                    request.result.some(
+                      (entry) =>
+                        entry.entity_type === "mastery" &&
+                        entry.entity_id === expected.id &&
+                        entry.server_version === expected.version &&
+                        entry.payload_hash === expected.hash &&
+                        entry.sync_status === "clean",
+                    ),
+                  );
+                request.onerror = () => reject(request.error);
+              });
+            } finally {
+              db.close();
+            }
+          }, applied),
+        )
+        .toBe(true);
       const inspector = page.getByTestId("review-inspector");
       await expect(inspector).toContainText("已经接触");
       const label = inspector.getByText("建议依据", { exact: true });

@@ -143,6 +143,7 @@ function OfflineLearningCenter({
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -306,6 +307,7 @@ function OfflineLearningCenter({
         ),
         { workspace_id: workspaceId, device_id: deviceId },
       );
+    markChanged();
   }
   async function refresh(db = database.current, localVault = vault.current) {
     if (!db || !localVault || !workspaceId) return;

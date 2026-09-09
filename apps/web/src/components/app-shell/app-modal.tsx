@@ -49,7 +49,9 @@ export function AppModal({
         >
           <header className="app-modal-head">
             <div>
-              <p className="eyebrow">{eyebrow}</p>
+              <p className="eyebrow" style={{ color: "var(--accent-text)" }}>
+                {eyebrow}
+              </p>
               <Dialog.Title>{title}</Dialog.Title>
             </div>
             <Dialog.Close asChild>

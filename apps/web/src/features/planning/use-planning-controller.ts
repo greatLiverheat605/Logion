@@ -318,6 +318,7 @@ export function usePlanningController(): PlanningControllerResult {
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -485,8 +486,9 @@ export function usePlanningController(): PlanningControllerResult {
           },
         );
       }
+      markChanged();
     },
-    [],
+    [markChanged],
   );
 
   const refresh = useCallback(
