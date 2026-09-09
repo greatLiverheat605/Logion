@@ -32,7 +32,7 @@ async def deletion_case():
     async with AsyncClient(
         transport=ASGITransport(app=app, client=(client_ip, 54005)),
         base_url="http://test",
-        headers={"Origin": "http://test"},
+        headers={"Origin": "http://test", "X-Logion-Sync-Capabilities": "entity-deletion-v1"},
     ) as client:
         email = f"delete-{uuid4()}@example.com"
         password = f"delete-test-{uuid4()}"
@@ -292,7 +292,9 @@ async def test_delete_cascade_and_replay_delivers_only_tombstones_to_second_devi
     assert (await case["push"](op))["status"] == "duplicate"
     assert await snapshot(case) == before_replay
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers={"Origin": "http://test"}
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers={"Origin": "http://test", "X-Logion-Sync-Capabilities": "entity-deletion-v1"},
     ) as second:
         logged_in = await second.post(
             "/api/v1/auth/login",
@@ -605,7 +607,7 @@ async def test_delete_authorization_and_preview_visibility(deletion_case, scope)
             app=app, client=(f"2001:db8::{uuid4().hex[:4]}:{uuid4().hex[:4]}", 54006)
         ),
         base_url="http://test",
-        headers={"Origin": "http://test"},
+        headers={"Origin": "http://test", "X-Logion-Sync-Capabilities": "entity-deletion-v1"},
     ) as other:
         email = f"deletion-other-{uuid4()}@example.com"
         registered = await other.post(

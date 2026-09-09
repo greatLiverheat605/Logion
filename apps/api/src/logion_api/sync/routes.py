@@ -26,20 +26,32 @@ from logion_api.sync.deletion import DeleteEntityType, deletion_scope
 from logion_api.sync.push import SyncPushService
 from logion_api.sync.read import InvalidChunkError, StaleSnapshotError, SyncReadService
 from logion_api.sync.schemas import (
+    AppliedOperationResult,
     BootstrapRequest,
     BootstrapResponse,
+    ConflictOperationResult,
     CursorExpiredControl,
     DeletionPreview,
+    FailedOperationResult,
     PullRequest,
     PullResponse,
     PushRequest,
     PushResponse,
     RebootstrapControl,
+    UpgradeControl,
 )
 from logion_api.sync.service import SyncLedgerService
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/sync", tags=["sync"])
+
+DELETION_CAPABILITY = "entity-deletion-v1"
+
+
+def _supports_deletion(capabilities: str | None) -> bool:
+    return capabilities is not None and DELETION_CAPABILITY in {
+        item.strip() for item in capabilities.split(",")
+    }
 
 
 @router.get(
@@ -83,7 +95,7 @@ def _validate_context(
 
 @router.post(
     "/push",
-    response_model=PushResponse | RebootstrapControl,
+    response_model=PushResponse | RebootstrapControl | UpgradeControl,
     operation_id="sync_push",
     responses={
         401: {"model": ErrorResponse},
@@ -113,7 +125,8 @@ async def push(
     research: ResearchServiceDependency,
     collaboration: CollaborationServiceDependency,
     x_csrf_token: str | None = Header(default=None),
-) -> PushResponse | RebootstrapControl:
+    x_logion_sync_capabilities: str | None = Header(default=None, max_length=256),
+) -> PushResponse | RebootstrapControl | UpgradeControl:
     require_trusted_origin(request, settings)
     identity.validate_csrf(
         context.session,
@@ -163,6 +176,11 @@ async def push(
         server_sync_epoch = state.sync_epoch
         await db.rollback()
         return RebootstrapControl(server_sync_epoch=server_sync_epoch)
+    if not _supports_deletion(x_logion_sync_capabilities) and any(
+        operation.operation_type == "delete" for operation in payload.operations
+    ):
+        await db.rollback()
+        return UpgradeControl(server_sync_epoch=payload.sync_epoch)
     results = await SyncPushService(
         SyncLedgerService(),
         workspaces,
@@ -181,6 +199,22 @@ async def push(
         payload,
         request_id=request_id(request),
     )
+    if not _supports_deletion(x_logion_sync_capabilities) and any(
+        (
+            isinstance(result, ConflictOperationResult)
+            and (
+                result.conflict.conflict_kind == "delete_update"
+                or result.conflict.remote_deleted_at is not None
+            )
+        )
+        or (isinstance(result, AppliedOperationResult) and result.impact is not None)
+        or (isinstance(result, FailedOperationResult) and result.details is not None)
+        for result in results
+    ):
+        # The control acknowledges nothing: roll back the entire batch, including
+        # earlier successful operations and newly recorded conflicts.
+        await db.rollback()
+        return UpgradeControl(server_sync_epoch=payload.sync_epoch)
     await db.commit()
     return PushResponse(
         workspace_id=workspace_id,
@@ -192,7 +226,7 @@ async def push(
 
 @router.post(
     "/pull",
-    response_model=PullResponse | RebootstrapControl | CursorExpiredControl,
+    response_model=PullResponse | RebootstrapControl | CursorExpiredControl | UpgradeControl,
     operation_id="sync_pull",
 )
 async def pull(
@@ -203,7 +237,8 @@ async def pull(
     db: DatabaseSession,
     workspaces: WorkspaceServiceDependency,
     settings: SettingsDependency,
-) -> PullResponse | RebootstrapControl | CursorExpiredControl:
+    x_logion_sync_capabilities: str | None = Header(default=None, max_length=256),
+) -> PullResponse | RebootstrapControl | CursorExpiredControl | UpgradeControl:
     require_trusted_origin(request, settings)
     _validate_context(workspace_id, payload.workspace_id, payload.device_id, context)
     await workspaces.resolve_workspace(db, context, workspace_id, request_id=request_id(request))
@@ -212,7 +247,7 @@ async def pull(
         return RebootstrapControl(server_sync_epoch=state.sync_epoch)
     if payload.cursor < state.min_retained_sequence:
         return CursorExpiredControl(server_sync_epoch=state.sync_epoch)
-    return await SyncReadService().pull(
+    response = await SyncReadService().pull(
         db,
         state,
         device_id=context.device.id,
@@ -220,11 +255,18 @@ async def pull(
         cursor=payload.cursor,
         limit=payload.limit,
     )
+    # Inspect only authorized changes; private tombstones cannot trigger a control.
+    if not _supports_deletion(x_logion_sync_capabilities) and any(
+        change.tombstone or change.deleted_at is not None or change.operation_type == "delete"
+        for change in response.changes
+    ):
+        return UpgradeControl(server_sync_epoch=payload.sync_epoch)
+    return response
 
 
 @router.post(
     "/bootstrap",
-    response_model=BootstrapResponse,
+    response_model=BootstrapResponse | UpgradeControl,
     operation_id="sync_bootstrap",
 )
 async def bootstrap(
@@ -235,11 +277,20 @@ async def bootstrap(
     db: DatabaseSession,
     workspaces: WorkspaceServiceDependency,
     settings: SettingsDependency,
-) -> BootstrapResponse:
+    x_logion_sync_capabilities: str | None = Header(default=None, max_length=256),
+) -> BootstrapResponse | UpgradeControl:
     require_trusted_origin(request, settings)
     _validate_context(workspace_id, payload.workspace_id, payload.device_id, context)
     await workspaces.resolve_workspace(db, context, workspace_id, request_id=request_id(request))
     state = await SyncLedgerService().lock_workspace_state(db, workspace_id)
+    # Legacy pages retry bootstrap after upgrade_required. Replacing an existing
+    # snapshot can overwrite pending encrypted edits before Outbox reconciliation.
+    if (
+        payload.known_sync_epoch is not None
+        and (payload.snapshot_id is None or payload.chunk_index in (None, 0))
+        and not _supports_deletion(x_logion_sync_capabilities)
+    ):
+        return UpgradeControl(server_sync_epoch=state.sync_epoch)
     try:
         response = await SyncReadService().bootstrap(
             db,

@@ -5,6 +5,7 @@ import { validateSyncV1Message } from "@logion/contracts";
 import {
   AttachmentQueueRepository,
   BootstrapRepository,
+  canResumeSync,
   noteDocumentStateId,
   OfflineStorageError,
   OfflineVault,
@@ -524,10 +525,7 @@ export function useRecordsController(): RecordsControllerResult {
       selectedDevice: string,
     ) => {
       const current = await db.syncState.get(selectedWorkspace);
-      if (
-        current?.bootstrap_state === "ready" &&
-        current.device_id === selectedDevice
-      ) {
+      if (canResumeSync(current, selectedDevice)) {
         return;
       }
       const repository = new BootstrapRepository(db, {}, localVault);

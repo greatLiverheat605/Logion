@@ -79,6 +79,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
             "If-Match",
             "If-None-Match",
             "X-CSRF-Token",
+            "X-Logion-Sync-Capabilities",
             "X-Request-ID",
         ],
     )

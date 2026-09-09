@@ -1,12 +1,14 @@
 /** @vitest-environment jsdom */
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { OutboxEntry } from "@logion/offline";
 
 import { SyncWorkbench, type SyncWorkbenchProps } from "./sync-workbench";
 import type { ConflictView } from "./offline-sync-center";
+
+afterEach(cleanup);
 
 const workspace = {
   created_at: "2026-08-28T00:00:00.000Z",
@@ -131,6 +133,35 @@ function conflict(): ConflictView {
 }
 
 describe("SyncWorkbench", () => {
+  it("explains upgrade recovery while retaining access to the local queue", () => {
+    render(
+      <SyncWorkbench
+        {...props({
+          syncState: {
+            workspace_id: workspace.id,
+            device_id: device.id,
+            schema_version: 4,
+            sync_epoch: "epoch",
+            cursor: 7,
+            bootstrap_state: "upgrade_required",
+            last_sync_at: null,
+            outbox_isolated_at: null,
+            isolation_reason_code: null,
+          },
+        })}
+      />,
+    );
+    expect(
+      screen.getByText("请更新应用后继续同步").closest('[role="status"]'),
+    ).toBeTruthy();
+    expect(screen.getByText(/未上传的本地内容已保留/).textContent).toContain(
+      "无需清除本地数据",
+    );
+    expect(
+      screen.getByRole("button", { name: "立即同步" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(screen.getByText("NETWORK_OFFLINE")).toBeTruthy();
+  });
   it("renders the three-pane sync contract and one page primary", () => {
     render(<SyncWorkbench {...props()} />);
 

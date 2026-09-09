@@ -12623,6 +12623,51 @@
         "title": "UpdatedWithinDaysFilter",
         "type": "object"
       },
+      "UpgradeControl": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "upgrade_required",
+            "default": "upgrade_required",
+            "title": "Action",
+            "type": "string"
+          },
+          "message_type": {
+            "const": "sync_control",
+            "default": "sync_control",
+            "title": "Message Type",
+            "type": "string"
+          },
+          "min_supported_version": {
+            "const": "sync-v1",
+            "default": "sync-v1",
+            "title": "Min Supported Version",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": "sync-v1",
+            "default": "sync-v1",
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "reason_code": {
+            "const": "PROTOCOL_UNSUPPORTED",
+            "default": "PROTOCOL_UNSUPPORTED",
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "server_sync_epoch": {
+            "format": "uuid",
+            "title": "Server Sync Epoch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_sync_epoch"
+        ],
+        "title": "UpgradeControl",
+        "type": "object"
+      },
       "UrlFieldDefinition": {
         "additionalProperties": false,
         "properties": {
@@ -38439,6 +38484,23 @@
               "title": "Workspace Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-sync-capabilities",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Sync-Capabilities"
+            }
           }
         ],
         "requestBody": {
@@ -38456,7 +38518,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BootstrapResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BootstrapResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UpgradeControl"
+                    }
+                  ],
+                  "title": "Response Sync Bootstrap"
                 }
               }
             },
@@ -38559,6 +38629,23 @@
               "title": "Workspace Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-sync-capabilities",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Sync-Capabilities"
+            }
           }
         ],
         "requestBody": {
@@ -38585,6 +38672,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CursorExpiredControl"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UpgradeControl"
                     }
                   ],
                   "title": "Response Sync Pull"
@@ -38639,6 +38729,23 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-sync-capabilities",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Sync-Capabilities"
+            }
           }
         ],
         "requestBody": {
@@ -38662,6 +38769,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/RebootstrapControl"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UpgradeControl"
                     }
                   ],
                   "title": "Response Sync Push"

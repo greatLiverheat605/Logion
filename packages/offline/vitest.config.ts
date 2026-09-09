@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    ...(process.env.LOGION_SYNC_COMPAT_DIR
+      ? { include: ["tests/legacy-compatibility.compat.ts"] }
+      : {}),
     coverage: {
       include: ["src/**/*.ts"],
       provider: "v8",

@@ -50,6 +50,8 @@ jobs:
             --output reports/security/license-policy.json
           rm reports/security/pnpm-licenses.json
       - run: pnpm ci:fast
+      - name: Real legacy sync compatibility
+        run: pnpm test:sync-compat
       - name: Validate release shell scripts
         run: sh -n scripts/release/*.sh
       - name: OpenAPI compatibility
@@ -108,6 +110,7 @@ jobs:
           --health-retries 10
     env:
       LOGION_DATABASE_URL: postgresql+asyncpg://logion:logion_test@localhost:5432/logion_test
+      LOGION_SYNC_COMPAT_RESPONSES: reports/sync-legacy
       LOGION_REDIS_URL: redis://localhost:6379/0
       LOGION_ALLOWED_ORIGINS: '["http://test","http://localhost:3000"]'
       LOGION_SECRET_KEY: phase1-integration-secret-key-must-be-at-least-32
@@ -123,6 +126,16 @@ jobs:
       LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - uses: astral-sh/setup-uv@v7
         with:
           version: 0.11.29
@@ -156,6 +169,8 @@ jobs:
           uv run --package logion-api alembic -c apps/api/alembic.ini downgrade base
           uv run --package logion-api alembic -c apps/api/alembic.ini upgrade head
       - run: uv run --group dev pytest -m integration apps/api/tests apps/worker/tests
+      - name: Validate observed API responses with the legacy client contract
+        run: pnpm test:sync-compat --responses reports/sync-legacy
 
   browser:
     runs-on: ubuntu-latest

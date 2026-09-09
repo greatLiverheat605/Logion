@@ -7,6 +7,7 @@ import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
+  canResumeSync,
   OfflineVault,
   ProtectedOfflineRepository,
   SyncClient,
@@ -215,8 +216,7 @@ export function ExamCenter() {
     localVault: OfflineVault,
   ) {
     const current = await db.syncState.get(workspaceId);
-    if (current?.bootstrap_state === "ready" && current.device_id === deviceId)
-      return;
+    if (canResumeSync(current, deviceId)) return;
     const repository = new BootstrapRepository(db, {}, localVault);
     const first = await request<unknown>(
       `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,

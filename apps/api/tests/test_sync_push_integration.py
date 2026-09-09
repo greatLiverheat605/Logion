@@ -18,7 +18,7 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
     async with AsyncClient(
         transport=ASGITransport(app=app, client=("192.0.2.50", 45000)),
         base_url=origin,
-        headers={"Origin": origin},
+        headers={"Origin": origin, "X-Logion-Sync-Capabilities": "entity-deletion-v1"},
     ) as client:
         registered = await client.post(
             "/api/v1/auth/register",

@@ -8188,6 +8188,44 @@ export interface components {
              */
             kind: "updated-within-days";
         };
+        /** UpgradeControl */
+        UpgradeControl: {
+            /**
+             * Action
+             * @default upgrade_required
+             * @constant
+             */
+            action: "upgrade_required";
+            /**
+             * Message Type
+             * @default sync_control
+             * @constant
+             */
+            message_type: "sync_control";
+            /**
+             * Min Supported Version
+             * @default sync-v1
+             * @constant
+             */
+            min_supported_version: "sync-v1";
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Reason Code
+             * @default PROTOCOL_UNSUPPORTED
+             * @constant
+             */
+            reason_code: "PROTOCOL_UNSUPPORTED";
+            /**
+             * Server Sync Epoch
+             * Format: uuid
+             */
+            server_sync_epoch: string;
+        };
         /** UrlFieldDefinition */
         UrlFieldDefinition: {
             /** Id */
@@ -23691,7 +23729,9 @@ export interface operations {
     sync_bootstrap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-logion-sync-capabilities"?: string | null;
+            };
             path: {
                 workspace_id: string;
             };
@@ -23709,7 +23749,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BootstrapResponse"];
+                    "application/json": components["schemas"]["BootstrapResponse"] | components["schemas"]["UpgradeControl"];
                 };
             };
             /** @description Validation Error */
@@ -23759,7 +23799,9 @@ export interface operations {
     sync_pull: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-logion-sync-capabilities"?: string | null;
+            };
             path: {
                 workspace_id: string;
             };
@@ -23777,7 +23819,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PullResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["CursorExpiredControl"];
+                    "application/json": components["schemas"]["PullResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["CursorExpiredControl"] | components["schemas"]["UpgradeControl"];
                 };
             };
             /** @description Validation Error */
@@ -23796,6 +23838,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-csrf-token"?: string | null;
+                "x-logion-sync-capabilities"?: string | null;
             };
             path: {
                 workspace_id: string;
@@ -23814,7 +23857,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PushResponse"] | components["schemas"]["RebootstrapControl"];
+                    "application/json": components["schemas"]["PushResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["UpgradeControl"];
                 };
             };
             /** @description Unauthorized */

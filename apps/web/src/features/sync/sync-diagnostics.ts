@@ -8,6 +8,9 @@ export function incompleteSyncMessage(
   result: SyncCycleResult,
   entries: readonly Pick<OutboxEntry, "outbox_state" | "last_error_code">[],
 ): string | null {
+  if (result.control === "upgrade_required") {
+    return "同步已暂停，请更新应用后重试；未上传的本地内容已保留，无需清除本地数据（upgrade_required）。";
+  }
   if (result.control) {
     return `同步未完成；本地数据保留，请重新同步或更新客户端（${result.control}）。`;
   }

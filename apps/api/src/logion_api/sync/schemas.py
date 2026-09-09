@@ -123,6 +123,15 @@ class RebootstrapControl(StrictModel):
     server_sync_epoch: UUID
 
 
+class UpgradeControl(StrictModel):
+    message_type: Literal["sync_control"] = "sync_control"
+    protocol_version: Literal["sync-v1"] = "sync-v1"
+    min_supported_version: Literal["sync-v1"] = "sync-v1"
+    action: Literal["upgrade_required"] = "upgrade_required"
+    reason_code: Literal["PROTOCOL_UNSUPPORTED"] = "PROTOCOL_UNSUPPORTED"
+    server_sync_epoch: UUID
+
+
 class CursorExpiredControl(StrictModel):
     message_type: Literal["sync_control"] = "sync_control"
     protocol_version: Literal["sync-v1"] = "sync-v1"

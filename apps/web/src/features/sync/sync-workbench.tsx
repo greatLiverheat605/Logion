@@ -425,7 +425,14 @@ export function SyncWorkbench({
                   </button>
                 </div>
               ) : null}
-              {syncState?.bootstrap_state === "staging" ? (
+              {syncState?.bootstrap_state === "upgrade_required" ? (
+                <div className={styles.stateNotice} role="status">
+                  <strong>请更新应用后继续同步</strong>
+                  <span>
+                    未上传的本地内容已保留。更新应用后点击“立即同步”继续，无需清除本地数据。
+                  </span>
+                </div>
+              ) : syncState?.bootstrap_state === "staging" ? (
                 <div
                   className={styles.stateNotice}
                   data-testid="sync-bootstrap"

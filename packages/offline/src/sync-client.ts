@@ -38,12 +38,25 @@ export interface SyncCycleResult {
     | null;
 }
 
-type ReadySyncState = WorkspaceSyncState & {
-  bootstrap_state: "ready";
+type ResumableSyncState = WorkspaceSyncState & {
+  bootstrap_state: "ready" | "upgrade_required";
   sync_epoch: string;
 };
 
 const UUID_NAMESPACE_URL = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
+
+export function canResumeSync(
+  state: WorkspaceSyncState | undefined,
+  deviceId: string,
+): state is ResumableSyncState {
+  return (
+    state !== undefined &&
+    state.device_id === deviceId &&
+    state.sync_epoch !== null &&
+    (state.bootstrap_state === "ready" ||
+      state.bootstrap_state === "upgrade_required")
+  );
+}
 
 export class SyncClient {
   private readonly repository: OfflineRepository;
@@ -62,7 +75,7 @@ export class SyncClient {
   ): Promise<SyncCycleResult> {
     validateUuid(workspaceId);
     validateUuid(deviceId);
-    const state = await this.requireReadyState(workspaceId, deviceId);
+    const state = await this.requireResumableState(workspaceId, deviceId);
     try {
       const pushResult = await this.pushReady(state);
       if (pushResult.control !== null) {
@@ -80,7 +93,7 @@ export class SyncClient {
     }
   }
 
-  private async pushReady(state: ReadySyncState): Promise<{
+  private async pushReady(state: ResumableSyncState): Promise<{
     pushed: number;
     control: SyncCycleResult["control"];
   }> {
@@ -145,6 +158,7 @@ export class SyncClient {
       this.database.outbox,
       this.database.entities,
       this.database.conflicts,
+      this.database.syncState,
       async () => {
         for (let index = 0; index < ready.length; index += 1) {
           const operation = ready[index];
@@ -329,19 +343,22 @@ export class SyncClient {
             }
           }
         }
+        await this.database.syncState.update(state.workspace_id, {
+          bootstrap_state: "ready",
+        });
       },
     );
     return { pushed: ready.length, control: null };
   }
 
-  private async pullPages(state: ReadySyncState): Promise<{
+  private async pullPages(state: ResumableSyncState): Promise<{
     pulled: number;
     has_more: boolean;
     control: SyncCycleResult["control"];
   }> {
     let pulled = 0;
     for (let page = 0; page < 1000; page += 1) {
-      const current = await this.requireReadyState(
+      const current = await this.requireResumableState(
         state.workspace_id,
         state.device_id,
       );
@@ -610,6 +627,7 @@ export class SyncClient {
         await this.database.syncState.update(state.workspace_id, {
           cursor: message.next_cursor,
           last_sync_at: new Date().toISOString(),
+          bootstrap_state: "ready",
         });
       },
     );
@@ -632,20 +650,15 @@ export class SyncClient {
     });
   }
 
-  private async requireReadyState(
+  private async requireResumableState(
     workspaceId: string,
     deviceId: string,
-  ): Promise<ReadySyncState> {
+  ): Promise<ResumableSyncState> {
     const state = await this.database.syncState.get(workspaceId);
-    if (
-      state === undefined ||
-      state.device_id !== deviceId ||
-      state.bootstrap_state !== "ready" ||
-      state.sync_epoch === null
-    ) {
+    if (!canResumeSync(state, deviceId)) {
       throw new OfflineStorageError("OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH");
     }
-    return state as ReadySyncState;
+    return state;
   }
 
   private async transportOperation(

@@ -16,6 +16,7 @@ import type {
   AttachmentQueueEntry,
   LogionOfflineDatabase,
 } from "@logion/offline";
+import { SyncClient } from "@logion/offline";
 
 import {
   browserApiClient,
@@ -236,6 +237,40 @@ afterEach(() => {
 });
 
 describe("OfflineSyncCenter attachment upload feedback", () => {
+  it("retries upgraded synchronization from the existing state without bootstrapping", async () => {
+    const fake = createFakeDatabase(attachment());
+    vi.spyOn(fake.database.syncState, "get").mockResolvedValue({
+      workspace_id: WORKSPACE_ID,
+      device_id: DEVICE_ID,
+      schema_version: 4,
+      sync_epoch: "00000000-0000-7000-8000-000000000008",
+      cursor: 7,
+      bootstrap_state: "upgrade_required",
+      last_sync_at: null,
+      outbox_isolated_at: null,
+      isolation_reason_code: null,
+    });
+    const sync = vi
+      .spyOn(SyncClient.prototype, "synchronize")
+      .mockResolvedValue({
+        pushed: 0,
+        pulled: 0,
+        has_more: false,
+        control: "upgrade_required",
+      });
+    const unexpectedApi = vi.fn(() => {
+      throw new Error("Bootstrap must not run");
+    });
+    mockApi(unexpectedApi);
+    await renderReadyCenter(fake);
+    fireEvent(window, new Event("online"));
+    fireEvent.click(screen.getByRole("button", { name: "立即同步" }));
+    await waitFor(() =>
+      expect(sync).toHaveBeenCalledWith(WORKSPACE_ID, DEVICE_ID),
+    );
+    expect(unexpectedApi).not.toHaveBeenCalled();
+    expect(mocks.vaultSession.clearLocalData).not.toHaveBeenCalled();
+  });
   it("removes only the confirmed failed attachment while offline without clearing the Vault or calling HTTP", async () => {
     const failed = { ...attachment(), state: "failed" as const };
     const fake = createFakeDatabase(failed);
