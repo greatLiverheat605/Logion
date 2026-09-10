@@ -1,4 +1,6 @@
-# Infrastructure baseline
+# 基础设施与运维入口
+
+> 当前候选、工作流结果与生产前置见 [M6 发布准备](../docs/development/V021_M6_RELEASE_PREPARATION.md)。本文的旧版本号用于说明历史手册适用背景，不代表当前运行版本。
 
 `compose.yaml` 是首发参考部署，不是生产云平台的最终声明。它建立了 Web、API、Worker、PostgreSQL、Redis、反向代理和 Backup 的隔离边界。
 
@@ -6,7 +8,7 @@
 [`runbooks/aliyun-2c2g-staging-deployment.md`](runbooks/aliyun-2c2g-staging-deployment.md)
 执行。服务器已有旧版本时，其中的数据保留替换、加密备份、隔离恢复和稳定后清理流程仍适用。
 
-有正式域名和阿里云邮件推送的 `0.1.0-rc2` 预发布，先按
+正式域名与阿里云邮件推送的部署流程最初用于 `0.1.0-rc2`。后续版本先按
 [`runbooks/aliyun-production-release.md`](runbooks/aliyun-production-release.md) 完成部署和旧版本保留替换，
 再按 [`runbooks/aliyun-directmail-prerelease.md`](runbooks/aliyun-directmail-prerelease.md) 验收真实邮件，
 并按 [`runbooks/aliyun-real-sync-acceptance.md`](runbooks/aliyun-real-sync-acceptance.md) 验收双浏览器、

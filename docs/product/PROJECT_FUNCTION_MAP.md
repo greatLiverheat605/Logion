@@ -5,6 +5,8 @@
 
 ## 一句话定位
 
+Logion 将学习、研究与小组协作连接为可追溯的目标、任务、证据和复习闭环。本文描述功能布局；当前交付和延后项见 [v0.2.1 范围](../development/V021_DELIVERY_SCOPE.md)，发布进度见 [版本状态](../development/V021_STATUS.md)。
+
 ## 信息架构
 
 - 12 条画像主路由：Today、Exam、Review、Records、Self-study、Planning、Templates、Audit、Spaces、Settings、Profile、Help。
