@@ -47,7 +47,7 @@
 
 .system-workbench-nav .headless-tab[data-state="active"] {
   background: var(--bg-selected);
-  color: var(--primary);
+  color: var(--accent-text);
 }
 
 @media (max-width: 720px) {

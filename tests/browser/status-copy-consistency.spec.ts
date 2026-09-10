@@ -378,17 +378,20 @@ for (const width of [1440, 320]) {
       if (await switcher.isVisible()) await switcher.click();
     }
     await expect(exportRows).toHaveCount(initialExportCount + 1);
-    await exportRows.first().getByRole("button").first().click();
+    const finished = await updated;
+    const payload = (await finished.json()) as {
+      exports: Array<{ id: string; artifact_bytes: number }>;
+    };
+    // Resolve the created ID in the actual response order, not by recency.
+    const jobIndex = payload.exports.findIndex((entry) => entry.id === job.id);
+    expect(jobIndex).toBeGreaterThanOrEqual(0);
+    await exportRows.nth(jobIndex).getByRole("button").first().click();
     const detail = page.getByTestId("data-export-detail");
     await expect(detail).toContainText(/queued|running|succeeded/);
     await detail.scrollIntoViewIfNeeded();
     await page.screenshot({
       path: testInfo.outputPath(`export-selected-${width}.png`),
     });
-    const finished = await updated;
-    const payload = (await finished.json()) as {
-      exports: Array<{ id: string; artifact_bytes: number }>;
-    };
     const bytes = payload.exports.find(
       (entry) => entry.id === job.id,
     )!.artifact_bytes;

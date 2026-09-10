@@ -391,16 +391,26 @@ export class AttachmentQueueRepository {
   async uploadPending(
     workspaceId: string,
     transport: AttachmentUploadTransport,
+    attachmentId?: string,
   ): Promise<AttachmentQueueEntry | null> {
     validateUuid(workspaceId);
-    const entry = await this.database.attachmentQueue
-      .where("[workspace_id+state+queued_at]")
-      .between(
-        [workspaceId, "pending_upload", ""],
-        [workspaceId, "pending_upload", "\uffff"],
-      )
-      .first();
-    if (entry === undefined) return null;
+    if (attachmentId !== undefined) validateUuid(attachmentId);
+    const entry =
+      attachmentId === undefined
+        ? await this.database.attachmentQueue
+            .where("[workspace_id+state+queued_at]")
+            .between(
+              [workspaceId, "pending_upload", ""],
+              [workspaceId, "pending_upload", "\uffff"],
+            )
+            .first()
+        : await this.database.attachmentQueue.get(attachmentId);
+    if (
+      entry === undefined ||
+      entry.workspace_id !== workspaceId ||
+      entry.state !== "pending_upload"
+    )
+      return null;
     if (
       entry.space_id === null ||
       entry.target_id === null ||

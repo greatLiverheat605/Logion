@@ -600,6 +600,60 @@ describe("conflict center and attachment queue", () => {
     });
   });
 
+  it("uploads the requested attachment without falling back to another pending row", async () => {
+    const db = await open();
+    const repository = new AttachmentQueueRepository(db);
+    for (const attachmentId of [ids.conflict, ids.attachment]) {
+      await repository.enqueue({
+        attachment_id: attachmentId,
+        workspace_id: ids.workspace,
+        space_id: ids.entity,
+        device_id: ids.device,
+        target_type: "note",
+        target_id: ids.entity,
+        filename: "selected.txt",
+        media_type: "text/plain",
+        blob: new Blob([attachmentId], { type: "text/plain" }),
+      });
+      await db.attachmentQueue.update(attachmentId, {
+        queued_at: "2026-09-10T00:00:00.000Z",
+      });
+    }
+    const keep = await db.attachmentQueue.get(ids.conflict);
+    const calls: string[] = [];
+    const transport = {
+      initiate: (entry: { attachment_id: string }) => {
+        calls.push(entry.attachment_id);
+        return Promise.reject(new Error("offline"));
+      },
+      upload: () => Promise.resolve({ version: 2 }),
+      complete: () => Promise.resolve({ status: "verified", version: 3 }),
+    };
+    await expect(
+      repository.uploadPending(ids.workspace, transport, "invalid"),
+    ).rejects.toMatchObject({ code: "OFFLINE_INPUT_INVALID" });
+    expect(
+      await repository.uploadPending(ids.workspace, transport, ids.user),
+    ).toBeNull();
+    expect(
+      await repository.uploadPending(ids.user, transport, ids.attachment),
+    ).toBeNull();
+    expect(calls).toEqual([]);
+    expect(
+      await repository.uploadPending(ids.workspace, transport, ids.attachment),
+    ).toMatchObject({
+      attachment_id: ids.attachment,
+      state: "failed",
+    });
+    expect(
+      await repository.uploadPending(ids.workspace, transport, ids.attachment),
+    ).toBeNull();
+    await repository.retry(ids.attachment);
+    await repository.uploadPending(ids.workspace, transport, ids.attachment);
+    expect(calls).toEqual([ids.attachment, ids.attachment]);
+    expect(await db.attachmentQueue.get(ids.conflict)).toEqual(keep);
+  });
+
   it("removes only a failed attachment in the requested workspace", async () => {
     const db = await open();
     const repository = new AttachmentQueueRepository(db);

@@ -29,22 +29,40 @@ test.describe("persona system", () => {
   }) => {
     await page.goto("/app/settings");
     await page.getByRole("button", { name: /^切换到：考，/ }).click();
-    await expect(page.getByText("已切换到「考」画像。")).toBeVisible();
+    await expect(
+      page.getByTestId("workbench-frame").getByText("已切换到「考」画像。"),
+    ).toBeVisible();
     const navigation = page.getByRole("complementary", { name: "主导航" });
-    await expect(navigation.getByRole("link", { name: "考试" })).toBeVisible();
-    await expect(navigation.getByRole("link", { name: "复习" })).toBeVisible();
-    await expect(navigation.getByRole("link", { name: "审计" })).toHaveCount(0);
-    await expect(navigation.getByRole("link", { name: "空间" })).toHaveCount(0);
+    await expect(
+      navigation.getByRole("link", { name: "考试", exact: true }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole("link", { name: "复习", exact: true }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole("link", { name: "审计", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      navigation.getByRole("link", { name: "空间", exact: true }),
+    ).toHaveCount(0);
   });
 
   test("settings switch updates the sidebar immediately", async ({ page }) => {
     await page.goto("/app/settings");
     await page.getByRole("button", { name: /^切换到：导，/ }).click();
-    await expect(page.getByText("已切换到「导」画像。")).toBeVisible();
+    await expect(
+      page.getByTestId("workbench-frame").getByText("已切换到「导」画像。"),
+    ).toBeVisible();
     const navigation = page.getByRole("complementary", { name: "主导航" });
-    await expect(navigation.getByRole("link", { name: "审计" })).toBeVisible();
-    await expect(navigation.getByRole("link", { name: "空间" })).toBeVisible();
-    await expect(navigation.getByRole("link", { name: "考试" })).toHaveCount(0);
+    await expect(
+      navigation.getByRole("link", { name: "审计", exact: true }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole("link", { name: "空间", exact: true }),
+    ).toBeVisible();
+    await expect(
+      navigation.getByRole("link", { name: "考试", exact: true }),
+    ).toHaveCount(0);
 
     await page.goto("/app/today");
     await expect(
@@ -72,7 +90,9 @@ test.describe("persona system", () => {
         .getByRole("button", { name: new RegExp(`^切换到：${persona}，`) })
         .click();
       await expect(
-        page.getByText(`已切换到「${persona}」画像。`),
+        page
+          .getByTestId("workbench-frame")
+          .getByText(`已切换到「${persona}」画像。`),
       ).toBeVisible();
       await page.goto("/app/today");
       await expect(
@@ -118,7 +138,9 @@ test.describe("persona system", () => {
     const navigation = page.getByRole("navigation", { name: "移动端导航" });
 
     await page.getByRole("button", { name: /^切换到：考，/ }).click();
-    await expect(page.getByText("已切换到「考」画像。")).toBeVisible();
+    await expect(
+      page.getByTestId("workbench-frame").getByText("已切换到「考」画像。"),
+    ).toBeVisible();
     await expect(navigation.getByRole("link")).toHaveText([
       "今日",
       "备考",
@@ -128,7 +150,9 @@ test.describe("persona system", () => {
     await expect(navigation.locator('a[href="/app/research"]')).toHaveCount(0);
 
     await page.getByRole("button", { name: /^切换到：导，/ }).click();
-    await expect(page.getByText("已切换到「导」画像。")).toBeVisible();
+    await expect(
+      page.getByTestId("workbench-frame").getByText("已切换到「导」画像。"),
+    ).toBeVisible();
     await expect(navigation.getByRole("link")).toHaveText([
       "今日",
       "计划",
