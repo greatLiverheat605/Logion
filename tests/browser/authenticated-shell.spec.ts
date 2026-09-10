@@ -37,6 +37,55 @@ const sampleRoutes = new Set(["/app/today", "/app/search", "/app/records"]);
 const captureBefore = process.env.LOGION_E2E_CAPTURE_BEFORE === "true";
 
 test.describe("authenticated shell", () => {
+  for (const theme of ["light", "dark"] as const) {
+    for (const width of [1440, 320]) {
+      test(`R04 persona accessible name and keyboard in ${theme} at ${width}`, async ({
+        page,
+      }, testInfo) => {
+        await page.setViewportSize({
+          width,
+          height: width === 320 ? 568 : 900,
+        });
+        await page.evaluate((value) => {
+          localStorage.setItem("app-shell-theme", value);
+        }, theme);
+        await page.goto("/app/today");
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        if (width === 320) {
+          await page
+            .getByRole("button", { name: "打开主导航", exact: true })
+            .click();
+        }
+        const link = page.locator(".persona-indicator");
+        await expect(link.locator("strong")).not.toHaveText("画像加载中");
+        const label = (await link.locator("strong").innerText()).trim();
+        const description = (await link.locator("small").innerText()).trim();
+        await expect(link).toHaveAccessibleName(`${label} ${description}`);
+        await expect(link).not.toHaveAttribute("aria-label");
+        await page.locator(".app-nav-link").last().focus();
+        await page.keyboard.press("Tab");
+        await expect(link).toBeFocused();
+        await link.scrollIntoViewIfNeeded();
+        await expect(link).toBeInViewport();
+        const axe = await new AxeBuilder({ page })
+          .include(".persona-indicator")
+          .withTags(wcagTags)
+          .analyze();
+        expect(axe.violations).toEqual([]);
+        const nameCheck = await new AxeBuilder({ page })
+          .include(".persona-indicator")
+          .withRules(["label-content-name-mismatch"])
+          .analyze();
+        expect(nameCheck.violations).toEqual([]);
+        await page.screenshot({
+          path: testInfo.outputPath(`persona-${theme}-${width}.png`),
+        });
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(/\/app\/settings$/);
+      });
+    }
+  }
+
   test("workbenches have no WCAG violations or horizontal overflow", async ({
     page,
   }) => {
@@ -317,5 +366,60 @@ test.describe("authenticated shell", () => {
       .getByLabel("输入 CLEAR THIS DEVICE 确认", { exact: true })
       .fill("CLEAR THIS DEVIC");
     await expect(clearButton).toBeDisabled();
+  });
+
+  test("desktop sidebar keyboard traversal reaches routes and restores overlay focus", async ({
+    page,
+  }, testInfo) => {
+    for (const theme of ["light", "dark"] as const) {
+      await page.evaluate((value) => {
+        localStorage.setItem("app-shell-theme", value);
+      }, theme);
+      await page.goto("/app/today");
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      const sidebar = page.getByTestId("app-sidebar");
+      await expect(sidebar).not.toHaveAttribute("inert");
+      const controls = sidebar.locator("a[href], button:not([disabled])");
+      await controls.first().focus();
+      for (let index = 0; index < (await controls.count()); index += 1) {
+        const control = controls.nth(index);
+        await expect(control).toBeFocused();
+        await expect(control).toBeInViewport();
+        expect(
+          await control.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return style.outlineStyle !== "none" || style.boxShadow !== "none";
+          }),
+          "Keyboard focus has a visible indicator",
+        ).toBe(true);
+        await page.keyboard.press("Tab");
+      }
+      expect(
+        await sidebar.evaluate((element) =>
+          element.contains(document.activeElement),
+        ),
+      ).toBe(false);
+      await page.keyboard.press("Shift+Tab");
+      await expect(controls.last()).toBeFocused();
+      const route = sidebar.locator('a[href="/app/planning"]');
+      await route.focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(/\/app\/planning$/);
+      await expect(route).toHaveAttribute("aria-current", "page");
+      const command = page.getByRole("button", {
+        name: /搜索、导航或执行命令/,
+      });
+      await command.focus();
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByRole("dialog", { name: "搜索、跳转与执行" }),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(command).toBeFocused();
+      await page.screenshot({
+        path: testInfo.outputPath(`desktop-sidebar-${theme}.png`),
+      });
+    }
   });
 });

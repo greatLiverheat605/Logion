@@ -61,6 +61,7 @@ function validateTransition(
   }
   if (
     existing === undefined ||
+    existing.sync_status === "conflict" ||
     input.base_version !== existing.server_version ||
     input.local_revision !== existing.local_revision + 1 ||
     input.created_at !== existing.created_at ||
@@ -151,6 +152,21 @@ export class OfflineRepository {
             .where("[workspace_id+entity_type+entity_id]")
             .equals([input.workspace_id, input.entity_type, input.entity_id])
             .toArray();
+          if (
+            input.entity_type === "note" &&
+            input.operation_type === "delete"
+          ) {
+            relatedOperations.push(
+              ...(await this.database.outbox
+                .where("[workspace_id+entity_type+entity_id]")
+                .equals([
+                  input.workspace_id,
+                  "note_document_update",
+                  input.entity_id,
+                ])
+                .toArray()),
+            );
+          }
           const predecessor = relatedOperations
             .filter(
               (candidate) => candidate.operation_id !== input.operation_id,
@@ -176,6 +192,25 @@ export class OfflineRepository {
             input.entity_id,
           ]);
           validateTransition(input, currentEntity);
+          if (
+            input.operation_type === "delete" &&
+            currentEntity !== undefined
+          ) {
+            if (
+              currentEntity.sync_status === "conflict" ||
+              relatedOperations.some(
+                (item) =>
+                  item.outbox_state === "conflict" ||
+                  item.outbox_state === "blocked" ||
+                  item.outbox_state === "isolated",
+              )
+            ) {
+              throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+            }
+            // Keep the encrypted local body recoverable if the delete is refused.
+            entity.payload = currentEntity.payload;
+            entity.payload_hash = currentEntity.payload_hash;
+          }
           await this.database.entities.put(entity);
           await this.database.outbox.add(operation);
           return { kind: "committed", entity, operation };

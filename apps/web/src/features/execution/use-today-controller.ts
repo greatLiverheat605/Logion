@@ -4,6 +4,7 @@ import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
+  canResumeSync,
   OfflineVault,
   OfflineStorageError,
   ProtectedOfflineRepository,
@@ -40,6 +41,7 @@ import type { BuiltinPersonaId } from "@/features/personas/persona-definitions";
 import type { PersonaDashboardViewState } from "@/features/personas/persona-today-overview";
 import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 export type TodayWorkspace = components["schemas"]["WorkspaceResponse"];
 export type TodaySpace = components["schemas"]["SpaceResponse"];
@@ -197,7 +199,7 @@ const TODAY_TASK_STATUS_ORDER: Readonly<Record<TodayTaskStatus, number>> = {
 interface TodayDerivedInput {
   evidence: TodayLocalView<TodayEvidencePayload>[];
   goals: TodayLocalView<TodayGoalPayload>[];
-  selectedTaskId: string;
+  selectedTaskId: string | null;
   sessions: TodayLocalView<TodaySessionPayload>[];
   spaceId: string;
   tasks: TodayLocalView<TodayTaskPayload>[];
@@ -260,9 +262,11 @@ export function deriveTodayViewModel({
     actionableTasks.find((item) => item.payload.status === "in_progress") ??
     actionableTasks[0];
   const selectedTask =
-    queue.find((item) => item.entity.entity_id === selectedTaskId) ??
-    nextTask ??
-    queue[0];
+    selectedTaskId === null
+      ? undefined
+      : (queue.find((item) => item.entity.entity_id === selectedTaskId) ??
+        nextTask ??
+        queue[0]);
   const visibleEvidence = evidence.filter(
     (item) => item.payload.space_id === spaceId,
   );
@@ -428,7 +432,8 @@ export interface TodayControllerResult {
     ) => Promise<boolean>;
     finishSession: (input: TodayFinishSessionInput) => Promise<boolean>;
     loadContext: () => Promise<void>;
-    setSelectedTaskId: (taskId: string) => void;
+    setSelectedTaskId: (taskId: string | null) => void;
+    reportDeletion: (message: string) => void;
     setSpaceId: (spaceId: string) => void;
     setWorkspaceId: (workspaceId: string) => void;
     startSession: (taskId: string) => Promise<boolean>;
@@ -476,6 +481,7 @@ export function useTodayController(): TodayControllerResult {
   const { activePersona } = usePersona();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -487,7 +493,7 @@ export function useTodayController(): TodayControllerResult {
   const [membersAvailable, setMembersAvailable] = useState(false);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
-  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>("");
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const online = useSyncExternalStore(
@@ -707,8 +713,7 @@ export function useTodayController(): TodayControllerResult {
     localVault: OfflineVault,
   ): Promise<void> {
     const current = await db.syncState.get(workspaceId);
-    if (current?.bootstrap_state === "ready" && current.device_id === deviceId)
-      return;
+    if (canResumeSync(current, deviceId)) return;
     const repository = new BootstrapRepository(db, {}, localVault);
     const first = await browserApiClient.request<unknown>(
       `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
@@ -758,6 +763,7 @@ export function useTodayController(): TodayControllerResult {
         workspace_id: workspaceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(
@@ -813,9 +819,18 @@ export function useTodayController(): TodayControllerResult {
         taskRows.map((item) => decrypted<TodayTaskPayload>(localVault, item)),
       ),
       Promise.all(
-        sessionRows.map((item) =>
-          decrypted<TodaySessionPayload>(localVault, item),
-        ),
+        sessionRows.map(async (item) => {
+          const view = await decrypted<TodaySessionPayload>(localVault, item);
+          // outcome 是结束命令参数；回读投影统一以持久化的 status 为准。
+          return {
+            ...view,
+            payload: {
+              ...view.payload,
+              outcome:
+                view.payload.status === "active" ? null : view.payload.status,
+            },
+          };
+        }),
       ),
       Promise.all(
         goalRows.map((item) => decrypted<TodayGoalPayload>(localVault, item)),
@@ -903,10 +918,15 @@ export function useTodayController(): TodayControllerResult {
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
     const targetWorkspaceId = workspaceId;
     queueMicrotask(() => {
+      // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault)
         .then(() => {
           if (currentWorkspaceIdRef.current === targetWorkspaceId) {
-            setStatus("本地资料已在应用内解锁；完成会话不会自动验收任务。");
+            setStatus((current) =>
+              current === "请解锁本地资料。"
+                ? "本地资料已在应用内解锁；完成会话不会自动验收任务。"
+                : current,
+            );
           }
         })
         .catch((error: unknown) => {
@@ -985,7 +1005,7 @@ export function useTodayController(): TodayControllerResult {
       operation_type: existing === undefined ? "create" : "update",
       payload,
       protocol_version: "sync-v1",
-      updated_at: now,
+      updated_at: mutationTimestamp(existing, now),
       updated_by: session.user.id,
       workspace_id: workspaceId,
       dependencies,
@@ -1441,6 +1461,7 @@ export function useTodayController(): TodayControllerResult {
       finishSession,
       loadContext,
       setSelectedTaskId,
+      reportDeletion: setStatus,
       setSpaceId,
       setWorkspaceId: selectWorkspace,
       startSession,

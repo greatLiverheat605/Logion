@@ -9,6 +9,7 @@ import type {
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
+import { AppModal } from "@/components/app-shell/app-modal";
 import {
   WorkbenchSheet,
   WorkbenchTabPanel,
@@ -26,6 +27,7 @@ import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 import type { ConflictView } from "./offline-sync-center";
 import type { SyncQueueSummary } from "./sync-diagnostics";
 import styles from "./sync-workbench.module.css";
+import deleteStyles from "./entity-delete-action.module.css";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
@@ -75,6 +77,7 @@ export interface SyncWorkbenchProps {
   onMergeOpen: (view: ConflictView) => void;
   onMergeOpenChange: (open: boolean) => void;
   onReload: () => void;
+  onRemoveAttachment: (attachment: AttachmentQueueEntry) => Promise<void>;
   onResolve: (
     view: ConflictView,
     resolution: "keep_local" | "keep_remote" | "merge",
@@ -88,6 +91,7 @@ export interface SyncWorkbenchProps {
   status: string;
   syncState: WorkspaceSyncState | null;
   syncing: boolean;
+  uploading?: boolean;
   unlocked: boolean;
   vaultPhase: string;
   workspaceId: string;
@@ -95,6 +99,7 @@ export interface SyncWorkbenchProps {
 }
 
 export function SyncWorkbench({
+  uploading = false,
   accessIssue,
   attachments,
   clearConfirmation,
@@ -114,6 +119,7 @@ export function SyncWorkbench({
   onMergeOpen,
   onMergeOpenChange,
   onReload,
+  onRemoveAttachment,
   onResolve,
   onSynchronize,
   onUnlock,
@@ -139,6 +145,12 @@ export function SyncWorkbench({
     return conflicts.length > 0 ? "conflicts" : "outbox";
   };
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [removal, setRemoval] = useState<AttachmentQueueEntry | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removalError, setRemovalError] = useState("");
+  const removalBusy = useRef(false);
+  const attachmentHeading = useRef<HTMLHeadingElement>(null);
+  const removalReturnFocus = useRef<HTMLElement | null>(null);
   const previousConflictCount = useRef(conflicts.length);
   const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
   const currentDevice = devices.find((item) => item.id === deviceId) ?? null;
@@ -167,6 +179,51 @@ export function SyncWorkbench({
             : syncing
               ? "同步进行中，请等待当前操作完成"
               : "";
+
+  useEffect(() => {
+    if (
+      !removal ||
+      (unlocked &&
+        removal.workspace_id === workspaceId &&
+        (removing ||
+          attachments.some(
+            (entry) =>
+              entry.attachment_id === removal.attachment_id &&
+              entry.state === "failed",
+          )))
+    ) {
+      return;
+    }
+    let current = true;
+    queueMicrotask(() => {
+      if (!current) return;
+      removalReturnFocus.current = attachmentHeading.current;
+      setRemoval(null);
+      setRemovalError("");
+    });
+    return () => {
+      current = false;
+    };
+  }, [attachments, removal, removing, unlocked, workspaceId]);
+
+  async function confirmRemoval() {
+    if (!removal || removalBusy.current || uploading || !unlocked) return;
+    removalBusy.current = true;
+    setRemoving(true);
+    setRemovalError("");
+    try {
+      await onRemoveAttachment(removal);
+      removalReturnFocus.current = attachmentHeading.current;
+      setRemoval(null);
+    } catch (error) {
+      setRemovalError(
+        error instanceof Error ? error.message : "附件未移除，请重试。",
+      );
+    } finally {
+      removalBusy.current = false;
+      setRemoving(false);
+    }
+  }
 
   useEffect(() => {
     if (previousConflictCount.current === 0 && conflicts.length > 0) {
@@ -293,7 +350,13 @@ export function SyncWorkbench({
                 )}
               </InspectorSection>
               <InspectorSection title="运行状态">
-                <p className={styles.inspectorStatus}>{status}</p>
+                <p
+                  className={styles.inspectorStatus}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {status}
+                </p>
                 <span className={styles.statusNote}>
                   {connection === "offline"
                     ? "在线后可推送 Outbox；本地读取不受阻断。"
@@ -362,7 +425,14 @@ export function SyncWorkbench({
                   </button>
                 </div>
               ) : null}
-              {syncState?.bootstrap_state === "staging" ? (
+              {syncState?.bootstrap_state === "upgrade_required" ? (
+                <div className={styles.stateNotice} role="status">
+                  <strong>请更新应用后继续同步</strong>
+                  <span>
+                    未上传的本地内容已保留。更新应用后点击“立即同步”继续，无需清除本地数据。
+                  </span>
+                </div>
+              ) : syncState?.bootstrap_state === "staging" ? (
                 <div
                   className={styles.stateNotice}
                   data-testid="sync-bootstrap"
@@ -561,7 +631,15 @@ export function SyncWorkbench({
                             </div>
                             <div>
                               <span>服务器</span>
-                              <pre>{JSON.stringify(view.remote, null, 2)}</pre>
+                              {view.conflict.remote_deleted_at ? (
+                                <p>
+                                  服务器已删除此对象。本地内容仍保留，接受删除不会恢复原身份。
+                                </p>
+                              ) : (
+                                <pre>
+                                  {JSON.stringify(view.remote, null, 2)}
+                                </pre>
+                              )}
                             </div>
                           </div>
                           <div
@@ -594,7 +672,9 @@ export function SyncWorkbench({
                                 type="button"
                                 onClick={() => onResolve(view, "keep_remote")}
                               >
-                                采用服务器版本
+                                {view.conflict.remote_deleted_at
+                                  ? "接受服务器删除"
+                                  : "采用服务器版本"}
                               </button>
                             ) : null}
                             {view.conflict.resolution_options.includes(
@@ -641,7 +721,9 @@ export function SyncWorkbench({
                     <header className={styles.sectionHeader}>
                       <div>
                         <span className={styles.kicker}>ATTACHMENTS</span>
-                        <h2>附件上传队列</h2>
+                        <h2 ref={attachmentHeading} tabIndex={-1}>
+                          附件上传队列
+                        </h2>
                       </div>
                       <ProductTag tone={attachments.length ? "info" : "good"}>
                         {attachments.length} 项
@@ -673,19 +755,45 @@ export function SyncWorkbench({
                                 </small>
                               ) : null}
                             </div>
-                            {attachment.state === "pending_upload" ||
-                            attachment.state === "failed" ? (
-                              <button
-                                type="button"
-                                onClick={() => onUpload(attachment)}
-                              >
-                                {attachment.state === "failed"
-                                  ? "重试"
-                                  : "上传并验证"}
-                              </button>
-                            ) : (
-                              <ProductTag tone="good">已验证</ProductTag>
-                            )}
+                            <div className={styles.attachmentActions}>
+                              {attachment.state === "pending_upload" ||
+                              attachment.state === "failed" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onUpload(attachment)}
+                                  disabled={uploading || removing}
+                                >
+                                  {uploading
+                                    ? "正在上传…"
+                                    : attachment.state === "failed"
+                                      ? "重试"
+                                      : "上传并验证"}
+                                </button>
+                              ) : (
+                                <ProductTag tone="good">已验证</ProductTag>
+                              )}
+                              {attachment.state === "failed" ? (
+                                <button
+                                  aria-label={`移除附件「${attachment.filename}」`}
+                                  disabled={
+                                    !unlocked ||
+                                    uploading ||
+                                    removing ||
+                                    loading
+                                  }
+                                  onClick={(event) => {
+                                    removalReturnFocus.current =
+                                      event.currentTarget;
+                                    setRemovalError("");
+                                    setRemoval(attachment);
+                                  }}
+                                  type="button"
+                                >
+                                  <AppIcon name="close" size={14} />
+                                  移除
+                                </button>
+                              ) : null}
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -901,6 +1009,42 @@ export function SyncWorkbench({
           }
         />
       </main>
+      {removal ? (
+        <AppModal
+          eyebrow="本地附件队列"
+          title="移除失败附件"
+          onClose={() => {
+            if (!removalBusy.current) setRemoval(null);
+          }}
+          returnFocusRef={removalReturnFocus}
+        >
+          <div className={`${deleteStyles.body} ${styles.removalDialog}`}>
+            <p>附件「{removal.filename}」</p>
+            <p>
+              将移除此设备队列中的文件副本，无法从队列恢复。原文件、服务器附件、笔记和其他本地资料不受影响。
+            </p>
+            {removalError ? <p role="alert">{removalError}</p> : null}
+            <div className={deleteStyles.actions}>
+              <button
+                data-modal-autofocus
+                disabled={removing}
+                onClick={() => setRemoval(null)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className={deleteStyles.danger}
+                disabled={removing || uploading || !unlocked}
+                onClick={() => void confirmRemoval()}
+                type="button"
+              >
+                {removing ? "正在移除…" : "确认移除"}
+              </button>
+            </div>
+          </div>
+        </AppModal>
+      ) : null}
       <WorkbenchSheet
         description="只提交显式选择的合并 JSON；不会静默覆盖本地或服务器版本。"
         onOpenChange={onMergeOpenChange}

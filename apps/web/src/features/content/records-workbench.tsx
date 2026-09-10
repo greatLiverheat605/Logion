@@ -1,4 +1,5 @@
 "use client";
+import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import {
   type FormEvent,
@@ -28,6 +29,7 @@ import {
   WorkbenchToolbar,
 } from "@/components/product/workbench";
 
+import { NoteExternalLinks } from "./note-external-links";
 import styles from "./records-workbench.module.css";
 import {
   filterRecords,
@@ -495,6 +497,7 @@ function NoteEditor({
         ) : (
           <div className={styles.previewBody}>
             <ProductMarkdownPreview value={markdownBody} />
+            <NoteExternalLinks value={markdownBody} />
             <p className={styles.previewNotice}>
               <AppIcon name="shield" size={14} />
               安全预览只渲染 Markdown 结构，正文中的 HTML 不执行。
@@ -611,6 +614,17 @@ function Inspector({
               立即同步
             </button>
             <a href="/app/sync">打开同步中心</a>
+            <EntityDeleteAction
+              entityType="note"
+              entityId={note.entity.entity_id}
+              workspaceId={controller.context.workspaceId}
+              disabled={
+                !controller.capabilities.canWrite ||
+                !controller.context.unlocked
+              }
+              onStatus={controller.commands.reportDeletion}
+              onDeleted={() => controller.commands.selectNote(null)}
+            />
           </div>
         </InspectorSection>
       </div>

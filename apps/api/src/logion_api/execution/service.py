@@ -56,6 +56,7 @@ class ExecutionService:
                 request_id=request_id,
                 permission=Permission.SHARED_PLAN_WRITE,
             )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
         return space
 
     async def create_task(

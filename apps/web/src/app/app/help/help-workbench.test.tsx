@@ -26,11 +26,29 @@ describe("Help workbench", () => {
     expect(screen.getByTestId("help-workbench")).toBeTruthy();
     const search = screen.getByRole("searchbox", { name: "搜索帮助" });
     expect(search).toBeTruthy();
-    expect(screen.getByText("环境诊断")).toBeTruthy();
-    expect(screen.getByText("恢复路径")).toBeTruthy();
-    expect(screen.getByText("常见问题")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "环境诊断" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "环境诊断" }));
+    expect(screen.getByRole("heading", { name: "环境诊断" })).toBeTruthy();
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "恢复路径" }));
+    expect(screen.getByRole("heading", { name: "恢复路径" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "环境诊断" })).toBeNull();
+    expect(
+      screen.getByRole("link", { name: /同步工作台/ }).getAttribute("href"),
+    ).toBe("/app/sync");
+    fireEvent.click(screen.getByRole("button", { name: "搜索帮助" }));
     fireEvent.change(search, { target: { value: "Vault" } });
-    expect(screen.getByText(/Vault/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "常见问题" }));
+    expect(screen.getByRole("heading", { name: "常见问题" })).toBeTruthy();
+    expect(
+      screen.getByTestId("help-faq").querySelectorAll("details"),
+    ).toHaveLength(1);
+    expect(screen.getByTestId("help-faq").textContent).toContain(
+      "如何解锁 Vault",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "搜索帮助" }));
+    expect(screen.getByRole("searchbox")).toBe(search);
+    expect(search.getAttribute("value")).toBe("Vault");
     expect(document.querySelector(".product-panel")).toBeNull();
   });
 });

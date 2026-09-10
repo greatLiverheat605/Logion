@@ -3,6 +3,7 @@
 > 状态：长期有效的项目协作 SOP。
 > 所有者：用户指定的主线协调/执行方；产品方向和发布由用户最终批准。
 > 当前版本状态：[`V020_STATUS.md`](./V020_STATUS.md)。
+> FABLE 修复与后续演进任务入口：[`FABLE_PLAN_REGISTER.md`](./FABLE_PLAN_REGISTER.md)，含当前范围、验收、运维、决策和原文来源。
 
 ## 1. 权威顺序
 

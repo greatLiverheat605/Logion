@@ -1,9 +1,13 @@
 "use client";
 
+import { feedback, feedbackErrorText } from "@/lib/feedback";
+import { incompleteSyncMessage } from "@/features/sync/sync-diagnostics";
+
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
+  canResumeSync,
   OfflineVault,
   ProtectedOfflineRepository,
   SyncClient,
@@ -108,9 +112,9 @@ function transport(
 
 function message(error: unknown): string {
   if (error instanceof LogionApiError) {
-    return `操作未完成（请求编号：${error.requestId}）。`;
+    return feedbackErrorText(error);
   }
-  return "网络暂不可用；考试数据仍保存在本机 Outbox。";
+  return feedbackErrorText(error, "操作未完成；本地考试数据保留，可稍后重试。");
 }
 
 export function ExamCenter() {
@@ -118,6 +122,7 @@ export function ExamCenter() {
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -211,8 +216,7 @@ export function ExamCenter() {
     localVault: OfflineVault,
   ) {
     const current = await db.syncState.get(workspaceId);
-    if (current?.bootstrap_state === "ready" && current.device_id === deviceId)
-      return;
+    if (canResumeSync(current, deviceId)) return;
     const repository = new BootstrapRepository(db, {}, localVault);
     const first = await request<unknown>(
       `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
@@ -260,6 +264,7 @@ export function ExamCenter() {
         device_id: deviceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(
@@ -306,6 +311,7 @@ export function ExamCenter() {
 
   async function unlock(event: FormEvent<HTMLFormElement>): Promise<boolean> {
     event.preventDefault();
+    const form = event.currentTarget;
     if (session.status !== "authenticated" || !workspaceId || !deviceId)
       return false;
     const passphrase = String(
@@ -316,10 +322,10 @@ export function ExamCenter() {
       await bootstrap(db, localVault);
       await refresh(db, localVault);
       setStatus("备考资料已解锁；考试可断网创建并稍后同步。");
-      event.currentTarget.reset();
+      form.reset();
       return true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
       return false;
     }
   }
@@ -334,7 +340,7 @@ export function ExamCenter() {
           .then(() => setStatus("备考资料已在应用内解锁。"))
           .catch((error: unknown) => {
             setDataPhase("error");
-            setStatus(message(error));
+            setStatus(feedback.error(message(error)));
           }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
@@ -349,15 +355,24 @@ export function ExamCenter() {
     let succeeded = false;
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(
+      const result = await new SyncClient(
         db,
         transport(request, workspaceId),
         localVault,
       ).synchronize(workspaceId, deviceId);
-      setStatus("备考数据已同步。");
+      const remaining = await db.outbox
+        .where("[workspace_id+device_id]")
+        .equals([workspaceId, deviceId])
+        .toArray();
+      const incomplete = incompleteSyncMessage(result, remaining);
+      if (incomplete) {
+        setStatus(feedback.error(incomplete));
+        return false;
+      }
+      setStatus(feedback.success("备考数据已同步。"));
       succeeded = true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
     } finally {
       await refresh(db, localVault);
     }
@@ -407,9 +422,11 @@ export function ExamCenter() {
       });
       form.reset();
       setStatus("考试已加密保存在本地；正在尝试同步。");
-      return await synchronize();
+      // The boolean closes a locally committed form, not proof of server sync.
+      await synchronize();
+      return true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
       await refresh();
       return false;
     }
@@ -470,9 +487,11 @@ export function ExamCenter() {
       });
       form.reset();
       setStatus("科目已加密保存，正在尝试同步。");
-      return await synchronize();
+      // The boolean closes a locally committed form, not proof of server sync.
+      await synchronize();
+      return true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
       await refresh();
       return false;
     }
@@ -522,9 +541,11 @@ export function ExamCenter() {
       });
       form.reset();
       setStatus("大纲节点已加密保存，正在尝试同步。");
-      return await synchronize();
+      // The boolean closes a locally committed form, not proof of server sync.
+      await synchronize();
+      return true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
       await refresh();
       return false;
     }
@@ -575,9 +596,11 @@ export function ExamCenter() {
       });
       form.reset();
       setStatus("模考已加密保存，正在尝试同步。");
-      return await synchronize();
+      // The boolean closes a locally committed form, not proof of server sync.
+      await synchronize();
+      return true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
       await refresh();
       return false;
     }
@@ -632,9 +655,11 @@ export function ExamCenter() {
       });
       form.reset();
       setStatus("成绩已加密保存，正在尝试同步。");
-      return await synchronize();
+      // The boolean closes a locally committed form, not proof of server sync.
+      await synchronize();
+      return true;
     } catch (error) {
-      setStatus(message(error));
+      setStatus(feedback.error(message(error)));
       await refresh();
       return false;
     }

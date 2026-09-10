@@ -202,6 +202,7 @@ export interface LocalConflict {
   remote_version: number;
   remote_payload: JsonObject;
   remote_payload_hash: string;
+  remote_deleted_at?: string | null;
   resolution_options: ("dismiss" | "keep_local" | "keep_remote" | "merge")[];
   source_operation_id: string | null;
   source_device_id: string | null;

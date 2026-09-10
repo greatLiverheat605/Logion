@@ -1,6 +1,13 @@
 /** @vitest-environment jsdom */
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import {
+  ProtectedOfflineRepository,
+  SyncClient,
+  type JsonObject,
+  type LocalEntity,
+  type OutboxEntry,
+} from "@logion/offline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -78,7 +85,151 @@ beforeEach(() => {
   }
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe("Today 会话同步投影", () => {
+  it.each(["completed", "abandoned"] as const)(
+    "结束为 %s 后保留会话及非空 outcome，并可重新加载",
+    async (outcome) => {
+      let storedPayload: JsonObject = {
+        ended_at: null,
+        manual_minutes: null,
+        outcome: "completed",
+        reflection: "",
+        space_id: "space-1",
+        started_at: "2026-09-07T00:00:00.000Z",
+        status: "active",
+        task_id: "task-1",
+      };
+      const sessionRow: LocalEntity = {
+        ...task("workspace-1", "space-1", "session-1"),
+        entity_type: "study_session",
+        payload: { encrypted_payload_ref: "session-record" },
+        payload_hash: `sha256:${"a".repeat(64)}`,
+        sync_status: "clean",
+      };
+      const vaultGet = vi.fn(async () => storedPayload);
+      Object.assign(mocks.vaultSession, {
+        database: {
+          current: {
+            conflicts: {
+              where: () => ({ equals: () => ({ count: async () => 0 }) }),
+            },
+            entities: {
+              where: () => ({
+                equals: ([, entityType]: [string, string]) => ({
+                  toArray: async () =>
+                    entityType === "study_session"
+                      ? [sessionRow]
+                      : entityType === "task"
+                        ? [task("workspace-1", "space-1", "task-1")]
+                        : [],
+                }),
+              }),
+            },
+            outbox: {
+              where: () => ({ equals: () => ({ toArray: async () => [] }) }),
+            },
+            syncState: {
+              get: async () => ({
+                bootstrap_state: "ready",
+                device_id: "device-1",
+              }),
+            },
+          },
+        },
+        phase: "unlocked",
+        revision: 1,
+        unlock: vi.fn(),
+        vault: { current: { get: vaultGet } },
+      });
+      mocks.request.mockImplementation((path: string) => {
+        if (path === "/api/v1/workspaces")
+          return Promise.resolve({
+            workspaces: [{ id: "workspace-1", name: "测试", role: "owner" }],
+          });
+        if (path === "/api/v1/auth/devices")
+          return Promise.resolve({
+            devices: [{ current: true, id: "device-1" }],
+          });
+        if (path.endsWith("/spaces"))
+          return Promise.resolve({
+            spaces: [{ id: "space-1", name: "测试", visibility: "private" }],
+          });
+        if (path.endsWith("/members")) return Promise.resolve({ members: [] });
+        throw new Error(`Unexpected request: ${path}`);
+      });
+      const commit = vi
+        .spyOn(ProtectedOfflineRepository.prototype, "commitMutation")
+        .mockImplementation(async (input) => {
+          storedPayload = input.payload;
+          return {
+            kind: "committed",
+            entity: sessionRow,
+            operation: {} as OutboxEntry,
+          };
+        });
+      const synchronize = vi
+        .spyOn(SyncClient.prototype, "synchronize")
+        .mockImplementation(async () => {
+          // 真实 Pull 只持久化 status，不返回结束命令的 outcome。
+          const { outcome: commandOutcome, ...canonical } = storedPayload;
+          expect(commandOutcome).toBe(outcome);
+          storedPayload = canonical;
+          return { pushed: 1, pulled: 1, has_more: false, control: null };
+        });
+      const { result, unmount } = renderHook(() => useTodayController());
+      await waitFor(() => {
+        expect(result.current.viewModel.activeSession?.entity.entity_id).toBe(
+          "session-1",
+        );
+      });
+      expect(
+        result.current.viewModel.activeSession?.payload.outcome,
+      ).toBeNull();
+      await act(async () => {
+        expect(
+          await result.current.commands.finishSession({
+            manualMinutes: 1,
+            outcome,
+            reflection: "结束后的反思",
+          }),
+        ).toBe(true);
+      });
+      expect(commit).toHaveBeenCalledOnce();
+      expect(synchronize).toHaveBeenCalledOnce();
+      expect(storedPayload).not.toHaveProperty("outcome");
+      expect(result.current.viewModel.activeSession).toBeUndefined();
+      expect(result.current.viewModel.visibleSessions).toHaveLength(1);
+      expect(
+        result.current.viewModel.visibleSessions[0]?.payload,
+      ).toMatchObject({
+        status: outcome,
+        outcome,
+        manual_minutes: 1,
+        reflection: "结束后的反思",
+      });
+      unmount();
+      storedPayload = {
+        ...storedPayload,
+        outcome: outcome === "completed" ? "abandoned" : "completed",
+      };
+      const reloaded = renderHook(() => useTodayController());
+      await waitFor(() => {
+        expect(
+          reloaded.result.current.viewModel.visibleSessions[0]?.payload,
+        ).toMatchObject({
+          status: outcome,
+          outcome,
+        });
+      });
+      expect(storedPayload.outcome).not.toBe(outcome);
+    },
+  );
+});
 
 describe("Today controller Workspace isolation", () => {
   it("drops a late local read after switching Workspace", async () => {
@@ -156,11 +307,17 @@ describe("Today controller Workspace isolation", () => {
     });
 
     await act(async () => {
+      result.current.commands.reportDeletion(
+        "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
+      );
       firstRead.resolve([task("workspace-1", "space-1", "stale-task-a")]);
       await firstRead.promise;
     });
 
     expect(result.current.context.workspaceId).toBe("workspace-2");
     expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe("task-b");
+    expect(result.current.context.status).toBe(
+      "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
+    );
   });
 });

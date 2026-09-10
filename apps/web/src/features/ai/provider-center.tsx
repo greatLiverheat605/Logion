@@ -1,5 +1,7 @@
 "use client";
 
+import { feedback } from "@/lib/feedback";
+
 import type { components } from "@logion/contracts";
 import {
   type FormEvent,
@@ -43,6 +45,37 @@ function requestSuffix(error: LogionApiError): string {
     : `（请求编号：${error.requestId}）`;
 }
 
+function dnsErrorText(code: string, details?: unknown): string | null {
+  if (
+    code !== "AI_PROVIDER_DNS_UNRESOLVABLE" &&
+    code !== "AI_PROVIDER_DNS_BLOCKED"
+  ) {
+    return null;
+  }
+  const hostname =
+    details &&
+    typeof details === "object" &&
+    "hostname" in details &&
+    typeof details.hostname === "string" &&
+    details.hostname.trim()
+      ? details.hostname
+      : null;
+  if (code === "AI_PROVIDER_DNS_UNRESOLVABLE") {
+    return `无法解析 Provider 域名${hostname ? `（${hostname}）` : ""}，请检查服务端网络或 Provider 配置；可重试。`;
+  }
+  if (
+    details &&
+    typeof details === "object" &&
+    "resolved_count" in details &&
+    typeof details.resolved_count === "number" &&
+    Number.isInteger(details.resolved_count) &&
+    details.resolved_count > 0
+  ) {
+    return "Provider 域名解析结果包含非公网地址，连接已阻止。";
+  }
+  return "Provider DNS 检查未通过，请检查服务端网络或 Provider 配置。";
+}
+
 function errorText(error: unknown) {
   if (isRecentAuthRequired(error)) {
     return `需要重新认证后继续此操作${requestSuffix(error)}。`;
@@ -50,8 +83,9 @@ function errorText(error: unknown) {
   if (error instanceof LogionApiError) {
     if (error.code === "AI_PROVIDER_URL_BLOCKED")
       return "Base URL 必须是公开 HTTPS 地址，且不能指向本机、私网或内部域名。";
-    if (error.code === "AI_PROVIDER_DNS_BLOCKED")
-      return "Provider 域名解析结果包含非公网地址，连接已阻止。";
+    const dnsMessage = dnsErrorText(error.code, error.details);
+    if (dnsMessage)
+      return `${dnsMessage}（${error.code}）${requestSuffix(error)}`;
     if (error.code === "AI_PROVIDER_AUTH_FAILED")
       return "Provider 拒绝了密钥，请更新凭据后重试。";
     if (error.code.startsWith("AI_PROVIDER_"))
@@ -76,6 +110,7 @@ export function ProviderCenter() {
   const [online, setOnline] = useState(true);
   const [recentAuthRequired, setRecentAuthRequired] = useState(false);
   const [status, setStatus] = useState("正在读取 Provider 配置……");
+  const [discovering, setDiscovering] = useState(false);
   const [tab, setTab] = useState("providers");
   const [providerSheetOpen, setProviderSheetOpen] = useState(false);
   const [routeSheetOpen, setRouteSheetOpen] = useState(false);
@@ -138,6 +173,7 @@ export function ProviderCenter() {
             ? "Provider 与模型状态已更新；密钥仅保存在服务端。"
             : "尚未配置 Provider；AI 不可用，但学习、复习和研究功能仍可使用。",
         );
+        return true;
       } catch (error) {
         setProviders([]);
         setModels([]);
@@ -146,7 +182,8 @@ export function ProviderCenter() {
         setProviderWorkspaceId(selected);
         setModelsWorkspaceId(selected);
         setRecentAuthRequired(isRecentAuthRequired(error));
-        setStatus(errorText(error));
+        setStatus(feedback.error(errorText(error)));
+        return false;
       }
     },
     [request],
@@ -210,11 +247,15 @@ export function ProviderCenter() {
         }),
       });
       form.reset();
-      setStatus("Provider 已加密保存；浏览器不会保留密钥。尚未执行连接测试。");
-      await loadProviderData(workspaceId);
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(
+        feedback.success(
+          "Provider 已加密保存；浏览器不会保留密钥。尚未执行连接测试。",
+        ),
+      );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -237,10 +278,15 @@ export function ProviderCenter() {
           }),
         },
       );
-      await loadProviderData(workspaceId);
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(
+        feedback.success(
+          `${provider.name} 已${provider.enabled ? "停用" : "启用"}。`,
+        ),
+      );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -261,16 +307,25 @@ export function ProviderCenter() {
           body: JSON.stringify({ expected_version: provider.version }),
         },
       );
-      setStatus(`${provider.name} 已删除，服务端密文已清除。`);
-      await loadProviderData(workspaceId);
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(
+        feedback.success(`${provider.name} 已删除，服务端密文已清除。`),
+      );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
   async function discoverModels(provider: Provider) {
-    if (!workspaceId || !canConfigure || !online || !provider.enabled) return;
+    if (
+      discovering ||
+      !workspaceId ||
+      !canConfigure ||
+      !online ||
+      !provider.enabled
+    )
+      return;
     if (
       !window.confirm(
         `将向“${provider.name}”发送一次最小认证请求以检查连接并读取模型列表。继续吗？`,
@@ -278,17 +333,22 @@ export function ProviderCenter() {
     )
       return;
     try {
+      setDiscovering(true);
       const result = await request<{
         model_count: number;
       }>(
         `/api/v1/workspaces/${workspaceId}/ai/providers/${provider.id}/discover-models`,
         { method: "POST", csrf: true },
       );
-      await loadProviderData(workspaceId);
-      setStatus(`连接检查成功，发现 ${result.model_count} 个模型。`);
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(
+        feedback.success(`连接检查成功，发现 ${result.model_count} 个模型。`),
+      );
     } catch (error) {
       await loadProviderData(workspaceId);
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
+    } finally {
+      setDiscovering(false);
     }
   }
 
@@ -308,11 +368,15 @@ export function ProviderCenter() {
           currency: "USD",
         }),
       });
-      await loadProviderData(workspaceId);
-      setStatus("AI 月度 Token 上限已更新。正式运行会在服务端再次校验用量。");
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(
+        feedback.success(
+          "AI 月度 Token 上限已更新。正式运行会在服务端再次校验用量。",
+        ),
+      );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -336,11 +400,11 @@ export function ProviderCenter() {
           output_cost_per_million_minor: 0,
         }),
       });
-      await loadProviderData(workspaceId);
-      setStatus(`${model.display_name} 的能力配置已更新。`);
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(feedback.success(`${model.display_name} 的能力配置已更新。`));
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -366,11 +430,13 @@ export function ProviderCenter() {
         }),
       });
       form.reset();
-      await loadProviderData(workspaceId);
-      setStatus("AI 任务路由已创建；模型顺序决定主选与降级顺序。");
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(
+        feedback.success("AI 任务路由已创建；模型顺序决定主选与降级顺序。"),
+      );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -383,11 +449,11 @@ export function ProviderCenter() {
         csrf: true,
         body: JSON.stringify({ expected_version: route.version }),
       });
-      await loadProviderData(workspaceId);
-      setStatus("AI 任务路由已删除。");
+      if (!(await loadProviderData(workspaceId))) return;
+      setStatus(feedback.success("AI 任务路由已删除。"));
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -586,12 +652,15 @@ export function ProviderCenter() {
                       className={styles.primaryButton}
                       type="button"
                       disabled={
-                        !online || !canConfigure || !selectedProvider.enabled
+                        discovering ||
+                        !online ||
+                        !canConfigure ||
+                        !selectedProvider.enabled
                       }
                       onClick={() => void discoverModels(selectedProvider)}
                     >
                       <AppIcon name="refresh" size={14} />
-                      测试并发现模型
+                      {discovering ? "正在检查连接…" : "测试并发现模型"}
                     </button>
                   ) : (
                     <button
@@ -665,7 +734,7 @@ export function ProviderCenter() {
                             : "缺失"}{" "}
                           · 最近检查 {selectedProvider.last_health_status}
                           {selectedProvider.last_health_error_code
-                            ? ` · ${selectedProvider.last_health_error_code}`
+                            ? ` · ${dnsErrorText(selectedProvider.last_health_error_code) ?? selectedProvider.last_health_error_code}`
                             : ""}
                         </span>
                       </div>

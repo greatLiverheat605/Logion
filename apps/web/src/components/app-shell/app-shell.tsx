@@ -276,11 +276,6 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         </nav>
         <div className="app-sidebar-foot">
           <Link
-            aria-label={
-              activePersona
-                ? `当前画像：${activePersona.name}，前往画像设置`
-                : "画像加载中"
-            }
             className="persona-indicator"
             href="/app/settings"
             onClick={closeTransientUi}

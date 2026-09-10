@@ -1,5 +1,7 @@
 "use client";
 
+import { feedback } from "@/lib/feedback";
+
 import type { components } from "@logion/contracts";
 import {
   type FormEvent,
@@ -84,6 +86,7 @@ export function AIRunCenter() {
   const [recentAuthRequired, setRecentAuthRequired] = useState(false);
   const [status, setStatus] = useState("AI 只生成草稿，不会自动修改正式记录。");
   const [pendingRun, setPendingRun] = useState<PendingRun | null>(null);
+  const [sending, setSending] = useState(false);
   const [sendConsent, setSendConsent] = useState(false);
   const [masterTab, setMasterTab] = useState("runs");
   const [selectedDraftId, setSelectedDraftId] = useState("");
@@ -124,12 +127,14 @@ export function AIRunCenter() {
         setDrafts(Array.isArray(draftResult.drafts) ? draftResult.drafts : []);
         setDataWorkspaceId(selected);
         setRecentAuthRequired(false);
+        return true;
       } catch (error) {
         setRuns([]);
         setDrafts([]);
         setDataWorkspaceId(selected);
         setRecentAuthRequired(isRecentAuthRequired(error));
-        setStatus(errorText(error));
+        setStatus(feedback.error(errorText(error)));
+        return false;
       }
     },
     [request],
@@ -181,7 +186,9 @@ export function AIRunCenter() {
     const inputValue = String(data.get("input_value") ?? "");
     const outputName = String(data.get("output_name") ?? "");
     if (data.get("source_confirmed") !== "on") {
-      setStatus("请先确认发送内容只来自你明确选择并核对的来源。");
+      setStatus(
+        feedback.error("请先确认发送内容只来自你明确选择并核对的来源。"),
+      );
       return;
     }
     const requestedOutputTokens = Number(
@@ -233,17 +240,23 @@ export function AIRunCenter() {
         },
       });
       setSendConsent(false);
-      setStatus("预检完成。请核对发送范围、Provider、模型和预算后再确认。");
+      setStatus(
+        feedback.success(
+          "预检完成。请核对发送范围、Provider、模型和预算后再确认。",
+        ),
+      );
     } catch (error) {
       setPendingRun(null);
       setSendConsent(false);
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
   async function sendPreviewedRun() {
-    if (!workspaceId || !pendingRun || !sendConsent || !online) return;
+    if (sending || !workspaceId || !pendingRun || !sendConsent || !online)
+      return;
+    setSending(true);
     try {
       await request(`/api/v1/workspaces/${workspaceId}/ai/runs`, {
         method: "POST",
@@ -253,11 +266,13 @@ export function AIRunCenter() {
       runFormRef.current?.reset();
       setPendingRun(null);
       setSendConsent(false);
-      await loadData(workspaceId);
-      setStatus("AI 运行已入队；可随时刷新状态或请求取消。");
+      if (!(await loadData(workspaceId))) return;
+      setStatus(feedback.success("AI 运行已入队；可随时刷新状态或请求取消。"));
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
+    } finally {
+      setSending(false);
     }
   }
 
@@ -272,11 +287,15 @@ export function AIRunCenter() {
           body: JSON.stringify({ expected_version: run.version }),
         },
       );
-      await loadData(workspaceId);
-      setStatus("取消请求已记录；进行中的外部请求会在安全检查点停止。");
+      if (!(await loadData(workspaceId))) return;
+      setStatus(
+        feedback.success(
+          "取消请求已记录；进行中的外部请求会在安全检查点停止。",
+        ),
+      );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -303,15 +322,17 @@ export function AIRunCenter() {
           }),
         },
       );
-      await loadData(workspaceId);
+      if (!(await loadData(workspaceId))) return;
       setStatus(
-        decision === "accepted"
-          ? "草稿已人工批准并保留；本版本不会自动覆盖正式对象。"
-          : "草稿已拒绝，正式对象未改变。",
+        feedback.success(
+          decision === "accepted"
+            ? "草稿已人工批准并保留；本版本不会自动覆盖正式对象。"
+            : "草稿已拒绝，正式对象未改变。",
+        ),
       );
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }
 
@@ -567,8 +588,11 @@ export function AIRunCenter() {
                       onClick={() => {
                         setPendingRun(null);
                         setSendConsent(false);
-                        setStatus("已取消，内容未发送至 Provider。");
+                        setStatus(
+                          feedback.success("已取消，内容未发送至 Provider。"),
+                        );
                       }}
+                      disabled={sending}
                     >
                       取消发送
                     </button>
@@ -576,10 +600,10 @@ export function AIRunCenter() {
                       className={styles.primaryButton}
                       data-workbench-primary="true"
                       type="button"
-                      disabled={!sendConsent || !online}
+                      disabled={sending || !sendConsent || !online}
                       onClick={() => void sendPreviewedRun()}
                     >
-                      确认并发送到 Provider
+                      {sending ? "正在提交…" : "确认并发送到 Provider"}
                     </button>
                   </div>
                 </div>

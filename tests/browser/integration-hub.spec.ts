@@ -24,7 +24,9 @@ test.describe("interoperability hub real flows", () => {
     await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: /^切换到：考，/ }).click();
-    await expect(page.getByText("已切换到「考」画像。")).toBeVisible();
+    await expect(
+      page.getByTestId("workbench-frame").getByText("已切换到「考」画像。"),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "打开互操作中心" }),
     ).toHaveCount(0);
@@ -37,7 +39,9 @@ test.describe("interoperability hub real flows", () => {
         .getByRole("button", { name: new RegExp(`^切换到：${personaName}，`) })
         .click();
       await expect(
-        page.getByText(`已切换到「${personaName}」画像。`),
+        page
+          .getByTestId("workbench-frame")
+          .getByText(`已切换到「${personaName}」画像。`),
       ).toBeVisible();
       await expect(
         page.getByRole("link", { name: "打开互操作中心" }),
@@ -129,7 +133,10 @@ test.describe("interoperability hub real flows", () => {
 
     const confirmation = page.getByLabel("输入 EXPORT 确认创建");
     await confirmation.fill("EXPORT");
-    await page.getByRole("button", { name: "创建加密导出" }).click();
+    await expect(page.getByTestId("integrations-export")).toContainText(
+      "下载后为可读 ZIP，未加密，请妥善保管。",
+    );
+    await page.getByRole("button", { name: "创建数据导出" }).click();
     await expect(page.getByText("此操作需要重新登录后继续。")).toBeVisible();
     await expect(page.getByText(/browser-recent-auth-gate/)).toBeVisible();
 
@@ -141,7 +148,7 @@ test.describe("interoperability hub real flows", () => {
         response.url().endsWith("/data-exports") &&
         response.status() === 202,
     );
-    await page.getByRole("button", { name: "创建加密导出" }).click();
+    await page.getByRole("button", { name: "创建数据导出" }).click();
     const created = (await (await createdResponse).json()) as { id: string };
     await expect(page.getByText("导出任务已进入后台队列。")).toBeVisible();
 

@@ -112,6 +112,64 @@ async def test_human_evidence_revision_pass_and_close_flow() -> None:
         assert missing_csrf.status_code == 403
         _, first_verification, first = await submit("private draft evidence")
         assert first["task_status"] == "submitted"
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.187", 48007)),
+            base_url=origin,
+            headers={"Origin": origin},
+        ) as outsider:
+            registered = await outsider.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"evidence-outsider-{uuid4()}@example.com",
+                    "password": "a-strong-password-123",
+                    "device_name": "Evidence isolation browser",
+                },
+            )
+            assert registered.status_code == 201
+            outsider_workspace = (await outsider.get("/api/v1/workspaces")).json()["workspaces"][0][
+                "id"
+            ]
+            outsider_space = (
+                await outsider.get(f"/api/v1/workspaces/{outsider_workspace}/spaces")
+            ).json()["spaces"][0]["id"]
+            for scope_workspace, scope_space in (
+                (str(workspace_id), str(space_id)),
+                (outsider_workspace, outsider_space),
+            ):
+                base = f"/api/v1/workspaces/{scope_workspace}/spaces/{scope_space}"
+                for path, payload in (
+                    (
+                        f"{base}/verifications/{first_verification}/decision",
+                        {"expected_version": 1, "verdict": "passed", "reviewer_notes": ""},
+                    ),
+                    (
+                        f"{base}/tasks/{task_id}/close",
+                        {"expected_task_version": first["task_version"]},
+                    ),
+                    (
+                        f"{base}/evidence",
+                        {
+                            "evidence_id": str(uuid4()),
+                            "verification_id": str(uuid4()),
+                            "task_id": str(task_id),
+                            "evidence_type": "text",
+                            "summary": "Cross-tenant attempt",
+                        },
+                    ),
+                ):
+                    rejected = await outsider.post(
+                        path,
+                        headers={"X-CSRF-Token": outsider.cookies["logion_csrf"]},
+                        json=payload,
+                    )
+                    assert rejected.status_code == 404, rejected.text
+                    assert "private draft evidence" not in rejected.text
+            async with session_factory() as db:
+                unchanged_task = await db.get(Task, task_id)
+                unchanged_verification = await db.get(VerificationRecord, first_verification)
+                assert unchanged_task is not None and unchanged_task.status == "submitted"
+                assert unchanged_task.version == first["task_version"]
+                assert unchanged_verification is not None and unchanged_verification.version == 1
         revision = await client.post(
             f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/verifications/{first_verification}/decision",
             headers={"X-CSRF-Token": csrf},

@@ -2485,6 +2485,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/sync/deletion-preview/{entity_type}/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Deletion */
+        get: operations["sync_deletion_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/sync/pull": {
         parameters: {
             query?: never;
@@ -3318,6 +3335,10 @@ export interface components {
         };
         /** AppliedOperationResult */
         AppliedOperationResult: {
+            /** Impact */
+            impact?: {
+                [key: string]: number;
+            } | null;
             /**
              * Operation Id
              * Format: uuid
@@ -4144,6 +4165,21 @@ export interface components {
              */
             type: "date";
         };
+        /** DeletionPreview */
+        DeletionPreview: {
+            /** Blockers */
+            blockers: {
+                [key: string]: number;
+            };
+            /** Can Delete */
+            can_delete: boolean;
+            /** Impact */
+            impact: {
+                [key: string]: number;
+            };
+            /** Server Version */
+            server_version: number;
+        };
         /** DeliverableCreateRequest */
         DeliverableCreateRequest: {
             /**
@@ -4575,6 +4611,10 @@ export interface components {
         };
         /** FailedOperationResult */
         FailedOperationResult: {
+            /** Details */
+            details?: {
+                [key: string]: number;
+            } | null;
             /** Error Code */
             error_code: string;
             /**
@@ -7502,6 +7542,8 @@ export interface components {
             entity_type: string;
             /** Local Payload Hash */
             local_payload_hash: string;
+            /** Remote Deleted At */
+            remote_deleted_at?: string | null;
             /** Remote Payload */
             remote_payload: {
                 [key: string]: unknown;
@@ -8145,6 +8187,44 @@ export interface components {
              * @enum {string}
              */
             kind: "updated-within-days";
+        };
+        /** UpgradeControl */
+        UpgradeControl: {
+            /**
+             * Action
+             * @default upgrade_required
+             * @constant
+             */
+            action: "upgrade_required";
+            /**
+             * Message Type
+             * @default sync_control
+             * @constant
+             */
+            message_type: "sync_control";
+            /**
+             * Min Supported Version
+             * @default sync-v1
+             * @constant
+             */
+            min_supported_version: "sync-v1";
+            /**
+             * Protocol Version
+             * @default sync-v1
+             * @constant
+             */
+            protocol_version: "sync-v1";
+            /**
+             * Reason Code
+             * @default PROTOCOL_UNSUPPORTED
+             * @constant
+             */
+            reason_code: "PROTOCOL_UNSUPPORTED";
+            /**
+             * Server Sync Epoch
+             * Format: uuid
+             */
+            server_sync_epoch: string;
         };
         /** UrlFieldDefinition */
         UrlFieldDefinition: {
@@ -23649,7 +23729,9 @@ export interface operations {
     sync_bootstrap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-logion-sync-capabilities"?: string | null;
+            };
             path: {
                 workspace_id: string;
             };
@@ -23667,7 +23749,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BootstrapResponse"];
+                    "application/json": components["schemas"]["BootstrapResponse"] | components["schemas"]["UpgradeControl"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_deletion_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                entity_type: "learning_goal" | "task" | "note";
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionPreview"];
                 };
             };
             /** @description Validation Error */
@@ -23684,7 +23799,9 @@ export interface operations {
     sync_pull: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-logion-sync-capabilities"?: string | null;
+            };
             path: {
                 workspace_id: string;
             };
@@ -23702,7 +23819,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PullResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["CursorExpiredControl"];
+                    "application/json": components["schemas"]["PullResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["CursorExpiredControl"] | components["schemas"]["UpgradeControl"];
                 };
             };
             /** @description Validation Error */
@@ -23721,6 +23838,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-csrf-token"?: string | null;
+                "x-logion-sync-capabilities"?: string | null;
             };
             path: {
                 workspace_id: string;
@@ -23739,7 +23857,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PushResponse"] | components["schemas"]["RebootstrapControl"];
+                    "application/json": components["schemas"]["PushResponse"] | components["schemas"]["RebootstrapControl"] | components["schemas"]["UpgradeControl"];
                 };
             };
             /** @description Unauthorized */

@@ -372,7 +372,7 @@ describe("recoverable push/pull cycle", () => {
     expect(
       await database.entities.get([ids.workspace, "note", ids.entity]),
     ).toMatchObject({
-      payload: { encrypted_payload_ref: ids.entity },
+      payload: { encrypted_payload_ref: noteOperationId },
       sync_status: "clean",
     });
     expect(
@@ -382,14 +382,18 @@ describe("recoverable push/pull cycle", () => {
         stateId,
       ]),
     ).toMatchObject({
-      payload: { encrypted_payload_ref: stateId },
+      payload: { encrypted_payload_ref: stateOperationId },
       sync_status: "clean",
     });
     expect(await vault.get(updateOperationId, ids.workspace)).toEqual(
       updatePayload,
     );
-    expect(await vault.get(ids.entity, ids.workspace)).toEqual(notePayload);
-    expect(await vault.get(stateId, ids.workspace)).toEqual(statePayload);
+    expect(await vault.get(noteOperationId, ids.workspace)).toEqual(
+      notePayload,
+    );
+    expect(await vault.get(stateOperationId, ids.workspace)).toEqual(
+      statePayload,
+    );
     expect(JSON.stringify(await database.entities.toArray())).not.toContain(
       "merged remote body",
     );
@@ -923,9 +927,18 @@ describe("recoverable push/pull cycle", () => {
     expect(JSON.stringify(await database.entities.toArray())).not.toContain(
       "sensitive context",
     );
-    expect(await vault.get(ids.entity, ids.workspace)).toEqual(
-      protectedPayload,
-    );
+    const protectedEntity = await database.entities.get([
+      ids.workspace,
+      "learning_goal",
+      ids.entity,
+    ]);
+    if (!protectedEntity) throw new Error("Expected protected entity");
+    expect(
+      await vault.get(
+        protectedEntity.payload.encrypted_payload_ref as string,
+        ids.workspace,
+      ),
+    ).toEqual(protectedPayload);
   });
 
   it("keeps content and verification details out of entity and Outbox rows", async () => {

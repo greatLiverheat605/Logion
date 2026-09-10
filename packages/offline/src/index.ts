@@ -23,6 +23,7 @@ export {
 } from "./yjs-notes";
 export {
   SyncClient,
+  canResumeSync,
   type SyncCycleResult,
   type SyncTransport,
 } from "./sync-client";

@@ -519,7 +519,7 @@ export function IntegrationHub({
                     disabled={!workspaceId || dataPhase !== "ready"}
                   >
                     <AppIcon name="download" size={14} />
-                    创建加密导出
+                    创建数据导出
                   </button>
                 ) : undefined
               }
@@ -776,7 +776,8 @@ export function IntegrationHub({
                     <ProductTag tone="good">可校验</ProductTag>
                   </header>
                   <p className={styles.muted}>
-                    导出需要近期认证，并提供短期下载与 SHA-256。
+                    导出需要近期认证，服务端加密存储，并提供短期下载与 SHA-256。
+                    下载后为可读 ZIP，未加密，请妥善保管。
                   </p>
                   <form
                     id="integration-export-form"
@@ -882,7 +883,7 @@ export function IntegrationHub({
                 API Token 和自动化规则尚未开放。
               </p>
               <p className={styles.capabilityHint}>
-                替代路径：使用 Markdown / CSV / BibTeX 导入，或创建加密导出。
+                替代路径：使用 Markdown / CSV / BibTeX 导入，或导出可读 ZIP。
               </p>
             </InspectorSection>
             <InspectorSection title="操作状态">

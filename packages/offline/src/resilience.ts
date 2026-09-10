@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { validateUuid } from "./validation";
 import { OfflineVault } from "./vault";
+import { noteDocumentStateId } from "./yjs-notes";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "text/plain"]);
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -98,7 +99,6 @@ export class ConflictRepository {
         conflict.entity_type,
         conflict.entity_id,
       ];
-      const sourceOperationId = conflict.source_operation_id;
       const entity = await this.database.entities.get(entityKey);
       if (entity === undefined || entity.sync_status !== "conflict") {
         throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
@@ -147,6 +147,10 @@ export class ConflictRepository {
       const durablePayload: JsonObject = protectedEntity
         ? { encrypted_payload_ref: input.operation_id }
         : selectedPayload;
+      const remoteDeletion =
+        input.resolution === "keep_remote"
+          ? (conflict.remote_deleted_at ?? null)
+          : null;
       if (!conflict.server_recorded && input.resolution === "keep_remote") {
         await this.database.transaction(
           "rw",
@@ -158,7 +162,7 @@ export class ConflictRepository {
             if (sealed !== null) {
               await this.database.vaultRecords.put(sealed);
             }
-            await this.database.outbox.delete(sourceOperationId);
+            await this.removeRelatedOperations(conflict);
             await this.database.entities.update(entityKey, {
               payload: durablePayload,
               payload_hash: selectedHash,
@@ -167,7 +171,15 @@ export class ConflictRepository {
               updated_at: input.client_occurred_at,
               updated_by: input.updated_by,
               sync_status: "clean",
+              deleted_at: remoteDeletion,
             });
+            if (remoteDeletion !== null && conflict.entity_type === "note") {
+              await this.database.entities.delete([
+                input.workspace_id,
+                "note_document_state",
+                noteDocumentStateId(input.workspace_id, conflict.entity_id),
+              ]);
+            }
             await this.database.conflicts.update(input.conflict_id, {
               status: "resolved_remote",
               requested_resolution: input.resolution,
@@ -184,12 +196,15 @@ export class ConflictRepository {
         device_id: input.device_id,
         entity_type: conflict.entity_type,
         entity_id: conflict.entity_id,
-        operation_type: "update",
+        operation_type: remoteDeletion !== null ? "delete" : "update",
         base_version: conflict.remote_version,
         client_occurred_at: input.client_occurred_at,
-        payload: durablePayload,
+        payload: remoteDeletion !== null ? {} : durablePayload,
         payload_hash: selectedHash,
-        payload_vault_id: protectedEntity ? input.operation_id : undefined,
+        payload_vault_id:
+          protectedEntity && remoteDeletion === null
+            ? input.operation_id
+            : undefined,
         conflict_resolution: conflict.server_recorded
           ? {
               conflict_id: input.conflict_id,
@@ -219,7 +234,7 @@ export class ConflictRepository {
           if (sealed !== null) {
             await this.database.vaultRecords.put(sealed);
           }
-          await this.database.outbox.delete(sourceOperationId);
+          await this.removeRelatedOperations(conflict);
           await this.database.outbox.add(operation);
           await this.database.entities.update(entityKey, {
             payload: durablePayload,
@@ -229,6 +244,7 @@ export class ConflictRepository {
             updated_at: input.client_occurred_at,
             updated_by: input.updated_by,
             sync_status: "pending",
+            deleted_at: remoteDeletion,
           });
           await this.database.conflicts.update(input.conflict_id, {
             status: "resolving",
@@ -268,10 +284,29 @@ export class ConflictRepository {
     return this.vault;
   }
 
+  private async removeRelatedOperations(
+    conflict: LocalConflict,
+  ): Promise<void> {
+    await this.database.outbox
+      .where("workspace_id")
+      .equals(conflict.workspace_id)
+      .filter(
+        (item) =>
+          item.entity_id === conflict.entity_id &&
+          (item.operation_id === conflict.source_operation_id ||
+            item.outbox_state === "conflict") &&
+          (item.entity_type === conflict.entity_type ||
+            (conflict.entity_type === "note" &&
+              item.entity_type === "note_document_update")),
+      )
+      .delete();
+  }
+
   private async getProtectedPayload(
     referencePayload: JsonObject,
     workspaceId: string,
   ): Promise<JsonObject | null> {
+    if (Object.keys(referencePayload).length === 0) return {};
     const reference = referencePayload.encrypted_payload_ref;
     if (typeof reference !== "string") {
       throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
@@ -413,20 +448,46 @@ export class AttachmentQueueRepository {
 
   async retry(attachmentId: string): Promise<void> {
     validateUuid(attachmentId);
-    const entry = await this.database.attachmentQueue.get(attachmentId);
-    if (
-      entry === undefined ||
-      entry.state !== "failed" ||
-      entry.space_id === null ||
-      entry.target_id === null ||
-      entry.target_type === null
-    ) {
-      throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
-    }
-    await this.database.attachmentQueue.update(attachmentId, {
-      state: "pending_upload",
-      last_error_code: null,
-    });
+    await this.database.transaction(
+      "rw",
+      this.database.attachmentQueue,
+      async () => {
+        const entry = await this.database.attachmentQueue.get(attachmentId);
+        if (
+          entry === undefined ||
+          entry.state !== "failed" ||
+          entry.space_id === null ||
+          entry.target_id === null ||
+          entry.target_type === null
+        ) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        await this.database.attachmentQueue.update(attachmentId, {
+          state: "pending_upload",
+          last_error_code: null,
+        });
+      },
+    );
+  }
+
+  async removeFailed(workspaceId: string, attachmentId: string): Promise<void> {
+    validateUuid(workspaceId);
+    validateUuid(attachmentId);
+    await this.database.transaction(
+      "rw",
+      this.database.attachmentQueue,
+      async () => {
+        const entry = await this.database.attachmentQueue.get(attachmentId);
+        if (
+          entry === undefined ||
+          entry.workspace_id !== workspaceId ||
+          entry.state !== "failed"
+        ) {
+          throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+        }
+        await this.database.attachmentQueue.delete(attachmentId);
+      },
+    );
   }
 }
 

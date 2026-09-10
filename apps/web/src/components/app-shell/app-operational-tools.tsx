@@ -32,6 +32,7 @@ import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
@@ -395,6 +396,7 @@ export function AppOperationalTools() {
     let syncError: unknown;
     try {
       await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+      markChanged();
     } catch (error) {
       syncError = error;
     }
@@ -418,7 +420,14 @@ export function AppOperationalTools() {
     } finally {
       setBusy(false);
     }
-  }, [activeDatabase, activeVault, deviceId, readFocusData, workspaceId]);
+  }, [
+    activeDatabase,
+    activeVault,
+    deviceId,
+    markChanged,
+    readFocusData,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (overlay === "focus" && unlocked && workspaceId && deviceId) {
@@ -474,7 +483,7 @@ export function AppOperationalTools() {
       local_revision: (existing?.local_revision ?? 0) + 1,
       client_occurred_at: now,
       created_at: existing?.created_at ?? now,
-      updated_at: now,
+      updated_at: mutationTimestamp(existing, now),
       deleted_at: null,
       created_by: existing?.created_by ?? session.user.id,
       updated_by: session.user.id,
@@ -514,6 +523,7 @@ export function AppOperationalTools() {
     setFeedback({ message: "正在重试同步…", tone: "loading" });
     try {
       await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+      markChanged();
       await readFocusData();
       setFeedback({ message: "本地修改已与服务器同步。", tone: "success" });
     } catch (error) {
@@ -544,6 +554,7 @@ export function AppOperationalTools() {
     setFeedback({ message: "正在加密保存…", tone: "loading" });
     try {
       await ensureBootstrap(db, localVault, workspaceId, deviceId);
+      markChanged();
       const title = String(data.get("title") ?? "").trim();
       const body = String(data.get("body") ?? "").trim();
       await commitEntity(

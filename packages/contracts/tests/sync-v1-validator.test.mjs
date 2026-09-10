@@ -44,6 +44,69 @@ test("exports a runtime type guard for valid sync-v1 messages", () => {
   });
 });
 
+test("validates deletion refusal counts and explicit remote tombstone metadata", () => {
+  const envelope = {
+    message_type: "push_response",
+    protocol_version: "sync-v1",
+    workspace_id: ids.workspace,
+    device_id: ids.device,
+    sync_epoch: ids.epoch,
+  };
+  const refusal = {
+    operation_id: ids.snapshot,
+    status: "rejected",
+    retryable: false,
+    error_code: "SYNC_DELETE_BLOCKED_BY_REFERENCE",
+    details: { evidence_count: 2, citation_count: 1 },
+  };
+  assert.equal(isSyncV1Message({ ...envelope, results: [refusal] }), true);
+  assert.equal(
+    isSyncV1Message({
+      ...envelope,
+      results: [{ ...refusal, details: { note_id: ids.snapshot } }],
+    }),
+    false,
+  );
+  assert.equal(
+    isSyncV1Message({
+      ...envelope,
+      results: [{ ...refusal, details: { evidence_count: -1 } }],
+    }),
+    false,
+  );
+  const conflict = {
+    conflict_id: ids.snapshot,
+    conflict_kind: "delete_update",
+    status: "open",
+    entity_type: "note",
+    entity_id: ids.snapshot,
+    base_version: 1,
+    local_payload_hash: hash,
+    remote_version: 2,
+    remote_payload: {},
+    remote_payload_hash: hash,
+    remote_deleted_at: "2026-09-06T00:00:00Z",
+    resolution_options: ["keep_remote", "dismiss"],
+    created_at: "2026-09-06T00:00:00Z",
+  };
+  const result = {
+    operation_id: ids.snapshot,
+    status: "conflict",
+    retryable: false,
+    conflict,
+  };
+  assert.equal(isSyncV1Message({ ...envelope, results: [result] }), true);
+  assert.equal(
+    isSyncV1Message({
+      ...envelope,
+      results: [
+        { ...result, conflict: { ...conflict, remote_deleted_at: "invalid" } },
+      ],
+    }),
+    false,
+  );
+});
+
 test("fails closed for malformed and forward-unknown bootstrap messages", () => {
   for (const message of [
     bootstrap({ protocol_version: "sync-v2" }),

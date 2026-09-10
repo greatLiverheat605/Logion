@@ -27,6 +27,7 @@
     "test": "pnpm -r --if-present test && uv run --group dev pytest",
     "build": "pnpm -r --if-present build",
     "test:browser": "playwright test",
+    "test:sync-compat": "node scripts/check-sync-compatibility.mjs",
     "guard:context": "node scripts/check-dynamic-context.mjs",
     "agent:state:init": "node scripts/agent-state.mjs init",
     "agent:state:validate": "node scripts/agent-state.mjs validate",

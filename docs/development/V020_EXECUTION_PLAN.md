@@ -4,6 +4,7 @@
 > 协调基线：`08babebcd5a09861106c9b05accf32bd8f2ea01c`（`codex/v011-coordination`）。
 > V20-02 migration/tests 与 V20-04 default-off 合同门已完成；ORM/产品服务、生产启用、同步扩展和 Provider 配置仍受后续门禁约束。
 > 当前进度：见 [`V020_STATUS.md`](./V020_STATUS.md)。
+> 后续 FABLE 修复与演进计划：见 [`FABLE_PLAN_REGISTER.md`](./FABLE_PLAN_REGISTER.md)；其中 M0–M6 与本文件的架构门编号分别解释，不混用状态。
 > 当前所有权覆盖（2026-08-10）：下文出现的具体执行方名称只记录历史责任。后续任务统一由用户指定的
 > 主线执行方接手；专项设计执行方只产出隔离设计与原型，用户批准前不得修改正式前端。Git、Production、
 > 外部副作用和敏感能力权限必须由用户逐项明确授予，不能从模型品牌或历史角色推断。

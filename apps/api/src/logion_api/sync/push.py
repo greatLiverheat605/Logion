@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from datetime import datetime
 from typing import Any, Literal, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -73,6 +74,7 @@ from logion_api.memory.schemas import (
     TopicDependencyCreateRequest,
 )
 from logion_api.memory.service import MemoryService
+from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.planning.schemas import GoalPlanCreateRequest
 from logion_api.planning.service import PlanningService
 from logion_api.research.models import (
@@ -100,7 +102,8 @@ from logion_api.self_study.schemas import (
     TrackCreateRequest,
 )
 from logion_api.self_study.service import SelfStudyService
-from logion_api.sync.models import ProcessedSyncOperation, SyncConflictRecord
+from logion_api.sync.deletion import DELETE_MODELS, deletion_scope, require_unreferenced
+from logion_api.sync.models import ProcessedSyncOperation, SyncChange, SyncConflictRecord
 from logion_api.sync.schemas import (
     AppliedOperationResult,
     ConflictOperationResult,
@@ -204,6 +207,9 @@ class SyncPushService:
 
         register("workspace", ("space",), "create", self._create_space)
         register("planning", ("learning_goal",), "create", self._create_goal)
+        register("planning", ("learning_goal",), "delete", self._delete_goal)
+        register("execution", ("task",), "delete", self._delete_task)
+        register("content", ("note",), "delete", self._delete_note)
         register("execution", ("task",), "create", self._create_task)
         register("execution", ("task",), "update", self._transition_task)
         register("execution", ("study_session",), "create", self._start_session)
@@ -351,6 +357,42 @@ class SyncPushService:
                 server_version=replay.server_version,
                 sequence=replay.sequence,
             )
+        root_type = (
+            "note" if operation.entity_type == "note_document_update" else operation.entity_type
+        )
+        if (
+            operation.operation_type == "update"
+            and root_type in DELETE_MODELS
+            and operation.conflict_resolution is None
+        ):
+            remote = await db.get(DELETE_MODELS[root_type], operation.entity_id)
+            if (
+                remote is not None
+                and remote.workspace_id == request.workspace_id
+                and remote.deleted_at is not None
+            ):
+                try:
+                    await deletion_scope(
+                        db,
+                        self._workspaces,
+                        context,
+                        request.workspace_id,
+                        cast(Any, root_type),
+                        operation.entity_id,
+                        request_id,
+                    )
+                except APIError:
+                    return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+                return await self._api_error_result(
+                    db,
+                    request,
+                    operation,
+                    APIError(
+                        code="RESOURCE_VERSION_CONFLICT",
+                        message="The entity was deleted.",
+                        status_code=409,
+                    ),
+                )
         resolution_record, resolution_error = await self._validate_conflict_resolution(
             db, request, operation
         )
@@ -361,12 +403,28 @@ class SyncPushService:
             and operation.conflict_resolution is not None
             and operation.conflict_resolution.resolution == "keep_remote"
         ):
+            deleted_at = None
+            if operation.entity_type in DELETE_MODELS:
+                try:
+                    scope = await deletion_scope(
+                        db,
+                        self._workspaces,
+                        context,
+                        request.workspace_id,
+                        cast(Any, operation.entity_type),
+                        operation.entity_id,
+                        request_id,
+                    )
+                    deleted_at = scope.root.deleted_at
+                except APIError:
+                    return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
             return await self._append_entity(
                 db,
                 request.workspace_id,
                 identity,
                 resolution_record.remote_version,
                 operation.payload,
+                deleted_at=deleted_at,
             )
         handler = self._handler_for(operation.entity_type, operation.operation_type)
         if handler is not None:
@@ -379,6 +437,181 @@ class SyncPushService:
                 request_id=request_id,
             )
         return self._rejected(operation.operation_id, "SYNC_OPERATION_UNSUPPORTED")
+
+    async def _delete_goal(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        return await self._delete_entity(
+            db, context, request, operation, identity, request_id=request_id
+        )
+
+    async def _delete_task(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        return await self._delete_entity(
+            db, context, request, operation, identity, request_id=request_id
+        )
+
+    async def _delete_note(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        return await self._delete_entity(
+            db, context, request, operation, identity, request_id=request_id
+        )
+
+    async def _delete_entity(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        if operation.payload:
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            async with db.begin_nested():
+                scope = await deletion_scope(
+                    db,
+                    self._workspaces,
+                    context,
+                    request.workspace_id,
+                    cast(Any, operation.entity_type),
+                    operation.entity_id,
+                    request_id,
+                )
+                require_unreferenced(scope)
+                predecessors = list(
+                    await db.scalars(
+                        select(SyncChange)
+                        .join(
+                            ProcessedSyncOperation,
+                            ProcessedSyncOperation.operation_id == SyncChange.operation_id,
+                        )
+                        .where(
+                            ProcessedSyncOperation.operation_id.in_(operation.dependencies),
+                            ProcessedSyncOperation.workspace_id == request.workspace_id,
+                            ProcessedSyncOperation.device_id == request.device_id,
+                            ProcessedSyncOperation.entity_type.in_(
+                                [operation.entity_type, "note_document_update"]
+                                if operation.entity_type == "note"
+                                else [operation.entity_type]
+                            ),
+                            ProcessedSyncOperation.entity_id == operation.entity_id,
+                        )
+                    )
+                )
+                expected = max(
+                    [item.server_version for item in predecessors], default=operation.base_version
+                )
+                if (
+                    scope.root.deleted_at is not None
+                    or expected < 1
+                    or scope.root.version != expected
+                ):
+                    raise APIError(
+                        code="RESOURCE_VERSION_CONFLICT",
+                        message="Deletion base changed.",
+                        status_code=409,
+                    )
+                now = utc_now()
+                for child_type, child in scope.deleted:
+                    if child.deleted_at is not None:
+                        continue
+                    child.deleted_at = now
+                    child.updated_at = now
+                    child.updated_by = context.user.id
+                    child.version += 1
+                    if isinstance(child, StudySession) and child.status == "active":
+                        child.status = "abandoned"
+                        child.ended_at = now
+                    if child is not scope.root:
+                        await self._append_derived(
+                            db,
+                            request.workspace_id,
+                            identity,
+                            suffix=f"delete:{child_type}:{child.id}",
+                            entity_type=child_type,
+                            entity_id=child.id,
+                            operation_type="delete",
+                            version=child.version,
+                            payload={},
+                            deleted_at=now,
+                        )
+                for child_type, child in scope.detached:
+                    child.task_id = None
+                    child.version += 1
+                    child.updated_at = now
+                    child.updated_by = context.user.id
+                    projection = (
+                        note_payload(child) if isinstance(child, Note) else resource_payload(child)
+                    )
+                    await self._append_derived(
+                        db,
+                        request.workspace_id,
+                        identity,
+                        suffix=f"detach:{child_type}:{child.id}",
+                        entity_type=child_type,
+                        entity_id=child.id,
+                        operation_type="update",
+                        version=child.version,
+                        payload=projection,
+                    )
+                result = await self._append_entity(
+                    db, request.workspace_id, identity, scope.root.version, {}, deleted_at=now
+                )
+                db.add(
+                    new_audit_event(
+                        request_id=request_id,
+                        event_type="sync.entity_deleted",
+                        result="success",
+                        actor_id=context.user.id,
+                        workspace_id=request.workspace_id,
+                        target_type=operation.entity_type,
+                        target_id=operation.entity_id,
+                        metadata=scope.impact,
+                    )
+                )
+                result.impact = scope.impact
+                return result
+        except APIError as exc:
+            if exc.code == "SYNC_DELETE_BLOCKED_BY_REFERENCE":
+                return FailedOperationResult(
+                    operation_id=operation.operation_id,
+                    status="rejected",
+                    retryable=False,
+                    error_code=exc.code,
+                    details=cast(dict[str, int], exc.details),
+                )
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
 
     async def _create_space(
         self,
@@ -771,6 +1004,8 @@ class SyncPushService:
         identity: SyncOperationIdentity,
         version: int,
         payload: dict[str, object],
+        *,
+        deleted_at: datetime | None = None,
     ) -> AppliedOperationResult:
         state = await self._ledger.lock_workspace_state(db, workspace_id)
         durable = await self._ledger.append_applied(
@@ -781,6 +1016,8 @@ class SyncPushService:
                 server_version=version,
                 payload=payload,
                 payload_hash=canonical_hash(payload),
+                tombstone=deleted_at is not None,
+                deleted_at=deleted_at,
             ),
         )
         return AppliedOperationResult(
@@ -802,6 +1039,7 @@ class SyncPushService:
         operation_type: Literal["create", "update", "delete", "restore"],
         version: int,
         payload: dict[str, object],
+        deleted_at: datetime | None = None,
     ) -> None:
         operation_id = uuid5(
             NAMESPACE_URL,
@@ -836,6 +1074,8 @@ class SyncPushService:
                 server_version=version,
                 payload=payload,
                 payload_hash=canonical_hash(payload),
+                tombstone=deleted_at is not None,
+                deleted_at=deleted_at,
             ),
         )
 
@@ -2411,12 +2651,19 @@ class SyncPushService:
         )
         if record is None:
             return None, "SYNC_CONFLICT_NOT_FOUND"
+        remote_deleted_at = None
+        if operation.entity_type in DELETE_MODELS:
+            remote = await db.get(DELETE_MODELS[operation.entity_type], operation.entity_id)
+            if remote is not None and remote.workspace_id == request.workspace_id:
+                remote_deleted_at = remote.deleted_at
+        expected_operation = "delete" if remote_deleted_at is not None else "update"
         if (
             record.status != "open"
             or record.source_device_id != request.device_id
             or record.entity_type != operation.entity_type
             or record.entity_id != operation.entity_id
-            or operation.operation_type != "update"
+            or operation.operation_type != expected_operation
+            or (remote_deleted_at is not None and resolution.resolution != "keep_remote")
             or resolution.expected_remote_version != record.remote_version
             or operation.base_version != record.remote_version
             or resolution.resolution not in record.resolution_options
@@ -2505,6 +2752,8 @@ class SyncPushService:
         entity_id: UUID,
     ) -> int | None:
         models: dict[str, Any] = {
+            "learning_goal": LearningGoal,
+            "note_document_update": Note,
             "task": Task,
             "study_session": StudySession,
             "note": Note,
@@ -2564,7 +2813,8 @@ class SyncPushService:
             )
             return self._rejected(operation.operation_id, code)
         remote: (
-            Task
+            LearningGoal
+            | Task
             | StudySession
             | Note
             | Resource
@@ -2600,11 +2850,13 @@ class SyncPushService:
             | ReportSnapshot
             | None
         ) = None
-        if operation.entity_type == "task":
+        if operation.entity_type == "learning_goal":
+            remote = await db.get(LearningGoal, operation.entity_id)
+        elif operation.entity_type == "task":
             remote = await db.get(Task, operation.entity_id)
         elif operation.entity_type == "study_session":
             remote = await db.get(StudySession, operation.entity_id)
-        elif operation.entity_type == "note":
+        elif operation.entity_type in {"note", "note_document_update"}:
             remote = await db.get(Note, operation.entity_id)
         elif operation.entity_type == "resource":
             remote = await db.get(Resource, operation.entity_id)
@@ -2670,7 +2922,32 @@ class SyncPushService:
             remote = await db.get(ReportSnapshot, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
-        if isinstance(remote, Task):
+        remote_deleted_at = getattr(remote, "deleted_at", None)
+        if remote_deleted_at is not None:
+            payload = {}
+        elif isinstance(remote, LearningGoal):
+            plan = await db.scalar(select(LearningPlan).where(LearningPlan.goal_id == remote.id))
+            version = (
+                await db.scalar(
+                    select(PlanVersion)
+                    .where(PlanVersion.plan_id == plan.id)
+                    .order_by(PlanVersion.version_number.desc())
+                    .limit(1)
+                )
+                if plan
+                else None
+            )
+            if plan is None or version is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+            phases = list(
+                await db.scalars(
+                    select(PlanPhase)
+                    .where(PlanPhase.plan_version_id == version.id)
+                    .order_by(PlanPhase.position)
+                )
+            )
+            payload = goal_payload(remote, plan, version, phases)
+        elif isinstance(remote, Task):
             payload = task_payload(remote)
         elif isinstance(remote, StudySession):
             payload = session_payload(remote)
@@ -2727,7 +3004,10 @@ class SyncPushService:
         else:
             payload = resource_payload(remote)
         remote_payload_hash = canonical_hash(payload)
-        conflict_kind: Literal["content", "status"] = (
+        conflict_entity_type = (
+            "note" if operation.entity_type == "note_document_update" else operation.entity_type
+        )
+        conflict_kind: Literal["content", "status", "delete_update"] = (
             "content"
             if operation.entity_type in {"note", "resource", "evidence", "topic"}
             else "status"
@@ -2737,6 +3017,9 @@ class SyncPushService:
             if operation.entity_type in {"note", "resource"}
             else ["keep_remote", "dismiss"]
         )
+        if operation.operation_type == "delete" or remote_deleted_at is not None:
+            conflict_kind = "delete_update"
+            resolution_options = ["keep_remote", "dismiss"]
         conflict_id = uuid5(
             NAMESPACE_URL,
             f"logion:sync-conflict:{request.workspace_id}:{operation.operation_id}:"
@@ -2749,7 +3032,7 @@ class SyncPushService:
                 workspace_id=request.workspace_id,
                 original_operation_id=operation.operation_id,
                 source_device_id=request.device_id,
-                entity_type=operation.entity_type,
+                entity_type=conflict_entity_type,
                 entity_id=operation.entity_id,
                 conflict_kind=conflict_kind,
                 base_version=operation.base_version,
@@ -2766,7 +3049,7 @@ class SyncPushService:
             conflict=SyncConflict(
                 conflict_id=conflict_id,
                 conflict_kind=conflict_kind,
-                entity_type=operation.entity_type,
+                entity_type=conflict_entity_type,
                 entity_id=operation.entity_id,
                 base_version=operation.base_version,
                 local_payload_hash=operation.payload_hash,
@@ -2775,6 +3058,7 @@ class SyncPushService:
                 remote_payload_hash=remote_payload_hash,
                 resolution_options=resolution_options,
                 created_at=utc_now(),
+                remote_deleted_at=remote_deleted_at,
             ),
         )
 
@@ -2786,6 +3070,32 @@ class SyncPushService:
             retryable=False,
             error_code=code,
         )
+
+
+def goal_payload(
+    goal: LearningGoal, plan: LearningPlan, version: PlanVersion, phases: list[PlanPhase]
+) -> dict[str, object]:
+    return {
+        "space_id": str(goal.space_id),
+        "plan_id": str(plan.id),
+        "plan_version_id": str(version.id),
+        "title": goal.title,
+        "description": goal.description,
+        "desired_outcome": goal.desired_outcome,
+        "weekly_minutes": goal.weekly_minutes,
+        "target_date": goal.target_date.isoformat() if goal.target_date else None,
+        "phases": [
+            {
+                "id": str(phase.id),
+                "title": phase.title,
+                "description": phase.description,
+                "position": phase.position,
+                "estimated_minutes": phase.estimated_minutes,
+                "acceptance_criteria": phase.acceptance_criteria,
+            }
+            for phase in phases
+        ],
+    }
 
 
 def task_payload(task: Task) -> dict[str, object]:

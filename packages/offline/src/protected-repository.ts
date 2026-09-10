@@ -21,6 +21,9 @@ export class ProtectedOfflineRepository {
   async commitMutation(
     input: ProtectedMutationInput,
   ): Promise<MutationCommitResult> {
+    if (input.operation_type === "delete") {
+      return this.repository.commitMutation(input);
+    }
     const payloadHash = await hashPayload(input.payload);
     const protectedInput = {
       ...input,

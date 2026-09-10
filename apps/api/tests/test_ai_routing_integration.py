@@ -144,6 +144,42 @@ async def test_ai_routes_enforce_budget_order_capability_and_tenant_boundaries()
                 )
                 assert updated.status_code == 200, updated.text
 
+            models_url = f"/api/v1/workspaces/{workspace_id}/ai/models"
+            external_models_url = f"/api/v1/workspaces/{external_workspace_id}/ai/models"
+            model_update = {
+                "expected_version": 2,
+                "display_name": "Unauthorized change",
+                "enabled": False,
+                "supports_json": False,
+                "supports_stream": False,
+                "context_window": 1,
+                "pricing_currency": "USD",
+                "input_cost_per_million_minor": 0,
+                "output_cost_per_million_minor": 0,
+            }
+            model_create = {
+                "id": str(uuid4()),
+                "provider_id": str(provider_id),
+                "provider_model_id": "unauthorized-model",
+                "display_name": "Unauthorized model",
+            }
+            models_before = (await owner.get(models_url)).json()
+            external_models_before = (await viewer.get(external_models_url)).json()
+            for client, url, expected_status in (
+                (viewer, models_url, 403),
+                (owner, external_models_url, 404),
+                (viewer, external_models_url, 404),
+            ):
+                headers = {"X-CSRF-Token": client.cookies["logion_csrf"]}
+                denied_update = await client.put(
+                    f"{url}/{model_ids[0]}", headers=headers, json=model_update
+                )
+                assert denied_update.status_code == expected_status, denied_update.text
+                denied_create = await client.post(url, headers=headers, json=model_create)
+                assert denied_create.status_code == expected_status, denied_create.text
+            assert (await owner.get(models_url)).json() == models_before
+            assert (await viewer.get(external_models_url)).json() == external_models_before
+
             budget_url = f"/api/v1/workspaces/{workspace_id}/ai/budget"
             assert (await owner.put(budget_url, json={})).status_code == 403
             budget = await owner.put(
@@ -371,5 +407,35 @@ async def test_ai_routes_enforce_budget_order_capability_and_tenant_boundaries()
                 json={**preview_payload, "estimated_input_tokens": 20000},
             )
             assert over_budget.status_code == 422
+
+            members = (await owner.get(f"/api/v1/workspaces/{workspace_id}/members")).json()
+            membership = next(row for row in members["members"] if row["user_id"] == str(viewer_id))
+            membership_url = f"/api/v1/workspaces/{workspace_id}/members/{membership['id']}/update"
+            promoted = await owner.post(
+                membership_url,
+                headers=csrf,
+                json={"expected_version": membership["version"], "role": "admin"},
+            )
+            assert promoted.status_code == 200, promoted.text
+            assert (await viewer.get(models_url)).status_code == 200
+            revoked = await owner.post(
+                membership_url,
+                headers=csrf,
+                json={"expected_version": promoted.json()["version"], "status": "revoked"},
+            )
+            assert revoked.status_code == 200, revoked.text
+            models_before_revoked_requests = (await owner.get(models_url)).json()
+            viewer_csrf = {"X-CSRF-Token": viewer.cookies["logion_csrf"]}
+            assert (await viewer.get(models_url)).status_code == 404
+            assert (
+                await viewer.post(models_url, headers=viewer_csrf, json=model_create)
+            ).status_code == 404
+            assert (
+                await viewer.put(
+                    f"{models_url}/{model_ids[0]}", headers=viewer_csrf, json=model_update
+                )
+            ).status_code == 404
+            assert (await owner.get(models_url)).json() == models_before_revoked_requests
+            assert (await viewer.get(external_models_url)).json() == external_models_before
     finally:
         app.dependency_overrides.pop(get_ai_discovery_adapter, None)

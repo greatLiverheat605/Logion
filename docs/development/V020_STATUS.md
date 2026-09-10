@@ -863,3 +863,757 @@ feature-off、孤儿扫描与引用闭包演练；首个正式写入后只允许
 - Product Owner 已批准进入 I2 任务包准备；任务包为 `docs/coordination/mainline-handoff/09_WORKBENCH_V1_I2_CONSTRUCTION_TASK_PACKET.md`。
 - I2 冻结研究证据实验台、考试覆盖指挥台和领域集成回归三条线；基线为 `6e448ac01dc78b94f600658f2574a51cce1cca64`，正式代码施工尚未开始。
 - I2 仍禁止 API、contracts、数据库、迁移、权限、SessionBoundary、生产配置和敏感 Feature Flag 改动；每轮施工必须独立对抗复审。
+
+## v0.2.1 T-00 本地实现断点（2026-09-05）
+
+- T-00 执行分支为 `dev/T-00-expose-build-sha`，本地基准、`main` 与缓存的 `origin/main` 均为 `37e2e005d5594da31daade87d67a4ea183283b06`。`git fetch origin` 因 GitHub SSH 公钥认证失败而未取得远端更新，因此没有把缓存引用冒充最新远端观察。
+- Web `/health` 已改为在请求期读取 `LOGION_VERSION`，缺失时返回 `unknown`；Compose 已向 Web 服务传入该变量；相邻 Vitest 覆盖 40 位 SHA、缺失变量和 `no-store`。未修改 Nginx、API、Worker、Dockerfile、release workflow 或生产 runbook。
+- 已观察通过定向 Vitest、Web lint/typecheck、root lint、root build、`pnpm contracts:check`、Compose 配置校验、`git diff --check`、Next standalone 运行时 SHA smoke，以及完整 `pnpm test`：Python `550 passed, 77 deselected`，Web `79 files / 292 tests`，offline `55`，contracts `12`，mobile `4`。
+- `pnpm ci:fast` 未记为通过：Prettier 会扫描 17 个既有未跟踪 Markdown 文件并失败；root mypy 仍在既有 Worker 邮件模块的第三方包 typing metadata 处失败。T-00 未修改这些无关文件。
+- 2026-09-05 再次观察公网 `https://logion.work/health` 为 HTTP 200、`Cache-Control: no-store`，但版本仍是 `0.1.0`。生产 API readiness version、四个已部署镜像 digest 与候选 manifest 对照均为 `not_run`，原因是当前会话没有获授权的生产连接上下文；因此未判定线上是 RC7、RC8 或其他版本。
+- 本地 Run `run-v021-t00-expose-build-sha` 保持未验收并阻塞于生产证据。没有 commit、push、PR、deploy、流量切换或生产能力变更。
+
+## v0.2.1 T-01 本地实现收口（2026-09-05）
+
+- T-01 执行分支为 `dev/T-01-attachment-upload-truthful`，不可变基线为 T-00 本地提交
+  `8a3ee2e01ea884858a7363ba19571d0db2c1ae30`。T-00 的本地实现提交已存在，但生产 build identity
+  仍未验收；本节不把 T-00 写成生产通过。
+- 附件上传调用方现按 `uploadPending()` 的实际返回值区分 `null`、`verified` 与 `failed`；只有
+  `verified` 会显示“完成服务器哈希验证”。成功和失败反馈均使用实际处理结果的文件名，失败行保留在
+  本地队列中。Web transport 仅在当前上传生命周期内保留最后一个真实 `LogionApiError`，从而显示服务端
+  `code` 与 `requestId`；未修改 IndexedDB schema、offline wire、附件删除或生产开关。
+- 新增组件回归穿过真实 `OfflineSyncCenter`、`AttachmentQueueRepository` 与
+  `ApiAttachmentUploadTransport`：失败用例断言文件名、`KNOWLEDGE_ATTACHMENT_INGEST_DISABLED`、
+  请求编号、重试入口及“完成服务器哈希验证”缺席；成功用例断言文件名与 verified 文案；另覆盖队列竞态
+  返回 `null`。定向 Web 为 `2 files / 4 tests`，offline resilience 为 `1 file / 9 tests`；完整 Web
+  `80 files / 297 tests`、完整 offline `7 files / 55 tests`、根级测试（Python `550 passed, 77 deselected`、
+  contracts `12`、mobile `4`）、Web lint/typecheck/build、root build、`pnpm contracts:check`、Prettier、
+  Ruff、ESLint、`git diff --check` 与状态模型 `118` 项均已实际通过。
+- 浏览器清单 5.4 已在隔离本机栈复测：真实 PostgreSQL/Redis/API/Web 路径的附件 init 返回 HTTP `404` /
+  `KNOWLEDGE_ATTACHMENT_INGEST_DISABLED`，页面显示文件名、错误码和动态 request ID，失败行仍可重试，
+  且整页不含验证成功文案；随后以浏览器级 API route mock 依次返回 init/content/complete verified，只有此时
+  出现带文件名的验证成功文案。后半段仅证明真实浏览器 UI 与 transport 合同，不冒充 ClamAV/scanner 的
+  服务端成功验收。临时服务、容器和测试数据已清理。
+- 已复核 `packages/offline/src` 的 15 个 `catch (`：`bootstrap.ts:196/218/258`、
+  `database.ts:108`、`hashing.ts:65/81`、`protected-repository.ts:39`、`repository.ts:184/244`、
+  `resilience.ts:241/399`、`sync-client.ts:78`、`validation.ts:43`、`vault.ts:114`、
+  `yjs-notes.ts:291`。其中 14 处重新抛出，只有 `resilience.ts:399` 按设计写入 `failed` 后返回 entry；
+  另有不计入这 15 处的 `yjs-notes.ts:73 catch {}`，同样立即抛错。该清单必须原样进入后续 PR 描述。
+- `uv sync --all-packages --group dev --frozen` 已通过；`pnpm ci:fast` 仍在与 T-01 无关的既有 Worker
+  mypy 问题处失败：`email_delivery.py` 无法取得 `alibabacloud_credentials.client/models` 的类型实现，
+  并报告两个 `unused-ignore`。该聚合门没有写成通过，也未越界修改邮件模块。
+- 当前只有上述 Web 实现、组件测试和本状态文档差异；没有 commit、push、PR、merge、deploy 或生产能力变更。
+
+## v0.2.1 T-02 DNS 错误分类待审查（2026-09-05）
+
+- 用户确认 T-01 已通过 OPUS5 审查并提交为 `6547cf20e1740387f5d66921563c7f028883a40f`。
+  T-02 从该不可变基线创建 `dev/T-02-dns-error-split`，当前代码完成并交回用户审查。
+- `resolve_public_addresses` 新增两类异常：解析异常、非法解析结果及空列表属于
+  `ProviderDnsUnresolvable`；含任一非公网地址仍属于 `ProviderDnsNotPublic`。原有
+  `any(not address.is_global ...)` 公网校验、固定目标 IP、Host/SNI、禁止重定向与 `trust_env=False`
+  均保持不变，没有将无 DNS 出网或 SSRF 拦截推断成线上根因。
+- discovery 与 generation 两个 adapter 均将解析失败映射为 `AI_PROVIDER_DNS_UNRESOLVABLE` /
+  HTTP 503 / retryable；非公网结果仍为 `AI_PROVIDER_DNS_BLOCKED` / HTTP 422 / 不可重试；
+  无 hostname 的 URL 为 `AI_PROVIDER_URL_BLOCKED` / HTTP 422 / 不可重试。
+- DNS details 只包含 `hostname` 与 `resolved_count`，非公网异常仅携带数量。IP 字面量、带尾点 IP
+  或嵌入 IPv4 的 hostname 返回 `null`，不回显任何解析到的地址或原始 resolver 异常。
+  新增共享参数化测试覆盖两个 adapter、IPv4/IPv6、混合结果、解析异常/空值、取消及 URL 错误；
+  断言 details 序列化后不匹配 IPv4/IPv6 正则，并验证实际 HTTP 错误响应及失败前未创建 HTTP transport。
+- Provider 即时反馈显示可辨因文案、错误码和请求编号；旧 `DNS_BLOCKED` 缺失 details 时使用中性提示。
+  持久化健康状态没有 DNS details，因此同样使用中性提示，刷新后不会再次断言非公网原因。
+- 已实际通过：后端定向 `82` 项、完整 Python `603 passed / 77 deselected`、AI Workbench `14` 项、
+  完整 Web `80 files / 303 tests`、API mypy `174` 个文件、Web lint/typecheck、root production build、
+  `pnpm contracts:check`（零漂移）。
+- 浏览器在生产构建的 `1440px` 和 `375px` 下分别通过解析失败、非公网阻断、旧码无 details 共 `6` 个场景；
+  核对即时反馈、请求编号、无成功文案和刷新后的健康文案。认证、Provider 配置和 DNS 响应均为明确的
+  browser route mock，不作为真实 Provider 或生产 DNS 证据。临时浏览器服务已停止。
+- 配置链路核对：现有 Provider API 响应公开 `base_url` 和 `credential_configured`，不公开密钥；
+  `AIProviderService.discover_models` 将存储的 `provider.base_url` 传给 adapter。
+  步骤 5 的真实配置只读核对已尝试，但线上 Provider 页面显示“需要登录”，当前无有效浏览器会话，
+  实际存储的 `base_url` 核对为 **blocked**，未读取或解密凭据。
+- 步骤 4 运维为 **blocked**：线上版本仍未知，没有容器执行上下文，未验证 resolver 配置、出站策略、
+  DNS 出网、代理需求或真实 discover-models 200；不能据此认定生产无出网。
+- `pnpm ci:fast` 已实际执行：context guard、状态模型 `118` 项、格式、lint、Ruff、TypeScript 均通过；
+  root mypy 仍在未改动的 Worker `email_delivery.py:13/16` 处报告
+  `alibabacloud_credentials.client/models` 的两个 `import-not-found` 和两个 `unused-ignore`。
+  聚合门保持失败，未修改无关邮件模块或豁免该门禁。
+- AI 规划文档保持未跟踪且不纳入交付；本次没有 stage、commit、push、PR、merge 或部署。
+- 当前本地 Run 为 `run-v021-t02-dns-error-split`，待审查任务 `task-t02-review` 为 pending；
+  T-01 Run 保留历史完成与门禁记录。两个 Run 均通过 validator，未提前标记 T-02 accepted。
+
+## T-03 方案 C 实施批准（2026-09-05）
+
+- 用户确认步骤 0 浏览器复核已通过审查，并批准方案 C：修复 F1-F4、引入 Sonner 瞬时反馈、
+  保留七个模块的 inline 状态。实施基线为 `018e8a229252b702c33840d8f74bdd1d7d7b250b`，
+  独占分支 `dev/T-03-feedback-visibility`。本地提交已获交接授权，不推送、不部署。
+- 状态：实施与验证中，尚未验收。生产身份、DNS 出网与真实读屏播报不作为本轮通过项；
+  原有默认关闭开关、CSP、认证、同步协议与 AI 安全边界保持不变。
+
+## T-03 方案 C 实施待审查（2026-09-05）
+
+- F1-F4 已修复；七模块通过统一 `feedback` API 调用 Sonner，保留 inline StatusLine。
+  错误手动关闭、成功 3 秒；移动长错误码换行、44px 关闭按钮、ARIA live 区域均已验证。
+- Sonner 固定 `2.0.8`，采用仓库已有 pnpm patch 模式关闭自动 style 注入，静态导入官方 CSS；
+  生产 CSP 未放宽。依赖评估、修复语义、测试与真实/模拟边界见
+  [`V021_T03_FEEDBACK_REVIEW.md`](./V021_T03_FEEDBACK_REVIEW.md)。
+- 最新 Web 全量 `83 files / 321 tests`、lint、typecheck、production build 均通过。
+  七模块矩阵补强成败语义与 inline 一致性断言后 `28` 场景通过；此前复用浏览器资料的运行已作废归档。
+  持久 Playwright 三档视口 `12` 项通过，
+  覆盖 F1-F4、320×568 无横向滚动和主操作不被遮挡。另补 320×568 深色 Run 失败场景通过。
+- T-01 未回归：真实默认关闭附件 404 可见具体错误码和请求编号，且不含验证成功文案；
+  verified 成功使用明确标注的 browser route mock，不作为 scanner 验收。
+- `pnpm ci:fast` 仍在既有 Worker `email_delivery.py:13/16` 的第三方依赖 typing 处失败，
+  与 T-02 状态一致；补齐锁定 Python 环境后仍为相同 4 个错误。未改无关 Worker、未豁免聚合门。
+- NVDA/VoiceOver 实际播报按照最新交接留给回归验收，生产身份与 DNS 出网继续 blocked。
+  代码已供审查；因聚合门失败，本次未 stage、commit、push、merge、PR 或 deploy。
+  AI 规划文档保持未跟踪，浏览器生成结果不纳入候选差异。
+- 最后一处 Run 提交中取消禁用已通过全量 Web 和生产构建复验，并补跑 Run 四场景及深色 320px。
+  本地 Run `run-v021-t03-feedback-visibility` 已验证，owner review 为 pending；旧 T-02 事件保留。
+  本机隔离预览暂留供审查，无推理 Worker，不作为生产环境。
+
+## T-05 ADR 草案与外链部分实施（2026-09-06）
+
+- 当前分支 `dev/T-05-entity-deletion`，基线为
+  `29a2ca2fe74a4e546269ec599e90f64ea18845c3`。T-04 工作区改动保留，未混入 T-05 交付。
+- ADR-0031 已先行撰写，状态 Proposed。Resource 不存在 `note_id`，Evidence 没有 Note
+  正文快照；已请求 owner 确认级联及保留语义，删除实现依任务书 §7 保持 **blocked**。
+- 已独立实现 Note HTTP/HTTPS 外链列表，保留纯文本预览，不解释 HTML/Markdown 链接，
+  拒绝危险协议、畸形 URL、凭据和反斜杠，具备新窗口安全属性、外链提示和长链接换行。
+- 已实际通过：Web 全量 `84 files / 336 tests`、lint、typecheck、production build；
+  新增真实栈 Playwright `1 passed`，覆盖 1440/375/320px，桌面和最窄截图已查看。
+- 后端 delete、tombstone 修复、ProtectedOfflineRepository delete、三个 UI 删除入口
+  均未实施，相关删除/冲突/权限及完整浏览器回归未运行，T-05 状态为 partial。
+  详情见 [`V021_T05_ENTITY_DELETION_REVIEW.md`](./V021_T05_ENTITY_DELETION_REVIEW.md)。
+- 无 stage、commit、push、merge 或部署；AI 规划文档仍未跟踪。当前等待数据寿命决策，
+  不将 Proposed ADR 当作批准，不将 Note 外链测试通过当作删除功能验收。
+
+## T-05 方案 3 实施（2026-09-06，已由 OPUS5 审查）
+
+- Owner 已批准拒绝删除被引用的 Note，OPUS5 将 ADR-0031 定稿为 Accepted；前述
+  Proposed/blocked 段落仅保留为历史。本轮继续使用 `dev/T-05-entity-deletion` 和
+  `29a2ca2fe74a4e546269ec599e90f64ea18845c3`，无新增模型层阻塞。
+- Goal/Task/Note 软删除、事务级联、两类活跃引用拒绝、空 tombstone 权限下发、
+  Vault 删除同步与人工冲突处理、三个 UI 删除入口已实施。预检显示引用计数并禁用确认，
+  服务端同事务再次检查，拒绝时实体/ledger/audit/序号均不变化。
+- 后端删除 32 项、相关同步集成 39 项、API 默认非集成 532 项、Web 347 项、offline
+  68 项与覆盖率、contracts 13 项通过；Ruff、Web/offline lint/typecheck、contracts typecheck、
+  独立候选 production build 和四个合同生成制品字节级零漂移均通过。
+- API + Worker 完整 mypy 本次 181 个文件通过，不沿用旧四错误结论。全仓 `ci:fast`
+  未执行，不声明聚合门或全部数据库集成通过。
+- 最终真实栈浏览器 Planning/Records/Today 为 9 passed；三个删除、引用阻塞、断网
+  预检、预检后新增引用的拒绝可见性、安全外链及原有流程均通过；1440/375/320px、
+  最窄深色和 320x568 阻塞截图留在临时目录。修正了删除入口被底部导航遮挡及被动刷新覆盖反馈。
+- 详情见 `V021_T05_ENTITY_DELETION_REVIEW.md`。T-04 三文件、既有报告与 AI 文档保留，
+  不属 T-05 候选；无 stage、commit、push、merge 或部署。待 OPUS5 审查后由 owner 决定提交。
+
+## T-05 审查修复（2026-09-06，已复审并提交）
+
+- OPUS5 已确认核心实现正确，owner 授权仅修复 Push 可选字段兼容性、更正报告和追加
+  ADR 待办。基线与分支不变，仍禁止 stage、commit、push、部署；此前 39 项集成和四文件
+  生成一致性只是历史收窄检查，不能作为完整口径或合同干净树门禁通过的证据。
+- `impact`/`details` 仅在值为 None 时通过字段级 `exclude_if` 省略；删除计数保留。
+  未给 Push/Pull/bootstrap 路由启用 `exclude_none`，保留冲突与下行 tombstone 的显式空值。
+  原 memory 测试先复现失败、后原样通过；新增/补强相邻单测及 HTTP 断言。
+- 实际执行根级 `pnpm typecheck && pnpm lint && pnpm test && pnpm build` 全部通过：
+  mypy 181 文件；Web 347、offline 68（branch 85.52%）、contracts 13、mobile 4；
+  Python 606 passed / 109 deselected。定向序列化 7 passed，memory/Push/删除集成 34 passed。
+- 完整 `-m integration apps/api/tests -q -k "sync"` 收集到 105 项；`-k` 也匹配 asyncio
+  marker，实际包含 AI routing。复用旧库首轮为 103 passed / 2 failed（AI routing 调用数为 0、
+  Audit 固定主键重复）；不删除旧数据，另建干净测试库并成功向前迁移后重跑为
+  105 passed / 535 deselected。没有修改 AI routing、Audit 或 memory 测试来消除失败。
+- 重跑 `contracts:generate` 后六个契约文件 MD5 全部一致；实际运行干净树脚本仍因
+  未提交的有意合同差异退出 1，不声称该门通过，也不通过提交规避本轮禁止 Git 写入的约束。
+- ADR-0031 保持 Accepted，追加 operation-id Vault 槽位的安全 GC 待办，本轮不实现。
+  本轮没有重跑浏览器、Worker 数据库集成、迁移往返、真机或生产检查，也未执行完整
+  `ci:fast`；详细实跑/失败/历史与未运行边界见 T-05 实施报告。无缺少凭据或模型层阻塞。
+
+## T-05 已提交（2026-09-06，OPUS5 复核）
+
+- 提交 `dd664fc feat(sync): refuse deletion of referenced Notes (T-05)`，分支
+  `dev/T-05-entity-deletion`，46 文件 +4378/-265，**未 push**。上面各段的
+  "禁止 commit""干净树门禁退出 1""未执行 ci:fast" 均为当时事实，现仅作历史保留。
+- OPUS5 复核发现 GPT 门禁链 `typecheck && lint && test && build` 漏掉 `format:check`：
+  `sync-v1.schema.json` 三处 T-05 新增行超 80 字符。已确认该文件是手写输入而非生成物，
+  `prettier --write` 后四个生成制品 MD5 不变，修复以 amend 并入同一提交。
+- 首次在提交态、且 T-04 三文件 stash 移出的隔离树上实跑完整 `pnpm ci:fast`，八门全过：
+  `guard:context`、`agent:state:check`、`format:check`、`lint`、`typecheck`（mypy 181 文件）、
+  `test`（mobile 4、contracts 13、offline 68、Web 347、Python 606 passed / 109 deselected）、
+  `build`、`contracts:check`。干净树门禁提交后退出 0，印证其为纯 `git diff --exit-code`。
+- 遗留未归属缺陷（非 T-05 引入，已逐一验证为既有）：`test_ai_routing_integration.py`
+  调用计数、`test_audit_integration.py` 固定主键在复用库上冲突、`guard:context` 与
+  `pnpm test` 重新生成 `packages/offline/coverage` 的次序陷阱（连续两次 ci:fast 必失败）。
+- 仍未执行：浏览器回归未在序列化修复后重跑、Worker 数据库集成、迁移往返、真机。
+  ADR-0031 的 Vault 槽位 GC 按设计延后。T-04 三文件保留在工作区，不属本提交。
+
+## T-06 状态与文案一致性（2026-09-06，待审查）
+
+- Owner 批准五项直接修复、StudySession 先复现后修复、Mastery 只确认不派生百分比。
+  基于 `64b6d4bdc4a7890cfb2a2304acb138ba71580ee3` 创建
+  `dev/T-06-status-copy-consistency`，HEAD 不变；没有 stage、commit、push、PR 或部署。
+- 判题三态、导出 KB 档与真实 ZIP 文案、可见时条件轮询和安全 next 回跳已实施。
+  48 项定向测试通过；完整 `pnpm test` 重跑 Web 392、offline 68、contracts 13、mobile 4、
+  Python 606 passed / 109 deselected，lint/typecheck（mypy 181 文件）/build/contracts:check 通过。
+- 实际运行 `pnpm ci:fast` 在第三门因既有 `sisyphus/PROGRESS.md` 格式报警退出 1，前两门通过；
+  后五门逐项另行实跑，不宣称聚合命令或八门全过。未修改其他所有者文件规避门禁。
+- 真实本地候选浏览器 1440/320px 的六个场景通过，已人工查看截图；早期测试定位器错误、
+  全量测试首轮失败和后续实跑结果均保留在 T-06 报告，旧浏览器 JSON 不用作证据。
+- StudySession 因生产未登录且未指定测试对象保持 blocked，没有认证后的复现或代码修复。
+  Mastery 不显示百分比，但当前没有渲染 suggested_reason；范围外的重复答题阶段保留问题另行上报。
+  T-04 三文件及原报告哈希不变。详情见 `V021_T06_STATUS_COPY_REVIEW.md`。
+
+## T-06 剩余工作（2026-09-06，部分完成）
+
+- 新基线 `821a9acc77f0a13b85b1b7a05b4b4ccf4fe64e8f`，沿用 T-06 分支。
+  所有者批准 Mastery 理由显示、StudySession 先复现后修复，以及两项完成后一次提交和 push。
+  上一节基线、授权和测试结果均保留为历史，不作为本轮证据。
+- Mastery Inspector 增加非空“建议依据”，两个 level 和百分比逻辑不变。
+  定向单测 10/10，通过新增 Chromium 1440/320px 两用例，有值/无值四图已检查。
+- 本轮完整 `pnpm ci:fast` 首次实跑退出 0：八门通过，Web 397、Python 606 passed /
+  109 deselected；最终收口证据见 `V021_T06_REMAINING_REVIEW.md`。
+- 线上已实际提交一次注册确认请求，但受控邮箱未收到邮件。未进入认证后流程，开始/结束
+  会话均为 0 次；状态是认证前提 blocked，不是“未能复现”，没有 StudySession 代码修改。
+- SSH push 仍失败；现有密钥被拒绝，CLI 凭据无效，官方设备登录未成功，等待所有者恢复授权。
+  两项完成条件未满足，没有新 commit、stage、merge 或部署。
+  T-04 三文件及既有浏览器 JSON 哈希不变；新 Run 保存新基线，旧 Run 和事件未改写。
+
+## T-06 StudySession 本地复现（2026-09-07，验收中）
+
+- 当前基线为已推送的 `14fd3eb2b81869ddf967cb32b9e9fe8e2d33f2bf`，远端分支已实查一致。
+  依照新交接搭建隔离完整本地栈，以合成账号登录 Web，普通在线开始/结束已复现
+  “1 分钟 · 未结束”，reload 后仍然存在；旧线上认证阻塞结论保留为历史。
+- 实际 Pull 与 Vault 解密数据均为 completed、版本 2、1 分钟、outcome 缺失，entity clean、
+  outbox 空。根因是 Today 读取模型把命令参数误当持久字段；现于读取投影按 status 派生
+  outcome，未修改显示兜底、服务端或同步合同。修复前两个新增回归失败，修复后 Today 11 项通过。
+- 完整验收与清理继续执行，详见 `V021_T06_STUDY_SESSION_REVIEW.md`。T-04 三文件不动，
+  本轮未 stage、commit、push 或部署；新 Run 记录当前基线，旧 Run 与事件不改写。
+
+## T-06 StudySession 本地验证完成（2026-09-07，待交接审查）
+
+- 本轮完整 `pnpm ci:fast` 退出 0，八门通过：Web 399、offline 68、contracts 13、mobile 4、
+  Python 606 passed / 109 deselected，mypy 181 文件。修复前两项回归为红，最终 Today 11 项通过。
+- 真实浏览器在线/离线两种终态共四条路径、重连、reload、同设备冷读取及独立设备 bootstrap
+  均通过。仓库 Today 测试 dev 模式因 Select 警告失败，原样在 production build 下重跑
+  1 passed；四档布局/axe/人工验收通过。失败记录和未运行边界见本轮专项报告。
+- 本轮隔离库的 5 个用户、5 个 Workspace、5 个 Space、6 个 Task、14 条会话已清理，相关
+  行数均为 0；独占 Redis 清空，临时凭据删除，保留空库本地测试栈。
+- T-04 三文件哈希不变且未暂存，原有状态文档字节前缀不变，其他既有改动保留。
+  无 stage、commit、push、merge 或部署。最终 diff 经独立只读复核无新增 actionable findings。
+
+## FABLE 计划归纳补齐（2026-09-07）
+
+- 用户授权“开始补齐”后，新增 [FABLE 计划总表](./FABLE_PLAN_REGISTER.md) 和
+  [58 项回归映射](./FABLE_REGRESSION_CHECKLIST.md)。归纳覆盖 T-00–T-07（含 T-01b/T-05a）、
+  12 条 ISSUE、M0–M6、O1–O11、N1–N10、视觉 U0–U6/G1/G2、12 份旧文档及不做项。
+- 本地规划分支的 `c00d500bef56a1114ff9fbc90208244043130f8f` 包含 FABLE 全部 5 份原文；
+  从中恢复当前工作树缺失的验收摘要、UI 优化、功能演进三份正文，另从 `6365e47` 恢复 OPUS5
+  规划审查。原文内容只规范 Markdown 排版；现有主线/开发两份计划不改。此前“缺原文”的判断
+  只适用于当时当前工作树检索，不再视为原始规划丢失。
+- 项目备份还找回 RC8 58 项清单及 12 份旧开发文档；回归映射不复制个人测试账号，保留
+  全部原 ID，并标明内链/外链、Goal/Topic、ZIP/JSON、邀请邮件与既有邮件等语义差异。
+- Git 历史确认 T-00/01/02/03/05 和 T-06 六项在当前 HEAD 祖先链中；StudySession 第七项
+  仍为本地验证完成的未提交候选。`64b6d4bd` 已记录 owner 搁置 T-04/长期延后移动工作，
+  原三文件继续保护；原 M3/M5 包含 T-04 的验收门没有因此自动通过。
+- 独立补列 T-05a、通用危险操作确认框、O9/O11 未排期、真实读屏、生产 SHA/digest、
+  ingest 观察/启用决定、DNS/配置、真实邮件与版本/验收标准决定。T-05/T-06 已覆盖的
+  O3、O7 外链、O6 部分内容不重复开发；原有记录与后续遗留事项保留。
+- 本轮仅补文档和本地协调记录，未执行 58 项全量回归或生产/真机检查，不据此新增产品
+  passed 结论。无 stage、commit、push、merge 或部署；新增文档待审查。
+- 文档验证已观察通过：11 份定向 Prettier、58 个本地链接、任务/里程碑/演进编号覆盖、
+  58 个清单 ID 与 12 个补充项、旧报告 27/12/9/10 逐项归类、4 份恢复正文与 Git 原文的
+  格式化一致性、`git diff --check`、当前 Run validator。T-04 三文件哈希和此前状态文档
+  字节前缀不变、暂存区为空；独立只读复核的 3 项补充均已纳入。
+
+## T-06 审查收口与 T-05a 开始（2026-09-07）
+
+- 用户明确“开始”后，先只读复核 StudySession 三份代码：与已验证候选一致、无阻塞
+  findings，定向 diff 空白检查通过。原真实栈证据保留，不重新声称跑过相同产品门禁。
+- T-05a 按 FABLE 原范围开始：失败附件单条本地移除、明确确认与反馈；工作区/状态检查
+  与移除位于同一 Dexie 事务，retry 同步收紧事务边界。仓储 15 项、Web 定向 8 项已通过，
+  其余验证进行中，见 [T-05a 报告](./V021_T05A_ATTACHMENT_QUEUE_REVIEW.md)。
+- 当前基线、分支及既有未提交改动保留；T-04 三文件仍受保护，不恢复移动施工。
+  本轮没有生产开关、同步合同、schema 或 Git 提交/推送变更。
+
+## T-05a 本地附件移除完成验证（2026-09-07，待 Git 交付）
+
+- 实现 failed 附件单行确认移除，事务重查工作区和状态；不影响非空 Vault、实体、Outbox
+  或其他附件。跨标签页状态变化会刷新并关闭旧确认，存储失败保留行和错误。
+- 最终完整 `pnpm ci:fast` 八门通过：Web 403、offline 74、contracts 13、mobile 4、
+  Python 606 passed / 109 deselected。初轮 lint 失败及修正记录见
+  [T-05a 报告](./V021_T05A_ATTACHMENT_QUEUE_REVIEW.md)。
+- 隔离生产构建的 Chromium 回归 1 passed；真实 Note、Blob、非空 Outbox、断网上传失败、
+  取消/Escape、单项移除与 reload 持久化通过。1440/320px 确认框 axe 和焦点通过；截图发现
+  toast 遮挡后已局部修正并重跑。不是移动真机、生产 ingest 或 M5 全量验收。
+- 累计 6 个合成用户与相关测试数据已清理，91 张业务表总行数归零；独占 Redis 清空，
+  3 个失败初始化空库删除，临时认证文件和含合成口令的失败 trace 删除。
+- StudySession 技术审查已完成，FABLE 总表的 T-05a/T-06、O4、D-02 与 A-08 状态已同步。
+  12 文件与隔离候选字节一致；T-04 三文件哈希不变且不入候选，暂存区为空。全部新候选
+  仍未提交、未推送、未部署；下一步是按明确 Git 授权交付，并统一最终版本和发布验收口径。
+
+## FABLE 候选进入 Git 交付（2026-09-07）
+
+- 用户在上一轮提出 Git 交付后回复“继续”，本轮整理已经验证的 StudySession、T-05a 与
+  FABLE 文档归纳到当前开发分支。交付范围、源码摘要和版本/验收推荐稿见
+  [候选范围与后续验收](./V021_DELIVERY_SCOPE.md)；提交及远端 SHA 以实际 Git 比对为准。
+- 不纳入 T-04 三文件、其未入库报告、其他本地材料或运行证据；FABLE 中原指向未入库材料
+  的两个链接改为来源说明，避免在其他机器形成失效链接。
+- D-02/D-03/D-06 的推荐稿尚待确认，原 58 项及 27 项通过基线保留。特别指出 12.2 属于
+  原 27 项，不能在延后移动工作后仍声称“原 27 项全部零回归”；13.1 的未验部分如实保留。
+- 生产、main 合并、release、真实读屏/真机和运维验收均不从本次 Git 交付自动获得通过状态。
+
+## FABLE M5 本地回归归纳（2026-09-07）
+
+- 上轮 28 文件已提交并推送，候选为 `bac2a4371ce6a12d6c3e9a6124104d121b0f8807`。
+  所有者在具体推荐稿后回复“开始”，D-02/D-03/D-06 已生效，本轮按 v0.2.1 修复候选执行 M5。
+- [M5 本地回归报告](./V021_M5_LOCAL_REGRESSION.md)与 [58 项清单](./FABLE_REGRESSION_CHECKLIST.md)
+  已填写：40 passed、3 failed、6 partial、3 blocked、6 out_of_scope，分母仍为 58。
+  原 scope 内 26 项为 24 passed、6.2 failed、12.1 partial，M5 门未通过。
+- 独立 Git archive 的 production build 使用完整候选 SHA，无产品源码覆盖；本地 API/Web
+  health 归因一致。真实核心数据、四条会话终态、离线同步/冲突、角色变更、预算、导入导出和
+  关闭态附件已有实证。Provider 发现为明确 mock，生产与真实邮箱/读屏未验。
+- 首轮浏览器 29 passed / 5 failed / 4 did not run；定位 strict-mode 与溢出 helper 问题后分别
+  补跑，所有初轮失败保留。重复 Quiz 阶段残留、导出加密文案遗漏、Toast 对比度和画像名称
+  差异已登记 R-01–R-04；Mastery/Sync 独立重跑通过，整组不稳定性仍未定根因。
+- 本轮 34 项定向单测通过，Lighthouse 13.0.1 八个认证静态页面为 98–100；高分不抵消交互态
+  axe 失败。完整 `ci:fast` 仍引用上轮相同产品 SHA 的实跑证据，本轮未重复声明新执行。
+- 18 个合成账号及关联数据清理完成，91 张业务表总行数与独占 Redis 键均为 0，认证文件与
+  Lighthouse profile 删除，注册额度恢复为 5。空本地测试栈及仓库外脱敏证据保留。
+- 两份浏览器测试调整与本轮文档未提交；T-04 三文件哈希不变且未暂存，其他既有改动保留。
+  下一步按 M5 报告修复和复验，不启动 M6 生产发布。
+
+## FABLE M5 三项缺陷修复复验（2026-09-07）
+
+- 所有者回复“开始”后完成 R-01–R-03：答题弹窗关闭后卸载并重置，互操作导出明确服务端
+  加密与下载可读 ZIP 未加密，浅色成功 Toast 文字调整为 #006b2c。R-04 保护边界保持。
+- 基于 `bac2a4371ce6a12d6c3e9a6124104d121b0f8807` 独立候选，三份产品覆盖摘要
+  `9117a37769f0b44c4b56406811dac5d7fb3df5577f4a1c83edac0968893ff9aa`，运行版本带覆盖前缀。
+  完整 `ci:fast` 八门通过：Web 405、offline 74、contracts 13、mobile 4、Python 606 passed /
+  109 deselected、mypy 181。并行测试超时与版本环境污染的两轮失败均保留在修复报告。
+- 浏览器三组 20、2、1 passed（含重跑）：成功反馈两主题/两宽度、既有失败反馈、真实 ZIP
+  摘要/成员、Review 两主题四断点、保存/Escape/取消重开与离线 false/true 两条真实记录通过。
+- 当前 58 项为 43 passed、1 failed、5 partial、3 blocked、6 out_of_scope。原范围内
+  26 项当前映射均 passed；其他项继续引用首轮证据，不当作新候选 58 项全量重跑。
+  13.3/R-04、13.1 侧栏、真实邮件/读屏及整组测试不稳定性仍保留，M5/M6 未通过。
+- 详情见 [M5 修复复验](./V021_M5_FIXES_REVIEW.md)。无新 commit、push、merge 或部署；
+  T-04 三文件、未跟踪报告与其他所有者材料保持原样，合成数据与认证在复验后清理。
+
+## FABLE M5 后续收口复验（2026-09-07）
+
+- 所有者回复“按照建议推进”后，继续本地验收与交付准备。R-05 慢保存旧回调误关新草稿、
+  R-06 深色附件弹窗对比度、R-07 Mastery 时间回拨入队前拒绝均已复现并修复。
+- 相同基线加十份产品覆盖摘要为
+  `87a78a593c19677e820a3ec1b64c1d7355f4a0f2d5aacd257367072dd86c1b1d`。
+  完整 CI 八门退出 0：Web 411、offline 74、contracts 13、mobile 4、Python 606 passed /
+  109 deselected、mypy 181、coordination 118。旧 CI 不替代该最终产品的检查。
+- 九份浏览器 spec 加两条固定回拨回归，42 passed；最终调整后的四条 Mastery 测试另跑
+  4 passed。包含真实 Push/Pull、目标 payload hash、IDB clean/version/revision 和两主题
+  附件弹窗 axe。浏览器测试独立严格 tsc 通过，之前测试自身错误和旧产品失败均保留。
+- 58 项仍为 43 passed、1 failed、5 partial、3 blocked、6 out_of_scope。旧解锁/Today/Sync
+  失败在最终组合未重现，但不能全部归因为时间回拨；R-04、真实读屏、生产/邮件前置仍缺。
+- 本轮 11 个合成账号及数据清理，91 张业务表总行数与独占 Redis 键均为 0；所有候选
+  临时认证已不存在，注册额度恢复 5。空本地预览与仓库外证据保留。
+- [后续收口报告](./V021_M5_CLOSEOUT.md)已补候选身份、测试版本和发布回滚材料。原 T-04
+  三文件仍保护；R-04 仅准备仓库外五行补丁。没有新 commit、push、merge、部署、真实邮件
+  或 Provider 请求；M5 未通过，M6 未授权。
+
+## FABLE M5 继续验收（2026-09-07）
+
+- 所有者回复“继续 M5”后，R-04 五行删除在独立基线候选通过完整 CI 与浅/深两主题、
+  1440/320 两视口四项可访问名称和键盘回归。产品覆盖摘要为
+  `005b067ecb218e747c2956f65e67be41fe4863c08d4dab90fbe74c4b2282ad82`；主树例外未批准，
+  三份 T-04 保护文件保持原样。
+- 显式执行 API integration：删除冲突 8 passed、导入 12 passed，含错误版本、重放精确码、
+  11 个字符/记录边界与拒绝无误写。专用数据库和 Redis 实例清理完成；默认 CI 不替代这些结果。
+- Note 离线删除、第二设备更新、delete_update、人工采用服务器版本、B 冷初始化正文与 A
+  重载后同步前本地解密内容验证最终 1 passed。认证单测 20 passed / 3 筛选跳过，真实合法
+  回跳/导出与 mock recent-auth 三项浏览器复验通过；首轮测试失败保留在后续收口报告。
+- 最新清单为 44 passed、1 failed、4 partial、3 blocked、6 out_of_scope；8.4 和 A-06 本地通过。
+  A-07 完整过期会话重登录链路仍缺；NVDA 2026.2 已启动但桌面控制因 URL 确认失败停止，
+  未完成真实播报。R-04 主树例外、侧栏、生产与真实邮件前置仍保留，M5 未通过。
+- 本轮 9 个合成账号及数据清理，91 表总行数与 Redis 键均零，注册额度恢复 5；认证、Windows
+  独立浏览器 profile 和 NVDA 日志已删除，便携工具停止并保留。主树仅补三份测试及结果文档，
+  无 commit、push、merge、部署或真实外呼；M6 未授权。证据见 [H01–H08](./V021_M5_CLOSEOUT.md)。
+
+## FABLE M5 反馈与认证补齐（2026-09-08）
+
+- 所有者回复“继续完善”后，A-07 真实过期、refresh 仍拒绝、重新登录回跳、重试 202 且
+  新增任务 ID 与响应一致，最终 1 passed；窗口由临时 60 秒恢复 600 秒，未伪造认证响应。
+- A-03 七模块本地反馈合同补齐，最终 50 项浏览器全部通过。Provider/Run/附件 verified
+  仍含 mock，真实外呼/scanner/读屏未验；前三学习模块和附件固定浅色，后三模块双主题。
+- 新复现 R-08 浅色错误 Toast 对比度 4.34:1，仅在反馈 CSS 加深错误文字。最新主树十份
+  产品覆盖摘要 `b5ddaaf5eaa6fabaec7b47d6ffe905f6bf9a63e08e74df894d562b0fb74e23b8`；
+  含 R-04 隔离提案摘要 `5818528d6f825a500382d54d2e1a9a8fd45c92c906510eaffedcabf775a52258`。
+- 新隔离候选完整 CI 八门退出 0：Web 411、offline 74、contracts 13、mobile 4、Python
+  606 passed / 120 deselected、mypy 181、coordination 118。原失败保留，见 [I01–I04](./V021_M5_CLOSEOUT.md)。
+- 六账号与关联数据清理，91 表总行数零、Redis 键零、认证不存在、注册额度 5。A-03/A-07
+  为补充项，原 58 项仍是 44/1/4/3/6；R-04 主树例外及真实读屏/邮件/生产前置保留。
+  T-04 三文件保护继续，无 commit、push、merge、部署或真实外呼；M5 未通过，M6 未授权。
+
+## FABLE M5 安全与本地回滚补齐（2026-09-08）
+
+- 所有者回复“继续 M5 完善”，本轮仅新增 AI 接受测试扩充及结果文档，产品覆盖不变。
+  显式 integration 9 passed / 1 deselected，覆盖权限/撤权、知识 scope/迁移约束和 AI 接受；
+  四个实际 SQL 写点注入失败均完整回滚，同 key 并发重试只产生一组 citation/receipt/audit。
+- 独占本地 API 的认证列表 200 请求、并发 10，P95 161.03 ms，通过既有 500 ms smoke
+  门槛；不能替代完整容量、生产网络或核心 API 相对基线的回归比较。
+- 空库 head → 0035 → head 与 schema check 通过；备份恢复库 92 表（含版本表）共 229 行
+  的行数和内容摘要一致，三组 scope 孤儿为零；有 receipt 时降级命中 V20-09 保护，数据与头不变。
+- 14 个合成账号及数据随两独占 tmpfs 容器清理，临时 API 已停，原始备份未落盘。
+  J01–J06 及首轮快照脚本失败保留于 [M5 收口报告](./V021_M5_CLOSEOUT.md)。
+- A-10/A-11 仍 partial，原 58 项仍 44/1/4/3/6；R-04 主树例外、侧栏、真实读屏/邮件与
+  完整 IDOR/容量、生产回滚前置继续保留。无 Git 提交/推送/合并或部署，M5 未通过，M6 未授权。
+
+## FABLE M5 完整验收续推（2026-09-08）
+
+- 所有者要求保证 M5 完整通过。本轮新增内容隔离、账号删除/所有权等 10 项 integration
+  通过，完整容量数据集和六组查询门槛通过，最慢 P95 12.30 ms；仍非生产等价容量批准。
+- 两独占容器、匿名数据库卷和附件样本均清理。真实 NVDA 再次被原生窗口工具因当前
+  浏览器 URL 无法可靠确认而停止；已停 NVDA 并清理一合成账号，91 业务表/Redis 均零。
+  证据见 [K01–K03](./V021_M5_CLOSEOUT.md)，未取得实际播报通过。
+- 侧栏键盘和清空本地数据 UI 未执行；A-12 更新为后端 partial。R-04 五行例外、生产/
+  Provider 目标和请求授权、受控收件箱及邮件授权已询问，尚未收到答案。
+- 产品与测试源码未改，原 58 项仍 44/1/4/3/6；M5 未通过，M6 未授权，无 Git 交付或部署。
+
+## FABLE M5 本地 UI、权限与候选固定（2026-09-08）
+
+- L01–L03 补 26 文件、38 个不同权限集成测试及增强 Evidence 重跑；六次跨租户写入
+  均 404 且版本不变，独占容器和卷已清理。Provider/scanner 为受控替身，不代表真实外呼。
+- R-09 清空恢复竞态已复现修复：数据落库后只通知旧组件，跨页仍为空；八份入口/工具
+  代码补现有共享刷新通知。三份 T-04 保护文件保持，R-04 未纳入。
+- 最终十四份产品覆盖摘要 `2a06c52e4b93f551668625093bc4b4b08b6dcfd6b01793a856fd1e0959c07095`，
+  基线仍 `bac2a4371ce6a12d6c3e9a6124104d121b0f8807`。L06 完整 CI 八门通过：Web 411、
+  offline 74、contracts 13、mobile 4、Python 606/120 deselected、mypy 181、coordination 118。
+- L07 本地 UI/生命周期 5 passed，L08 跨模块 9 passed；A-12 本地通过，13.1 桌面侧栏
+  已验、移动开闭焦点保留 partial。原产品失败、429 限流与重启代理 500 均保留。
+- L09 两轮分别清理 5/3 合成账号及数据，91 业务表/Redis 均零，注册额度 5，认证不存在。
+  证据和候选摘要见 [M5 收口报告](./V021_M5_CLOSEOUT.md)，尚未创建最终发布提交。
+- D-15/R-04 单点保护例外与 D-16/邀请 URL 范围仍待所有者决定；真实 Provider、邮件、
+  读屏缺具体环境/授权或可用设备条件。原 58 项仍 44/1/4/3/6，M5 未通过；M6 还需同 SHA
+  CI/镜像 manifest、生产身份/备份恢复/回滚、真实运行观察及当前批准。无 Git 交付或部署。
+
+## FABLE M5 两项决定落地（2026-09-08）
+
+- 所有者“采取建议”，D-15/D-16 生效：R-04 仅删除画像入口五行 aria-label，完整邀请
+  URL/复制延后至 O1，10.2 保留 partial；不再作为待决问题。T-04 其他改动继续保护。
+- 主树五行补丁已应用；候选 AppShell 只含基线加该补丁，不含主树其他 T-04 改动。
+  最终十五份产品覆盖摘要 `3330b538bcc67b48fca74973ef78176cea6ad0bbd1725ca2d59de8704ca7503e`，
+  基线仍 `bac2a4371ce6a12d6c3e9a6124104d121b0f8807`，尚未创建最终提交。
+- 新候选完整 CI 八门与新增浏览器 spec 严格 tsc 通过；9 项浏览器同次通过，包含
+  R-04 四组名称/axe/键盘、桌面侧栏、R-09 恢复及账号生命周期。详见
+  [R04-01–R04-03](./V021_M5_CLOSEOUT.md)，旧失败历史保留。
+- 两个合成账号及数据清理，91 业务表/Redis 均零，注册额度 5，临时认证不存在，
+  Web/API 健康和身份通过。13.3 更新为 passed，原 58 项为 45/0/4/3/6。
+- M5 仍待真实 Provider、邮件、读屏与生产环境/容量前置；M6 发布条件保持。没有
+  commit、push、merge、部署或敏感能力启用，正式 actor/review task 仍 pending。
+
+## FABLE M5 计划续跑与本地安全补验（2026-09-08）
+
+- 按所有者连续推进指令恢复，Run validator 通过；D-15/D-16 继续有效。总表顶部、M5/
+  REL-01 与 FOLLOWUP-M5 的旧当前摘要已同步，历史结果保留，`do-plan` 续跑入口已建立。
+- SEC-04 六文件 15 项本地安全集成通过，覆盖 Growth、Identity、TOTP、软件 Passkey、
+  注册验证和密码恢复。首轮 13 passed / 2 failed 保留；Passkey 缺 CI 来源配置已补齐。
+- SEC-03 过期用例诊断抓到单调时钟前进 11.59 ms、墙钟回拨 7.839217 秒。本轮只固定
+  密码恢复过期测试的服务时刻，最终六项恢复测试通过；认证/生产时间代码未改，主机时钟
+  同步风险另列。四轮各两独占容器及数据卷均清理，真实邮件和 Provider 未请求。
+- 产品摘要仍为 `3330b538bcc67b48fca74973ef78176cea6ad0bbd1725ca2d59de8704ca7503e`；
+  补充测试独立归因，不覆盖原 R04 候选，未重跑完整 CI 或原浏览器组合。
+- 58 项仍 45/0/4/3/6，M5 未通过、M6 未授权。真实 Provider/邮件环境和授权、可用读屏
+  操作设备及生产只读上下文仍缺；未作 Git 交付或部署。详情见 [M5 收口报告](./V021_M5_CLOSEOUT.md)。
+
+## FABLE M5 真实 Provider 与邮件环境核验（2026-09-08）
+
+- 所有者已提供 Provider 凭据、授权查看阿里云并指定受控收件箱。三次外呼额度已用完，
+  其中生成一次；最多五封邮件的授权保留，当前发送零封。秘密及真实邮箱未进入仓库/Run。
+- 真实发现暴露 R-10：两 adapter 的 bytes SNI 在 AnyIO TLS 编码时异常。仅改两处字符串
+  类型及对应断言，新增真实本地 TLS 正常握手/错误证书拒绝回归；旧实现四项复现失败，
+  修复后 Provider/generation/DNS/TLS 86 项及 Ruff 通过。
+- 新候选真实发现与生成均 200，27 项检查通过，输入 177 / 输出 332 tokens，应用保守
+  价格记账 1 分；幂等、权限、预算、pending Draft 和脱敏通过。不是账单对账；真实上游
+  失败未请求，2.4 保持 partial。三轮独占数据库/Redis 及卷均清理。
+- 当前 17 份产品摘要 `9274e567144c8d5cdf6651cf39e1ddf525d2a88bccc7353f44d82a06c9f4f3f3`，
+  37 份源码/测试摘要 `8ec16533d34d2e41bbe80bb4746c68f4be12c1f91bee3f88cff7da6c7ab81a36`。
+  完整 CI 首轮 Web 两项等待超时保留，独立 19 项及原样完整复跑八门通过，根因未确定；
+  最终 Web 411、Python 610/120 deselected，其余门见 [PRV-01–PRV-04](./V021_M5_CLOSEOUT.md)。
+- 新候选预览 Web/API 健康且身份一致，91 业务表行数/Redis 键零，登录页已刷新目视检查。
+  AppShell 仍只含基线加获批五行删除，主树其他 T-04 改动保留，旧证据未覆盖。
+- 发信域/地址正常，现有发信角色已绑定且 API/Worker 配置存在；角色策略未核实。
+  线上 API/Worker/backup 为旧 SHA，Web 公开版本为 0.1.0；实收 CSP/HSTS 与 NTP 同步
+  只属于旧部署。邮件需同候选隔离环境，实际读屏工具条件仍缺；未修改云端配置。
+- 58 项仍 45/0/4/3/6，M5 未通过、M6 未授权；没有 commit、push、merge、部署或敏感
+  启用。正式 actor/review task 保持 pending，不补造旧角色证明或验收事件。
+
+## FABLE M5 本机真实邮件批次（2026-09-08）
+
+- 所有者已批准短期发信凭据加密转交本机并仅内存使用。离线演练 58 项通过后，从现有
+  角色读取短期凭据并只输出加密信封；本机当前候选 API、加密 Outbox 和 Worker 真实发送
+  首封注册验证成功。无需升级生产 ECS，产品和候选源码未改。
+- 云端投递详情显示成功，接收服务器返回 250；对应 token 在独占测试库设置过期后，
+  API 400、错误码和账号/token 状态正确。本批 13 项断言通过，不等同于五封整批通过。
+- QQ 邮箱未登录，实收内容、发件人和链接尚未核实；累计已用一封、剩余四封，不重发
+  首封或重置额度。凭据进程、API、独占数据库/Redis 及卷已清理，正常预览保留。
+- 详见 [MAIL-01–MAIL-02](./V021_M5_CLOSEOUT.md) 和执行子计划。原 58 项仍 45/0/4/3/6，
+  M5 未通过，M6 未授权；真实上游失败、读屏与生产前置仍缺。没有 Git 交付或部署。
+
+## FABLE M5 首封邮件反馈（2026-09-08）
+
+- 用户点击首封后报告邮箱包装跳转地址不存在；其回传链接解码后的 Origin、路径和
+  token 摘要与首封完全一致，确认用户已收到该封。本机邮箱 UI、发件人、到达时间仍未观察。
+- 原临时入口在点击前已清理，页面验证未完成；这是验收编排时序问题，API 过期拒绝
+  不替代页面通过。下一批先确认本机收件箱可读，并保持环境到逐封收件与页面核验结束。
+- 剩余四封执行器已硬限额度、先实收再完成、禁止重复计收并修正中途 passed 语义；
+  离线 53 项通过且资源清理，真实累计仍一封。详见 [MAIL-03](./V021_M5_CLOSEOUT.md)。
+- 产品及固定候选不变，M5 未通过、M6 未授权；无新增外呼、发信或部署。
+
+## FABLE M5 实收与 R-11 修复（2026-09-08）
+
+- 本机邮箱已登录，五封邮件的来源、时间和正文已实际核实，累计额度 5/5。续验四封
+  56 项检查通过，注册/恢复有效、显式过期、重放、登录和会话撤销通过，安全通知实收。
+- 服务存活时仍复现 QQ 包装跳转 404；直接原链接另暴露 R-11，Worker 裸 fragment
+  与前端 named token 不兼容。共享解析器最小修复，旧实现三项复现失败，修后 12 项通过；
+  实收注册/恢复原链接显示表单并清除 token，未声称浏览器最终提交成功。
+- 新候选 18 产品摘要 `c92d51c279db6c8434f399f628b2c0f41cb1ab567c0d0fe06ca04d9a7706fd6a`，
+  39 源码测试摘要 `ecdce872f700cb7b22da18ecaffcb6ac0d51ceb278808e2831bf4777fd13bb59`。
+  完整 CI 首轮两项既有 Provider UI 等待失败，独立 19 项通过；原样复跑八门通过，
+  Web 416、Python 610 passed / 120 deselected。预览 Web/API/Worker 已统一新候选且健康。
+- 独占邮件容器/卷、API 与短期凭据进程已清理，正常预览保留；11.1/11.4 passed，
+  11.2 partial，58 项为 47/0/5/0/6。详见 [MAIL-04 与 R11-01–02](./V021_M5_CLOSEOUT.md)。
+  M5 未通过、M6 未授权；Provider 额度已尽，真实读屏和生产前置保留，无 Git 交付部署。
+
+## FABLE M5 本地表单与权限补充（2026-09-08）
+
+- R-11 产品候选不变，新增邮件表单九项回归，与 token 八项共十七项通过；整包 Web
+  四百二十五项、typecheck 通过。真实 fragment hook 与认证适配层保留，仅 mock 传输，
+  不计为 QQ 按钮或浏览器最终提交通过。初轮新测试等待时序错误及旧 Provider 超时保留。
+- Provider 两项集成补九次创建、修改、删除和发现拒绝请求，角色与对象归属拒绝、
+  凭据/版本/删除状态不变及假 adapter 零调用均通过；独占数据库和 Redis 及卷清理。
+  OpenAPI 清点一百五十三 path、一百八十六 operation，不将模块通过当作完整 IDOR。
+- Computer Use 因无法可靠识别浏览器 URL 自动停止，没有启动 NVDA 或操作桌面。
+  真实读屏仍未验；本批没有新增 Provider 请求或邮件，原额度均耗尽。
+- 清单 2.3/A-11 过时归因已纠正，计数仍 47/0/5/0/6。两份测试单独归因，常驻
+  R-11 预览保留；M5 未通过，M6 未授权。详见 [LOC-01–03](./V021_M5_CLOSEOUT.md)。
+
+## FABLE M5 读屏豁免与最终收口（2026-09-08）
+
+- 所有者要求免除真实读屏并完善其余验收，D-17 生效；实际播报记为明确豁免，不计 passed。
+  自动化无障碍、键盘焦点、本地候选 CSP 继续验证，D-03/D-06/D-15/D-16 范围保持。
+- R-12 为 HTML 邮件增加可复制的完整原链接，保留 fragment、转义、有效期与一次性语义。
+  旧模板新增两项回归失败，修复后 Worker 十五项通过；不声称修复了 QQ 外部包装跳转。
+- 新候选十九产品摘要 `b9511a8e874867a1e71bb6494818fa91c1683a97c3ed1d227243fb13220a2987`，
+  四十四源码测试摘要 `38a1c31aec0c0869e8cfa4a2a77e2c1c9f43ea2c2605307b3adc858c72043892`，
+  完整 CI 一次通过，Web 425、Python 612；Provider/Model 三项集成及新增九次拒绝通过。
+  邮件四十八项与 Provider 十三项本地浏览器演练通过，成功/失败及截图已检查，临时环境清理。
+  五十七文件、一百一十七链接、摘要/保护/秘密/Run 最终复核通过；详见 FIN-01–07。
+- Provider 三次与邮件五封额度均已用完，新批次先完成准备与本地演练；没有新增外呼发信。
+  M5 还需 2.3/2.4/11.2 真实闭环，追加两次发现与三封邮件问题待答。M6 未授权；没有
+  Git 交付、生产部署或敏感开关变更。完整 API 普查与生产容量依原后续/发布范围单列。
+
+## FABLE M5 追加真实批次获批（2026-09-08）
+
+- 所有者批准继续追加，并确认原 Provider 凭据可复用；最多两次发现，零生成零重试，
+  原受控收件箱最多三封注册、恢复和安全通知。旧额度计数保留，累计上限五次请求、八封邮件。
+- 沿用 R-12 固定候选，D-17 真实读屏豁免有效；先完成真实页面闭环，再做最终结论。
+  未增加 Git、部署、长期凭据或权限变更授权；秘密和真实连接信息仍不入仓库或 Run。
+
+## FABLE M5 追加实收与页面接管（2026-09-08）
+
+- R-12 候选不变，Run validator 通过。Provider 已在真实页面点击发现，原生确认框
+  遇浏览器控制超时，服务端新增外呼零；已请求所有者解除弹窗后续验。
+- 现有云助手 IMDSv2 短期凭据加密转交退出零，本机解密与有效性通过；Workbench
+  所需新增白名单已选择暂不开通，没有修改云端权限、安全组或生产配置。
+- 首封追加注册邮件投递成功并实收，批准发件人、到达时间与完整备用链接核实，
+  十三项检查通过。原链接显示确认表单并清除 fragment，密码提交与登录待所有者
+  接管，独占环境保持至闭环。累计六封，后两封尚未发送；整批未 finish。
+- 原五十八项仍 47/0/5/0/6，D-17 豁免有效，M5 待页面闭环、M6 未授权；没有
+  Git 交付部署。证据见 [LIVE-01–03](./V021_M5_CLOSEOUT.md)，旧失败和额度保留。
+
+## FABLE M5 导航反馈修复（2026-09-08）
+
+- 所有者报告 Provider 入口与 Tab 无反馈；真实浏览器复现个人、帮助只改变高亮，
+  自学两个空状态相同。R-13/R-14 已修复，并在设置补直达 Provider 的既有画像规则入口。
+- 当前固定二十三产品摘要 `84e7adfa5f2c0b33ae1bf9b34d31082d381e53c2fca4558f197511cbe35b11fc`，
+  五十三源码测试摘要 `062f080c5d4ea894cac0c95a934545fc133a58f77fff260d0b1230b3e74d5c60`。
+  R-14 完整 CI 一次通过，Web 430、Python 612/120 deselected；十二项定向回归及真实
+  入口/分组往返/FAQ/新建路线打开取消通过。R-13 两次旧 UI 等待失败及 AI 十九项独立
+  通过保留，未宣称已确定超时根因。常驻预览三服务已统一 R-14 且健康。
+- 真实注册已完成并登录；恢复邮件已实收并打开原链接表单，待所有者操作密码。
+  本批两封发送和实收、累计七封；最后安全通知待恢复成功。Provider 合成认证已按
+  不同浏览器主机名隔离，原生确认框工具仍超时，新增请求零，已请求所有者手动确认。
+- 所有者已创建目标与里程碑，原邮件环境及数据保留，仓库外受限权限数据库归档可读；
+  不按旧临时清理脚本直接删除，不将归档可读当作独立恢复演练。T-04 保护保持。
+- 五十八项仍 47/0/5/0/6，D-17 豁免有效；M5 待真实闭环，M6 未授权。详细证据及
+  条件见 [M5 收口报告](./V021_M5_CLOSEOUT.md)，没有 Git 交付或生产变更。
+
+## FABLE M5 接管重试与环境恢复（2026-09-08）
+
+- 恢复页已离开表单，但令牌未消费；主线提前执行完成核验，旧执行器断言失败后自动
+  清理邮件测试 API、数据库与 Redis。此为执行错误，原环境继续运行的旧状态已失效。
+- 已从 21:39 归档恢复独立持久化数据库，账号、目标、学习计划、阶段和工作区存在；
+  R-14 API 健康，原本机入口恢复，服务退出不删除数据。之后新增数据无法核实，
+  不声称恢复到事故前瞬间；旧恢复链接不能继续使用，没有改用户密码。
+- Provider 重登录及点击后，原生窗口工具因无法可靠识别浏览器 URL 停止操作；
+  新增请求零。本批邮件两发两收、累计七封，短期凭据进程已退出；补发恢复并保留
+  安全通知会需要额外一封额度，目前未发送。详见收口报告 LIVE-05–07。
+- R-14 源码和已通过 CI 保持，五十八项仍 47/0/5/0/6；M5 未完成、M6 未授权。
+  历史失败保留，未做 Git 交付或生产变更。
+
+## FABLE M5 恢复邮件追加额度（2026-09-08）
+
+- 所有者允许邮件累计上限从八封调整为九封，已发七封保留；剩余两封仅补发恢复及
+  完成安全通知，零自动重试。仅内存短期凭据转交授权继续有效，使用持久化本机环境。
+- Provider 原有两次发现额度、R-14 候选和范围决定保持；批准时尚未新增外呼或邮件。
+  M5 继续验收，M6 未授权，没有新增 Git、部署、权限扩张或长期云端凭据授权。
+
+## FABLE M5 跨日续验（2026-09-09）
+
+- 第八封恢复邮件前一日实收，但令牌未消费且已过期。原收件计数因中断未落盘，保留
+  历史并补记独立观察；累计八封、上限九封，下一组恢复及通知需再追加一封额度。
+- 正常 R-14 页面及持久化恢复环境健康，账号和目标数据保留。旧 Provider/邮件临时
+  执行器已退出，Provider 新环境本地准备完成，累计仍三次，剩余两次已授权发现。
+- 当前候选源码与 CI 不变，M5 尚待真实闭环，M6 未授权，详见收口报告 LIVE-09。
+
+## FABLE M5 两点处理授权（2026-09-09）
+
+- 所有者要求主线处理 Provider 确认与邮件追加两点，批准邮件累计上限十封；已发八封，
+  剩余恢复及通知两封，零自动重试。Provider 仍剩两次发现，零生成零重试。
+- 两执行器仍在，批准时新增请求与邮件零；仅内存短期凭据有效，继续自主验收。
+  真实用户新密码按工具要求本人提交；本次不增加 Git、生产部署或权限扩张授权。
+
+## FABLE M5 正常发现闭环（2026-09-09）
+
+- LIVE-13 真实 Chromium Provider 点击、原生确认、POST 成功、三个模型及同次成功
+  文案通过，2.3 更新 passed，五十八项为 48/0/4/0/6。R-14 源码与 CI 保持。
+- 浏览器切换期间已有一笔正常请求完成；主线未先按最新计数停止，又执行一笔正常
+  请求。两次额度都用于成功路径，累计五次已尽，此执行错误及首笔归属未完全核实
+  明确保留。失败环境已准备但默认禁止外呼，额外一次批准待答。
+- 邮件上限十封已获批准，第九封恢复邮件 12:58 实收，完整原链接表单已显示；恢复
+  尚未消费，需本人提交，最后通知一封保留。M5 尚待 2.4/11.2，M6 未授权。
+
+## FABLE M5 密码恢复与邮件闭环（2026-09-09）
+
+- 所有者完成密码提交，实际页面显示密码已更新；LIVE-16 确认恢复令牌已消费、原两条
+  会话全部撤销。最后安全通知单次发送成功，13:26 实收核实发件人、收件人和正文。
+  本批两发两收、累计十封达批准上限，二十八项检查全通过；未观察新密码重新登录。
+- 邮件执行器退出零并释放短期凭据，持久化服务与数据保留。退出后独立只读确认 API
+  健康且版本 R-14、账号/目标/计划/阶段各一，安全通知已发送且载荷清空。历史清理
+  事故及恢复点后的数据限制继续保留，未把事故恢复当作 M6 独立恢复演练。
+- 11.2 更新 passed，五十八项为 49/0/3/0/6。M5 范围内仅剩 2.4 真实失败 UI；10.2
+  和 13.1 按既有决定延后，D-17 豁免有效。Provider 累计五次，额外一次请求仍待批准；
+  用户本次密码完成反馈不扩张该额度。产品候选和 CI 不变，M6 未授权，无 Git 交付部署。
+- LIVE-17 六十九文件、一百二十三链接、候选/保护/秘密/计数/Run 和健康复核通过，
+  三十一份证据摘要保存。已结束耗尽额度的旧 Provider 执行器并清理其合成容器和卷；
+  缺少失败路径的批次 false 及退出一保留，单次失败环境仍禁止外呼，用户持久化环境保留。
+
+## FABLE M5 单次失败验收授权（2026-09-09）
+
+所有者确认追加一次合成无效凭据的真实模型发现，累计上限从五次调整为六次，
+零生成零重试。批准时新请求零，旧计数与执行错误保留；进入 2.4 真实失败 UI 验收，
+不增加邮件、Git 交付、生产部署或敏感开关授权。
+
+## FABLE M5 按批准范围完成（2026-09-09）
+
+- LIVE-18 实际执行一次合成无效凭据发现：上游 401、应用 422/AUTH_FAILED 且不可
+  自动重试、真实页面持续错误提示及 unhealthy 健康状态通过。浏览器退出零，累计
+  Provider 六次、邮件十封达批准上限，不再追加。
+- 收尾脚本原会话等待超过默认有效期，未检查响应便取 providers，KeyError 及整批
+  false/退出一保留，原列表拒绝码未保存；两个后续断言未运行，不当作通过。2.4
+  根据实际请求、应用响应及浏览器/截图独立通过；独占合成容器及卷已清理。
+- R-14 产品/源码测试摘要不变，完整 CI Web 430/Python 612 和导航/权限证据保持，
+  2.4 更新 passed。58 项为 50/0/2/0/6，原二十六项零回归、直接修复项通过、无
+  新增 P0/P1；D-16/D-06 延后与 D-17 豁免保留，M5 完成主线技术验收。
+- 计划留 current，未声明用户已最终整体验收/批准归档，旧角色正式 review pending
+  不补造 accepted。历史失败、执行事故和恢复点限制保留；用户服务与数据备份保留。
+  M6 未发布未授权，具体条件见收口报告末节；没有新增 Git 交付或生产变更。
+- LIVE-19 最终复核通过：六十九文件、一百二十四链接、候选/保护/秘密/计数、原
+  二十六项映射、Run/空暂存区/服务健康及三十七证据摘要。M5 明确记录为批准范围
+  passed，M6 not-authorized；旧失败与未运行收尾断言保留，不重复完整 CI 或归档。
+
+## FABLE M6 发布准备启动（2026-09-09）
+
+所有者要求推进 M6，已启动可逆本地准备与只读核验。远端开发分支仍为 M5 基线，
+main 是其祖先且落后九个提交；最新成功 Main、capacity、Release 工作流分别对应
+旧 SHA，不能作为当前发布证据。GitHub CLI 未登录，公开 API 已核实运行状态。
+新建发布准备文档、M6 计划及直接子计划，整理完整交付范围、制品门禁和生产备份回滚
+步骤。具体 Git 交付与生产变更尚未批准；没有新提交、推送、工作流调度、外呼或部署。
+
+## FABLE M6 本地交付准备完成（2026-09-09）
+
+独立副本已准备 72 文件交付包（53 源码测试、19 文档），产品摘要保持 R-14；
+主树 T-04 保护与空暂存区不变。包含已有九个提交的 main 完整差异为 160 文件，
+两组 patch、精确 Git tree 和文件摘要保存于仓库外，尚无最终候选提交或四镜像 manifest。
+发布工具 21 passed，133 本地链接、格式/秘密/范围/空白和 Run 校验通过；原 M5
+完整 CI 证据继续绑定不变产品，不冒充新 SHA 的远端 CI、生产备份或恢复结果。
+下一道必要决策为该交付包的提交、推送现有开发分支及面向 main 的草稿 PR 授权；
+合并、维护切换、M6 外呼/邮件和生产启用仍有独立门禁。本轮新增外呼与生产操作为零。
+
+## FABLE M6 Git 交付开始（2026-09-09）
+
+所有者在具体 Git 交付提案后要求开始 M6，提交、推送开发分支及面向 main 的草稿 PR
+已获准。原 72 文件树形成产品提交 `3620176704c27ecdef481aedee7fd62823f0718c`，
+tree 与批准输入完全一致；后续文档提交记录该身份及本次授权，新增直接 Git 子计划。
+总选择 73 文件，包含既有九个提交的 main 完整差异 161 文件，产品摘要保持 R-14。
+独立副本执行 Git，原主树基线、T-04 修改与空暂存区保持；推送和 PR 仍待实际结果。
+具体合并及生产发布未批准，真实 Provider 与邮件旧额度不扩张。
+
+## FABLE M6 草稿 PR 与检查修复（2026-09-09）
+
+已推送候选 `3fc558d92b593b8b6895a338e2e4ee1424cb767d` 并创建草稿
+[PR #233](https://github.com/greatLiverheat605/Logion/pull/233)。首轮远端数据库
+集成、浏览器和移动构建通过，快速检查被依赖审计阻断；本地复现六项漏洞。
+独立副本正在更新必要补丁依赖并修复普通冲突多发空删除时间的旧客户端兼容回归。
+红测试一失败一通过与初次 CI 失败保留；新候选将重跑门禁，不沿用 R-14 产品摘要。
+原主树和 T-04 修改保持，合并及生产尚未批准，新增 Provider 与邮件均零。
+
+本地必要补丁已完成，JavaScript 审计零漏洞、Python 审计无已知漏洞；完整
+`pnpm ci:fast` 退出零，Web 430/Python 614 passed、120 deselected，合同零生成
+差异。旧 main 校验器确认普通冲突修复有效，但真正删除冲突仍拒绝非空扩展字段；
+已形成兼容性子计划与 D-18 待决策，不将协议同名当作兼容通过。准备推送修复并复核
+新提交远端检查，PR 保持草稿，尚不可直接合并。
+
+修复已推送为 `c134bf4c4ace77084a1ba7d95dc939fe837ec029`，远端 fast、
+browser 和移动构建通过，integration 的唯一失败是旧断言仍索引空删除时间。
+断言改为字段明确缺席后，新的独占数据库完整集成 120 passed / 578 deselected，
+迁移和合成容器清理通过；首次本地镜像启动失败未执行测试的记录保留。补充现有
+upgrade_required 控制的旧校验器验证通过，但真实跨版本删除升级链尚待 D-18。
+
+## FABLE M6 焦点与生产浏览器复验（2026-09-09）
+
+集成修复 `7e6ce8b` 已推送，PR 共 13 提交、164 文件；同 SHA 数据库集成和移动
+构建成功，fast 的恢复表单焦点断言失败，browser 有两项 WebKit axe 上下文销毁
+失败及两项 flaky。焦点测试改为等待 effect 完成，定向 9 项和 Web 全套 430 项
+通过；浏览器工作流正切换至与 Docker 一致的生产 standalone，保留所有测试门槛。
+工作流工具 4 项和格式/空白检查通过；首次本机生产浏览器执行因缺少浏览器及系统库
+失败，证据保留并补齐环境后复验，不记为产品失败。D-18 仍待所有者决定，PR 保持
+草稿；原主树产品和用户数据保持，无合并、部署或新增 Provider/邮件批次。
+
+## FABLE M6 当前候选 PR 门禁通过（2026-09-09）
+
+固定候选 `7333eadeaa8d7d23348c77ec95f8bfc51ef71b68` 已推送，草稿 PR #233
+共 14 提交、165 文件；同 SHA 的 fast/integration/browser/mobile 全部 success。
+生产浏览器原测试为 135 passed、10 项既定跳过、零失败或 flaky；没有放宽测试。
+本机浏览器依赖安装及 Firefox/WebKit 启动渲染也通过，完整复验采用同 SHA 远端
+结果，不重复整套测试。依赖审计、集成断言、焦点时序、旧开发浏览器失败和首次
+本机环境失败历史保留，具体 run 和制品见 [M6 发布准备](./V021_M6_RELEASE_PREPARATION.md)。
+候选副本 clean，原主树基线、空暂存区与 T-04 保护保持；本次状态观察留在本地，
+不改变已通过 CI 的提交。D-18 尚待决定和实现，PR 继续草稿；合并、生产和新增
+真实外呼未执行。M6 状态为发布准备进行中，不能宣称完成。
+
+## FABLE M6 D-18 方案批准（2026-09-09）
+
+所有者明确“采取推荐方案”，D-18 由待决策进入实施：客户端声明删除能力，旧端
+普通同步保留；无法安全表达的删除语义返回升级控制并保留本地内容，新端升级后
+从原游标与队列继续。发现旧页面会在升级状态重建快照，因此同批保护 bootstrap
+恢复入口，避免绕过暂停后覆盖待上传内容。实现基于已通过 PR 四项检查的 `7333ead`，
+新代码另验；原主树和 Run 基线不变，生产及合并未执行。
+
+## FABLE M6 D-18 实现与目标验收（2026-09-09）
+
+能力协商、旧端整批回滚/升级控制、快照重建保护、新端保留原队列和游标恢复已实现，
+六个 Web 入口共用恢复条件并增加升级提示。固定真实旧源码和校验器的 17 项、
+当前 offline 25 项、Web 23 项及类型通过，实际 API 响应经旧校验器验证。完整
+集成先为 132 passed；新增分块边界通过后，整套 TOTP/邮件重试时间相关失败保留，
+带时钟监测复验中。完整 CI 和新 SHA 远端门禁收口后再提出具体合并批准，M6 尚未
+完成发布；M5 结论与生产停止线保持，无新增真实外呼。
+
+后续实测完整隔离集成 133 passed / 578 deselected，迁移和两个独占容器清理
+通过。时钟监测捕获约正负 11 秒的调整，原 TOTP/邮件失败保留，未修改相关逻辑
+和断言；累计 46 份实际 API 响应与 17 项真实旧源码兼容检查通过。固定新提交后
+继续完整 CI 与远端复核；旧候选绿灯不借用。

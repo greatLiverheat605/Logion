@@ -127,7 +127,7 @@ async def test_discovery_pins_public_ip_and_preserves_host_and_sni() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://93.184.216.34/v1/models"
         assert request.headers["host"] == "api.example.com"
-        assert request.extensions["sni_hostname"] == b"api.example.com"
+        assert request.extensions["sni_hostname"] == "api.example.com"
         assert request.headers["authorization"] == "Bearer provider-test-secret"
         return httpx.Response(200, json={"data": [{"id": "model-a"}]})
 

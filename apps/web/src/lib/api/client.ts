@@ -208,6 +208,13 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         });
       }
       const headers = prepareHeaders(requestOptions, cookieSource);
+      if (
+        /^\/api\/v1\/workspaces\/[^/]+\/sync\/(?:push|pull|bootstrap)$/.test(
+          path,
+        )
+      ) {
+        headers.set("X-Logion-Sync-Capabilities", "entity-deletion-v1");
+      }
       const { cleanup, signal } = timeoutSignal(
         requestOptions.signal,
         timeoutMs,

@@ -788,6 +788,8 @@ function FormSheet({
 }) {
   const formId = useId();
   const [dateStatus, setDateStatus] = useState(context.dateStatus);
+  const [pending, setPending] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const title = {
     exam: "创建考试",
     subject: "添加科目",
@@ -814,8 +816,13 @@ function FormSheet({
           >
             取消
           </button>
-          <button className={styles.primaryButton} form={formId} type="submit">
-            {title}
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : title}
           </button>
         </>
       }
@@ -827,10 +834,19 @@ function FormSheet({
         className={styles.sheetForm}
         id={formId}
         onSubmit={async (event) => {
-          const ok = await submit(event);
-          if (ok) onOpenChange(false);
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          setSubmitted(true);
+          try {
+            const ok = await submit(event);
+            if (ok) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
         }}
       >
+        {submitted ? <StatusLine>{context.status}</StatusLine> : null}
         {kind === "exam" ? (
           <>
             <label htmlFor={`${formId}-title`}>考试名称</label>

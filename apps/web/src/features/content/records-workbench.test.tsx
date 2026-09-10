@@ -52,7 +52,7 @@ function controllerFixture() {
   const first = note(
     "note-1",
     "Raft 精读",
-    "# Raft\n\n<script>alert(1)</script>",
+    "# Raft\n\n<script>alert(1)</script>\n\nhttps://example.com\n\njavascript:alert(1)",
   );
   const second = note("note-2", "一致性模型", "# Consistency");
   const commands = {
@@ -63,6 +63,7 @@ function controllerFixture() {
     renameResource: vi.fn(async () => true),
     saveNote: vi.fn(async () => true),
     selectNote: vi.fn(),
+    reportDeletion: vi.fn(),
     setSpaceId: vi.fn(),
     setWorkspaceId: vi.fn(),
     synchronize: vi.fn(async () => true),
@@ -168,6 +169,12 @@ describe("Records workbench", () => {
     expect(screen.getByText("<script>alert(1)</script>")).toBeTruthy();
     expect(document.querySelector("script")).toBeNull();
     expect(screen.getByText(/正文中的 HTML 不执行/)).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: /https:\/\/example.com/ })
+        .getAttribute("href"),
+    ).toBe("https://example.com");
+    expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
   });
 
   it("keeps resource registration and attachment queuing in secondary Sheets", async () => {

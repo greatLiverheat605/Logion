@@ -1,6 +1,13 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
@@ -424,7 +431,7 @@ function QueuePanel({
                       ? "服务端精确匹配"
                       : "本人明确判断"}
                     {latest
-                      ? ` · 最近${formatStatus(String(latest.payload.is_correct))}`
+                      ? ` · 最近${latest.payload.is_correct === true ? "正确" : latest.payload.is_correct === false ? "错误" : "尚未判定"}`
                       : " · 尚未作答"}
                   </small>
                 </div>
@@ -871,6 +878,12 @@ function ReviewInspector({
                 : "暂无建议"}
             </dd>
           </div>
+          {mastery?.payload.suggested_reason?.trim() && (
+            <div>
+              <dt>建议依据</dt>
+              <dd>{mastery.payload.suggested_reason}</dd>
+            </div>
+          )}
           <div>
             <dt>下次复习</dt>
             <dd>{formatDate(schedule?.payload.next_review_at)}</dd>
@@ -1216,6 +1229,7 @@ function AuditReviewSheet({
   open: boolean;
 }>) {
   const formId = useId();
+  const [pending, setPending] = useState(false);
   return (
     <WorkbenchSheet
       description="创建草稿后，再添加发现并明确完成审查。"
@@ -1228,8 +1242,13 @@ function AuditReviewSheet({
           >
             取消
           </button>
-          <button className={styles.primaryButton} form={formId} type="submit">
-            保存审查草稿
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : "保存审查草稿"}
           </button>
         </>
       }
@@ -1241,8 +1260,15 @@ function AuditReviewSheet({
         className={styles.sheetForm}
         id={formId}
         onSubmit={async (event) => {
-          const succeeded = await actions.createAuditReview(event);
-          if (succeeded === true) onOpenChange(false);
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          try {
+            const succeeded = await actions.createAuditReview(event);
+            if (succeeded === true) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <label htmlFor={`${formId}-cadence`}>周期</label>
@@ -1284,6 +1310,13 @@ function AnswerSheet({
 }>) {
   const formId = useId();
   const [phase, setPhase] = useState<"answer" | "review">("answer");
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   if (!quiz) return null;
   return (
     <WorkbenchSheet
@@ -1353,7 +1386,9 @@ function AnswerSheet({
           const succeeded = await actions.submitQuizAttempt(event, quiz);
           if (succeeded === true) {
             // Let the submit click settle before Radix unmounts the Sheet.
-            window.setTimeout(() => onOpenChange(false), 0);
+            window.setTimeout(() => {
+              if (mounted.current) onOpenChange(false);
+            }, 0);
           }
         }}
       >
@@ -1730,14 +1765,16 @@ export function ReviewWorkbench({
         onOpenChange={setReviewOpen}
         open={reviewOpen}
       />
-      <AnswerSheet
-        actions={actions}
-        onOpenChange={(next) => {
-          if (!next) setQuiz(null);
-        }}
-        open={quiz !== null}
-        quiz={quiz}
-      />
+      {quiz ? (
+        <AnswerSheet
+          actions={actions}
+          onOpenChange={(next) => {
+            if (!next) setQuiz(null);
+          }}
+          open
+          quiz={quiz}
+        />
+      ) : null}
     </main>
   );
 }

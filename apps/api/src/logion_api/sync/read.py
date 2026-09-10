@@ -40,6 +40,7 @@ from logion_api.sync.push import (
     evidence_payload,
     exam_payload,
     exam_subject_payload,
+    goal_payload,
     mastery_payload,
     mock_exam_payload,
     note_document_state_id,
@@ -290,6 +291,37 @@ class SyncReadService:
                 state.workspace_id,
                 {row.entity_id for row in page if row.entity_type == entity_type},
             )
+        # Only tombstone rows use retained identities. Historical live payloads
+        # remain filtered by the existing non-deleted visibility queries.
+        visible_tombstones: set[tuple[str, UUID]] = set()
+        for tombstone_type, tombstone_model in (
+            ("learning_goal", LearningGoal),
+            ("task", Task),
+            ("note", Note),
+            ("resource", Resource),
+            ("study_session", StudySession),
+        ):
+            ids = {
+                row.entity_id for row in page if row.tombstone and row.entity_type == tombstone_type
+            }
+            if not ids:
+                continue
+            visible_tombstones.update(
+                (tombstone_type, visible_id)
+                for visible_id in await db.scalars(
+                    select(tombstone_model.id)
+                    .join(Space, Space.id == tombstone_model.space_id)
+                    .where(
+                        tombstone_model.workspace_id == state.workspace_id,
+                        tombstone_model.id.in_(ids),
+                        tombstone_model.deleted_at.is_not(None),
+                        Space.workspace_id == state.workspace_id,
+                        Space.deleted_at.is_(None),
+                        Space.status == "active",
+                        (Space.visibility == "shared") | (Space.owner_user_id == user_id),
+                    )
+                )
+            )
         changes = [
             Change(
                 sequence=row.sequence,
@@ -308,7 +340,8 @@ class SyncReadService:
                 payload_hash=row.payload_hash,
             )
             for row in page
-            if (row.entity_type == "space" and row.entity_id in visible_spaces)
+            if (row.tombstone and (row.entity_type, row.entity_id) in visible_tombstones)
+            or (row.entity_type == "space" and row.entity_id in visible_spaces)
             or (row.entity_type == "learning_goal" and row.entity_id in visible_goals)
             or (row.entity_type == "task" and row.entity_id in visible_tasks)
             or (row.entity_type == "study_session" and row.entity_id in visible_sessions)
@@ -596,27 +629,7 @@ class SyncReadService:
             version = version_by_plan.get(plan.id) if plan is not None else None
             if plan is None or version is None:
                 continue
-            payload = {
-                "space_id": str(goal.space_id),
-                "plan_id": str(plan.id),
-                "plan_version_id": str(version.id),
-                "title": goal.title,
-                "description": goal.description,
-                "desired_outcome": goal.desired_outcome,
-                "weekly_minutes": goal.weekly_minutes,
-                "target_date": goal.target_date.isoformat() if goal.target_date else None,
-                "phases": [
-                    {
-                        "id": str(phase.id),
-                        "title": phase.title,
-                        "description": phase.description,
-                        "position": phase.position,
-                        "estimated_minutes": phase.estimated_minutes,
-                        "acceptance_criteria": phase.acceptance_criteria,
-                    }
-                    for phase in phases_by_version.get(version.id, [])
-                ],
-            }
+            payload = goal_payload(goal, plan, version, phases_by_version.get(version.id, []))
             records.append(
                 EntityRecord(
                     entity_type="learning_goal",

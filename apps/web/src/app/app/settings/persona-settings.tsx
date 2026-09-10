@@ -1,9 +1,15 @@
 "use client";
 
+import { feedback, feedbackErrorText } from "@/lib/feedback";
+
 import Link from "next/link";
 import { type FormEvent, useRef, useState } from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
+import {
+  COMMAND_ITEMS,
+  isCommandItemVisible,
+} from "@/components/app-shell/app-navigation";
 import { ThemeToggle } from "@/components/app-shell/theme-toggle";
 import { WorkbenchSheet } from "@/components/product/headless-ui";
 import { IntegrationHubEntry } from "@/features/integrations/integration-hub-entry";
@@ -168,6 +174,7 @@ export function PersonaSettings() {
     customPersonas,
     deleteCustomPersona,
     isLoading,
+    isRouteVisible,
     setActivePersona,
   } = usePersona();
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -180,9 +187,13 @@ export function PersonaSettings() {
     setPendingId(persona.id);
     try {
       await setActivePersona(persona.id);
-      setStatus(`已切换到「${persona.name}」画像。`);
-    } catch {
-      setStatus("画像未能保存，请刷新数据后重试。");
+      setStatus(feedback.success(`已切换到「${persona.name}」画像。`));
+    } catch (error) {
+      setStatus(
+        feedback.error(
+          feedbackErrorText(error, "画像未能保存，请刷新数据后重试。"),
+        ),
+      );
     } finally {
       setPendingId(null);
     }
@@ -192,9 +203,13 @@ export function PersonaSettings() {
     setPendingId(persona.id);
     try {
       await deleteCustomPersona(persona.id);
-      setStatus(`已删除「${persona.name}」。`);
-    } catch {
-      setStatus("画像未能保存，请刷新数据后重试。");
+      setStatus(feedback.success(`已删除「${persona.name}」。`));
+    } catch (error) {
+      setStatus(
+        feedback.error(
+          feedbackErrorText(error, "画像未能保存，请刷新数据后重试。"),
+        ),
+      );
     } finally {
       setPendingId(null);
     }
@@ -219,9 +234,13 @@ export function PersonaSettings() {
       });
       form.reset();
       setSheetOpen(false);
-      setStatus("自定义画像已创建。");
-    } catch {
-      setStatus("画像未能保存，请刷新数据后重试。");
+      setStatus(feedback.success("自定义画像已创建。"));
+    } catch (error) {
+      setStatus(
+        feedback.error(
+          feedbackErrorText(error, "画像未能保存，请刷新数据后重试。"),
+        ),
+      );
     } finally {
       setPendingId(null);
     }
@@ -396,6 +415,22 @@ export function PersonaSettings() {
                   打开安全中心
                 </Link>
                 <IntegrationHubEntry />
+                {COMMAND_ITEMS.filter(
+                  (item) =>
+                    item.id === "ai" &&
+                    isCommandItemVisible(item, activePersona, isRouteVisible),
+                ).map((item) =>
+                  item.kind === "route" ? (
+                    <Link
+                      className={styles.inspectorLink}
+                      href={`${item.href}#ai-provider-center`}
+                      key={item.id}
+                    >
+                      <AppIcon name={item.icon} size={15} />
+                      AI / Provider
+                    </Link>
+                  ) : null,
+                )}
               </InspectorSection>
             </aside>
           }

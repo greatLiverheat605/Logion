@@ -351,6 +351,13 @@ grep -E '^(authenticator|webroot_path) *=' \
 
 ## 6. 发布前备份
 
+停止旧容器前，必须另外保存升级前实际运行的 API、Worker、Web、Backup 四个应用镜像记录：
+服务名、容器配置的不可变镜像引用、实际 Image ID 和对应 RepoDigests。已有旧版 candidate
+manifest 时，逐项对照运行容器与镜像元数据，不能只保留旧源码 SHA 或从浮动 tag 推测旧摘要。
+记录保存在仅运维可读的发布目录，不能导出容器 Env 或完整 inspect 内容。四个服务中任一旧摘要
+无法确认、与旧 manifest 不一致或旧镜像无法保留时，停止升级准备。第 11 节的应用回滚必须引用
+这份已核验记录，不能临时选择另一个 tag。
+
 不要先清理旧版本。先创建 root 专用升级目录，验证旧服务，再进入维护窗口停止所有应用写入者；
 PostgreSQL 与 Redis 暂时保持运行：
 

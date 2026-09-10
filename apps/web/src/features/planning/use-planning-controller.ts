@@ -293,7 +293,8 @@ export interface PlanningControllerResult {
   commands: {
     createGoal: (input: PlanningCreateGoalInput) => Promise<string | null>;
     loadContext: () => Promise<void>;
-    selectGoal: (goalId: string) => void;
+    selectGoal: (goalId: string | null) => void;
+    reportDeletion: (message: string) => void;
     setSpaceId: (spaceId: string) => void;
     setWorkspaceId: (workspaceId: string) => void;
     synchronize: () => Promise<boolean>;
@@ -317,6 +318,7 @@ export function usePlanningController(): PlanningControllerResult {
   const { state: session } = useSession();
   const {
     database,
+    markChanged,
     phase: vaultPhase,
     revision: vaultRevision,
     unlock: unlockVault,
@@ -340,7 +342,7 @@ export function usePlanningController(): PlanningControllerResult {
   const [workspaceId, setWorkspaceIdState] = useState("");
   const [spaceId, setSpaceIdState] = useState("");
   const [deviceId, setDeviceId] = useState("");
-  const [selectedGoalId, setSelectedGoalId] = useState("");
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>("");
   const [goals, setGoals] = useState<PlanningGoalRecord[]>([]);
   const [tasks, setTasks] = useState<PlanningTaskRecord[]>([]);
   const [conflictCount, setConflictCount] = useState(0);
@@ -484,8 +486,9 @@ export function usePlanningController(): PlanningControllerResult {
           },
         );
       }
+      markChanged();
     },
-    [],
+    [markChanged],
   );
 
   const refresh = useCallback(
@@ -563,11 +566,15 @@ export function usePlanningController(): PlanningControllerResult {
     const localVault = vault.current;
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
     queueMicrotask(() => {
+      // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault, workspaceId)
         .then(() => {
           if (workspaceId === workspaceIdRef.current) {
-            setIssue(null);
-            setStatus("目标、阶段和关联任务已从本地加密资料读取。");
+            setStatus((current) =>
+              current === "请选择 Space 并解锁本地资料。"
+                ? "目标、阶段和关联任务已从本地加密资料读取。"
+                : current,
+            );
           }
         })
         .catch(() => undefined);
@@ -848,6 +855,7 @@ export function usePlanningController(): PlanningControllerResult {
       createGoal,
       loadContext,
       selectGoal: setSelectedGoalId,
+      reportDeletion: setStatus,
       setSpaceId,
       setWorkspaceId,
       synchronize,

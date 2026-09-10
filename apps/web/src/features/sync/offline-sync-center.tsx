@@ -1,10 +1,14 @@
 "use client";
 
+import { feedback, feedbackErrorText } from "@/lib/feedback";
+import { incompleteSyncMessage } from "@/features/sync/sync-diagnostics";
+
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   AttachmentQueueRepository,
   BootstrapRepository,
+  canResumeSync,
   ConflictRepository,
   OfflineStorageError,
   OfflineVault,
@@ -55,12 +59,38 @@ function userMessage(error: unknown): string {
   const capabilityMessage = offlineCapabilityMessage(error);
   if (capabilityMessage !== null) return capabilityMessage;
   if (error instanceof LogionApiError) {
-    return `操作未完成（请求编号：${error.requestId}）。`;
+    return feedbackErrorText(error);
   }
   if (error instanceof OfflineStorageError) {
-    return "本地资料操作未完成；本设备上的既有数据保持不变。";
+    return feedbackErrorText(
+      error,
+      "本地资料操作未完成；本设备上的既有数据保持不变。",
+    );
   }
   return "操作未完成；本地数据保持不变，请检查解锁状态或稍后重试。";
+}
+
+function attachmentFailureMessage(
+  attachment: AttachmentQueueEntry,
+  apiError: LogionApiError | null,
+): string {
+  const code =
+    apiError?.code ??
+    attachment.last_error_code ??
+    "OFFLINE_ATTACHMENT_UPLOAD_FAILED";
+  const request = apiError ? `；请求编号：${apiError.requestId}` : "";
+  const evidence = `（${code}${request}）`;
+
+  switch (code) {
+    case "KNOWLEDGE_ATTACHMENT_INGEST_DISABLED":
+      return `附件「${attachment.filename}」上传失败：服务端附件功能当前未开放，本地文件保留在队列中${evidence}。`;
+    case "OFFLINE_ATTACHMENT_METADATA_REQUIRED":
+      return `附件「${attachment.filename}」未上传：需补全目标对象信息，本地文件保留在队列中${evidence}。`;
+    case "OFFLINE_ATTACHMENT_VERIFICATION_FAILED":
+      return `附件「${attachment.filename}」上传失败：服务器未确认哈希，本地文件保留在队列中，请重试${evidence}。`;
+    default:
+      return `附件「${attachment.filename}」上传失败：本地文件保留在队列中，请检查错误码后重试${evidence}。`;
+  }
 }
 
 function transport(
@@ -105,6 +135,7 @@ export function OfflineSyncCenter() {
   const {
     clearLocalData,
     database,
+    markChanged,
     lock: lockVault,
     phase: vaultPhase,
     revision: vaultRevision,
@@ -118,6 +149,7 @@ export function OfflineSyncCenter() {
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在读取同步上下文…");
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [accessIssue, setAccessIssue] = useState<PermissionIssue>(null);
   const [syncing, setSyncing] = useState(false);
@@ -183,8 +215,7 @@ export function OfflineSyncCenter() {
     localVault: OfflineVault,
   ): Promise<void> {
     const current = await db.syncState.get(workspaceId);
-    if (current?.bootstrap_state === "ready" && current.device_id === deviceId)
-      return;
+    if (canResumeSync(current, deviceId)) return;
     const repository = new BootstrapRepository(db, {}, localVault);
     const first = await request<unknown>(
       `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
@@ -234,6 +265,7 @@ export function OfflineSyncCenter() {
         device_id: deviceId,
       });
     }
+    markChanged();
   }
 
   async function refresh(
@@ -271,6 +303,7 @@ export function OfflineSyncCenter() {
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (session.status !== "authenticated" || !workspaceId || !deviceId) return;
     const passphrase = String(
       new FormData(event.currentTarget).get("passphrase") ?? "",
@@ -280,7 +313,7 @@ export function OfflineSyncCenter() {
       await bootstrap(db, localVault);
       await refresh(db, localVault);
       setStatus("本地资料已解锁；冲突正文只在当前页面内存中显示。");
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       setStatus(offlineUnlockMessage(error) ?? userMessage(error));
     }
@@ -294,7 +327,9 @@ export function OfflineSyncCenter() {
       () =>
         void refresh(db, localVault)
           .then(() => setStatus("本地资料已在应用内解锁。"))
-          .catch((error: unknown) => setStatus(userMessage(error))),
+          .catch((error: unknown) =>
+            setStatus(feedback.error(userMessage(error))),
+          ),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,9 +361,11 @@ export function OfflineSyncCenter() {
       setMergeConflictId(null);
       setMergeDraft("");
       setClearConfirmation("");
-      setStatus("本设备上的离线数据已清除；服务器数据没有改变。");
+      setStatus(
+        feedback.success("本设备上的离线数据已清除；服务器数据没有改变。"),
+      );
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(feedback.error(userMessage(error)));
     }
   }
 
@@ -339,14 +376,23 @@ export function OfflineSyncCenter() {
     setSyncing(true);
     try {
       await bootstrap(db, localVault);
-      await new SyncClient(
+      const result = await new SyncClient(
         db,
         transport(request, workspaceId),
         localVault,
       ).synchronize(workspaceId, deviceId);
-      setStatus("同步完成；仍需选择的冲突会继续保留。 ");
+      const remaining = await db.outbox
+        .where("[workspace_id+device_id]")
+        .equals([workspaceId, deviceId])
+        .toArray();
+      const incomplete = incompleteSyncMessage(result, remaining);
+      if (incomplete) {
+        setStatus(feedback.error(incomplete));
+        return;
+      }
+      setStatus(feedback.success("同步完成；仍需选择的冲突会继续保留。 "));
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(feedback.error(userMessage(error)));
     } finally {
       await refresh(db, localVault);
       setSyncing(false);
@@ -392,7 +438,7 @@ export function OfflineSyncCenter() {
       setStatus("解决方案已安全写入本地 Outbox，正在尝试同步。");
       await synchronize();
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(feedback.error(userMessage(error)));
       await refresh(db, localVault);
     }
   }
@@ -439,7 +485,7 @@ export function OfflineSyncCenter() {
       setStatus("已复制本地版本为新对象；原对象将采用服务器版本。");
       await synchronize();
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(feedback.error(userMessage(error)));
       await refresh(db, localVault);
     }
   }
@@ -453,36 +499,104 @@ export function OfflineSyncCenter() {
         workspaceId,
         view.conflict.conflict_id,
       );
-      setStatus("冲突已暂不处理；本地版本与服务器版本均未被覆盖。 ");
+      setStatus(
+        feedback.success("冲突已暂不处理；本地版本与服务器版本均未被覆盖。 "),
+      );
       await refresh(db, localVault);
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(feedback.error(userMessage(error)));
       await refresh(db, localVault);
+    }
+  }
+
+  async function removeAttachment(
+    attachment: AttachmentQueueEntry,
+  ): Promise<void> {
+    try {
+      const db = database.current;
+      if (
+        db === null ||
+        !unlocked ||
+        uploading ||
+        attachment.workspace_id !== workspaceId
+      ) {
+        throw new OfflineStorageError("OFFLINE_INPUT_INVALID");
+      }
+      await new AttachmentQueueRepository(db).removeFailed(
+        workspaceId,
+        attachment.attachment_id,
+      );
+      setAttachments((current) =>
+        current.filter(
+          (entry) => entry.attachment_id !== attachment.attachment_id,
+        ),
+      );
+      setStatus(
+        feedback.success(`已从本设备队列移除附件「${attachment.filename}」。`),
+      );
+    } catch (error) {
+      let message = userMessage(error);
+      try {
+        await refresh();
+        if (
+          error instanceof OfflineStorageError &&
+          error.code === "OFFLINE_INPUT_INVALID"
+        ) {
+          message = "附件已不可移除，已重新读取当前队列。";
+        }
+      } catch (refreshError) {
+        message = `${message} 队列读取失败：${userMessage(refreshError)}`;
+      }
+      setStatus(feedback.error(message));
+      throw new Error(message);
     }
   }
 
   async function upload(attachment: AttachmentQueueEntry) {
     const db = database.current;
-    if (db === null) return;
+    if (db === null || uploading) return;
+    setUploading(true);
     const repository = new AttachmentQueueRepository(db);
+    const uploadTransport = new ApiAttachmentUploadTransport();
     try {
       if (attachment.state === "failed") {
         await repository.retry(attachment.attachment_id);
       }
-      await repository.uploadPending(
+      const result = await repository.uploadPending(
         workspaceId,
-        new ApiAttachmentUploadTransport(),
+        uploadTransport,
       );
-      setStatus("附件上传队列已处理一项，并完成服务器哈希验证。");
+      if (result === null) {
+        setStatus(feedback.error("附件队列中没有待上传项。"));
+      } else if (result.state === "verified") {
+        setStatus(
+          feedback.success(
+            `附件「${result.filename}」上传成功，并完成服务器哈希验证。`,
+          ),
+        );
+      } else {
+        setStatus(
+          feedback.error(
+            attachmentFailureMessage(result, uploadTransport.lastError),
+          ),
+        );
+      }
     } catch (error) {
-      setStatus(userMessage(error));
+      setStatus(feedback.error(userMessage(error)));
     } finally {
-      await refresh();
+      try {
+        await refresh();
+      } catch (error) {
+        setStatus(feedback.error(userMessage(error)));
+      } finally {
+        setUploading(false);
+      }
     }
   }
 
   return (
     <SyncWorkbench
+      uploading={uploading}
       accessIssue={accessIssue}
       attachments={attachments}
       clearConfirmation={clearConfirmation}
@@ -515,6 +629,7 @@ export function OfflineSyncCenter() {
       onUpload={(attachment) => void upload(attachment)}
       onWorkspaceChange={setWorkspaceId}
       onReload={() => void loadContext()}
+      onRemoveAttachment={removeAttachment}
       outbox={outbox}
       queueSummary={queueSummary}
       status={status}

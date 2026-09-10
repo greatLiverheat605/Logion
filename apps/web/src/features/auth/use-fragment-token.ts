@@ -8,7 +8,8 @@ export function consumeFragmentToken(
   hash: string,
   clear: () => void,
 ): string | null {
-  const candidate = new URLSearchParams(hash.slice(1)).get("token");
+  const fragment = hash.slice(1);
+  const candidate = new URLSearchParams(fragment).get("token") ?? fragment;
   clear();
   return candidate !== null && TOKEN_PATTERN.test(candidate) ? candidate : null;
 }

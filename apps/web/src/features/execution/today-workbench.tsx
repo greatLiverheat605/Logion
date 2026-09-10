@@ -1,4 +1,5 @@
 "use client";
+import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import Link from "next/link";
 import {
@@ -970,6 +971,16 @@ function TodayInspector({ controller }: { controller: TodayControllerResult }) {
         <Link href="/app/audit">审计时间线</Link>
         <Link href="/app/sync">同步详情</Link>
       </nav>
+      <EntityDeleteAction
+        entityType="task"
+        entityId={task.entity.entity_id}
+        workspaceId={controller.context.workspaceId}
+        disabled={
+          !controller.capabilities.canWrite || !controller.context.unlocked
+        }
+        onStatus={controller.commands.reportDeletion}
+        onDeleted={() => controller.commands.setSelectedTaskId(null)}
+      />
     </div>
   );
 }

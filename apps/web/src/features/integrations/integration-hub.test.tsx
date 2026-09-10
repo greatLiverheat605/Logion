@@ -322,7 +322,13 @@ describe("IntegrationHub", () => {
     fireEvent.change(await screen.findByLabelText("输入 EXPORT 确认创建"), {
       target: { value: "EXPORT" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "创建加密导出" }));
+    expect(screen.getByTestId("integrations-export").textContent).toContain(
+      "服务端加密存储",
+    );
+    expect(screen.getByTestId("integrations-export").textContent).toContain(
+      "下载后为可读 ZIP，未加密，请妥善保管。",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "创建数据导出" }));
     expect(
       await screen.findByText("需要重新登录后才能创建数据导出。"),
     ).toBeTruthy();

@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Iterator
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -7,13 +8,14 @@ from httpx import ASGITransport, AsyncClient
 from logion_api.ai_gateway.models import AIOutputDraft, AIOutputDraftCandidate, AIRun, AITaskRoute
 from logion_api.config import get_settings
 from logion_api.content.models import Resource
-from logion_api.db import session_factory
+from logion_api.db import engine, session_factory
+from logion_api.identity.models import AuditEvent
 from logion_api.knowledge_space.models import KnowledgeAcceptanceReceipt, KnowledgeCitation
 from logion_api.knowledge_space.schemas import KnowledgeDraftAcceptanceRequest
 from logion_api.knowledge_space.service import KnowledgeService
 from logion_api.main import app
 from logion_api.memory.models import Topic
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 ORIGIN = "http://test"
 PASSWORD = "a-strong-password-123"  # noqa: S105 - test-only credential
@@ -109,7 +111,7 @@ def _payload(
 @pytest.mark.asyncio
 async def test_acceptance_is_atomic_and_idempotent(_knowledge_space_api_enabled: None) -> None:
     async with AsyncClient(
-        transport=ASGITransport(app=app, client=("192.0.2.59", 48204)),
+        transport=ASGITransport(app=app, client=("192.0.2.59", 48204), raise_app_exceptions=False),
         base_url=ORIGIN,
         headers={"Origin": ORIGIN},
     ) as client:
@@ -235,6 +237,91 @@ async def test_acceptance_is_atomic_and_idempotent(_knowledge_space_api_enabled:
             excerpt_sha256=excerpt_sha256,
             accepted_edits={"summary": "approved"},
         )
+
+        async def assert_pending_without_acceptance() -> None:
+            async with session_factory() as db:
+                draft = await db.get(AIOutputDraft, draft_id)
+                assert draft is not None
+                assert (draft.status, draft.version, draft.edited_output) == ("pending", 1, None)
+                assert draft.decided_by is None and draft.decided_at is None
+                assert await db.get(KnowledgeCitation, candidate_id) is None
+                assert (
+                    await db.scalar(
+                        select(KnowledgeAcceptanceReceipt.id).where(
+                            KnowledgeAcceptanceReceipt.draft_id == draft_id,
+                        )
+                    )
+                    is None
+                )
+                assert (
+                    await db.scalar(
+                        select(AuditEvent.id).where(
+                            AuditEvent.workspace_id == workspace_id,
+                            AuditEvent.event_type == "knowledge.draft_accepted",
+                        )
+                    )
+                    is None
+                )
+
+        await assert_pending_without_acceptance()
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=("192.0.2.60", 48205)),
+            base_url=ORIGIN,
+            headers={"Origin": ORIGIN},
+        ) as other:
+            await _register(other, "other")
+            for requested_draft_id in (draft_id, uuid4()):
+                denied = await other.post(
+                    f"{base}/drafts/{requested_draft_id}/acceptances",
+                    headers=_csrf(other),
+                    json=payload,
+                )
+                assert denied.status_code == 404
+                assert denied.json()["code"] == "RESOURCE_NOT_FOUND"
+        await assert_pending_without_acceptance()
+
+        # Fail after each SQL write has executed, then read back through a new session.
+        for failed_table in (
+            "knowledge_citations",
+            "knowledge_acceptance_receipts",
+            "ai_output_drafts",
+            "audit_events",
+        ):
+            injected = False
+
+            def fail_after_write(
+                _connection: Any,
+                _cursor: Any,
+                _statement: str,
+                _parameters: Any,
+                context: Any,
+                _executemany: bool,
+                *,
+                _failed_table: str = failed_table,
+            ) -> None:
+                nonlocal injected
+                table = getattr(getattr(context.compiled, "statement", None), "table", None)
+                if (
+                    (context.isinsert or context.isupdate)
+                    and table is not None
+                    and table.name == _failed_table
+                ):
+                    injected = True
+                    raise RuntimeError("Injected acceptance write failure")
+
+            event.listen(engine.sync_engine, "after_cursor_execute", fail_after_write)
+            try:
+                failed = await client.post(
+                    f"{base}/drafts/{draft_id}/acceptances",
+                    headers=_csrf(client),
+                    json=payload,
+                )
+                assert injected, failed_table
+                assert failed.status_code == 500
+            finally:
+                event.remove(engine.sync_engine, "after_cursor_execute", fail_after_write)
+            await assert_pending_without_acceptance()
+
         accepted, replay = await asyncio.gather(
             client.post(
                 f"{base}/drafts/{draft_id}/acceptances",
@@ -278,6 +365,33 @@ async def test_acceptance_is_atomic_and_idempotent(_knowledge_space_api_enabled:
             assert len(candidates.all()) == 1
             draft = await db.get(AIOutputDraft, draft_id)
             assert draft is not None and draft.status == "accepted"
+            assert draft.version == 2 and draft.edited_output == {"summary": "approved"}
+            assert draft.decided_by == user_id and draft.decided_at is not None
+            citations = (
+                await db.scalars(
+                    select(KnowledgeCitation).where(KnowledgeCitation.accepted_draft_id == draft_id)
+                )
+            ).all()
+            receipts = (
+                await db.scalars(
+                    select(KnowledgeAcceptanceReceipt).where(
+                        KnowledgeAcceptanceReceipt.draft_id == draft_id
+                    )
+                )
+            ).all()
+            audits = (
+                await db.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.workspace_id == workspace_id,
+                        AuditEvent.event_type == "knowledge.draft_accepted",
+                    )
+                )
+            ).all()
+            assert len(citations) == len(receipts) == len(audits) == 1
+            assert citations[0].id == candidate_id
+            assert citations[0].acceptance_operation_id == receipts[0].id == audits[0].target_id
+            assert receipts[0].created_object_ids == [str(candidate_id)]
+            assert receipts[0].idempotency_key == UUID(str(payload["idempotency_key"]))
 
         stale_run_id, stale_draft_id, stale_candidate_id = uuid4(), uuid4(), uuid4()
         async with session_factory() as db:

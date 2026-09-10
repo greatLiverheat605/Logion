@@ -10,6 +10,33 @@ function jsonResponse(value: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("API client security boundary", () => {
+  it("advertises deletion handling on all sync transports without changing other requests", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => jsonResponse({}));
+    const client = createApiClient({ fetchImplementation });
+    for (const operation of ["push", "pull", "bootstrap"]) {
+      await client.request(
+        `/api/v1/workspaces/test-workspace/sync/${operation}`,
+        {
+          method: "POST",
+          body: "{}",
+        },
+      );
+    }
+    await client.request("/api/v1/auth/me");
+    expect(
+      fetchImplementation.mock.calls.map(([, options]) =>
+        new Headers(options?.headers).get("X-Logion-Sync-Capabilities"),
+      ),
+    ).toEqual([
+      "entity-deletion-v1",
+      "entity-deletion-v1",
+      "entity-deletion-v1",
+      null,
+    ]);
+  });
+
   it("rejects absolute, query-bearing and non-v1 paths before fetch", async () => {
     const fetchImplementation = vi.fn<typeof fetch>();
     const client = createApiClient({ fetchImplementation });

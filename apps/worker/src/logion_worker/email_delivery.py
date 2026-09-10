@@ -91,9 +91,7 @@ class AliyunDirectMailTransport:
     ) -> None:
         self._settings = settings
         self._credentials = credentials or self._create_credentials(settings)
-        self._transport_factory = transport_factory or (
-            lambda: httpx.AsyncHTTPTransport(retries=0)
-        )
+        self._transport_factory = transport_factory or (lambda: httpx.AsyncHTTPTransport(retries=0))
         self._clock = clock or (lambda: datetime.now(UTC))
         self._nonce_factory = nonce_factory or (lambda: uuid4().hex)
 
@@ -112,7 +110,7 @@ class AliyunDirectMailTransport:
                     timeout=settings.aliyun_directmail_read_timeout_seconds * 1000,
                     connect_timeout=settings.aliyun_directmail_connect_timeout_seconds * 1000,
                 )
-            )
+            ),
         )
 
     async def send(self, message: EmailMessage) -> DeliveryReceipt:
@@ -156,17 +154,20 @@ class AliyunDirectMailTransport:
                 write=self._settings.aliyun_directmail_read_timeout_seconds,
                 pool=self._settings.aliyun_directmail_connect_timeout_seconds,
             )
-            async with httpx.AsyncClient(
-                transport=self._transport_factory(),
-                timeout=timeout,
-                follow_redirects=False,
-                trust_env=False,
-            ) as client, client.stream(
-                "POST",
-                f"https://{endpoint}/",
-                headers=headers,
-                content=payload,
-            ) as response:
+            async with (
+                httpx.AsyncClient(
+                    transport=self._transport_factory(),
+                    timeout=timeout,
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as client,
+                client.stream(
+                    "POST",
+                    f"https://{endpoint}/",
+                    headers=headers,
+                    content=payload,
+                ) as response,
+            ):
                 response_status = response.status_code
                 response_body = bytearray()
                 async for chunk in response.aiter_bytes(chunk_size=8192):
@@ -430,7 +431,7 @@ def render_email(purpose: str, payload: dict[str, str], base_url: str) -> EmailM
             subject=subject,
             text_body=f"{message}\n\n这是一封自动安全通知，请勿回复。",
             html_body=(
-                "<!doctype html><html lang=\"zh-CN\"><body>"
+                '<!doctype html><html lang="zh-CN"><body>'
                 f"<h1>{html.escape(subject)}</h1><p>{html.escape(message)}</p>"
                 "<p>这是一封自动安全通知，请勿回复。</p></body></html>"
             ),
@@ -452,13 +453,14 @@ def _action_email(
         recipient=recipient,
         subject=subject,
         text_body=(
-            f"{lead}\n\n{action_label}：{link}\n\n{expiry}\n"
-            "如果这不是您的操作，请忽略本邮件。"
+            f"{lead}\n\n{action_label}：{link}\n\n{expiry}\n如果这不是您的操作，请忽略本邮件。"
         ),
         html_body=(
-            "<!doctype html><html lang=\"zh-CN\"><body>"
+            '<!doctype html><html lang="zh-CN"><body>'
             f"<h1>{html.escape(subject)}</h1><p>{html.escape(lead)}</p>"
-            f"<p><a href=\"{escaped_link}\">{html.escape(action_label)}</a></p>"
+            f'<p><a href="{escaped_link}">{html.escape(action_label)}</a></p>'
+            "<p>如果按钮无法打开，请复制以下完整链接到浏览器地址栏：</p>"
+            f'<p style="overflow-wrap:anywhere;word-break:break-all">{escaped_link}</p>'
             f"<p>{html.escape(expiry)}</p>"
             "<p>如果这不是您的操作，请忽略本邮件。</p></body></html>"
         ),
@@ -504,17 +506,10 @@ def signed_directmail_headers(
     if security_token:
         headers["x-acs-accesskey-id"] = access_key_id
         headers["x-acs-security-token"] = security_token
-    canonical_headers = "".join(
-        f"{key}:{headers[key].strip()}\n" for key in sorted(headers)
-    )
+    canonical_headers = "".join(f"{key}:{headers[key].strip()}\n" for key in sorted(headers))
     signed_headers = ";".join(sorted(headers))
-    canonical_request = (
-        f"POST\n/\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
-    )
-    string_to_sign = (
-        "ACS3-HMAC-SHA256\n"
-        f"{hashlib.sha256(canonical_request.encode()).hexdigest()}"
-    )
+    canonical_request = f"POST\n/\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+    string_to_sign = f"ACS3-HMAC-SHA256\n{hashlib.sha256(canonical_request.encode()).hexdigest()}"
     signature = hmac.new(
         access_key_secret.encode(),
         string_to_sign.encode(),

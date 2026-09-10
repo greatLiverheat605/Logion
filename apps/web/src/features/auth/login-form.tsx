@@ -16,11 +16,27 @@ type PasskeyOptions =
   components["schemas"]["PasskeyAuthenticationOptionsResponse"];
 type AuthResponse = components["schemas"]["AuthResponse"];
 
-async function nextRoute(response: AuthResponse): Promise<string> {
+function safeNextPath(value: string | null): string | null {
+  const isLocalPath = (path: string) =>
+    path.startsWith("/") && !path.startsWith("//") && !path.includes("\\");
+  if (!value || !isLocalPath(value)) return null;
+  try {
+    const decoded = decodeURIComponent(value);
+    if (!isLocalPath(decoded)) return null;
+    const origin = "https://logion.invalid";
+    return new URL(decoded, origin).origin === origin ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function nextRoute(
+  response: AuthResponse,
+  requestedNext: string | null = null,
+): Promise<string> {
   if (response.user.status === "pending_deletion") return "/account/deletion";
-  return (await resolveOnboardingAccess()) === "complete"
-    ? "/app/today"
-    : "/onboarding";
+  if ((await resolveOnboardingAccess()) !== "complete") return "/onboarding";
+  return safeNextPath(requestedNext) ?? "/app/today";
 }
 
 function decodeBase64url(value: string): ArrayBuffer {
@@ -63,7 +79,10 @@ export function LoginForm() {
     setAuthenticated(response);
     setSettingsBlocked(false);
     try {
-      window.location.assign(await nextRoute(response));
+      const requestedNext = new URLSearchParams(window.location.search).get(
+        "next",
+      );
+      window.location.assign(await nextRoute(response, requestedNext));
     } catch {
       setSettingsBlocked(true);
     }

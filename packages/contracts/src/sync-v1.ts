@@ -175,6 +175,9 @@ export interface AppliedOperationResult {
   retryable: false;
   server_version: number;
   sequence: number;
+  impact?: {
+    [k: string]: number;
+  } | null;
 }
 export interface ConflictOperationResult {
   operation_id: Uuid;
@@ -198,6 +201,7 @@ export interface Conflict {
   remote_version: number;
   remote_payload: Payload;
   remote_payload_hash: Hash;
+  remote_deleted_at?: DateTime | null;
   /**
    * @minItems 1
    */
@@ -212,6 +216,9 @@ export interface FailedOperationResult {
   status: "rejected" | "blocked_dependency";
   retryable: boolean;
   error_code: string;
+  details?: {
+    [k: string]: number;
+  } | null;
 }
 export interface LiveChange {
   sequence: number;

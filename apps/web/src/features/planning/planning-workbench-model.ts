@@ -76,7 +76,7 @@ export function derivePlanningViewModel({
   tasks,
 }: Readonly<{
   goals: readonly PlanningGoalRecord[];
-  selectedGoalId: string;
+  selectedGoalId: string | null;
   spaceId: string;
   tasks: readonly PlanningTaskRecord[];
 }>): PlanningDerivedViewModel {
@@ -84,7 +84,10 @@ export function derivePlanningViewModel({
     .filter((goal) => goal.payload.space_id === spaceId)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const selectedGoal =
-    visibleGoals.find((goal) => goal.id === selectedGoalId) ?? visibleGoals[0];
+    selectedGoalId === null
+      ? undefined
+      : (visibleGoals.find((goal) => goal.id === selectedGoalId) ??
+        visibleGoals[0]);
   const phaseSequence = buildPlanningPhaseSequence(
     selectedGoal?.payload.phases ?? [],
   );
