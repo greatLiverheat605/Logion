@@ -1,11 +1,13 @@
 # v0.2.1 M5 缺陷修复与复验
 
+> 历史适用范围：本文记录 2026-09-07 的候选与检查，以下“未通过”“未提交”和过程计数均为当时状态。M5 最终按批准范围完成（50 passed、2 partial、6 out_of_scope），见 [M5 结论](V021_M5_CLOSEOUT.md)；当前 Git 与发布进度见 [v0.2.1 状态](V021_STATUS.md)。
+
 > 日期：2026-09-07。状态：R-01–R-03 已修复并完成本地复验，未提交，M5 门仍未通过。
 > Git 基线：`bac2a4371ce6a12d6c3e9a6124104d121b0f8807`，未创建新提交。
 > 前轮完整结果：[M5 本地回归记录](./V021_M5_LOCAL_REGRESSION.md)。
 > 本文保留 R-01–R-03 阶段历史。R-05 慢保存竞态、R-06 弹窗对比度、R-07 时钟回拨的后续结果见 [M5 收口记录](./V021_M5_CLOSEOUT.md)。
 
-当前 [58 项清单](./FABLE_REGRESSION_CHECKLIST.md)为 43 passed、1 failed、5 partial、
+当时 [58 项清单](./FABLE_REGRESSION_CHECKLIST.md)为 43 passed、1 failed、5 partial、
 3 blocked、6 out_of_scope。6.2、8.3、12.1 更新为 passed，原范围内 26 项当前映射均
 passed；其他项继续引用前轮证据，本轮没有重新执行全部 58 项。13.3/R-04 仍失败，
 13.1 侧栏仍 partial，不能以通过数上升替代 M5 的全部验收门。

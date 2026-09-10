@@ -40,6 +40,7 @@ test("Templates completes real version, install, import and share workflows", as
   page,
 }) => {
   test.setTimeout(300_000);
+  await page.goto("about:blank");
   const runtimeProblems: string[] = [];
   page.on("console", (entry) => {
     if (entry.text() === "Service Worker registration blocked by Playwright")
@@ -51,6 +52,15 @@ test("Templates completes real version, install, import and share workflows", as
   page.on("pageerror", (error) =>
     runtimeProblems.push(`pageerror: ${error.message}`),
   );
+
+  // Installation requires recent authentication even late in the full suite.
+  await page.context().clearCookies();
+  await page.goto("/auth/login?next=%2Fapp%2Ftemplates");
+  await page.getByLabel("邮箱", { exact: true }).fill(accountState.email);
+  await page.getByLabel("密码", { exact: true }).fill(accountState.password);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/templates$/);
+  accountState.authenticatedAt = Date.now();
 
   const marker = `TEMPLATE-${Date.now()}`;
   const manifest = loadGlmTargetManifest();

@@ -86,23 +86,29 @@ test.describe("authenticated shell", () => {
     }
   }
 
-  test("workbenches have no WCAG violations or horizontal overflow", async ({
-    page,
-  }) => {
-    test.setTimeout(120_000);
-    const viewport = WORKBENCH_VIEWPORTS[3];
-    await page.setViewportSize(viewport);
+  for (const theme of ["light", "dark"] as const) {
+    test(`workbenches have no WCAG violations or horizontal overflow in ${theme}`, async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      const viewport = WORKBENCH_VIEWPORTS[3];
+      await page.setViewportSize(viewport);
+      await page.evaluate((value) => {
+        localStorage.setItem("app-shell-theme", value);
+      }, theme);
 
-    for (const route of authenticatedRoutes) {
-      await page.goto(route, { waitUntil: "domcontentloaded" });
-      await waitForWorkbenchReady(page, route);
-      await assertNoHorizontalOverflow(page, route, viewport);
-      const results = await new AxeBuilder({ page })
-        .withTags(wcagTags)
-        .analyze();
-      expect(results.violations).toEqual([]);
-    }
-  });
+      for (const route of authenticatedRoutes) {
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+        await waitForWorkbenchReady(page, route);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await assertNoHorizontalOverflow(page, route, viewport);
+        const results = await new AxeBuilder({ page })
+          .withTags(wcagTags)
+          .analyze();
+        expect(results.violations).toEqual([]);
+      }
+    });
+  }
 
   test("all authenticated routes fit every product breakpoint", async ({
     page,

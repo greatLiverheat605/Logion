@@ -1,8 +1,10 @@
 # v0.2.1 M5 本地回归记录
 
+> 历史适用范围：本文记录 2026-09-07 的候选与检查，以下“未通过”“未提交”和过程计数均为当时状态。M5 最终按批准范围完成（50 passed、2 partial、6 out_of_scope），见 [M5 结论](V021_M5_CLOSEOUT.md)；当前 Git 与发布进度见 [v0.2.1 状态](V021_STATUS.md)。
+
 > 日期：2026-09-07。状态：首轮执行与结果归纳完成，以下保留修复前历史，M5 验收门未通过。
 > 产品候选：`bac2a4371ce6a12d6c3e9a6124104d121b0f8807`。
-> 后续 R-01–R-03 已修复并复验，当前 43/1/5/3/6 结果见 [修复报告](./V021_M5_FIXES_REVIEW.md)与 [清单](./FABLE_REGRESSION_CHECKLIST.md)。
+> 后续 R-01–R-03 已修复并复验，当时 43/1/5/3/6 结果见 [修复报告](./V021_M5_FIXES_REVIEW.md)与 [清单](./FABLE_REGRESSION_CHECKLIST.md)。
 > 入口：[计划总表](./FABLE_PLAN_REGISTER.md)、[58 项清单](./FABLE_REGRESSION_CHECKLIST.md)、[生效范围](./V021_DELIVERY_SCOPE.md#生效范围2026-09-07)。
 
 ## 结论与范围

@@ -7,7 +7,7 @@
 
 Logion 把目标、计划、任务、专注会话、笔记、证据、人工验收、复习、考试、研究和小组协作连接成可追溯闭环。它面向个人和最多 10 人的小规模自托管使用，不是普通待办应用，也不把 AI 生成内容当作已经确认的学习结果。
 
-> 当前状态：仓库清单版本仍为 `0.1.0`；受控 prerelease 仍运行已观察通过的 `0.2.0-rc7`。C7 修复 PR #220 的 fast/integration/browser 门禁已通过，当前等待 GLM 整体复审，尚未进入 Production；flags 默认关闭，真实邮件、实体设备、生产备份和流量切换仍未授权。
+> 当前状态（2026-09-10）：v0.2.1 的 M5 已按批准范围完成，PR #233/#234 已合入 main，正在完成 M6 发布制品验收。生产尚未切换；当前候选与门禁见 [版本状态](docs/development/V021_STATUS.md)。包清单版本仍为 `0.1.0`，生产敏感能力沿用默认关闭与逐项准入要求。
 
 ## 为什么是 Logion
 
@@ -72,9 +72,9 @@ Logion 把目标、计划、任务、专注会话、笔记、证据、人工验�
 
 ## 产品界面
 
-- Adaptive Desk 使用五个稳定区域：今天、工作台、知识库、协作空间、系统中心。
+- 桌面导航按每日、知识、治理、系统分组，12 条画像主路由按当前画像显示。
 - 21 条正式业务 URL 保持可深链和兼容；全局搜索与历史知识原型不扩张一级导航。
-- Desktop 使用五区侧边栏、44px 上下文栏、命令面板和按需 Inspector；移动端保持相同五区入口，并将图谱降级为可操作节点列表与详情层。
+- Desktop 使用侧边栏、命令面板和按需 Inspector；移动端按画像显示 4 个固定入口与“更多”，真机验收和后续移动施工按批准范围延后。
 - Persona 只调整工作台和知识库的默认入口，不改变 Workspace Role、Space 权限或服务端授权。
 - 每个页面区分 loading、empty、error、权限、离线和真实就绪状态，不用演示数据伪造成功。
 - 支持浅色/深色主题、键盘焦点、reduced-motion 和 320 CSS px 起的响应式布局。
@@ -256,27 +256,19 @@ PR/Release/Nightly 流水线还覆盖 PostgreSQL/Redis 集成、迁移往返、�
 
 ## 项目文档
 
-- [项目功能全景](docs/product/PROJECT_FUNCTION_MAP.md)
-- [用户指南](docs/user-guide.md)
-- [V20-15 RC8 修复候选与发布证据](docs/development/V020_V15_PRERELEASE_RC8_EVIDENCE.md)
-- [V20-15 RC7 受控 prerelease 证据](docs/development/V020_V15_PRERELEASE_RC7_EVIDENCE.md)
-- [版本状态快照](docs/development/V020_STATUS.md)
-- [下一版本产品与技术路线](docs/product/NEXT_VERSION_ROADMAP.md)
-- [全仓代码审查与问题台账](docs/reviews/PROJECT_CODE_REVIEW_2026-08-01.md)
-- [互操作中心 v1](docs/features/interoperability-hub.md)
-- [用户画像系统](docs/features/persona-system.md)
-- [架构决策记录](docs/adr/README.md)
-- [安全设计与威胁模型](docs/security/)
-- [离线存储与同步](docs/offline/)、[sync-v1 文档](docs/sync/)
-- [移动端状态与架构](docs/mobile/README.md)
-- [基础设施与运行手册](infra/README.md)
-- [变更日志](CHANGELOG.md)
+- [文档导航](docs/README.md) · [开发与交付导航](docs/development/README.md)
+- [用户指南](docs/user-guide.md) · [项目功能全景](docs/product/PROJECT_FUNCTION_MAP.md)
+- [v0.2.1 当前状态](docs/development/V021_STATUS.md) · [M5 验收结论](docs/development/V021_M5_CLOSEOUT.md) · [M6 发布准备](docs/development/V021_M6_RELEASE_PREPARATION.md)
+- [FABLE 计划与决策](docs/development/FABLE_PLAN_REGISTER.md) · [长期产品路线](docs/product/NEXT_VERSION_ROADMAP.md)
+- [架构决策](docs/adr/README.md) · [安全设计](docs/security/) · [离线](docs/offline/) · [sync-v1](docs/sync/)
+- [移动端状态](docs/mobile/README.md) · [基础设施与运行手册](infra/README.md)
+- [v0.2.0 历史与证据](docs/development/V020_STATUS.md) · [变更日志](CHANGELOG.md)
 
 ## 近期方向
 
-当前主线是观察 `0.2.0-rc7` 的受控 prerelease；C7 修复 PR #220 已通过 fast/integration/browser 门禁，包含 Today 工作区切换竞态防护和隔离反向代理 DELETE body 门验收，当前等待 GLM `PASS / P0=0 / P1=0`。Production 发布和流量切换仍需更高一级审批。
+当前推进 v0.2.1 的 M6 发布制品验收。M5 已按批准范围完成，PR #233/#234 已合入 main；生产部署、恢复点、维护切换和至少 24 小时观察仍按 [M6 发布条件](docs/development/V021_M6_RELEASE_PREPARATION.md)执行。
 
-后续产品迭代优先处理 Today/Review/Sync 大型模块拆分、页面级离线能力说明、实体设备验收和认知工作台的真实用户验证。Connector/Automation v2、共享写入、附件、本地 Worker 和 AI Acceptance 仍需独立设计与生产准入。完整优先级、指标与进入条件见[下一版本路线图](docs/product/NEXT_VERSION_ROADMAP.md)。
+后续产品演进按 [FABLE 总表](docs/development/FABLE_PLAN_REGISTER.md)核对已实现部分和待批准提议。长期路线的历史版本号不替代当前修复版范围；移动施工、共享写入、附件、本地 Worker、Provider 和 AI Acceptance 的生产准入沿用既有决定。
 
 ## 明确范围与限制
 

@@ -565,6 +565,7 @@ export function OfflineSyncCenter() {
       const result = await repository.uploadPending(
         workspaceId,
         uploadTransport,
+        attachment.attachment_id,
       );
       if (result === null) {
         setStatus(feedback.error("附件队列中没有待上传项。"));

@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
@@ -47,7 +48,6 @@ const WORKSPACE_ID = "00000000-0000-7000-8000-000000000001";
 const DEVICE_ID = "00000000-0000-7000-8000-000000000002";
 
 interface FakeDatabaseState {
-  pendingAvailable: boolean;
   rows: AttachmentQueueEntry[];
 }
 
@@ -78,7 +78,6 @@ function attachment(): AttachmentQueueEntry {
 
 function createFakeDatabase(initial: AttachmentQueueEntry): FakeDatabase {
   const state: FakeDatabaseState = {
-    pendingAvailable: true,
     rows: [{ ...initial }],
   };
   const attachmentQueue = {
@@ -120,7 +119,6 @@ function createFakeDatabase(initial: AttachmentQueueEntry): FakeDatabase {
         return {
           between: (lower: [string, string, string]) => ({
             first: async () => {
-              if (!state.pendingAvailable) return undefined;
               const row = state.rows.find(
                 (candidate) =>
                   candidate.workspace_id === lower[0] &&
@@ -378,8 +376,14 @@ describe("OfflineSyncCenter attachment upload feedback", () => {
     },
   );
 
-  it("keeps a failed upload visible and never reports hash verification", async () => {
+  it("uploads only the selected row and keeps its failure visible", async () => {
     const fake = createFakeDatabase(attachment());
+    const keep = {
+      ...attachment(),
+      attachment_id: "00000000-0000-7000-8000-000000000007",
+      filename: "keep.txt",
+    };
+    fake.state.rows.unshift(keep);
     const attachmentRequest = vi.fn().mockRejectedValue(
       new LogionApiError({
         code: "KNOWLEDGE_ATTACHMENT_INGEST_DISABLED",
@@ -391,7 +395,12 @@ describe("OfflineSyncCenter attachment upload feedback", () => {
     mockApi(attachmentRequest);
     await renderReadyCenter(fake);
 
-    fireEvent.click(screen.getByRole("button", { name: "上传并验证" }));
+    fireEvent.click(
+      within(screen.getByText("research-notes.txt").closest("li")!).getByRole(
+        "button",
+        { name: "上传并验证" },
+      ),
+    );
 
     await waitFor(() => {
       const status = screen.getByTestId("sync-inspector").textContent ?? "";
@@ -407,8 +416,9 @@ describe("OfflineSyncCenter attachment upload feedback", () => {
     );
     expect(toast.success).not.toHaveBeenCalled();
     expect(await screen.findByRole("button", { name: "重试" })).toBeTruthy();
-    expect(fake.state.rows[0]?.state).toBe("failed");
-    expect(fake.state.rows[0]?.last_error_code).toBe(
+    expect(fake.state.rows[0]).toEqual(keep);
+    expect(fake.state.rows[1]?.state).toBe("failed");
+    expect(fake.state.rows[1]?.last_error_code).toBe(
       "OFFLINE_ATTACHMENT_UPLOAD_FAILED",
     );
   });
@@ -447,7 +457,7 @@ describe("OfflineSyncCenter attachment upload feedback", () => {
     const attachmentRequest = vi.fn();
     mockApi(attachmentRequest);
     await renderReadyCenter(fake);
-    fake.state.pendingAvailable = false;
+    fake.state.rows = [];
 
     fireEvent.click(screen.getByRole("button", { name: "上传并验证" }));
 

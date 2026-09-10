@@ -68,9 +68,6 @@ test("device wipe clears populated local stores and bootstraps unchanged server 
     page.getByRole("button", { name: "本地资料已解锁" }),
   ).toBeVisible();
   await page.locator('a[href="/app/records"]').first().click();
-  const existingIds = (await localSnapshot(page)).entities.map(
-    (entry) => entry.entity_id,
-  );
   await page.getByRole("button", { name: "新建笔记", exact: true }).click();
   const create = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
   await create.getByLabel("标题", { exact: true }).fill(marker);
@@ -79,11 +76,14 @@ test("device wipe clears populated local stores and bootstraps unchanged server 
   await expect(page.getByRole("textbox", { name: "笔记标题" })).toHaveValue(
     marker,
   );
+  await page.getByRole("button", { name: "添加附件", exact: true }).click();
+  const notePicker = page.getByRole("dialog", { name: "添加笔记附件" });
+  const selectedNote = notePicker.getByLabel("关联笔记", { exact: true });
+  await expect(selectedNote.locator("option:checked")).toHaveText(marker);
+  const noteId = await selectedNote.inputValue();
+  await notePicker.getByRole("button", { name: "取消", exact: true }).click();
   const entities = (await localSnapshot(page)).entities;
-  const note = entities.find(
-    (entry) =>
-      entry.entity_type === "note" && !existingIds.includes(entry.entity_id),
-  );
+  const note = entities.find((entry) => entry.entity_id === noteId);
   expect(note).toBeDefined();
   const syncState = (await localSnapshot(page)).syncState.find(
     (state) => state.workspace_id === note!.workspace_id,
