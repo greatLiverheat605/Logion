@@ -35,7 +35,7 @@ uv sync --all-packages --group dev --frozen
 pnpm ci:fast
 ```
 
-更多启动方式见 [README](README.md#本地开发)。
+完整启动方式、浏览器测试与文档维护说明见[开发指南](docs/development/README.md)。
 
 ## 变更原则
 
@@ -59,3 +59,9 @@ Pull Request 请包含：
 保持提交信息简洁、使用祈使语气并描述结果，例如 `fix: preserve invite privacy during registration`。
 
 维护者可能要求拆分过大的变更、补充测试或更新 ADR。所有检查通过并不自动代表变更一定合并。
+
+## 仓库内容与文档
+
+公开仓库保存产品源码、正式测试、可复用合成夹具、构建部署配置与长期文档。运行报告、截图、个人施工计划、AI 交接和机器专属配置保存在忽略目录或 CI artifacts；不能把正式测试输入误当作报告删除。
+
+功能变化同步更新[功能总览](docs/product/PROJECT_FUNCTION_MAP.md)与[操作手册](docs/user-guide.md)，配置变化同步更新[运维手册](docs/operations/README.md)。文档命令应与脚本和配置一致，验证本地链接，并明确实际环境的前置条件。

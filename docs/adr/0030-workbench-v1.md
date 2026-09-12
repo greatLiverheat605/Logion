@@ -10,7 +10,7 @@
 
 当前 `PersonaDefinition` 只保存名称、图标、说明和路由列表，但产品已经分别围绕考试、学习、研究与导师场景聚合不同的领域对象、指标和下一行动。继续把它称为“画像”会混淆用户偏好、权限角色、数据范围和工作方式，也无法承载受控自定义、对象引用、布局恢复和多设备冲突。
 
-本 ADR 冻结 Workbench v1 的架构边界，不批准迁移、OpenAPI、正式前端施工或生产能力启用。完整产品定义见 [`WORKBENCH_V1_PRODUCT_SPEC.md`](../product/WORKBENCH_V1_PRODUCT_SPEC.md)。
+本 ADR 冻结 Workbench v1 的架构边界，不批准迁移、OpenAPI、正式前端施工或生产能力启用。完整产品定义见 [历史产品提案](https://github.com/greatLiverheat605/Logion/blob/7c8cff619a32beed22d1da9aa5ccb781c34dbf0c/docs/product/WORKBENCH_V1_PRODUCT_SPEC.md)。
 
 ## 决策
 

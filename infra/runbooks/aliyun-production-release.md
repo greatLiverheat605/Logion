@@ -4,20 +4,20 @@
 >
 > 部署形态：阿里云单台 ECS、单实例 PostgreSQL/Redis、不可变应用镜像。
 >
-> 当前阶段：先部署 `0.1.0-rc2` 预发布候选，完成 24 小时观察后再人工批准 Production。
+> 发布方式：部署已验证的不可变候选，完成至少 24 小时观察后再确认生产验收；实际源码与镜像版本以本次发布 manifest 为准。
 >
 > 本手册不提供高可用或 SLA 承诺；命中任一停止条件时不得上线。
 
 配套文档：
 
-- [0.1.0-rc2 预发布准备记录](../../docs/release/0.1.0-rc2-prerelease.md)
+- [部署与运维总览](../../docs/operations/README.md)
 - [阿里云邮件推送接入与预发布验收](./aliyun-directmail-prerelease.md)
 - [阿里云真实双设备同步验收](./aliyun-real-sync-acceptance.md)
 - [备份与恢复操作手册](./backup-restore.md)
 
-## 0. 本次预发布如何执行
+## 0. 发布执行顺序
 
-本手册是 rc2 的主入口。`aliyun-2c2g-staging-deployment.md` 固定的是历史无域名候选，只能引用其中
+本手册适用于受控候选发布。`aliyun-2c2g-staging-deployment.md` 固定的是历史无域名候选，只能引用其中
 的基础环境安装、旧数据清点和 2 GB 资源覆盖做法；不要复制其中的旧提交、旧镜像摘要、HTTP Origin
 或“邮件未实现”结论。
 
@@ -62,7 +62,7 @@ test -f /opt/logion/secrets/backup.key
 固定执行顺序：
 
 1. 等本轮代码合并到 `main`，Main 与 capacity 工作流对同一 SHA 全绿；
-2. 生成并下载经过验证的 rc2 candidate manifest、SBOM、provenance 和安全报告；
+2. 生成并下载经过验证的 candidate manifest、SBOM、provenance 和安全报告；
 3. 完成域名解析、阿里云邮件发信域名/RAM、HTTPS、Windows 异机备份与告警准备；
 4. 对旧版本停写，生成并验证加密备份，下载到受控 Windows 电脑；
 5. 保留数据卷与原密钥，替换为 manifest 对应的源码和四个 digest 镜像；
@@ -520,7 +520,7 @@ chown root:10001 /opt/logion/secrets/backup.key
 三个基础镜像仍须使用经候选安全扫描的精确摘要。若服务器已升级到 4 GB，资源上限可另行审核调整，
 但 8080 的 `127.0.0.1` 绑定不能删除。
 
-### 7.3 保留密钥并更新 rc2 非秘密配置
+### 7.3 保留密钥并更新非秘密配置
 
 只更新候选、域名、注册门控和邮件 Provider 等非秘密值。下列函数不会显示 `.env`；如果已有 Owner，
 `LOGION_BOOTSTRAP_OWNER_EMAIL` 必须保持为空。没有 Owner 时才写入预定 Owner 邮箱，完成注册后立即清空。
@@ -706,7 +706,7 @@ logion-compose up -d --no-build --force-recreate api worker
 
 ### 8.4 预发布状态
 
-首次部署 `rc2` 后环境标记为 `prerelease`，不立即宣布 Production。记录开始时间并连续观察至少
+首次部署候选后环境标记为 `prerelease`，不立即宣布 Production。记录开始时间并连续观察至少
 24 小时；期间只允许受邀测试者使用，不清理旧源码、旧镜像、部署前备份或数据卷。
 
 ## 9. 监控与告警
