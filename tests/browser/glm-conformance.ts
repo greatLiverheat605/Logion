@@ -80,9 +80,10 @@ const REPOSITORY_ROOT = resolve(
 );
 export const GLM_TARGET_MANIFEST_PATH = resolve(
   REPOSITORY_ROOT,
-  "reports",
-  "ui-refactor",
-  "glm-target-manifest.json",
+  "tests",
+  "browser",
+  "fixtures",
+  "ui-targets.json",
 );
 
 export function loadGlmTargetManifest(): GlmTargetManifest {
@@ -93,7 +94,9 @@ export function loadGlmTargetManifest(): GlmTargetManifest {
 
 export function glmTargetRoot(manifest: GlmTargetManifest): string {
   const override = process.env.LOGION_GLM_TARGET_ROOT?.trim();
-  return override ? resolve(override) : resolve(manifest.source.root);
+  return override
+    ? resolve(override)
+    : resolve(REPOSITORY_ROOT, manifest.source.root);
 }
 
 export function isGlmTargetSourceAvailable(

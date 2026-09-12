@@ -1,39 +1,20 @@
-# 基础设施与运维入口
+# 基础设施
 
-> 当前候选、工作流结果与生产前置见 [M6 发布准备](../docs/development/V021_M6_RELEASE_PREPARATION.md)。本文的旧版本号用于说明历史手册适用背景，不代表当前运行版本。
+`compose.yaml` 提供 Web、API、Worker、PostgreSQL、Redis、Nginx 和 Backup 的参考自托管拓扑，数据库与 Redis 位于内部网络。`attachment-init` 负责一次性附件目录初始化。
 
-`compose.yaml` 是首发参考部署，不是生产云平台的最终声明。它建立了 Web、API、Worker、PostgreSQL、Redis、反向代理和 Backup 的隔离边界。
+完整操作入口是[部署与运维手册](../docs/operations/README.md)。
 
-阿里云 2 核 2 GB、无域名的历史封闭技术测试基线，按照
-[`runbooks/aliyun-2c2g-staging-deployment.md`](runbooks/aliyun-2c2g-staging-deployment.md)
-执行。服务器已有旧版本时，其中的数据保留替换、加密备份、隔离恢复和稳定后清理流程仍适用。
+| 任务                 | 手册                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| 生产部署与升级       | [生产发布](runbooks/aliyun-production-release.md)                                  |
+| 备份、校验与恢复     | [备份恢复](runbooks/backup-restore.md)                                             |
+| 异机密文保存         | [Windows 异机备份](runbooks/windows-off-host-backup.md)                            |
+| 邮件接入与投递       | [DirectMail](runbooks/aliyun-directmail-prerelease.md)                             |
+| 双设备与离线同步验证 | [真实同步](runbooks/aliyun-real-sync-acceptance.md)                                |
+| 附件扫描与隔离       | [附件扫描](runbooks/attachment-scanner.md)                                         |
+| 候选安全和恢复       | [安全门禁](runbooks/candidate-security.md) · [恢复](runbooks/release-candidate.md) |
+| 资源受限部署参考     | [2 核 2 GB](runbooks/aliyun-2c2g-staging-deployment.md)                            |
 
-正式域名与阿里云邮件推送的部署流程最初用于 `0.1.0-rc2`。后续版本先按
-[`runbooks/aliyun-production-release.md`](runbooks/aliyun-production-release.md) 完成部署和旧版本保留替换，
-再按 [`runbooks/aliyun-directmail-prerelease.md`](runbooks/aliyun-directmail-prerelease.md) 验收真实邮件，
-并按 [`runbooks/aliyun-real-sync-acceptance.md`](runbooks/aliyun-real-sync-acceptance.md) 验收双浏览器、
-离线 Outbox 与恢复回读。
+发布时使用同一源码提交对应的不可变镜像和 manifest。运行版本、环境配置、外部服务、备份与观察结果由具体部署记录，不用文档里的示例版本替代现场检查。
 
-Production 前仍必须补齐 TLS 自动续期、云端密钥管理、Windows 异机加密备份、告警接收人、
-RPO/RTO、日志保留、实体手机和 24 小时预发布观察。候选镜像生成 SBOM、provenance 与
-GitHub/Sigstore attestation；发布前仍须验证选定云平台的签名策略。Backup 服务将 PostgreSQL
-dump、附件和恢复版本元数据放入经认证加密的单一 bundle；同机卷不是最终灾备，密文及校验文件
-必须按 [`runbooks/windows-off-host-backup.md`](runbooks/windows-off-host-backup.md) 下载到受控 Windows
-电脑，并完成独立恢复演练。项目不使用 OSS。
-
-完整门禁和未完成事项记录在
-[`../docs/release/0.1.0-rc2-prerelease.md`](../docs/release/0.1.0-rc2-prerelease.md)。任一阻断项未完成时，
-环境保持预发布状态。
-
-本机没有 Docker 时不得声称 Compose 已运行通过；由 CI 的 `docker compose config` 和具备 Docker 的 staging 执行 smoke 与恢复测试。
-
-## Worker 健康检查
-
-Compose 使用 Worker readiness，而不是固定成功的进程探针。排障时可执行：
-
-```bash
-docker exec logion-worker-1 python -m logion_worker.health
-docker exec logion-worker-1 python -m logion_worker.health --live
-```
-
-readiness 会检查主循环心跳、最近成功轮询、按队列连续失败、PostgreSQL、Redis，以及 Email、Export、AI、Deletion 四类队列的聚合积压。返回 `not_ready` 时先根据 `checks`、`last_queue` 和 `last_error_code` 定位依赖或任务类型；不要为了恢复绿色状态降低失败阈值或删除业务任务。
+生产环境需要独立密钥、TLS 续期、受邀注册、真实邮件、异机备份与有效告警。已有环境升级时保留原密钥、配置和数据卷；同机备份须配合异机副本与独立恢复演练。

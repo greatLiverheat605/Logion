@@ -1,52 +1,55 @@
-# Logion 项目功能全景
+# 功能总览
 
-> 21 条正式应用路由、公共流程、权限状态与恢复动作的迁移合同见
-> [LOGION_ROUTE_FUNCTION_CONTRACT.md](./LOGION_ROUTE_FUNCTION_CONTRACT.md)。
+本页按当前 Web 应用的 21 个业务页面组织功能。详细步骤见[用户操作手册](../user-guide.md)，内部路由合同见[架构说明](../architecture/route-function-contract.md)。
 
-## 一句话定位
+画像控制入口的显示顺序与可见性，工作区角色和空间权限决定实际操作权限。未显示的页面可在有权限时通过直接地址访问。
 
-Logion 将学习、研究与小组协作连接为可追溯的目标、任务、证据和复习闭环。本文描述功能布局；当前交付和延后项见 [v0.2.1 范围](../development/V021_DELIVERY_SCOPE.md)，发布进度见 [版本状态](../development/V021_STATUS.md)。
+## 功能与入口
 
-## 信息架构
+| 页面       | 地址                 | 主要功能                                     | 使用条件                         |
+| ---------- | -------------------- | -------------------------------------------- | -------------------------------- |
+| 今日       | `/app/today`         | 今日任务、下一行动、专注会话、证据与验收     | 工作区/空间；离线资料需解锁      |
+| 计划       | `/app/planning`      | 目标、阶段、依赖、任务与投入                 | 工作区/空间及写入权限            |
+| 资料与笔记 | `/app/records`       | Markdown、链接资料、PDF 定位、附件队列       | Vault；上传还需联网及服务支持    |
+| 复习与掌握 | `/app/review`        | 知识点、先修、回忆题、错因、掌握度、复习计划 | Vault 与空间                     |
+| 备考       | `/app/exam`          | 考试、科目、大纲、模考和成绩趋势             | Vault 与空间                     |
+| 自主学习   | `/app/self-study`    | 收件箱、学习路线、项目、里程碑和成果         | Vault 与空间                     |
+| 研究       | `/app/research`      | 研究问题、论文、声明、证据、实验和指标       | Vault 与空间                     |
+| 导师与小组 | `/app/collaboration` | Rubric、共享审阅、反馈和报告快照             | Shared Space 与相应角色          |
+| 模板与分享 | `/app/templates`     | 模板版本、导入、安装副本、限时只读分享       | 工作区及目标空间权限             |
+| 搜索       | `/app/search`        | 在线/离线内容搜索、通知偏好和日历 Feed       | 联网；离线搜索需解锁本机缓存     |
+| 工作区     | `/app/workspaces`    | 成员、邀请、角色、所有权和工作区管理         | 管理动作受 Owner/Admin 权限约束  |
+| 空间       | `/app/spaces`        | Private/Shared Space、创建与选择             | 工作区与空间权限                 |
+| 同步与设备 | `/app/sync`          | Outbox、Bootstrap、冲突、附件与设备状态      | 当前账号、设备、Vault 和联网条件 |
+| AI 工作台  | `/app/ai`            | Provider、模型、路由、预算、运行和草稿       | 联网、权限、已配置的外部服务     |
+| 互操作中心 | `/app/integrations`  | Calendar、开放格式导入和数据导出             | 工作区；导入写本人私有空间       |
+| 账户安全   | `/app/security`      | Passkey、TOTP、恢复码和设备会话              | 部分动作要求近期重新登录         |
+| 数据       | `/app/data`          | 导入预览、导出、校验信息与账户删除           | 权限、近期认证及确认             |
+| 审计       | `/app/audit`         | 事件查询、筛选和分页                         | 对应审计读取权限                 |
+| 设置       | `/app/settings`      | 画像、主题、偏好及二级功能入口               | 当前账号                         |
+| 个人资料   | `/app/profile`       | 身份信息与安全入口                           | 当前账号                         |
+| 帮助       | `/app/help`          | 帮助搜索、恢复与诊断入口                     | 已登录                           |
 
-- 12 条画像主路由：Today、Exam、Review、Records、Self-study、Planning、Templates、Audit、Spaces、Settings、Profile、Help。
-- 二级工作台：Research、Collaboration、Search、Workspaces、Security、Sync、Data、Integrations、AI 等。
-- Desktop 使用侧边栏和命令面板；移动端按画像显示 4 个固定入口加“更多”。
-- `/app/integrations` 等二级路由不扩大画像主路由契约；直接 URL 仍受认证和服务端权限保护。
+## 公共流程
 
-## 技术架构
+登录、注册、邮箱验证、密码恢复、邀请确认、只读分享和首次使用引导分别有独立页面。生产注册遵守部署策略；邀请存在不代表任何人都可加入。
 
-```text
-Browser / PWA / thin mobile shell
-  ├─ Next.js + React application shell
-  ├─ IndexedDB + encrypted Vault + Outbox
-  └─ OpenAPI client / sync-v1
-             │
-             ▼
-Nginx reverse proxy :8080
-  ├─ FastAPI API ─ PostgreSQL
-  │              └─ Redis rate limits / coordination
-  ├─ Worker ─ email / portability / AI / deletion
-  └─ Encrypted backup and restore tools
-```
+## 数据与权限
 
-仓库采用 pnpm + uv monorepo：Web、API、worker、薄移动壳、契约、离线包和基础设施在同一版本中验证。
+- Workspace 表示协作组织边界，Space 决定具体内容的可见范围。
+- Private Space 正文只对所有者开放；工作区管理角色不自动获得读取权。
+- 私有资料转为共享或发送到 Provider 都需要明确选择。
+- 已同步、已上传、已验收、已批准草稿分别表示不同结果。
 
-## 当前成熟度
+## 条件可用与未提供的能力
 
-| 维度         | 状态      | 说明                                                      |
-| ------------ | --------- | --------------------------------------------------------- |
-| 核心学习闭环 | 已实现    | 目标→任务→会话→证据→验收→复习具备真实数据路径             |
-| 身份与权限   | 已实现    | 多因素认证、邀请、角色、空间和审计边界完整                |
-| 离线与同步   | 基础成熟  | 写入、Bootstrap、冲突和恢复完整；受保护页面冷启动仍需加强 |
-| AI           | 条件可用  | 需要部署者配置 Provider；结果保持草稿                     |
-| 移动端       | 预发布    | 响应式/PWA 和薄壳边界存在；签名、实体机和分发尚未完成     |
-| 外部互操作   | v1 已实现 | 开放格式与 Calendar 可用；账号连接/Webhook/自动化延期     |
-| 生产部署     | 候选阶段  | 需要部署者完成 TLS、邮件、异机备份、告警和观察期          |
+| 能力                 | 当前边界                                                                    |
+| -------------------- | --------------------------------------------------------------------------- |
+| 离线                 | 支持既有离线实体和加密队列；受保护页面不保证完整冷启动                      |
+| 新知识空间接口       | 默认开关、共享写入、AI 接受、删除和本地 Worker 分别控制；不自动进入 sync-v1 |
+| AI                   | 必须配置 Provider；批准草稿不自动覆盖正式对象                               |
+| 邮件、附件扫描与备份 | 需要部署者接入、配置和独立验证                                              |
+| 移动端               | Web/PWA 与薄壳源码已有；签名、真机和发布需单独验收                          |
+| 第三方连接与自动化   | 尚未提供通用账号连接、Webhook、MCP/API Token 或自动化规则                   |
 
-## 明确不做
-
-- 计费、套餐、entitlement、公共营销站和 SaaS 运营后台；
-- 未经用户确认自动改变正式学习结果、研究结论或权限；
-- 抓取付费墙正文或自动向 AI Provider 发送私有材料；
-- 把移动安装包、模拟器通过或示例配置描述成已完成生产发布。
+服务的健康状态和功能准入由具体部署负责；源码中存在接口不代表任意环境已经启用。

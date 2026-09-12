@@ -40,10 +40,7 @@ tmp/
 artifacts/
 playwright-report/
 test-results/
-reports/*
-!reports/ui-refactor/
-reports/ui-refactor/*
-!reports/ui-refactor/glm-target-manifest.json
+reports/
 apps/mobile/android/.gradle/
 apps/mobile/android/local.properties
 apps/mobile/android/**/build/
@@ -74,3 +71,8 @@ apps/mobile/harmony/local.properties
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Private development notes and local reference material
+/.codex/
+/.local/
+/sisyphus/
