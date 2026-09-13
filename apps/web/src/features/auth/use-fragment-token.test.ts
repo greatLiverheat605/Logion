@@ -55,3 +55,15 @@ describe("fragment action tokens", () => {
     },
   );
 });
+
+it("preserves the non-sensitive login destination while consuming its fragment", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/auth/login?next=%2Finvitations%2Faccept#token=${"a".repeat(40)}`,
+  );
+  const { result } = renderHook(() => useFragmentToken(true));
+  await waitFor(() => expect(result.current).toBe("a".repeat(40)));
+  expect(window.location.hash).toBe("");
+  expect(window.location.search).toBe("?next=%2Finvitations%2Faccept");
+});

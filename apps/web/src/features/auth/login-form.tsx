@@ -8,6 +8,8 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 import { resolveOnboardingAccess } from "@/features/onboarding/onboarding-access";
 
 import { AuthFormShell, FormError, PasswordField } from "./auth-form-shell";
+import { useFragmentToken } from "./use-fragment-token";
+import { INVITATION_PATH } from "@/features/workspaces/invitation-link";
 import { detectDeviceName } from "./device-name";
 import { createPublicAuthApi, type LoginOutcome } from "./public-auth-api";
 
@@ -54,6 +56,7 @@ function encodeBase64url(value: ArrayBuffer): string {
 }
 
 export function LoginForm() {
+  const invitationToken = useFragmentToken(true);
   const [clientReady, setClientReady] = useState(false);
   const [deviceName, setDeviceName] = useState("此浏览器");
   const [passkeyAvailable, setPasskeyAvailable] = useState(true);
@@ -82,7 +85,12 @@ export function LoginForm() {
       const requestedNext = new URLSearchParams(window.location.search).get(
         "next",
       );
-      window.location.assign(await nextRoute(response, requestedNext));
+      const destination = await nextRoute(response, requestedNext);
+      window.location.assign(
+        destination === INVITATION_PATH && invitationToken
+          ? `${destination}#token=${encodeURIComponent(invitationToken)}`
+          : destination,
+      );
     } catch {
       setSettingsBlocked(true);
     }

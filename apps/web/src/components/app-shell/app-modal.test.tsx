@@ -72,3 +72,42 @@ describe("AppModal", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
+
+it("returns to the active tab when a successful action removes its trigger", async () => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    const [removed, setRemoved] = useState(false);
+    return (
+      <>
+        <button role="tab" aria-selected="true">
+          设备
+        </button>
+        {!removed ? <button onClick={() => setOpen(true)}>撤销</button> : null}
+        {open ? (
+          <AppModal
+            title="撤销确认"
+            eyebrow="TEST"
+            onClose={() => setOpen(false)}
+          >
+            <button
+              onClick={() => {
+                setRemoved(true);
+                setOpen(false);
+              }}
+            >
+              完成
+            </button>
+          </AppModal>
+        ) : null}
+      </>
+    );
+  }
+  render(<Harness />);
+  const trigger = screen.getByText("撤销");
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByText("完成"));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole("tab")),
+  );
+});

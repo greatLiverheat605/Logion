@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
@@ -558,3 +559,77 @@ describe("AI governance workbench", () => {
     );
   });
 });
+
+it.each(["provider", "route"])(
+  "uses a modal for %s deletion and preserves recent authentication failures",
+  async (kind) => {
+    const native = vi.spyOn(window, "confirm");
+    const fallback = request.getMockImplementation()!;
+    request.mockImplementation(async (path, options) => {
+      if (options?.method === "DELETE")
+        throw new LogionApiError({
+          code: "AUTH_RECENT_LOGIN_REQUIRED",
+          status: 403,
+          message: "private",
+        });
+      if (path.endsWith("/ai/providers"))
+        return {
+          providers: [
+            {
+              id: "provider-1",
+              name: "Test Provider",
+              enabled: true,
+              version: 3,
+            },
+          ],
+        };
+      if (path.endsWith("/ai/routes"))
+        return {
+          routes: [
+            {
+              id: "route-1",
+              name: "Test Route",
+              task_type: "summary",
+              model_ids: [],
+              enabled: true,
+              version: 4,
+            },
+          ],
+        };
+      return fallback(path);
+    });
+    render(<ProviderCenter />);
+    await screen.findAllByText("Test Provider");
+    if (kind === "route")
+      fireEvent.mouseDown(screen.getByRole("tab", { name: /路由/ }), {
+        button: 0,
+        ctrlKey: false,
+      });
+    const button = await screen.findByRole("button", {
+      name: kind === "route" ? "删除路由" : "删除并清除密钥",
+    });
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain(
+      kind === "provider" ? "Test Provider" : "Test Route",
+    );
+    expect(native).not.toHaveBeenCalled();
+    expect(
+      request.mock.calls.some(([, options]) => options?.method === "DELETE"),
+    ).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: /删除/ }));
+    await waitFor(() =>
+      expect(within(dialog).getByRole("alert").textContent).toContain(
+        "重新认证",
+      ),
+    );
+    expect(request).toHaveBeenCalledWith(
+      `/api/v1/workspaces/workspace-1/ai/${kind === "provider" ? "providers/provider-1" : "routes/route-1"}`,
+      {
+        method: "DELETE",
+        csrf: true,
+        body: JSON.stringify({ expected_version: kind === "provider" ? 3 : 4 }),
+      },
+    );
+  },
+);
