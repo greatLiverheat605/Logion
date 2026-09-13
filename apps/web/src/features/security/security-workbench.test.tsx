@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -109,3 +110,78 @@ describe("Security workbench", () => {
     expect(screen.getByRole("button", { name: "撤销" })).toBeTruthy();
   });
 });
+
+it.each([
+  ["设备与会话", "工作电脑", "撤销设备", "/api/v1/auth/devices/device-1"],
+  [
+    "登录凭据",
+    "工作电脑认证器",
+    "撤销 Passkey",
+    "/api/v1/auth/passkeys/passkey-1",
+  ],
+])(
+  "confirms %s with object and original DELETE semantics",
+  async (tab, object, action, path) => {
+    render(<SecurityCenter />);
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`^${tab}`) }),
+    );
+    await screen.findByText(object);
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain(object);
+    expect(
+      request.mock.calls.some(([, options]) => options?.method === "DELETE"),
+    ).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: action }));
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(path, {
+        method: "DELETE",
+        csrf: true,
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  },
+);
+it.each([
+  [
+    "重新生成恢复码",
+    "生成新恢复码",
+    "/api/v1/auth/totp/recovery-codes/regenerate",
+    "POST",
+  ],
+  ["关闭 TOTP", "关闭 TOTP", "/api/v1/auth/totp", "DELETE"],
+])(
+  "confirms %s inside the TOTP sheet and retains the submitted code",
+  async (action, confirm, path, method) => {
+    const fallback = request.getMockImplementation()!;
+    request.mockImplementation(async (url, options) =>
+      options?.method
+        ? { recovery_codes: ["synthetic-recovery"] }
+        : fallback(url),
+    );
+    render(<SecurityCenter />);
+    fireEvent.click(screen.getByRole("button", { name: /^认证器与恢复/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "管理 TOTP 与恢复码" }),
+    );
+    const button = screen.getByRole("button", { name: action });
+    const form = button.closest("form")!;
+    fireEvent.change(within(form).getByRole("textbox"), {
+      target: { value: "123456" },
+    });
+    fireEvent.submit(form);
+    const dialog = screen.getByRole("dialog", { name: action });
+    expect(request.mock.calls.some(([, options]) => options?.method)).toBe(
+      false,
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: confirm }));
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith(path, {
+        method,
+        csrf: true,
+        body: JSON.stringify({ code: "123456" }),
+      }),
+    );
+  },
+);

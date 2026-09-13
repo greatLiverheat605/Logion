@@ -2,6 +2,8 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 
+import { InvitationLink } from "./invitation-link";
+
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
   InspectorSection,
@@ -138,10 +140,8 @@ function InvitationRow({
           撤销
         </button>
       ) : null}
-      {invitation.token ? (
-        <code className={styles.token} title="Token 只在创建响应中显示一次">
-          {invitation.token}
-        </code>
+      {invitation.token && invitation.status === "pending" ? (
+        <InvitationLink token={invitation.token} />
       ) : null}
     </li>
   );

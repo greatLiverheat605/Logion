@@ -2,6 +2,11 @@
 
 import { feedback } from "@/lib/feedback";
 
+import {
+  AppConfirmModal,
+  type ConfirmationAction,
+} from "@/components/app-shell/app-confirm-modal";
+
 import type { components } from "@logion/contracts";
 import {
   type FormEvent,
@@ -98,6 +103,9 @@ function errorText(error: unknown) {
 }
 
 export function ProviderCenter() {
+  const [confirmation, setConfirmation] = useState<ConfirmationAction | null>(
+    null,
+  );
   const { request } = useProviderController();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
@@ -292,29 +300,31 @@ export function ProviderCenter() {
 
   async function deleteProvider(provider: Provider) {
     if (!workspaceId || !canConfigure || !online) return;
-    if (
-      !window.confirm(
-        `删除 Provider“${provider.name}”并立即清除服务端密钥？此操作不能撤销。`,
-      )
-    )
-      return;
-    try {
-      await request(
-        `/api/v1/workspaces/${workspaceId}/ai/providers/${provider.id}`,
-        {
-          method: "DELETE",
-          csrf: true,
-          body: JSON.stringify({ expected_version: provider.version }),
-        },
-      );
-      if (!(await loadProviderData(workspaceId))) return;
-      setStatus(
-        feedback.success(`${provider.name} 已删除，服务端密文已清除。`),
-      );
-    } catch (error) {
-      setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(feedback.error(errorText(error)));
-    }
+    setConfirmation({
+      title: "删除 Provider",
+      description: `删除 Provider“${provider.name}”并立即清除服务端密钥，此操作不能撤销。`,
+      confirmLabel: "删除 Provider",
+      run: async () => {
+        try {
+          await request(
+            `/api/v1/workspaces/${workspaceId}/ai/providers/${provider.id}`,
+            {
+              method: "DELETE",
+              csrf: true,
+              body: JSON.stringify({ expected_version: provider.version }),
+            },
+          );
+          if (!(await loadProviderData(workspaceId))) return;
+          setStatus(
+            feedback.success(`${provider.name} 已删除，服务端密文已清除。`),
+          );
+        } catch (error) {
+          setRecentAuthRequired(isRecentAuthRequired(error));
+          setStatus(feedback.error(errorText(error)));
+          throw error;
+        }
+      },
+    });
   }
 
   async function discoverModels(provider: Provider) {
@@ -442,19 +452,29 @@ export function ProviderCenter() {
 
   async function deleteRoute(route: Route) {
     if (!workspaceId || !canConfigure || !online) return;
-    if (!window.confirm(`删除路由“${route.name}”？`)) return;
-    try {
-      await request(`/api/v1/workspaces/${workspaceId}/ai/routes/${route.id}`, {
-        method: "DELETE",
-        csrf: true,
-        body: JSON.stringify({ expected_version: route.version }),
-      });
-      if (!(await loadProviderData(workspaceId))) return;
-      setStatus(feedback.success("AI 任务路由已删除。"));
-    } catch (error) {
-      setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(feedback.error(errorText(error)));
-    }
+    setConfirmation({
+      title: "删除任务路由",
+      description: `删除路由“${route.name}”后，该路由将不再可用。此操作不能撤销。`,
+      confirmLabel: "删除路由",
+      run: async () => {
+        try {
+          await request(
+            `/api/v1/workspaces/${workspaceId}/ai/routes/${route.id}`,
+            {
+              method: "DELETE",
+              csrf: true,
+              body: JSON.stringify({ expected_version: route.version }),
+            },
+          );
+          if (!(await loadProviderData(workspaceId))) return;
+          setStatus(feedback.success("AI 任务路由已删除。"));
+        } catch (error) {
+          setRecentAuthRequired(isRecentAuthRequired(error));
+          setStatus(feedback.error(errorText(error)));
+          throw error;
+        }
+      },
+    });
   }
 
   const selectedProvider =
@@ -475,6 +495,13 @@ export function ProviderCenter() {
       aria-labelledby="provider-center-heading"
       data-testid="ai-provider"
     >
+      {confirmation ? (
+        <AppConfirmModal
+          action={confirmation}
+          onClose={() => setConfirmation(null)}
+          errorText={errorText}
+        />
+      ) : null}
       <WorkbenchFrame
         label="AI 模型治理工作台"
         header={

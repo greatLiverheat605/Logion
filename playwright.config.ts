@@ -7,7 +7,7 @@ import {
 } from "./tests/browser/e2e-environment";
 
 const publicTests =
-  /(?:public-accessibility|public-flows-conformance|pwa-offline)\.spec\.ts/;
+  /(?:public-accessibility|public-flows-conformance|experience-confirm|pwa-offline)\.spec\.ts/;
 const authenticatedTests =
   /(?:authenticated-accessibility|authenticated-shell|auth-public-flow|persona-system|prototype-productization|integration-hub|today-workbench|search-workbench|records-workbench|sync-workbench|planning-workbench|review-workbench|exam-workbench|self-study-workbench|research-workbench|collaboration-workbench|workspace-lifecycle|templates-workbench|feedback-visibility|status-copy-consistency)\.spec\.ts/;
 

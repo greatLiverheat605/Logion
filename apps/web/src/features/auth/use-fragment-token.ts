@@ -14,7 +14,7 @@ export function consumeFragmentToken(
   return candidate !== null && TOKEN_PATTERN.test(candidate) ? candidate : null;
 }
 
-export function useFragmentToken(): string | null {
+export function useFragmentToken(preserveSearch = false): string | null {
   const [token, setToken] = useState<string | null>(null);
   const consumed = useRef(false);
 
@@ -22,10 +22,15 @@ export function useFragmentToken(): string | null {
     if (consumed.current) return;
     consumed.current = true;
     const candidate = consumeFragmentToken(window.location.hash, () =>
-      window.history.replaceState(null, "", window.location.pathname),
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname +
+          (preserveSearch ? window.location.search : ""),
+      ),
     );
     queueMicrotask(() => setToken(candidate));
-  }, []);
+  }, [preserveSearch]);
 
   return token;
 }

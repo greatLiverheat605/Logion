@@ -1,10 +1,15 @@
 "use client";
 
+import {
+  AppConfirmModal,
+  type ConfirmationAction,
+} from "@/components/app-shell/app-confirm-modal";
+
 import type { components } from "@logion/contracts";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
-import { LogionApiError } from "@/lib/api/client";
+import { isRecentAuthRequired, LogionApiError } from "@/lib/api/client";
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
   InspectorSection,
@@ -48,12 +53,16 @@ function decode(value: string): ArrayBuffer {
 }
 
 function message(error: unknown): string {
+  if (isRecentAuthRequired(error)) return "需要重新登录认证后继续此操作。";
   return error instanceof LogionApiError
     ? `操作未完成（请求编号：${error.requestId}）`
     : "操作未完成，请稍后重试。";
 }
 
 export function SecurityCenter() {
+  const [confirmation, setConfirmation] = useState<ConfirmationAction | null>(
+    null,
+  );
   const { request } = useSecurityController();
   const [devices, setDevices] = useState<Device[]>([]);
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
@@ -92,16 +101,23 @@ export function SecurityCenter() {
   }, [load]);
 
   async function revokeDevice(id: string) {
-    if (!window.confirm("撤销后该设备上的全部会话会立即失效。继续吗？")) return;
-    try {
-      await request(`/api/v1/auth/devices/${id}`, {
-        method: "DELETE",
-        csrf: true,
-      });
-      await load();
-    } catch (error) {
-      setStatus(message(error));
-    }
+    setConfirmation({
+      title: "撤销设备",
+      description: `撤销设备“${devices.find((item) => item.id === id)?.name ?? id}”后，该设备上的全部会话会立即失效。`,
+      confirmLabel: "撤销设备",
+      run: async () => {
+        try {
+          await request(`/api/v1/auth/devices/${id}`, {
+            method: "DELETE",
+            csrf: true,
+          });
+          await load();
+        } catch (error) {
+          setStatus(message(error));
+          throw error;
+        }
+      },
+    });
   }
 
   async function registerPasskey(event: FormEvent<HTMLFormElement>) {
@@ -163,16 +179,23 @@ export function SecurityCenter() {
   }
 
   async function revokePasskey(id: string) {
-    if (!window.confirm("确认撤销这个 Passkey？")) return;
-    try {
-      await request(`/api/v1/auth/passkeys/${id}`, {
-        method: "DELETE",
-        csrf: true,
-      });
-      await load();
-    } catch (error) {
-      setStatus(message(error));
-    }
+    setConfirmation({
+      title: "撤销 Passkey",
+      description: `撤销 Passkey“${passkeys.find((item) => item.id === id)?.name ?? id}”后，将无法再使用此凭据登录。`,
+      confirmLabel: "撤销 Passkey",
+      run: async () => {
+        try {
+          await request(`/api/v1/auth/passkeys/${id}`, {
+            method: "DELETE",
+            csrf: true,
+          });
+          await load();
+        } catch (error) {
+          setStatus(message(error));
+          throw error;
+        }
+      },
+    });
   }
 
   async function startTotp() {
@@ -210,41 +233,67 @@ export function SecurityCenter() {
 
   async function regenerateCodes(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const code = String(new FormData(event.currentTarget).get("code") ?? "");
-    if (!window.confirm("生成新恢复码后，旧恢复码会全部失效。继续吗？")) return;
-    try {
-      const result = await request<{
-        recovery_codes: string[];
-      }>("/api/v1/auth/totp/recovery-codes/regenerate", {
-        method: "POST",
-        csrf: true,
-        body: JSON.stringify({ code }),
-      });
-      setRecoveryCodes(result.recovery_codes);
-      event.currentTarget.reset();
-      await load();
-    } catch (error) {
-      setStatus(message(error));
-    }
+    const form = event.currentTarget;
+    const code = String(new FormData(form).get("code") ?? "");
+    setConfirmation({
+      title: "重新生成恢复码",
+      description:
+        "将为当前账户生成新恢复码，旧恢复码会全部失效。请立即保存新恢复码。",
+      confirmLabel: "生成新恢复码",
+      run: async () => {
+        try {
+          const result = await request<{
+            recovery_codes: string[];
+          }>("/api/v1/auth/totp/recovery-codes/regenerate", {
+            method: "POST",
+            csrf: true,
+            body: JSON.stringify({ code }),
+          });
+          setRecoveryCodes(result.recovery_codes);
+          form.reset();
+          await load();
+        } catch (error) {
+          setStatus(message(error));
+          throw error;
+        }
+      },
+    });
   }
 
   async function disableTotp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const code = String(new FormData(event.currentTarget).get("code") ?? "");
-    if (!window.confirm("关闭 TOTP 会同时废止剩余恢复码。继续吗？")) return;
-    try {
-      await request("/api/v1/auth/totp", {
-        method: "DELETE",
-        csrf: true,
-        body: JSON.stringify({ code }),
-      });
-      setRecoveryCodes([]);
-      event.currentTarget.reset();
-      await load();
-    } catch (error) {
-      setStatus(message(error));
-    }
+    const form = event.currentTarget;
+    const code = String(new FormData(form).get("code") ?? "");
+    setConfirmation({
+      title: "关闭 TOTP",
+      description: "将关闭当前账户的 TOTP 验证，同时废止剩余恢复码。",
+      confirmLabel: "关闭 TOTP",
+      run: async () => {
+        try {
+          await request("/api/v1/auth/totp", {
+            method: "DELETE",
+            csrf: true,
+            body: JSON.stringify({ code }),
+          });
+          setRecoveryCodes([]);
+          form.reset();
+          await load();
+        } catch (error) {
+          setStatus(message(error));
+          throw error;
+        }
+      },
+    });
   }
+
+  const confirmationModal = confirmation ? (
+    <AppConfirmModal
+      action={confirmation}
+      onClose={() => setConfirmation(null)}
+      onConfirmed={() => setTotpSheetOpen(false)}
+      errorText={message}
+    />
+  ) : null;
 
   return (
     <main id="main-content" className={styles.root}>
@@ -729,7 +778,9 @@ export function SecurityCenter() {
             ? "需要当前动态码才能生成恢复码或关闭 TOTP。"
             : "仅在完成动态码验证后启用 TOTP。"
         }
-        onOpenChange={setTotpSheetOpen}
+        onOpenChange={(open) => {
+          if (!confirmation) setTotpSheetOpen(open);
+        }}
         open={totpSheetOpen}
         title="认证器与恢复码"
       >
@@ -786,7 +837,9 @@ export function SecurityCenter() {
             description="关闭此 Sheet 后可从唯一主操作重新开始。"
           />
         )}
+        {totpSheetOpen ? confirmationModal : null}
       </WorkbenchSheet>
+      {!totpSheetOpen ? confirmationModal : null}
     </main>
   );
 }
