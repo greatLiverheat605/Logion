@@ -795,6 +795,13 @@ class SyncPushService:
                     db, request.workspace_id, identity, task.version, task_payload(task)
                 )
         except APIError as exc:
+            if source is not None and exc.code == "RESOURCE_VERSION_CONFLICT":
+                return FailedOperationResult(
+                    operation_id=operation.operation_id,
+                    status="blocked_dependency",
+                    retryable=True,
+                    error_code="SYNC_RESOURCE_VERSION_CONFLICT",
+                )
             return await self._api_error_result(db, request, operation, exc)
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
