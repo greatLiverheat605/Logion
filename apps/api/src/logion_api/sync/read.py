@@ -295,6 +295,7 @@ class SyncReadService:
         # remain filtered by the existing non-deleted visibility queries.
         visible_tombstones: set[tuple[str, UUID]] = set()
         tombstone_model: Any
+        private_tombstone_types = {"inbox_item", "exam", "exam_subject", "syllabus_node", "mock_exam", "score_record"}
         for tombstone_type, tombstone_model in (
             ("learning_goal", LearningGoal),
             ("task", Task),
@@ -322,7 +323,7 @@ class SyncReadService:
                     .where(
                         tombstone_model.workspace_id == state.workspace_id,
                         (tombstone_model.user_id == user_id)
-                        if hasattr(tombstone_model, "user_id")
+                        if tombstone_type in private_tombstone_types
                         else true(),
                         tombstone_model.id.in_(ids),
                         tombstone_model.deleted_at.is_not(None),
