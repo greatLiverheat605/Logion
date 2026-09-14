@@ -33,6 +33,8 @@ from logion_api.identity.service import AuthContext
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.planning.schemas import GoalPlanCreateRequest
 from logion_api.planning.service import PlanningService
+from logion_api.sync.push import canonical_hash, goal_payload, resource_payload, task_payload
+from logion_api.sync.service import AppliedSyncChange, SyncLedgerService, SyncOperationIdentity
 from logion_api.workspaces.models import Space
 from logion_api.workspaces.permissions import Permission
 from logion_api.workspaces.service import WorkspaceService
@@ -430,13 +432,42 @@ class GrowthService:
                 message="The template package is incompatible or invalid.",
                 status_code=422,
             ) from exc
-        await self._planning.create(
+        ledger = SyncLedgerService()
+        state = await ledger.lock_workspace_state(db, workspace_id)
+
+        async def publish(
+            entity_type: str, entity_id: UUID, version: int, value: dict[str, object]
+        ) -> None:
+            digest = canonical_hash(value)
+            await ledger.append_applied(
+                db,
+                state,
+                SyncOperationIdentity(
+                    operation_id=uuid7(),
+                    workspace_id=workspace_id,
+                    device_id=context.device.id,
+                    payload_hash=digest,
+                    operation_fingerprint=digest,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    operation_type="create",
+                ),
+                AppliedSyncChange(server_version=version, payload=value, payload_hash=digest),
+            )
+
+        aggregate = await self._planning.create(
             db,
             context,
             workspace_id,
             payload.target_space_id,
             create,
             request_id=request_id,
+        )
+        await publish(
+            "learning_goal",
+            goal_id,
+            aggregate.goal.version,
+            goal_payload(aggregate.goal, aggregate.plan, aggregate.plan_version, aggregate.phases),
         )
         for phase_position, phase in enumerate(raw_phases):
             raw_tasks = phase.get("tasks", [])
@@ -458,7 +489,7 @@ class GrowthService:
                 task_day = payload.start_date + timedelta(days=int(raw_task["day_offset"]))
                 planned_at = datetime.combine(task_day, time.min, tzinfo=UTC)
                 due_at = datetime.combine(task_day, time.max, tzinfo=UTC)
-                await self._execution.create_task(
+                task = await self._execution.create_task(
                     db,
                     context,
                     workspace_id,
@@ -474,10 +505,11 @@ class GrowthService:
                     due_at=due_at,
                     request_id=request_id,
                 )
+                await publish("task", task.id, task.version, task_payload(task))
                 for raw_resource in raw_task.get("resources", []):
                     resource_id = uuid7()
                     resource_ids.append(resource_id)
-                    await self._content.create_resource(
+                    resource = await self._content.create_resource(
                         db,
                         context,
                         workspace_id,
@@ -492,6 +524,9 @@ class GrowthService:
                             }
                         ),
                         request_id,
+                    )
+                    await publish(
+                        "resource", resource.id, resource.version, resource_payload(resource)
                     )
         installed = TemplateInstallation(
             id=payload.id,

@@ -23,7 +23,9 @@ for (const theme of ["light", "dark"] as const) {
     await page
       .getByLabel("本地解锁口令", { exact: true })
       .fill(accountState.password);
-    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await page
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
     await expect(page.getByLabel("本地解锁口令", { exact: true })).toHaveCount(
       0,
     );
@@ -56,14 +58,16 @@ for (const theme of ["light", "dark"] as const) {
 
 async function unlock(page: Page, passphrase: string) {
   const button = page
-    .getByRole("button", { name: "解锁资料", exact: true })
+    .getByRole("button", { name: "解锁本地资料", exact: true })
     .first();
   await expect(button).toBeVisible();
   {
     await button.click();
     const sheet = page.getByRole("dialog");
     await sheet.getByLabel("本地口令", { exact: true }).fill(passphrase);
-    await sheet.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await sheet
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
     await expect(sheet).toHaveCount(0);
   }
 }
@@ -281,7 +285,7 @@ for (const width of [1440, 375, 320]) {
           process.env.LOGION_E2E_VAULT_PASSPHRASE || accountState.password,
         );
         await page
-          .getByRole("button", { name: "解锁资料", exact: true })
+          .getByRole("button", { name: "解锁本地资料", exact: true })
           .click();
         await expect(password).toHaveCount(0);
       }

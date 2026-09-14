@@ -179,7 +179,7 @@ describe("Self-study workbench", () => {
     const html = renderToStaticMarkup(<SelfStudyWorkbench {...locked} />);
 
     expect(html).toContain("self-study-unlock");
-    expect(html).toContain("解锁资料");
+    expect(html).toContain("解锁本地资料");
     expect(html.match(/data-workbench-primary="true"/g)).toHaveLength(1);
   });
 });

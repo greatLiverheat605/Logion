@@ -137,10 +137,12 @@ for (const width of [1440, 320]) {
     page.setDefaultTimeout(15_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/app/review");
-    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await page
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
     const unlock = page.getByRole("dialog", { name: "解锁本地复习资料" });
     await unlock.getByLabel("本地口令").fill("m5-clock-vault-passphrase");
-    await unlock.getByRole("button", { name: "解锁资料" }).click();
+    await unlock.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(unlock).toHaveCount(0);
     const title = `M5 clock ${width} ${Date.now()}`;
     await page.getByRole("button", { name: "新建知识点", exact: true }).click();
@@ -441,14 +443,14 @@ for (const width of [1440, 320]) {
         page.getByRole("heading", { name: "把“看过”变成真正能回忆" }),
       ).toBeVisible();
       const unlock = page.getByRole("button", {
-        name: "解锁资料",
+        name: "解锁本地资料",
         exact: true,
       });
       if (await unlock.isVisible()) {
         await unlock.click();
         const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });
         await sheet.getByLabel("本地口令").fill("t06-local-vault-passphrase");
-        await sheet.getByRole("button", { name: "解锁资料" }).click();
+        await sheet.getByRole("button", { name: "解锁本地资料" }).click();
         await expect(sheet).toHaveCount(0);
       }
       const title = `T06 recall ${width} ${Date.now()}`;
@@ -506,12 +508,15 @@ for (const width of [1440, 320]) {
     page.setDefaultTimeout(15_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/app/review");
-    const unlock = page.getByRole("button", { name: "解锁资料", exact: true });
+    const unlock = page.getByRole("button", {
+      name: "解锁本地资料",
+      exact: true,
+    });
     await expect(unlock).toBeVisible();
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });
     await sheet.getByLabel("本地口令").fill("t06-local-vault-passphrase");
-    await sheet.getByRole("button", { name: "解锁资料" }).click();
+    await sheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(sheet).toHaveCount(0);
     const title = `T06 mastery ${width} ${Date.now()}`;
     await page.getByRole("button", { name: "新建知识点", exact: true }).click();

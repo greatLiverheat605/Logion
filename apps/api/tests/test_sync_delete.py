@@ -663,3 +663,253 @@ async def test_delete_authorization_and_preview_visibility(deletion_case, scope)
             )
             async with session_factory() as db:
                 assert (await db.get(Note, case["ids"]["note"])).deleted_at is None
+
+
+async def test_inbox_triage_is_atomic_replay_safe_and_delivers_tombstone(deletion_case):
+    case = deletion_case
+    inbox_id, track_id = uuid4(), uuid4()
+    create = case["operation"](
+        "inbox_item",
+        inbox_id,
+        {"space_id": case["space"], "title": "Captured idea", "note": "Keep on failure"},
+        base=0,
+        operation_type="create",
+    )
+    assert (await case["push"](create))["status"] == "applied"
+    triage = case["operation"](
+        "learning_track",
+        track_id,
+        {
+            "space_id": case["space"],
+            "title": "New route",
+            "objective": "Proof",
+            "inbox_source": {"id": str(inbox_id), "version": 1},
+        },
+        base=0,
+        operation_type="create",
+    )
+    result = await case["push"](triage)
+    assert result["status"] == "applied", result
+    assert (await case["push"](triage))["status"] == "duplicate"
+    second = {**triage, "operation_id": str(uuid4()), "entity_id": str(uuid4())}
+    assert (await case["push"](second))["status"] != "applied"
+    from logion_api.self_study.models import InboxItem, LearningTrack
+
+    async with session_factory() as db:
+        assert (await db.get(InboxItem, inbox_id)).deleted_at is not None
+        assert await db.get(LearningTrack, UUID(second["entity_id"])) is None
+    pull = await case["client"].post(
+        f"/api/v1/workspaces/{case['workspace']}/sync/pull",
+        json={
+            **case["envelope"],
+            "message_type": "pull_request",
+            "sync_epoch": case["epoch"],
+            "cursor": 0,
+            "limit": 100,
+        },
+    )
+    assert pull.status_code == 200, pull.text
+    assert "Keep on failure" not in pull.text
+    assert any(
+        row["entity_id"] == str(inbox_id) and row["tombstone"] for row in pull.json()["changes"]
+    )
+
+
+async def test_inbox_triage_invalid_target_preserves_source(deletion_case):
+    case = deletion_case
+    inbox_id, project_id = uuid4(), uuid4()
+    create = case["operation"](
+        "inbox_item",
+        inbox_id,
+        {"space_id": case["space"], "title": "Retained"},
+        base=0,
+        operation_type="create",
+    )
+    assert (await case["push"](create))["status"] == "applied"
+    triage = case["operation"](
+        "study_project",
+        project_id,
+        {
+            "space_id": case["space"],
+            "track_id": str(uuid4()),
+            "title": "Invalid project",
+            "intended_outcome": "Missing parent",
+            "inbox_source": {"id": str(inbox_id), "version": 1},
+        },
+        base=0,
+        operation_type="create",
+    )
+    assert (await case["push"](triage))["status"] == "rejected"
+    from logion_api.self_study.models import InboxItem, StudyProject
+
+    async with session_factory() as db:
+        assert (await db.get(InboxItem, inbox_id)).deleted_at is None
+        assert await db.get(StudyProject, project_id) is None
+    delete = case["operation"]("inbox_item", inbox_id)
+    assert (await case["push"](delete))["status"] == "applied"
+    assert (await case["push"](delete))["status"] == "duplicate"
+
+
+async def test_exam_delete_cascades_and_topic_references_block(deletion_case):
+    case = deletion_case
+    from logion_api.exam.models import Exam, MockExam, ScoreRecord, Subject, SyllabusNode
+    from logion_api.memory.models import QuizItem, Topic
+
+    ids = {
+        key: uuid4()
+        for key in ("exam", "exam_subject", "syllabus_node", "mock_exam", "score_record", "topic")
+    }
+    common = case["common"]
+    personal = {**common, "user_id": common["created_by"]}
+    async with session_factory() as db:
+        db.add(
+            Exam(
+                id=ids["exam"], title="Exam", date_status="undetermined", timezone="UTC", **personal
+            )
+        )
+        db.add(Topic(id=ids["topic"], title="Topic", **common))
+        await db.flush()
+        db.add(Subject(id=ids["exam_subject"], exam_id=ids["exam"], name="Subject", **personal))
+        db.add(
+            MockExam(
+                id=ids["mock_exam"],
+                exam_id=ids["exam"],
+                title="Mock",
+                duration_limit_seconds=3600,
+                **personal,
+            )
+        )
+        await db.flush()
+        db.add(
+            SyllabusNode(
+                id=ids["syllabus_node"], subject_id=ids["exam_subject"], title="Node", **personal
+            )
+        )
+        db.add(
+            ScoreRecord(
+                id=ids["score_record"],
+                mock_exam_id=ids["mock_exam"],
+                score=70,
+                score_scale_max=100,
+                duration_seconds=3600,
+                completed_at=datetime.now(UTC),
+                **personal,
+            )
+        )
+        await db.commit()
+    deleted = await case["push"](case["operation"]("exam", ids["exam"]))
+    assert deleted["status"] == "applied", deleted
+    assert all(deleted["impact"]["deleted_" + kind] == 1 for kind in ids if kind != "topic")
+    async with session_factory() as db:
+        for kind, model in (
+            ("exam", Exam),
+            ("exam_subject", Subject),
+            ("syllabus_node", SyllabusNode),
+            ("mock_exam", MockExam),
+            ("score_record", ScoreRecord),
+        ):
+            assert (await db.get(model, ids[kind])).deleted_at is not None
+        db.add(
+            QuizItem(
+                id=uuid4(),
+                topic_id=ids["topic"],
+                prompt="Question",
+                answer_key="Answer",
+                evaluation_mode="self_assessed",
+                **common,
+            )
+        )
+        await db.commit()
+    blocked = await case["push"](case["operation"]("topic", ids["topic"]))
+    assert blocked["error_code"] == "SYNC_DELETE_BLOCKED_BY_REFERENCE", blocked
+    empty = uuid4()
+    async with session_factory() as db:
+        db.add(Topic(id=empty, title="Unreferenced", **common))
+        await db.commit()
+    assert (await case["push"](case["operation"]("topic", empty)))["status"] == "applied"
+
+
+async def test_triage_requires_tombstone_capability_and_preserves_source(deletion_case):
+    case = deletion_case
+    inbox_id, track_id = uuid4(), uuid4()
+    created = case["operation"](
+        "inbox_item",
+        inbox_id,
+        {"space_id": case["space"], "title": "Original"},
+        base=0,
+        operation_type="create",
+    )
+    assert (await case["push"](created))["status"] == "applied"
+    triage = case["operation"](
+        "learning_track",
+        track_id,
+        {
+            "space_id": case["space"],
+            "title": "Target",
+            "inbox_source": {"id": str(inbox_id), "version": 1},
+        },
+        base=0,
+        operation_type="create",
+    )
+    response = await case["client"].post(
+        f"/api/v1/workspaces/{case['workspace']}/sync/push",
+        headers={
+            "X-CSRF-Token": case["client"].cookies["logion_csrf"],
+            "X-Logion-Sync-Capabilities": "",
+        },
+        json={
+            **case["envelope"],
+            "message_type": "push_request",
+            "sync_epoch": case["epoch"],
+            "operations": [triage],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["action"] == "upgrade_required"
+    from logion_api.self_study.models import InboxItem, LearningTrack
+
+    async with session_factory() as db:
+        assert (await db.get(InboxItem, inbox_id)).deleted_at is None
+        assert await db.get(LearningTrack, track_id) is None
+
+
+async def test_personal_inbox_cannot_be_deleted_or_triaged_by_another_owner(deletion_case):
+    case = deletion_case
+    address = f"other-{uuid4()}@example.com"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", headers={"Origin": "http://test"}
+    ) as other:
+        registered = await other.post(
+            "/api/v1/auth/register",
+            json={"email": address, "password": f"test-{uuid4()}", "device_name": "Other"},
+        )
+        assert registered.status_code == 201, registered.text
+    from logion_api.self_study.models import InboxItem
+
+    inbox_id = uuid4()
+    async with session_factory() as db:
+        other_id = await db.scalar(select(User.id).where(User.email == address))
+        db.add(
+            InboxItem(id=inbox_id, title="Other personal inbox", user_id=other_id, **case["common"])
+        )
+        await db.commit()
+    preview = await case["client"].get(
+        f"/api/v1/workspaces/{case['workspace']}/sync/deletion-preview/inbox_item/{inbox_id}"
+    )
+    assert preview.status_code == 404
+    rejected = await case["push"](case["operation"]("inbox_item", inbox_id))
+    assert rejected["status"] == "rejected"
+    triage = case["operation"](
+        "learning_track",
+        uuid4(),
+        {
+            "space_id": case["space"],
+            "title": "Unauthorized",
+            "inbox_source": {"id": str(inbox_id), "version": 1},
+        },
+        base=0,
+        operation_type="create",
+    )
+    assert (await case["push"](triage))["status"] == "rejected"
+    async with session_factory() as db:
+        assert (await db.get(InboxItem, inbox_id)).deleted_at is None

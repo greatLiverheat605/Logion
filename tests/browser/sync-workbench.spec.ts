@@ -191,7 +191,9 @@ test("device wipe clears populated local stores and bootstraps unchanged server 
   });
   try {
     await page.getByLabel("本地解锁口令").fill(passphrase);
-    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await page
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
     await expect(
       page.getByRole("button", { name: "本地资料已解锁" }),
     ).toBeVisible();
@@ -301,7 +303,9 @@ test("T05a removes one failed local attachment offline and preserves other data"
   const unlock = page.getByLabel("本地解锁口令");
   if (await unlock.isVisible()) {
     await unlock.fill(password);
-    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await page
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
   }
   await expect(attachmentTab).toContainText("2");
   await attachmentTab.click();
@@ -401,7 +405,7 @@ test("T05a removes one failed local attachment offline and preserves other data"
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.reload();
   await page.getByLabel("本地解锁口令").fill(password);
-  await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+  await page.getByRole("button", { name: "解锁本地资料", exact: true }).click();
   await expect(attachmentTab).toContainText("1");
   await page.getByRole("tab", { name: /附件队列/ }).click();
   await expect(queue).toContainText(keepName);

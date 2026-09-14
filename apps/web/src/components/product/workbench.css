@@ -215,7 +215,7 @@
   }
 }
 
-@media (max-width: 719px) {
+@media (max-width: 768px) {
   .workbench-toolbar button[aria-label="同步当前 Workspace"],
   .workbench-toolbar button[aria-label="立即同步"] {
     min-width: 2.75rem;
@@ -493,7 +493,7 @@
   justify-content: space-between;
 }
 
-@media (max-width: 719px) {
+@media (max-width: 768px) {
   .headless-dialog:not(.headless-sheet) {
     top: auto;
     bottom: 0;

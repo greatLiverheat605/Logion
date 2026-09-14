@@ -144,7 +144,7 @@ describe("Collaboration workbench", () => {
     const html = renderToStaticMarkup(<CollaborationWorkbench {...locked} />);
 
     expect(html).toContain('id="collaboration-unlock"');
-    expect(html).toContain("解锁资料");
+    expect(html).toContain("解锁本地资料");
     expect(html.match(/data-workbench-primary="true"/g)).toHaveLength(1);
   });
 });

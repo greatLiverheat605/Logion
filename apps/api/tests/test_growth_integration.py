@@ -11,6 +11,7 @@ from logion_api.execution.models import Task
 from logion_api.growth.models import ShareSnapshot, TemplateInstallation, TemplatePackage
 from logion_api.identity.models import AuditEvent
 from logion_api.main import app
+from logion_api.sync.models import SyncChange
 from logion_api.workspaces.models import WorkspaceMembership
 from sqlalchemy import func, select
 
@@ -346,6 +347,21 @@ async def test_example_47_day_template_import_is_bounded_private_and_date_preser
     async with session_factory() as db:
         installation = await db.get(TemplateInstallation, installation_id)
         assert installation is not None
+        expected_ids = {
+            UUID(ids["goal_id"]),
+            *(UUID(value) for value in ids["task_ids"]),
+            *(UUID(value) for value in ids["resource_ids"]),
+        }
+        changes = list(
+            (
+                await db.scalars(select(SyncChange).where(SyncChange.entity_id.in_(expected_ids)))
+            ).all()
+        )
+        assert {change.entity_id for change in changes} == expected_ids
+        assert len(changes) == 56
+        assert all(change.operation_type == "create" and not change.tombstone for change in changes)
+        goal_change = next(change for change in changes if change.entity_type == "learning_goal")
+        assert len(goal_change.payload["phases"]) == 7
         tasks = list(
             (
                 await db.scalars(
@@ -491,14 +507,10 @@ async def test_official_templates_are_global_readable_installable_and_tenant_iso
             await external.get(f"/api/v1/workspaces/{external_workspace}/templates")
         ).json()["templates"]
         assert {
-            UUID(row["id"])
-            for row in owner_templates
-            if row["visibility"] == "official"
+            UUID(row["id"]) for row in owner_templates if row["visibility"] == "official"
         } == official_ids
         assert {
-            UUID(row["id"])
-            for row in external_templates
-            if row["visibility"] == "official"
+            UUID(row["id"]) for row in external_templates if row["visibility"] == "official"
         } == official_ids
         assert all(
             row["workspace_id"] is None

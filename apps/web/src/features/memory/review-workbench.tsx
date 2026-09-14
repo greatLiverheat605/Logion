@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
+
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
   InspectorSection,
@@ -818,10 +820,12 @@ function ReviewsPanel({
 }
 
 function ReviewInspector({
+  context,
   data,
   onQuiz,
   selectedTopic,
 }: Readonly<{
+  context: ReviewWorkbenchProps["context"];
   data: ReviewWorkbenchProps["data"];
   onQuiz: (quiz: ReviewQuiz) => void;
   selectedTopic: ReviewTopic | null;
@@ -860,6 +864,16 @@ function ReviewInspector({
         <h2>{selectedTopic.payload.title}</h2>
         <p>{selectedTopic.payload.description || "暂无说明"}</p>
       </header>
+      <InspectorSection title="删除知识点">
+        <EntityDeleteAction
+          entityType="topic"
+          entityId={selectedTopic.entity.entity_id}
+          workspaceId={context.workspaceId}
+          disabled={!context.unlocked}
+          onDeleted={() => undefined}
+          onStatus={() => undefined}
+        />
+      </InspectorSection>
       <InspectorSection title="掌握状态">
         <MetaList>
           <div>
@@ -967,7 +981,7 @@ function UnlockSheet({
             取消
           </button>
           <button className={styles.primaryButton} form={formId} type="submit">
-            解锁资料
+            解锁本地资料
           </button>
         </>
       }
@@ -1473,8 +1487,8 @@ function ContextToolbar({
   actions,
   context,
 }: Readonly<{
-  actions: ReviewWorkbenchProps["actions"];
   context: ReviewWorkbenchProps["context"];
+  actions: ReviewWorkbenchProps["actions"];
 }>) {
   return (
     <WorkbenchToolbar label="复习上下文操作">
@@ -1571,7 +1585,7 @@ export function ReviewWorkbench({
       ref={unlockButtonRef}
       type="button"
     >
-      <AppIcon name="unlock" size={16} /> 解锁资料
+      <AppIcon name="unlock" size={16} /> 解锁本地资料
     </button>
   );
 
@@ -1621,6 +1635,7 @@ export function ReviewWorkbench({
         initialPane="master"
         inspector={
           <ReviewInspector
+            context={context}
             data={data}
             onQuiz={(next) => {
               setQuiz(next);

@@ -38571,7 +38571,10 @@
               "enum": [
                 "learning_goal",
                 "task",
-                "note"
+                "note",
+                "inbox_item",
+                "exam",
+                "topic"
               ],
               "title": "Entity Type",
               "type": "string"

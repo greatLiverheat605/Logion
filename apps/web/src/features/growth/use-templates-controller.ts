@@ -1,4 +1,5 @@
 "use client";
+import { feedback } from "@/lib/feedback";
 
 import type { components } from "@logion/contracts";
 import {
@@ -331,7 +332,7 @@ export function useTemplatesController(): TemplatesControllerResult {
     } catch (error) {
       setContextPhase("error");
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }, []);
 
@@ -384,7 +385,7 @@ export function useTemplatesController(): TemplatesControllerResult {
       setDataWorkspaceId(selected);
       setDataPhase("error");
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }, []);
 
@@ -399,7 +400,7 @@ export function useTemplatesController(): TemplatesControllerResult {
       setGoals([]);
       setGoalsSpaceId(space);
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
     }
   }, []);
 
@@ -531,7 +532,7 @@ export function useTemplatesController(): TemplatesControllerResult {
       return true;
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
       return false;
     }
   }
@@ -562,11 +563,15 @@ export function useTemplatesController(): TemplatesControllerResult {
       );
       await loadGoals(workspaceId, spaceId);
       setRecentAuthRequired(false);
-      setStatus("模板已安装为独立计划；后续模板版本不会覆盖此副本。");
+      setStatus(
+        feedback.success(
+          "模板已安装为独立计划；进入规划页同步后可查看，后续模板版本不会覆盖此副本。",
+        ),
+      );
       return true;
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
       return false;
     }
   }
@@ -607,7 +612,7 @@ export function useTemplatesController(): TemplatesControllerResult {
       return true;
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
       return false;
     }
   }
@@ -643,7 +648,7 @@ export function useTemplatesController(): TemplatesControllerResult {
       return true;
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
       return false;
     }
   }
@@ -665,7 +670,7 @@ export function useTemplatesController(): TemplatesControllerResult {
       return true;
     } catch (error) {
       setRecentAuthRequired(isRecentAuthRequired(error));
-      setStatus(errorText(error));
+      setStatus(feedback.error(errorText(error)));
       return false;
     }
   }

@@ -26,7 +26,10 @@ export type VaultSessionPhase =
   | "unlocking"
   | "unlocked";
 
+export const VAULT_SESSION_DURATION_MS = 30 * 60 * 1000;
+
 interface VaultSessionContextValue {
+  expiresAt: number | null;
   activeDatabase: LogionOfflineDatabase | null;
   activeVault: OfflineVault | null;
   database: MutableRefObject<LogionOfflineDatabase | null>;
@@ -59,8 +62,12 @@ export function VaultSessionProvider({
   const [activeVault, setActiveVault] = useState<OfflineVault | null>(null);
   const [phase, setPhase] = useState<VaultSessionPhase>("locked");
   const [revision, setRevision] = useState(0);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const unlockAttempt = useRef(0);
 
   const lock = useCallback(() => {
+    unlockAttempt.current += 1;
+    setExpiresAt(null);
     vault.current?.lock();
     database.current?.close();
     vault.current = null;
@@ -80,6 +87,8 @@ export function VaultSessionProvider({
       throw new Error("not authenticated");
     }
 
+    unlockAttempt.current += 1;
+    setExpiresAt(null);
     setPhase("clearing");
     const authenticatedUserId = session.user.id;
     let targetDatabase =
@@ -112,16 +121,19 @@ export function VaultSessionProvider({
       if (session.status !== "authenticated") {
         throw new Error("not authenticated");
       }
+      const attempt = ++unlockAttempt.current;
+      userId.current = session.user.id;
       const previousPhase = phase;
       setPhase("unlocking");
       let nextDatabase: LogionOfflineDatabase | null = null;
+      let nextVault: OfflineVault | null = null;
       try {
         nextDatabase = await openOfflineDatabase({
           databaseName: databaseNameForUser(session.user.id),
           indexedDB: globalThis.indexedDB ?? null,
           IDBKeyRange: globalThis.IDBKeyRange ?? null,
         });
-        const nextVault = new OfflineVault(nextDatabase);
+        nextVault = new OfflineVault(nextDatabase);
         const initialized =
           (await nextDatabase.vaultMetadata.get(session.user.id)) === undefined;
         if (initialized) {
@@ -129,6 +141,8 @@ export function VaultSessionProvider({
         } else {
           await nextVault.unlock(session.user.id, passphrase);
         }
+        if (attempt !== unlockAttempt.current)
+          throw new Error("本次解锁已取消，请重新解锁。");
         vault.current?.lock();
         database.current?.close();
         database.current = nextDatabase;
@@ -136,12 +150,15 @@ export function VaultSessionProvider({
         userId.current = session.user.id;
         setActiveDatabase(nextDatabase);
         setActiveVault(nextVault);
+        setExpiresAt(Date.now() + VAULT_SESSION_DURATION_MS);
         setPhase("unlocked");
         setRevision((current) => current + 1);
         return { database: nextDatabase, initialized, vault: nextVault };
       } catch (error) {
+        nextVault?.lock();
         nextDatabase?.close();
-        setPhase(previousPhase === "unlocked" ? "unlocked" : "locked");
+        if (attempt === unlockAttempt.current)
+          setPhase(previousPhase === "unlocked" ? "unlocked" : "locked");
         throw error;
       }
     },
@@ -156,10 +173,26 @@ export function VaultSessionProvider({
     }
   }, [lock, session]);
 
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const check = () => {
+      if (Date.now() >= expiresAt) lock();
+    };
+    const timer = window.setInterval(check, 1000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [expiresAt, lock]);
+
   useEffect(() => lock, [lock]);
 
   const value = useMemo<VaultSessionContextValue>(
     () => ({
+      expiresAt,
       activeDatabase,
       activeVault,
       clearLocalData,
@@ -172,6 +205,7 @@ export function VaultSessionProvider({
       vault,
     }),
     [
+      expiresAt,
       activeDatabase,
       activeVault,
       clearLocalData,

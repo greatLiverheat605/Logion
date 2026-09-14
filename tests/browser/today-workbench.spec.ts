@@ -69,13 +69,13 @@ test("Today completes a real execution loop and four-breakpoint audit", async ({
     await waitForWorkbenchReady(page, "/app/planning");
     const planningUnlockTrigger = page.getByRole("button", {
       exact: true,
-      name: "解锁资料",
+      name: "解锁本地资料",
     });
     if (await planningUnlockTrigger.isVisible()) {
       await planningUnlockTrigger.click();
       const unlockSheet = page.getByRole("dialog", { name: "解锁本地资料" });
       await unlockSheet.getByLabel("本地口令").fill(vaultPassphrase);
-      await unlockSheet.getByRole("button", { name: "解锁资料" }).click();
+      await unlockSheet.getByRole("button", { name: "解锁本地资料" }).click();
       await expect(unlockSheet).toHaveCount(0);
     }
     await expect(
@@ -253,4 +253,168 @@ test("Today completes a real execution loop and four-breakpoint audit", async ({
     runtimeProblems,
     "Today must not emit browser warnings or errors",
   ).toEqual([]);
+});
+
+test("Browser defects: task feedback, template pull, locked states and mobile shell", async ({
+  page,
+  accountState,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const goalTitle = `Browser-fix-${Date.now()}`;
+  await page.goto("/app/planning");
+  await expect(
+    page.getByTestId("planning-goals").getByText("资料已锁定，解锁后读取"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "解锁本地资料", exact: true }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByLabel("本地口令").fill(accountState.password);
+  await dialog
+    .getByRole("button", { name: "解锁本地资料", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "新建目标", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("目标名称").fill(goalTitle);
+  await dialog.getByLabel("可验收成果").fill("浏览器验收记录");
+  await dialog.getByLabel("阶段名称").fill("第一阶段");
+  await dialog.getByLabel("预计分钟").fill("480");
+  await dialog.getByLabel("验收标准").fill("通过回归");
+  await dialog.getByRole("button", { name: "保存目标" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("link", { name: "打开 Today" }).click();
+  await page.getByRole("button", { name: "新建任务", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("任务名称").fill(`${goalTitle}-task`);
+  await dialog.getByLabel("关联目标").selectOption({ label: goalTitle });
+  await dialog.getByLabel("阶段（可选）").selectOption({ label: "第一阶段" });
+  await dialog.getByLabel("预计分钟").fill("960");
+  await dialog.getByLabel("说明（可选）").fill("最后输入");
+  await dialog.getByRole("button", { name: "保存任务" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("预计分钟不能超过 480");
+  const errorToast = page
+    .locator('[data-sonner-toast][data-type="error"]')
+    .filter({ hasText: "预计分钟不能超过 480" });
+  await expect(errorToast).toBeVisible();
+  await expect(errorToast).toHaveCSS("opacity", "1");
+  await page.screenshot({ path: testInfo.outputPath("p0-task-error.png") });
+  await dialog.getByLabel("预计分钟").fill("480");
+  await dialog.getByRole("button", { name: "保存任务" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("complementary", { name: "今日序列" }),
+  ).toContainText(`${goalTitle}-task`);
+  await page.locator('a[href="/app/templates"]').first().click();
+  await page.getByRole("button", { name: /研究项目 · 问题到证据/ }).click();
+  await page.getByRole("button", { name: "安装独立副本", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("安装起始日期").fill("2026-09-13");
+  await dialog.getByRole("button", { name: "确认安装" }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.locator('a[href="/app/planning"]').first().click();
+  await expect(page.getByTestId("planning-goals")).toContainText("研究项目");
+  // Simulate a pre-fix cache missing objects after its cursor has advanced.
+  await page.evaluate(async () => {
+    const info = (await indexedDB.databases()).find((item) =>
+      item.name?.startsWith("logion-offline"),
+    );
+    if (!info?.name) throw new Error("Missing test database");
+    await new Promise<void>((resolve, reject) => {
+      const opening = indexedDB.open(info.name!);
+      opening.onerror = () => reject(opening.error);
+      opening.onsuccess = () => {
+        const db = opening.result;
+        const tx = db.transaction(["entities", "outbox"], "readwrite");
+        const pending = tx.objectStore("outbox").count();
+        pending.onsuccess = () => {
+          if (pending.result) {
+            tx.abort();
+            return;
+          }
+          const store = tx.objectStore("entities");
+          const rows = store.openCursor();
+          rows.onsuccess = () => {
+            const cursor = rows.result;
+            if (!cursor) return;
+            if (
+              cursor.value.entity_type === "learning_goal" &&
+              cursor.value.sync_status === "clean"
+            )
+              cursor.delete();
+            cursor.continue();
+          };
+        };
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onabort = () => {
+          db.close();
+          reject(new Error("Cannot alter a pending test cache"));
+        };
+      };
+    });
+  });
+  await page.locator('a[href="/app/today"]').first().click();
+  await page.locator('a[href="/app/planning"]').first().click();
+  await expect(page.getByTestId("planning-goals")).not.toContainText(
+    "研究项目",
+  );
+  await page
+    .getByRole("button", { name: "补全服务器资料", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "补全服务器资料" })
+    .getByRole("button", { name: "确认补全" })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByTestId("planning-goals")).toContainText("研究项目");
+
+  await page.screenshot({
+    path: testInfo.outputPath("p1-template-planning.png"),
+  });
+  await page
+    .getByTestId("planning-goals")
+    .getByRole("button", { name: /研究项目/ })
+    .click();
+  await page.getByRole("button", { name: "删除学习目标", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "确认删除" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("planning-goals")).not.toContainText(
+    "研究项目",
+  );
+  await page.locator('a[href="/app/templates"]').first().click();
+  await expect(
+    page.getByTestId("templates-installed").locator("strong"),
+  ).toHaveText("1");
+  await page.locator('a[href="/app/planning"]').first().click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.locator(".app-mobile-menu")).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".app-sidebar")
+        .evaluate((node) => node.getBoundingClientRect().right),
+    )
+    .toBeLessThanOrEqual(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("p2-mobile-375.png") });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await expect(
+    page.getByTestId("planning-goals").getByText("资料已锁定，解锁后读取"),
+  ).toBeVisible();
+  await page.goto("/app/today");
+  await page.getByRole("button", { name: "新建任务", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("资料已锁定，解锁后读取")).toBeVisible();
+  await expect(dialog.getByText("当前 Space 还没有可关联的目标。")).toHaveCount(
+    0,
+  );
+  await page.goto("/app/search");
+  await expect(page.getByText("资料已锁定，解锁后读取")).toBeVisible();
 });

@@ -48,14 +48,14 @@ test("Exam completes the protected planning and mock-exam workflow", async ({
   await expect(page.getByTestId("exam-weaknesses")).toBeAttached();
 
   const unlock = page
-    .getByRole("button", { exact: true, name: "解锁资料" })
+    .getByRole("button", { exact: true, name: "解锁本地资料" })
     .first();
   if (await unlock.isVisible()) {
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地备考资料" });
     await expect(sheet.getByLabel("本地口令")).toBeFocused();
     await sheet.getByLabel("本地口令").fill(vaultPassphrase);
-    await sheet.getByRole("button", { name: "解锁资料" }).click();
+    await sheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(sheet).toHaveCount(0);
   }
 
@@ -63,11 +63,18 @@ test("Exam completes the protected planning and mock-exam workflow", async ({
   await page.getByTestId("exam-create").click();
   const examSheet = page.getByRole("dialog", { name: "创建考试" });
   await examSheet.getByLabel("考试名称").fill(title);
+  await examSheet.getByRole("button", { name: "创建考试" }).click();
+  await expect(examSheet.getByRole("alert")).toContainText("请填写考试时间");
+
   await examSheet.getByLabel("考试时间（本地时区）").fill("2026-11-07T09:00");
   await examSheet.getByLabel("目标分（可选）").fill("80");
   await examSheet.getByLabel("满分（与目标分成对）").fill("100");
   await examSheet.getByRole("button", { name: "创建考试" }).click();
   await expect(examSheet).toHaveCount(0);
+  await page
+    .locator('[data-sonner-toast][data-type="error"]')
+    .getByRole("button", { name: "关闭反馈" })
+    .click();
   await expect(
     page
       .getByTestId("exam-list")
@@ -118,6 +125,7 @@ test("Exam completes the protected planning and mock-exam workflow", async ({
   await scoreSheet.getByRole("button", { name: "记录成绩" }).click();
   await expect(scoreSheet).toHaveCount(0);
 
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
   for (const viewport of WORKBENCH_VIEWPORTS) {
     await page.setViewportSize(viewport);
     await waitForWorkbenchReady(page, "/app/exam");
@@ -147,5 +155,18 @@ test("Exam completes the protected planning and mock-exam workflow", async ({
     await assertReducedMotion(page, "/app/exam", viewport);
   }
   await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "删除考试", exact: true }).click();
+  const deleteDialog = page.getByRole("dialog", { name: "确认删除" });
+  await expect(deleteDialog).toContainText("成绩记录");
+  await deleteDialog.getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByRole("button", { name: "删除考试", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "确认删除" })
+    .getByRole("button", { name: "确认删除", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "删除考试", exact: true }),
+  ).toHaveCount(0);
   expect(runtimeProblems).toEqual([]);
 });

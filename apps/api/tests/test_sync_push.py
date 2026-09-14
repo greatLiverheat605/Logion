@@ -172,6 +172,7 @@ def test_push_handlers_are_registered_by_entity_family() -> None:
         "evidence": {("evidence", "create"), ("verification", "update")},
         "memory": {
             ("topic", "create"),
+            ("topic", "delete"),
             ("topic_dependency", "create"),
             ("mastery", "create"),
             ("mastery", "update"),
@@ -185,6 +186,7 @@ def test_push_handlers_are_registered_by_entity_family() -> None:
         },
         "exams": {
             ("exam", "create"),
+            ("exam", "delete"),
             ("exam_subject", "create"),
             ("syllabus_node", "create"),
             ("mock_exam", "create"),
@@ -194,6 +196,7 @@ def test_push_handlers_are_registered_by_entity_family() -> None:
             ("learning_track", "create"),
             ("study_project", "create"),
             ("inbox_item", "create"),
+            ("inbox_item", "delete"),
             ("deliverable", "create"),
         },
         "research": {

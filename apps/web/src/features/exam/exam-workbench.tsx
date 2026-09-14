@@ -1,6 +1,10 @@
 "use client";
+import { feedback } from "@/lib/feedback";
+import { validateForm } from "@/lib/form-validation";
 
 import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
+
+import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
@@ -591,6 +595,16 @@ function ExamInspector({
       </header>
       {selectedExam ? (
         <>
+          <InspectorSection title="删除考试">
+            <EntityDeleteAction
+              entityType="exam"
+              entityId={selectedExam.entity.entity_id}
+              workspaceId={context.workspaceId}
+              disabled={!context.unlocked}
+              onDeleted={() => undefined}
+              onStatus={() => undefined}
+            />
+          </InspectorSection>
           <InspectorSection title="考试范围">
             <dl className={styles.metaList}>
               <div>
@@ -732,7 +746,7 @@ function UnlockSheet({
             取消
           </button>
           <button className={styles.primaryButton} form={formId} type="submit">
-            解锁资料
+            解锁本地资料
           </button>
         </>
       }
@@ -790,6 +804,7 @@ function FormSheet({
   const [dateStatus, setDateStatus] = useState(context.dateStatus);
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const title = {
     exam: "创建考试",
     subject: "添加科目",
@@ -833,19 +848,48 @@ function FormSheet({
       <form
         className={styles.sheetForm}
         id={formId}
+        noValidate
         onSubmit={async (event) => {
           event.preventDefault();
           if (pending) return;
+          const form = event.currentTarget;
+          const data = new FormData(form);
+          const extra: Record<string, string> = {};
+          if (kind === "exam") {
+            if (data.get("date_status") === "scheduled" && !data.get("exam_at"))
+              extra.exam_at = "请填写考试时间";
+            const target = String(data.get("target_score") ?? "");
+            const scale = String(data.get("score_scale_max") ?? "");
+            if (Boolean(target) !== Boolean(scale))
+              extra[target ? "score_scale_max" : "target_score"] =
+                "目标分与满分需要一起填写。";
+            else if (target && Number(target) > Number(scale))
+              extra.target_score = "目标分不能超过满分。";
+          }
+          const nextErrors = validateForm(form, extra);
+          setErrors(nextErrors);
+          if (Object.keys(nextErrors).length) return;
           setPending(true);
           setSubmitted(true);
           try {
             const ok = await submit(event);
-            if (ok) onOpenChange(false);
+            if (ok) {
+              feedback.success(`${title}已保存在本地。`);
+              onOpenChange(false);
+            } else
+              setErrors({
+                submit: feedback.error(
+                  "未保存，请检查解锁状态及表单内容后重试。",
+                ),
+              });
+          } catch (error) {
+            setErrors({ submit: feedback.error(error) });
           } finally {
             setPending(false);
           }
         }}
       >
+        {errors.submit ? <p role="alert">{errors.submit}</p> : null}
         {submitted ? <StatusLine>{context.status}</StatusLine> : null}
         {kind === "exam" ? (
           <>
@@ -854,8 +898,17 @@ function FormSheet({
               id={`${formId}-title`}
               maxLength={160}
               name="title"
+              aria-invalid={Boolean(errors.title)}
+              aria-describedby={
+                errors.title ? `${formId}-error-title` : undefined
+              }
               required
             />
+            {errors.title ? (
+              <small role="alert" id={`${formId}-error-title`}>
+                {errors.title}
+              </small>
+            ) : null}
             <fieldset className={styles.choiceField}>
               <legend>日期状态</legend>
               <label>
@@ -891,9 +944,18 @@ function FormSheet({
                 <input
                   id={`${formId}-at`}
                   name="exam_at"
+                  aria-invalid={Boolean(errors.exam_at)}
+                  aria-describedby={
+                    errors.exam_at ? `${formId}-error-exam_at` : undefined
+                  }
                   required
                   type="datetime-local"
                 />
+                {errors.exam_at ? (
+                  <small role="alert" id={`${formId}-error-exam_at`}>
+                    {errors.exam_at}
+                  </small>
+                ) : null}
               </>
             ) : null}
             <div className={styles.formGrid}>
@@ -902,15 +964,37 @@ function FormSheet({
                 id={`${formId}-target`}
                 min={0}
                 name="target_score"
+                aria-invalid={Boolean(errors.target_score)}
+                aria-describedby={
+                  errors.target_score
+                    ? `${formId}-error-target_score`
+                    : undefined
+                }
                 type="number"
               />
+              {errors.target_score ? (
+                <small role="alert" id={`${formId}-error-target_score`}>
+                  {errors.target_score}
+                </small>
+              ) : null}
               <label htmlFor={`${formId}-scale`}>满分（与目标分成对）</label>
               <input
                 id={`${formId}-scale`}
                 min={1}
                 name="score_scale_max"
+                aria-invalid={Boolean(errors.score_scale_max)}
+                aria-describedby={
+                  errors.score_scale_max
+                    ? `${formId}-error-score_scale_max`
+                    : undefined
+                }
                 type="number"
               />
+              {errors.score_scale_max ? (
+                <small role="alert" id={`${formId}-error-score_scale_max`}>
+                  {errors.score_scale_max}
+                </small>
+              ) : null}
             </div>
           </>
         ) : null}
@@ -923,6 +1007,10 @@ function FormSheet({
               }
               id={`${formId}-exam`}
               name="exam_id"
+              aria-invalid={Boolean(errors.exam_id)}
+              aria-describedby={
+                errors.exam_id ? `${formId}-error-exam_id` : undefined
+              }
               required
             >
               <option value="">请选择</option>
@@ -935,8 +1023,27 @@ function FormSheet({
                 </option>
               ))}
             </select>
+            {errors.exam_id ? (
+              <small role="alert" id={`${formId}-error-exam_id`}>
+                {errors.exam_id}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-name`}>科目名称</label>
-            <input id={`${formId}-name`} maxLength={160} name="name" required />
+            <input
+              id={`${formId}-name`}
+              maxLength={160}
+              name="name"
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={
+                errors.name ? `${formId}-error-name` : undefined
+              }
+              required
+            />
+            {errors.name ? (
+              <small role="alert" id={`${formId}-error-name`}>
+                {errors.name}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-weight`}>权重（百分比）</label>
             <input
               defaultValue="0"
@@ -944,10 +1051,21 @@ function FormSheet({
               max={100}
               min={0}
               name="weight_percent"
+              aria-invalid={Boolean(errors.weight_percent)}
+              aria-describedby={
+                errors.weight_percent
+                  ? `${formId}-error-weight_percent`
+                  : undefined
+              }
               required
               step="0.01"
               type="number"
             />
+            {errors.weight_percent ? (
+              <small role="alert" id={`${formId}-error-weight_percent`}>
+                {errors.weight_percent}
+              </small>
+            ) : null}
           </>
         ) : null}
         {kind === "syllabus" ? (
@@ -956,6 +1074,10 @@ function FormSheet({
             <select
               id={`${formId}-subject`}
               name="subject_id"
+              aria-invalid={Boolean(errors.subject_id)}
+              aria-describedby={
+                errors.subject_id ? `${formId}-error-subject_id` : undefined
+              }
               required
               value={context.syllabusSubjectId}
               onChange={(event) =>
@@ -972,8 +1094,20 @@ function FormSheet({
                 </option>
               ))}
             </select>
+            {errors.subject_id ? (
+              <small role="alert" id={`${formId}-error-subject_id`}>
+                {errors.subject_id}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-parent`}>父节点（可选）</label>
-            <select id={`${formId}-parent`} name="parent_id">
+            <select
+              id={`${formId}-parent`}
+              name="parent_id"
+              aria-invalid={Boolean(errors.parent_id)}
+              aria-describedby={
+                errors.parent_id ? `${formId}-error-parent_id` : undefined
+              }
+            >
               <option value="">顶层节点</option>
               {data.visibleNodes
                 .filter(
@@ -989,18 +1123,36 @@ function FormSheet({
                   </option>
                 ))}
             </select>
+            {errors.parent_id ? (
+              <small role="alert" id={`${formId}-error-parent_id`}>
+                {errors.parent_id}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-node-title`}>节点名称</label>
             <input
               id={`${formId}-node-title`}
               maxLength={240}
               name="title"
+              aria-invalid={Boolean(errors.title)}
+              aria-describedby={
+                errors.title ? `${formId}-error-title` : undefined
+              }
               required
             />
+            {errors.title ? (
+              <small role="alert" id={`${formId}-error-title`}>
+                {errors.title}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-importance`}>重要度</label>
             <select
               defaultValue="3"
               id={`${formId}-importance`}
               name="importance"
+              aria-invalid={Boolean(errors.importance)}
+              aria-describedby={
+                errors.importance ? `${formId}-error-importance` : undefined
+              }
             >
               <option value="1">1</option>
               <option value="2">2</option>
@@ -1008,6 +1160,11 @@ function FormSheet({
               <option value="4">4</option>
               <option value="5">5</option>
             </select>
+            {errors.importance ? (
+              <small role="alert" id={`${formId}-error-importance`}>
+                {errors.importance}
+              </small>
+            ) : null}
           </>
         ) : null}
         {kind === "mock" ? (
@@ -1019,6 +1176,10 @@ function FormSheet({
               }
               id={`${formId}-mock-exam`}
               name="exam_id"
+              aria-invalid={Boolean(errors.exam_id)}
+              aria-describedby={
+                errors.exam_id ? `${formId}-error-exam_id` : undefined
+              }
               required
             >
               <option value="">请选择</option>
@@ -1031,13 +1192,27 @@ function FormSheet({
                 </option>
               ))}
             </select>
+            {errors.exam_id ? (
+              <small role="alert" id={`${formId}-error-exam_id`}>
+                {errors.exam_id}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-mock-title`}>模考名称</label>
             <input
               id={`${formId}-mock-title`}
               maxLength={160}
               name="title"
+              aria-invalid={Boolean(errors.title)}
+              aria-describedby={
+                errors.title ? `${formId}-error-title` : undefined
+              }
               required
             />
+            {errors.title ? (
+              <small role="alert" id={`${formId}-error-title`}>
+                {errors.title}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-duration`}>限时（分钟）</label>
             <input
               defaultValue="90"
@@ -1045,15 +1220,34 @@ function FormSheet({
               max={1440}
               min={1}
               name="duration_minutes"
+              aria-invalid={Boolean(errors.duration_minutes)}
+              aria-describedby={
+                errors.duration_minutes
+                  ? `${formId}-error-duration_minutes`
+                  : undefined
+              }
               required
               type="number"
             />
+            {errors.duration_minutes ? (
+              <small role="alert" id={`${formId}-error-duration_minutes`}>
+                {errors.duration_minutes}
+              </small>
+            ) : null}
           </>
         ) : null}
         {kind === "score" ? (
           <>
             <label htmlFor={`${formId}-score-mock`}>已完成模考</label>
-            <select id={`${formId}-score-mock`} name="mock_exam_id" required>
+            <select
+              id={`${formId}-score-mock`}
+              name="mock_exam_id"
+              aria-invalid={Boolean(errors.mock_exam_id)}
+              aria-describedby={
+                errors.mock_exam_id ? `${formId}-error-mock_exam_id` : undefined
+              }
+              required
+            >
               <option value="">请选择</option>
               {data.visibleMocks.map((mock) => (
                 <option
@@ -1064,31 +1258,67 @@ function FormSheet({
                 </option>
               ))}
             </select>
+            {errors.mock_exam_id ? (
+              <small role="alert" id={`${formId}-error-mock_exam_id`}>
+                {errors.mock_exam_id}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-score`}>得分</label>
             <input
               id={`${formId}-score`}
               min={0}
               name="score"
+              aria-invalid={Boolean(errors.score)}
+              aria-describedby={
+                errors.score ? `${formId}-error-score` : undefined
+              }
               required
               type="number"
             />
+            {errors.score ? (
+              <small role="alert" id={`${formId}-error-score`}>
+                {errors.score}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-score-scale`}>满分</label>
             <input
               id={`${formId}-score-scale`}
               min={1}
               name="score_scale_max"
+              aria-invalid={Boolean(errors.score_scale_max)}
+              aria-describedby={
+                errors.score_scale_max
+                  ? `${formId}-error-score_scale_max`
+                  : undefined
+              }
               required
               type="number"
             />
+            {errors.score_scale_max ? (
+              <small role="alert" id={`${formId}-error-score_scale_max`}>
+                {errors.score_scale_max}
+              </small>
+            ) : null}
             <label htmlFor={`${formId}-score-duration`}>实际用时（分钟）</label>
             <input
               id={`${formId}-score-duration`}
               max={1440}
               min={0}
               name="duration_minutes"
+              aria-invalid={Boolean(errors.duration_minutes)}
+              aria-describedby={
+                errors.duration_minutes
+                  ? `${formId}-error-duration_minutes`
+                  : undefined
+              }
               required
               type="number"
             />
+            {errors.duration_minutes ? (
+              <small role="alert" id={`${formId}-error-duration_minutes`}>
+                {errors.duration_minutes}
+              </small>
+            ) : null}
           </>
         ) : null}
       </form>
@@ -1135,7 +1365,7 @@ export function ExamWorkbench({ actions, context, data }: ExamWorkbenchProps) {
       ref={unlockButtonRef}
       type="button"
     >
-      <AppIcon name="unlock" size={16} /> 解锁资料
+      <AppIcon name="unlock" size={16} /> 解锁本地资料
     </button>
   );
   return (

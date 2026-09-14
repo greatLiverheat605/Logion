@@ -562,7 +562,7 @@ function TemplateInspector({
           Logion 官方模板不可编辑、分享或撤销；仅可安装独立副本。
         </p>
       </InspectorSection>
-      <InspectorSection title="已安装副本">
+      <InspectorSection title="当前目标">
         <div
           className={styles.installSummary}
           data-testid="templates-installed"
@@ -667,6 +667,7 @@ function InstallSheet({
 }) {
   const template = context.selectedTemplate;
   const formId = useId();
+  const [pending, setPending] = useState(false);
   const relativeDate = template ? templateHasRelativeDate(template) : false;
   const [startDate, setStartDate] = useState(
     template ? (context.installStartDates[template.id] ?? "") : "",
@@ -689,10 +690,12 @@ function InstallSheet({
             form={formId}
             type="submit"
             disabled={
-              !context.capabilities.canInstall || template.status !== "active"
+              pending ||
+              !context.capabilities.canInstall ||
+              template.status !== "active"
             }
           >
-            确认安装
+            {pending ? "正在安装…" : "确认安装"}
           </button>
         </>
       }
@@ -706,9 +709,15 @@ function InstallSheet({
         className={styles.sheetForm}
         onSubmit={async (event) => {
           event.preventDefault();
-          actions.setInstallStartDate(template.id, startDate);
-          const ok = await actions.installTemplate(template, startDate);
-          if (ok) onOpenChange(false);
+          if (pending) return;
+          setPending(true);
+          try {
+            actions.setInstallStartDate(template.id, startDate);
+            const ok = await actions.installTemplate(template, startDate);
+            if (ok) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <div className={styles.sheetSummary}>

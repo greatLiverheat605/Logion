@@ -23769,7 +23769,7 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: string;
-                entity_type: "learning_goal" | "task" | "note";
+                entity_type: "learning_goal" | "task" | "note" | "inbox_item" | "exam" | "topic";
                 entity_id: string;
             };
             cookie?: never;

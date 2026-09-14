@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useRef, useState, type FormEvent } from "react";
 
@@ -584,9 +585,9 @@ function DataMaster({
         <div className={styles.masterEmpty}>
           <ProductEmptyState
             action={
-              <a className={styles.stateAction} href="/app/workspaces">
+              <Link className={styles.stateAction} href="/app/workspaces">
                 管理 Workspace
-              </a>
+              </Link>
             }
             description="当前账号没有可访问的 Workspace。请创建一个工作区，或联系管理员授予访问权限。"
             title="没有可访问 Workspace"
@@ -631,9 +632,9 @@ function DataMaster({
                 当前 Workspace 没有你拥有的 Private Space。先创建 Private
                 Space，才能确认导入写入边界。
               </p>
-              <a className={styles.stateAction} href="/app/spaces">
+              <Link className={styles.stateAction} href="/app/spaces">
                 管理 Private Space
-              </a>
+              </Link>
             </div>
           ) : null}
           <div className={styles.masterActions}>

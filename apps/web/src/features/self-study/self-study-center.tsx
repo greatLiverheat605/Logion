@@ -490,8 +490,41 @@ function OfflineLearningCenter({
       data = new FormData(form);
     try {
       let committed = false;
+      const sourceId = String(data.get("inbox_source_id") ?? "");
+      let source: JsonObject = {};
+      if (sourceId && (kind === "learning_track" || kind === "study_project")) {
+        const item = records.inbox_item.find(
+          (row) => row.entity.entity_id === sourceId,
+        );
+        if (
+          !item ||
+          item.entity.sync_status !== "clean" ||
+          item.entity.server_version < 1
+        ) {
+          setStatus(feedback.error("请先同步收件箱条目，再建立路线或项目。"));
+          return false;
+        }
+        if (
+          [...records.learning_track, ...records.study_project].some(
+            (row) =>
+              (row.payload.inbox_source as JsonObject | undefined)?.id ===
+              sourceId,
+          )
+        ) {
+          setStatus(
+            feedback.error(
+              "该条目已有分诊操作，请在同步中心完成或处理后重试。",
+            ),
+          );
+          return false;
+        }
+        source = {
+          inbox_source: { id: sourceId, version: item.entity.server_version },
+        };
+      }
       if (kind === "learning_track") {
         committed = await commit(kind, {
+          ...source,
           title: String(data.get("title")),
           objective: String(data.get("objective")),
         });
@@ -507,6 +540,7 @@ function OfflineLearningCenter({
         committed = await commit(
           kind,
           {
+            ...source,
             track_id: track,
             title: String(data.get("title")),
             intended_outcome: String(data.get("outcome")),

@@ -254,7 +254,9 @@ export function deriveTodayViewModel({
   const visibleTasks = tasks.filter(
     (item) => item.payload.space_id === spaceId,
   );
-  const queue = [...visibleTasks].sort(compareTasks);
+  const queue = visibleTasks
+    .filter((item) => !["done", "cancelled"].includes(item.payload.status))
+    .sort(compareTasks);
   const actionableTasks = queue.filter((item) =>
     ["backlog", "planned", "in_progress"].includes(item.payload.status),
   );

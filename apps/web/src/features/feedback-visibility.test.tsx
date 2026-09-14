@@ -192,7 +192,11 @@ describe("F1/F2/F3 center feedback control flow", () => {
       expect(inline).toContain("request-t03-sync");
       expect(inline).not.toContain("已加密保存");
       expect(inline).not.toContain("Private transport detail");
-      expect(toast.success).not.toHaveBeenCalled();
+      if (module === "exam")
+        expect(toast.success).toHaveBeenCalledWith("创建考试已保存在本地。", {
+          duration: 3000,
+        });
+      else expect(toast.success).not.toHaveBeenCalled();
     },
   );
 
