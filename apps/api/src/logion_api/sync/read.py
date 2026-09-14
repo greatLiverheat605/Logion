@@ -295,7 +295,9 @@ class SyncReadService:
         # remain filtered by the existing non-deleted visibility queries.
         visible_tombstones: set[tuple[str, UUID]] = set()
         tombstone_model: Any
-        private_tombstone_types = {"inbox_item", "exam", "exam_subject", "syllabus_node", "mock_exam", "score_record"}
+        private_tombstone_types = {
+            "inbox_item", "exam", "exam_subject", "syllabus_node", "mock_exam", "score_record"
+        }
         for tombstone_type, tombstone_model in (
             ("learning_goal", LearningGoal),
             ("task", Task),
