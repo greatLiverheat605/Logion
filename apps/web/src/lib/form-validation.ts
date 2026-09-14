@@ -29,7 +29,8 @@ export function validateForm(
   }
   Object.assign(errors, additional);
   if (Object.keys(errors).length) {
-    feedback.error(Object.values(errors)[0]);
+    const count = Object.keys(errors).length;
+    feedback.error(count > 1 ? `请修正 ${count} 项错误` : Object.values(errors)[0]);
     const first = form.elements.namedItem(Object.keys(errors)[0] ?? "");
     if (first instanceof HTMLElement) first.focus();
   }

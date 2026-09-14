@@ -228,7 +228,16 @@ async def deletion_scope(
                 )
             )
             if count:
-                blockers["topic_reference_count"] = 1
+                key = {
+                    TopicDependency: "dependency_count",
+                    MasteryRecord: "mastery_count",
+                    ReviewSchedule: "review_schedule_count",
+                    QuizItem: "quiz_item_count",
+                    QuizAttempt: "quiz_attempt_count",
+                    ErrorPattern: "error_pattern_count",
+                    KnowledgeCitation: "citation_count",
+                }[ref_model]
+                blockers[key] = int(count)
     impact_kinds: tuple[str, ...] = ("learning_goal", "task", "note", "resource", "study_session")
     if entity_type == "exam":
         impact_kinds = ("exam", "exam_subject", "syllabus_node", "mock_exam", "score_record")
