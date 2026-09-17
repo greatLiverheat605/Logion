@@ -29,6 +29,10 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AttachmentCapability(Strict):
+    ingest_enabled: bool
+
+
 class AttachmentInit(Strict):
     id: UUID
     target_type: AttachmentTargetType

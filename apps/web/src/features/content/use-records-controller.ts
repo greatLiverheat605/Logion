@@ -1,4 +1,8 @@
 "use client";
+import {
+  AttachmentCapabilityError,
+  checkAttachmentQueuePermission,
+} from "./attachment-capability";
 
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
@@ -306,6 +310,7 @@ function issueFrom(error: unknown): RecordsIssue {
 }
 
 function userMessage(error: unknown): string {
+  if (error instanceof AttachmentCapabilityError) return error.message;
   const capabilityMessage = offlineCapabilityMessage(error);
   if (capabilityMessage !== null) return capabilityMessage;
   if (error instanceof LogionApiError) {
@@ -370,7 +375,11 @@ export interface RecordsControllerResult {
     }) => Promise<string | null>;
     createResource: (input: RecordsResourceInput) => Promise<boolean>;
     loadContext: () => Promise<void>;
-    queueAttachment: (noteId: string, file: File) => Promise<boolean>;
+    queueAttachment: (
+      noteId: string,
+      file: File,
+      allowOffline?: boolean,
+    ) => Promise<boolean>;
     renameResource: (resourceId: string, title: string) => Promise<boolean>;
     saveNote: (
       noteId: string,
@@ -412,6 +421,8 @@ export function useRecordsController(): RecordsControllerResult {
   const contextRequest = useRef(0);
   const spaceRequest = useRef(0);
   const recordsRequest = useRef(0);
+  const attachmentContext = useRef(0);
+  const attachmentBusy = useRef(false);
   const unlocked = vaultPhase === "unlocked";
   const online = useSyncExternalStore(
     subscribeOnline,
@@ -957,10 +968,16 @@ export function useRecordsController(): RecordsControllerResult {
     }
   }
 
-  async function queueAttachment(noteId: string, file: File): Promise<boolean> {
+  async function queueAttachment(
+    noteId: string,
+    file: File,
+    allowOffline = false,
+  ): Promise<boolean> {
+    if (attachmentBusy.current) return false;
     const db = database.current;
     if (
       db === null ||
+      !unlocked ||
       !workspaceIdRef.current ||
       !spaceId ||
       !deviceIdRef.current ||
@@ -970,8 +987,26 @@ export function useRecordsController(): RecordsControllerResult {
       setStatus("请选择已有笔记和一个受支持的附件。");
       return false;
     }
+    attachmentBusy.current = true;
     setCommandPhase("pending");
     try {
+      const selectedWorkspace = workspaceIdRef.current;
+      const contextVersion = attachmentContext.current;
+      await checkAttachmentQueuePermission(
+        selectedWorkspace,
+        spaceId,
+        online,
+        allowOffline,
+      );
+      if (
+        selectedWorkspace !== workspaceIdRef.current ||
+        db !== database.current ||
+        contextVersion !== attachmentContext.current ||
+        online !== navigator.onLine
+      ) {
+        setCommandPhase("idle");
+        return false;
+      }
       await new AttachmentQueueRepository(db).enqueue({
         attachment_id: crypto.randomUUID(),
         blob: file,
@@ -995,6 +1030,8 @@ export function useRecordsController(): RecordsControllerResult {
       setStatus(userMessage(error));
       setCommandPhase("idle");
       return false;
+    } finally {
+      attachmentBusy.current = false;
     }
   }
 
@@ -1034,6 +1071,7 @@ export function useRecordsController(): RecordsControllerResult {
 
   function setWorkspaceId(nextWorkspaceId: string) {
     if (nextWorkspaceId === workspaceIdRef.current) return;
+    attachmentContext.current += 1;
     workspaceIdRef.current = nextWorkspaceId;
     spaceRequest.current += 1;
     recordsRequest.current += 1;
@@ -1051,6 +1089,7 @@ export function useRecordsController(): RecordsControllerResult {
   }
 
   function setSpaceId(nextSpaceId: string) {
+    attachmentContext.current += 1;
     setSpaceIdState(nextSpaceId);
     setSelectedNoteId("");
     setCommandPhase("idle");

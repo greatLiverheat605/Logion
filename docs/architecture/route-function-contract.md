@@ -55,3 +55,7 @@
 `loading`、`empty`、`pending`、`success`、`offline`、`locked`、`permission`、`409`、`error`、`capability-disabled`、`stale` 必须来自真实 controller 状态。非 ready 状态至少提供一个适用的恢复动作：重试、解锁、导航、解决冲突或关闭反馈。
 
 危险操作必须显示对象范围、所需权限、确认内容和恢复路径。移动端关键触达目标至少 `44 x 44 px`；键盘、焦点恢复、Screen Reader 与 reduced-motion 属于功能合同，不是视觉加分项。
+
+## 搜索空间范围
+
+`POST /api/v1/workspaces/{workspace_id}/search` 接受可选 `space_id`（UUID 或 null）；省略或 null 保留全部已授权空间搜索。指定空间与现有工作区、空间权限条件一并筛选，再执行每类和最终结果数量上限。无权访问或不存在的空间返回空结果，不枚举空间是否存在。响应结构、对象类型和原查询长度限制不变。离线缓存不支持按空间筛选；最近查询仅保留在当前搜索视图内存。

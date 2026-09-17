@@ -1038,3 +1038,16 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.recentSearches {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.recentSearches ul {
+  padding-left: 1rem;
+}
+.recentSearches button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

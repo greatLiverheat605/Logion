@@ -24,6 +24,7 @@ class Strict(BaseModel):
 
 
 class SearchRequest(Strict):
+    space_id: UUID | None = None
     query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
     object_types: list[SearchType] = Field(
         default_factory=default_search_types,

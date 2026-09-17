@@ -176,6 +176,21 @@ describe("Search workbench", () => {
     expect(commands.resetSearch).toHaveBeenCalledOnce();
   });
 
+  it("shows an empty online result even when the local vault is locked", () => {
+    const { controller } = controllerFixture({ empty: true });
+    controller.context.offlineUnlocked = false;
+    render(
+      <SearchWorkbench
+        controller={controller}
+        onScopeChange={vi.fn()}
+        scope="all"
+      />,
+    );
+    expect(screen.getByRole("heading", { name: /没有匹配/ })).toBeTruthy();
+    expect(screen.getByText("资料已锁定，解锁后读取")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "清除筛选" })).toBeTruthy();
+  });
+
   it("requires explicit impact confirmation before revoking a calendar URL", async () => {
     const { commands, controller } = controllerFixture();
     render(
@@ -264,4 +279,55 @@ describe("Search workbench", () => {
       expect(document.activeElement).toBe(result);
     });
   });
+});
+
+it("keeps five successful recent searches in memory, restores without sending, and clears on workspace change", async () => {
+  const { controller, commands } = controllerFixture();
+  const view = render(
+    <SearchWorkbench
+      controller={controller}
+      onScopeChange={vi.fn()}
+      scope="all"
+    />,
+  );
+  for (const query of [
+    "query-one",
+    "query-two",
+    "query-three",
+    "query-four",
+    "query-five",
+    "query-six",
+  ]) {
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: query },
+    });
+    fireEvent.submit(screen.getByRole("search"));
+    await screen.findByRole("button", { name: query });
+  }
+  expect(screen.queryByRole("button", { name: "query-one" })).toBeNull();
+  const count = commands.search.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "query-two" }));
+  expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe(
+    "query-two",
+  );
+  expect(commands.search.mock.calls.length).toBe(count);
+  fireEvent.click(screen.getByRole("button", { name: "清空最近搜索" }));
+  expect(screen.queryByRole("button", { name: "query-two" })).toBeNull();
+  commands.search.mockResolvedValueOnce(false);
+  fireEvent.submit(screen.getByRole("search"));
+  await waitFor(() => expect(commands.search).toHaveBeenCalledTimes(count + 1));
+  expect(screen.queryByRole("button", { name: "query-two" })).toBeNull();
+  fireEvent.submit(screen.getByRole("search"));
+  await screen.findByRole("button", { name: "query-two" });
+  view.rerender(
+    <SearchWorkbench
+      controller={{
+        ...controller,
+        context: { ...controller.context, workspaceId: "workspace-2" },
+      }}
+      onScopeChange={vi.fn()}
+      scope="all"
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "query-two" })).toBeNull();
 });

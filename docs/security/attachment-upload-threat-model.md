@@ -30,3 +30,7 @@
 ## 残余风险
 
 文件系统适配器只适用于单服务器，不代表异地灾备或云对象存储耐久性。未提供防病毒/CDR；白名单文件只作为附件下载，API 不渲染、不执行。Production 对象存储、恶意软件策略、保留和异地恢复仍由操作员/人类发布决策。
+
+## 入队前能力读取
+
+`GET /api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments/capability` 需已登录并通过现有工作区与空间访问校验，仅返回 `ingest_enabled`，响应使用 `private, no-store`。关闭时仍可读取 false，不调用 scanner、不创建附件、不改变上传权限、近期认证或 feature gate。该布尔值是配置快照，不保证上传或扫描成功；实际上传仍重新执行原服务端边界。离线暂存必须由用户明确同意。

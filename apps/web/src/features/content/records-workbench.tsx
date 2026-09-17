@@ -6,6 +6,7 @@ import {
   type FormEvent,
   type ReactNode,
   useId,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -30,6 +31,7 @@ import {
   WorkbenchToolbar,
 } from "@/components/product/workbench";
 
+import { useAttachmentCapability } from "./attachment-capability";
 import { NoteExternalLinks } from "./note-external-links";
 import styles from "./records-workbench.module.css";
 import {
@@ -899,9 +901,33 @@ function AttachmentSheet({
 }>) {
   const formId = useId();
   const [pending, setPending] = useState(false);
+  const [allowOffline, setAllowOffline] = useState(false);
+  const [error, setError] = useState("");
+  const availability = useAttachmentCapability(
+    controller.context.workspaceId,
+    controller.context.spaceId,
+    controller.context.online,
+    open,
+  );
+  useEffect(() => {
+    queueMicrotask(() => {
+      setAllowOffline(false);
+      setError("");
+    });
+  }, [
+    open,
+    controller.context.workspaceId,
+    controller.context.spaceId,
+    controller.context.online,
+  ]);
+  const canQueue =
+    availability.state === "enabled" ||
+    (availability.state === "offline" && allowOffline);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending || !canQueue) return;
+    setError("");
     const data = new FormData(event.currentTarget);
     const file = data.get("attachment");
     if (!(file instanceof File)) return;
@@ -909,9 +935,14 @@ function AttachmentSheet({
     const queued = await controller.commands.queueAttachment(
       String(data.get("note_id") ?? ""),
       file,
+      allowOffline,
     );
     setPending(false);
     if (queued) onOpenChange(false);
+    else {
+      setError("附件未加入队列，请查看当前状态并重试。");
+      availability.retry();
+    }
   }
 
   return (
@@ -928,11 +959,13 @@ function AttachmentSheet({
           </button>
           <button
             className={styles.primaryButton}
-            disabled={pending || controller.viewModel.notes.length === 0}
+            disabled={
+              pending || !canQueue || controller.viewModel.notes.length === 0
+            }
             form={formId}
             type="submit"
           >
-            {pending ? "正在计算哈希" : "加入附件队列"}
+            {pending ? "正在检查并准备附件" : "加入附件队列"}
           </button>
         </>
       }
@@ -940,6 +973,41 @@ function AttachmentSheet({
       open={open}
       title="添加笔记附件"
     >
+      <p role="status">
+        {availability.state === "loading"
+          ? "正在确认服务端附件上传能力…"
+          : availability.state === "disabled"
+            ? "服务端未启用附件上传，当前不能加入队列。请联系管理员。"
+            : availability.state === "enabled"
+              ? "服务端已启用附件上传。入队仅表示本地待上传，上传和扫描成功后才算完成。"
+              : availability.state === "offline"
+                ? "当前离线，无法确认服务端能力。可明确选择仅在本地暂存，联网后仍需服务端允许上传。"
+                : "无法确认服务端能力，当前不能加入队列。请检查网络或权限后重试。"}
+      </p>
+      {availability.state === "error" || availability.state === "disabled" ? (
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={availability.retry}
+        >
+          重新检查上传能力
+        </button>
+      ) : null}
+      {availability.state === "offline" ? (
+        <label>
+          <input
+            type="checkbox"
+            checked={allowOffline}
+            onChange={(event) => setAllowOffline(event.target.checked)}
+          />
+          我理解尚未确认上传能力，仅在本地暂存
+        </label>
+      ) : null}
+      {error ? (
+        <p role="alert">
+          {error} {controller.context.status}
+        </p>
+      ) : null}
       <form className={styles.sheetForm} id={formId} onSubmit={submit}>
         <label htmlFor={`${formId}-note`}>关联笔记</label>
         <select

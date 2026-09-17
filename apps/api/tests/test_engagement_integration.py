@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from logion_api.config import get_settings
 from logion_api.db import session_factory
 from logion_api.engagement.models import CalendarFeed, Notification
 from logion_api.engagement.service import EngagementService
@@ -129,6 +130,78 @@ async def test_search_notifications_and_revocable_calendar_respect_privacy() -> 
         )
         assert viewer_search.status_code == 200
         assert viewer_search.json()["results"] == []
+        # The optional Space filter applies before the result limit and preserves privacy.
+        other_space = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/spaces",
+            headers=csrf,
+            json={"name": "Another private space", "visibility": "private"},
+        )
+        assert other_space.status_code == 201, other_space.text
+        other_space_id = other_space.json()["id"]
+        newer_note = await owner.post(
+            f"/api/v1/workspaces/{workspace_id}/spaces/{other_space_id}/notes",
+            headers=csrf,
+            json={"id": str(uuid4()), "title": "Newer note", "markdown_body": private_marker},
+        )
+        assert newer_note.status_code == 201, newer_note.text
+        filtered = await owner.post(
+            search_url,
+            headers=csrf,
+            json={
+                "query": private_marker,
+                "object_types": ["note"],
+                "limit": 1,
+                "space_id": str(space_id),
+            },
+        )
+        assert filtered.status_code == 200, filtered.text
+        assert [row["object_id"] for row in filtered.json()["results"]] == [note.json()["id"]]
+        for hidden_space in (str(space_id), str(uuid4())):
+            hidden = await viewer.post(
+                search_url,
+                headers={"X-CSRF-Token": viewer.cookies["logion_csrf"]},
+                json={"query": private_marker, "space_id": hidden_space},
+            )
+            assert hidden.status_code == 200
+            assert hidden.json()["results"] == []
+        # Capability reads reveal no flag until the same space permission boundary passes.
+        capability_url = (
+            f"/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments/capability"
+        )
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=origin) as anonymous:
+            assert (await anonymous.get(capability_url)).status_code == 401
+        unrelated_workspace = UUID(
+            (await viewer.get("/api/v1/workspaces")).json()["workspaces"][0]["id"]
+        )
+        if unrelated_workspace == workspace_id:
+            unrelated_workspace = uuid4()
+        cross_space = await owner.get(
+            f"/api/v1/workspaces/{unrelated_workspace}/spaces/{space_id}/attachments/capability"
+        )
+        assert cross_space.status_code in (403, 404)
+        assert "ingest_enabled" not in cross_space.json()
+        settings = get_settings()
+        previous = app.dependency_overrides.get(get_settings)
+        try:
+            for enabled in (False, True):
+                app.dependency_overrides[get_settings] = lambda enabled=enabled: (
+                    settings.model_copy(
+                        update={"knowledge_space_attachment_ingest_enabled": enabled}
+                    )
+                )
+                capability = await owner.get(capability_url)
+                assert capability.status_code == 200, capability.text
+                assert capability.json() == {"ingest_enabled": enabled}
+                assert capability.headers["cache-control"] == "private, no-store"
+                denied = await viewer.get(capability_url)
+                assert denied.status_code in (403, 404)
+                assert "ingest_enabled" not in denied.json()
+        finally:
+            if previous is None:
+                app.dependency_overrides.pop(get_settings, None)
+            else:
+                app.dependency_overrides[get_settings] = previous
+
         literal_wildcard = await owner.post(
             search_url,
             headers=csrf,

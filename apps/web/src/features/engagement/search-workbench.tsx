@@ -204,6 +204,8 @@ function SearchCommand({
   onModeChange,
   onQueryChange,
   onScopeChange,
+  onSpaceChange,
+  spaceId,
   query,
   scope,
 }: Readonly<{
@@ -214,16 +216,30 @@ function SearchCommand({
   onQueryChange: (query: string) => void;
   onScopeChange: (scope: SearchScope) => void;
   query: string;
+  spaceId: string;
+  onSpaceChange: (spaceId: string) => void;
   scope: SearchScope;
 }>) {
   const [passphrase, setPassphrase] = useState("");
+  const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const [unlocking, setUnlocking] = useState(false);
   const offlineLocked =
     !controller.context.online && !controller.context.offlineUnlocked;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await controller.commands.search({ mode, query });
+    if (
+      await controller.commands.search({
+        mode,
+        query,
+        ...(spaceId ? { spaceId } : {}),
+      })
+    ) {
+      const value = query.trim();
+      setRecentQueries((previous) =>
+        [value, ...previous.filter((item) => item !== value)].slice(0, 5),
+      );
+    }
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -278,6 +294,38 @@ function SearchCommand({
           </WorkbenchTooltip>
         ) : null}
       </form>
+      <section className={styles.recentSearches} aria-label="最近搜索">
+        <p>
+          最近搜索仅保留在当前页面内存中，最多 5
+          条；切换工作区或离开页面后清除。
+        </p>
+        {recentQueries.length ? (
+          <>
+            <ul>
+              {recentQueries.map((value) => (
+                <li key={value}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => onQueryChange(value)}
+                  >
+                    {value}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => setRecentQueries([])}
+            >
+              清空最近搜索
+            </button>
+          </>
+        ) : (
+          <p>暂无最近搜索</p>
+        )}
+      </section>
       <div
         aria-label="搜索类型"
         className={styles.modeSegmented}
@@ -320,6 +368,30 @@ function SearchCommand({
         </div>
         <span>{controller.context.online ? "服务器范围" : "本机缓存"}</span>
       </div>
+      <label>
+        搜索空间
+        <select
+          aria-label="搜索空间"
+          value={spaceId}
+          onChange={(event) => onSpaceChange(event.target.value)}
+        >
+          <option value="">全部空间</option>
+          {controller.utilities.spaces.map((space) => (
+            <option
+              key={space.id}
+              value={space.id}
+              disabled={!controller.context.online}
+            >
+              {space.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!controller.context.online ? (
+        <p>空间筛选仅在线可用；选择全部空间后可搜索本机缓存。</p>
+      ) : (
+        <p>空间筛选由服务端执行，只返回你有权访问的结果。</p>
+      )}
       <div className={styles.workspaceContext}>
         <div>
           <span>Workspace</span>
@@ -431,7 +503,8 @@ function SearchResults({
           detail="本地加密缓存尚未读取；在线搜索仅包含服务器已收到且有权访问的内容。"
         />
       ) : null}
-      {noResults && controller.context.offlineUnlocked ? (
+      {noResults &&
+      (controller.context.online || controller.context.offlineUnlocked) ? (
         <SearchEmpty
           action={
             <div data-workbench-primary="true">
@@ -536,6 +609,7 @@ function SearchPanel({
   scope: SearchScope;
 }>) {
   const [query, setQuery] = useState("");
+  const [spaceId, setSpaceId] = useState("");
   const [mode, setMode] = useState<SearchMode>("all");
   const [previewOpen, setPreviewOpen] = useState(false);
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -551,6 +625,7 @@ function SearchPanel({
   function clearSearch() {
     setQuery("");
     setMode("all");
+    setSpaceId("");
     onScopeChange("all");
     controller.commands.resetSearch();
   }
@@ -558,8 +633,23 @@ function SearchPanel({
   function changeMode(nextMode: SearchMode) {
     setMode(nextMode);
     if (query.trim().length >= 2) {
-      void controller.commands.search({ mode: nextMode, query });
+      void controller.commands.search({
+        mode: nextMode,
+        query,
+        ...(spaceId ? { spaceId } : {}),
+      });
     }
+  }
+
+  function changeSpace(nextSpaceId: string) {
+    setSpaceId(nextSpaceId);
+    controller.commands.resetSearch();
+    if (query.trim().length >= 2)
+      void controller.commands.search({
+        mode,
+        query,
+        ...(nextSpaceId ? { spaceId: nextSpaceId } : {}),
+      });
   }
 
   function openResult(resultId: string, trigger: HTMLButtonElement) {
@@ -578,11 +668,14 @@ function SearchPanel({
         data-testid="workbench-master"
       >
         <SearchCommand
+          key={`${controller.context.workspaceId}:${controller.context.offlineUnlocked}`}
           controller={controller}
           mode={mode}
           noResults={noResults}
           onModeChange={changeMode}
           onQueryChange={setQuery}
+          onSpaceChange={changeSpace}
+          spaceId={spaceId}
           onScopeChange={onScopeChange}
           query={query}
           scope={scope}
@@ -1126,6 +1219,7 @@ export function SearchWorkbench({
         >
           <WorkbenchTabPanel value="search">
             <SearchPanel
+              key={controller.context.workspaceId}
               controller={controller}
               onScopeChange={onScopeChange}
               scope={scope}
