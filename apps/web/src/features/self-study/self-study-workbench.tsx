@@ -12,6 +12,8 @@ import {
   type RefObject,
 } from "react";
 
+import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
+
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
   WorkbenchSelect,
@@ -190,7 +192,7 @@ function UnlockSheet({
             取消
           </button>
           <button className={styles.primaryButton} form={formId} type="submit">
-            解锁资料
+            解锁本地资料
           </button>
         </>
       }
@@ -236,6 +238,7 @@ function RecordSheet({
   open,
   selectedTrackId,
   selectedProjectId,
+  sourceInboxId,
 }: {
   actions: SelfStudyWorkbenchActions;
   data: SelfStudyWorkbenchData;
@@ -245,6 +248,7 @@ function RecordSheet({
   open: boolean;
   selectedTrackId?: string;
   selectedProjectId?: string;
+  sourceInboxId?: string;
 }) {
   const formId = useId();
   const title = {
@@ -299,6 +303,15 @@ function RecordSheet({
           }
         }}
       >
+        {sourceInboxId &&
+        (kind === "learning_track" || kind === "study_project") ? (
+          <>
+            <input type="hidden" name="inbox_source_id" value={sourceInboxId} />
+            <p>
+              确认建立后，同步成功会将原条目移出收件箱；同步失败时条目保留，可在同步中心重试。
+            </p>
+          </>
+        ) : null}
         {kind === "inbox_item" ? (
           <>
             <label htmlFor={`${formId}-title`}>想法或资料标题</label>
@@ -637,11 +650,13 @@ function InboxMaster({
 }
 
 function DetailMain({
+  context,
   data,
   selected,
   onOpenSheet,
   view,
 }: {
+  context: SelfStudyWorkbenchContext;
   data: SelfStudyWorkbenchData;
   view: "inbox" | "board";
   onOpenSheet: (
@@ -681,7 +696,19 @@ function DetailMain({
           <p className={styles.eyebrow}>INBOX ITEM</p>
           <h2>{text(item?.payload ?? {}, "title", "收件箱条目")}</h2>
           <p>{text(item?.payload ?? {}, "note", "暂无备注") || "暂无备注"}</p>
-          <small>选择下一步，将它带入正式学习结构。</small>
+          <small>
+            建立路线或项目同步成功后，原条目自动移出收件箱。离线时保留条目，等待同步确认。
+          </small>
+          {item ? (
+            <EntityDeleteAction
+              entityType="inbox_item"
+              entityId={item.entity.entity_id}
+              workspaceId={context.workspaceId}
+              disabled={!context.unlocked}
+              onDeleted={() => undefined}
+              onStatus={() => undefined}
+            />
+          ) : null}
         </div>
         <SectionHeading eyebrow="TRIAGE" title="分诊下一步" />
         <div className={styles.actionGrid}>
@@ -1036,7 +1063,16 @@ export function SelfStudyWorkbench({
   >(null);
   const unlockRef = useRef<HTMLButtonElement>(null);
   const selected: SelectedItem =
-    selectedId && selectedKind ? { id: selectedId, kind: selectedKind } : null;
+    selectedId &&
+    selectedKind &&
+    {
+      inbox: data.inbox,
+      track: data.tracks,
+      project: data.projects,
+      deliverable: data.deliverables,
+    }[selectedKind].some((item) => item.entity.entity_id === selectedId)
+      ? { id: selectedId, kind: selectedKind }
+      : null;
   const select = (item: SelectedItem) => {
     setSelectedId(item?.id || null);
     setSelectedKind(item?.kind ?? null);
@@ -1070,7 +1106,7 @@ export function SelfStudyWorkbench({
       type="button"
     >
       <AppIcon name="unlock" size={16} />
-      解锁资料
+      解锁本地资料
     </button>
   );
   const tabs: WorkbenchTab[] = [
@@ -1156,6 +1192,9 @@ export function SelfStudyWorkbench({
               onRetry={() => void actions.loadContext()}
               state={context.examState}
             />
+            <p>
+              不同数据类型的加密与读取范围不同；本地路线、项目与缓存需解锁，在线内容按服务器权限读取。
+            </p>
             <div className={styles.main} data-testid="self-study-main">
               <div className={styles.statusLine} aria-live="polite">
                 <span />
@@ -1170,6 +1209,7 @@ export function SelfStudyWorkbench({
                 >
                   <WorkbenchTabPanel forceMount value="inbox">
                     <DetailMain
+                      context={context}
                       data={data}
                       onOpenSheet={setSheet}
                       selected={selected?.kind === "inbox" ? selected : null}
@@ -1178,6 +1218,7 @@ export function SelfStudyWorkbench({
                   </WorkbenchTabPanel>
                   <WorkbenchTabPanel forceMount value="board">
                     <DetailMain
+                      context={context}
                       data={data}
                       onOpenSheet={setSheet}
                       selected={
@@ -1235,6 +1276,7 @@ export function SelfStudyWorkbench({
                 )
               : undefined
           }
+          sourceInboxId={selected?.kind === "inbox" ? selected.id : undefined}
           kind={sheet}
           onOpenChange={(open) => setSheet(open ? sheet : null)}
           open

@@ -71,7 +71,7 @@ test("Planning completes real goal, task and offline sync workflows", async ({
 
   const unlockTrigger = page.getByRole("button", {
     exact: true,
-    name: "解锁资料",
+    name: "解锁本地资料",
   });
   if (await unlockTrigger.isVisible()) {
     await unlockTrigger.click();
@@ -83,7 +83,7 @@ test("Planning completes real goal, task and offline sync workflows", async ({
 
     await unlockTrigger.click();
     await unlockSheet.getByLabel("本地口令").fill(vaultPassphrase);
-    await unlockSheet.getByRole("button", { name: "解锁资料" }).click();
+    await unlockSheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(unlockSheet).toHaveCount(0);
   }
   const newGoalTrigger = page.getByRole("button", { name: "新建目标" });

@@ -126,3 +126,39 @@ describe("Audit workbench", () => {
     });
   });
 });
+
+it("switches to the authorized workspace business audit without reusing a personal cursor", async () => {
+  const base = request.getMockImplementation()!;
+  request.mockImplementation(async (path: string, options?: unknown) => {
+    if (path === "/api/v1/workspaces")
+      return {
+        workspaces: [{ id: "workspace-1", name: "工作区", role: "owner" }],
+      };
+    if (path.includes("/audit-events"))
+      return {
+        events: [
+          {
+            ...loginEvent,
+            event_type: "planning.goal_created",
+            target_type: "learning_goal",
+          },
+        ],
+        next_cursor: null,
+      };
+    return base(path, options);
+  });
+  render(<AuditLog />);
+  await screen.findByRole("option", { name: "工作区 · 业务与安全事件" });
+  fireEvent.change(screen.getByLabelText("审计范围"), {
+    target: { value: "workspace-1" },
+  });
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith(
+      "/api/v1/workspaces/workspace-1/audit-events",
+      { query: { page_size: "50" } },
+    ),
+  );
+  expect(
+    (await screen.findAllByText("planning.goal_created")).length,
+  ).toBeGreaterThan(0);
+});

@@ -1,5 +1,14 @@
+// @vitest-environment jsdom
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LocalEntity } from "@logion/offline";
 
@@ -136,7 +145,28 @@ function props(): ExamWorkbenchProps {
   };
 }
 
+afterEach(cleanup);
 describe("ExamWorkbench", () => {
+  it("keeps an empty scheduled date open and accepts an immediate undetermined switch", async () => {
+    const fixture = props();
+    render(<ExamWorkbench {...fixture} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "创建考试" })[0]!);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("考试名称"), {
+      target: { value: "测试考试" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建考试" }));
+    expect(fixture.actions.createExam).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert").textContent).toBe(
+      "请填写考试时间",
+    );
+    fireEvent.click(within(dialog).getByLabelText("日期待定"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建考试" }));
+    await waitFor(() =>
+      expect(fixture.actions.createExam).toHaveBeenCalledTimes(1),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
   it("renders Exam Master, Coverage Main and Inspector without legacy panels", () => {
     const html = renderToStaticMarkup(<ExamWorkbench {...props()} />);
 
@@ -161,7 +191,7 @@ describe("ExamWorkbench", () => {
     const html = renderToStaticMarkup(<ExamWorkbench {...locked} />);
 
     expect(html).toContain("exam-unlock");
-    expect(html).toContain("解锁资料");
+    expect(html).toContain("解锁本地资料");
     expect(html.match(/data-workbench-primary="true"/g)).toHaveLength(1);
   });
 });

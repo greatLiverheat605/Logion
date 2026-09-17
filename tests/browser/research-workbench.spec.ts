@@ -48,14 +48,14 @@ test("Research completes a traceable question, evidence and experiment workflow"
   await expect(page.getByTestId("research-experiments")).toBeAttached();
 
   const unlock = page
-    .getByRole("button", { exact: true, name: "解锁资料" })
+    .getByRole("button", { exact: true, name: "解锁本地资料" })
     .first();
   if (await unlock.isVisible()) {
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁研究资料" });
     await expect(sheet.getByLabel("本地口令")).toBeFocused();
     await sheet.getByLabel("本地口令").fill(vaultPassphrase);
-    await sheet.getByRole("button", { name: "解锁资料" }).click();
+    await sheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(sheet).toHaveCount(0);
   }
 

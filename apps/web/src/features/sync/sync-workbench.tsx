@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import type { components } from "@logion/contracts";
 import type {
@@ -264,9 +265,9 @@ export function SyncWorkbench({
       label: "冲突",
       tone: conflicts.length ? ("warn" as const) : ("default" as const),
       value: conflicts.length ? (
-        <a className={styles.contextLink} href="/app/sync?tab=conflict">
+        <Link className={styles.contextLink} href="/app/sync?tab=conflict">
           {conflicts.length} 项待处理
-        </a>
+        </Link>
       ) : (
         "无"
       ),
@@ -344,7 +345,9 @@ export function SyncWorkbench({
                       }
                       type="submit"
                     >
-                      {vaultPhase === "unlocking" ? "正在解锁…" : "解锁资料"}
+                      {vaultPhase === "unlocking"
+                        ? "正在解锁…"
+                        : "解锁本地资料"}
                     </button>
                   </form>
                 )}

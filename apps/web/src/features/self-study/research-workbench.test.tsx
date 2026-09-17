@@ -170,7 +170,7 @@ describe("Research workbench", () => {
     const html = renderToStaticMarkup(<ResearchWorkbench {...locked} />);
 
     expect(html).toContain('id="research-unlock"');
-    expect(html).toContain("解锁资料");
+    expect(html).toContain("解锁本地资料");
     expect(html.match(/data-workbench-primary="true"/g)).toHaveLength(1);
   });
 });

@@ -48,14 +48,14 @@ test("Review exposes the due queue, answer sheet and knowledge inspector", async
 
   const unlockTrigger = page.getByRole("button", {
     exact: true,
-    name: "解锁资料",
+    name: "解锁本地资料",
   });
   if (await unlockTrigger.isVisible()) {
     await unlockTrigger.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });
     await expect(sheet.getByLabel("本地口令")).toBeFocused();
     await sheet.getByLabel("本地口令").fill("review-e2e-passphrase");
-    await sheet.getByRole("button", { name: "解锁资料" }).click();
+    await sheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(sheet).toHaveCount(0);
   }
 

@@ -171,14 +171,14 @@ test.describe("prototype productization", () => {
       page.getByRole("radiogroup", { name: "记录类型" }),
     ).toBeVisible();
     const unlockRecords = page.getByRole("button", {
-      name: "解锁资料",
+      name: "解锁本地资料",
       exact: true,
     });
     if (await unlockRecords.first().isVisible()) {
       await unlockRecords.first().click();
       const unlockSheet = page.getByRole("dialog", { name: "解锁本地资料" });
       await unlockSheet.getByLabel("本地口令").fill(accountState.password);
-      await unlockSheet.getByRole("button", { name: "解锁资料" }).click();
+      await unlockSheet.getByRole("button", { name: "解锁本地资料" }).click();
       await expect(unlockSheet).toHaveCount(0);
     }
     const noteRows = page

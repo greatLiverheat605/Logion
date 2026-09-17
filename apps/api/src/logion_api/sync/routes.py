@@ -177,7 +177,12 @@ async def push(
         await db.rollback()
         return RebootstrapControl(server_sync_epoch=server_sync_epoch)
     if not _supports_deletion(x_logion_sync_capabilities) and any(
-        operation.operation_type == "delete" for operation in payload.operations
+        operation.operation_type == "delete"
+        or (
+            operation.entity_type in ("learning_track", "study_project")
+            and "inbox_source" in operation.payload
+        )
+        for operation in payload.operations
     ):
         await db.rollback()
         return UpgradeControl(server_sync_epoch=payload.sync_epoch)

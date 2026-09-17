@@ -63,6 +63,28 @@ function formatDate(value: string): string {
 
 export function AuditLog() {
   const { request } = useAuditController();
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [workspaces, setWorkspaces] = useState<
+    components["schemas"]["WorkspaceResponse"][]
+  >([]);
+  useEffect(() => {
+    let active = true;
+    void request<{ workspaces: components["schemas"]["WorkspaceResponse"][] }>(
+      "/api/v1/workspaces",
+    )
+      .then((result) => {
+        if (active)
+          setWorkspaces(
+            (result.workspaces ?? []).filter((item) =>
+              ["owner", "admin"].includes(item.role),
+            ),
+          );
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [request]);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -82,7 +104,12 @@ export function AuditLog() {
       if (resultFilter === "success") query.result = "success";
 
       try {
-        const result = await request<AuditPage>("/api/v1/audit/me", { query });
+        const result = await request<AuditPage>(
+          workspaceId
+            ? `/api/v1/workspaces/${workspaceId}/audit-events`
+            : "/api/v1/audit/me",
+          { query },
+        );
         if (version !== requestVersion.current) return;
         const pageEvents = Array.isArray(result.events) ? result.events : [];
         setEvents((current) =>
@@ -102,7 +129,7 @@ export function AuditLog() {
         setLoadState("error");
       }
     },
-    [request, resultFilter],
+    [request, resultFilter, workspaceId],
   );
 
   useEffect(() => {
@@ -172,7 +199,10 @@ export function AuditLog() {
         context={
           <WorkbenchContextBar
             context={{
-              permission: { label: "仅本人身份事件", tone: "good" },
+              permission: {
+                label: workspaceId ? "工作区管理权限" : "仅本人身份事件",
+                tone: "good",
+              },
               sync: { label: "只读审计流", tone: "good" },
               vault: { label: "服务器记录" },
             }}
@@ -267,8 +297,30 @@ export function AuditLog() {
                 ))}
               </div>
             </fieldset>
+            <label>
+              审计范围
+              <select
+                aria-label="审计范围"
+                value={workspaceId}
+                onChange={(event) => {
+                  requestVersion.current += 1;
+                  setEvents([]);
+                  setNextCursor(null);
+                  setSelectedId(null);
+                  setTargetType("all");
+                  setWorkspaceId(event.target.value);
+                }}
+              >
+                <option value="">本人身份事件</option>
+                {workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name} · 业务与安全事件
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className={styles.filterHint}>
-              个人审计只返回身份相关事件；筛选不会扩大权限范围。
+              个人审计只返回身份相关事件；工作区管理员可切换范围查看目标、任务和笔记等业务写入。离线修改在同步成功后进入服务器审计。
             </div>
           </aside>
         }

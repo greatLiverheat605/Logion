@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LockedDataNotice } from "@/components/product/locked-data-notice";
 import {
   useEffect,
   useId,
@@ -414,10 +415,10 @@ function SearchCommand({
           离线时只搜索本机已同步、未删除且已解锁的缓存；查询不会离开设备。
         </p>
       ) : null}
-      {offlineLocked ? (
+      {!controller.context.offlineUnlocked ? (
         <form
           className={styles.unlockForm}
-          data-workbench-primary="true"
+          data-workbench-primary={offlineLocked ? "true" : undefined}
           id="search-vault"
           onSubmit={unlock}
         >
@@ -432,7 +433,7 @@ function SearchCommand({
             value={passphrase}
           />
           <button disabled={!passphrase || unlocking} type="submit">
-            {unlocking ? "正在解锁" : "解锁缓存"}
+            {unlocking ? "正在解锁" : "解锁本地资料"}
           </button>
         </form>
       ) : null}
@@ -496,7 +497,13 @@ function SearchResults({
           title="输入关键词开始搜索"
         />
       ) : null}
-      {noResults ? (
+      {!controller.context.offlineUnlocked ? (
+        <LockedDataNotice
+          href="#search-vault"
+          detail="本地加密缓存尚未读取；在线搜索仅包含服务器已收到且有权访问的内容。"
+        />
+      ) : null}
+      {noResults && controller.context.offlineUnlocked ? (
         <SearchEmpty
           action={
             <div data-workbench-primary="true">
@@ -646,7 +653,7 @@ function SearchPanel({
 
   function openResult(resultId: string, trigger: HTMLButtonElement) {
     controller.commands.selectResult(resultId);
-    if (window.matchMedia("(max-width: 719px)").matches) {
+    if (window.matchMedia("(max-width: 768px)").matches) {
       previewTriggerRef.current = trigger;
       setPreviewOpen(true);
     }

@@ -101,9 +101,14 @@ function SessionStateBoundary({
     }
     return (
       <main id="main-content" className="session-state" aria-busy="true">
-        <p role="status" aria-live="polite">
-          正在安全地验证会话…
+        <p className="sr-only" role="status" aria-live="polite">
+          正在验证会话
         </p>
+        <div className="session-skeleton" aria-hidden="true">
+          <div />
+          <div />
+          <div />
+        </div>
       </main>
     );
   }

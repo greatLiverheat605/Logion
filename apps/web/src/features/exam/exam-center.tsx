@@ -394,7 +394,10 @@ export function ExamCenter() {
       const payload: ExamPayload = {
         space_id: spaceId,
         ...buildExamPayload({
-          dateStatus,
+          dateStatus:
+            data.get("date_status") === "undetermined"
+              ? "undetermined"
+              : "scheduled",
           examAt: String(data.get("exam_at") ?? ""),
           scoreScaleMax: String(data.get("score_scale_max") ?? ""),
           targetScore: String(data.get("target_score") ?? ""),

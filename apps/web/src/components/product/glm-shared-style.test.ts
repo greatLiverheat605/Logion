@@ -115,7 +115,7 @@ describe("GLM shared visual contract", () => {
       "var(--workbench-master-width)\n    minmax(0, 1fr)\n    var(--workbench-inspector-width)",
     );
     expect(workbenchStyles).toContain("@media (max-width: 1099px)");
-    expect(workbenchStyles).toContain("@media (max-width: 719px)");
+    expect(workbenchStyles).toContain("@media (max-width: 768px)");
     expect(workbenchStyles).toContain(
       '"master main"\n      "master inspector"',
     );
@@ -131,7 +131,7 @@ describe("GLM shared visual contract", () => {
 
   it("keeps mobile drawer navigation links at touch target size", () => {
     expect(globalStyles).toMatch(
-      /@media \(max-width: 45rem\) \{[\s\S]*?\.app-nav-link \{[\s\S]*?min-height: 2\.75rem;/,
+      /@media \(max-width: 48rem\) \{[\s\S]*?\.app-nav-link \{[\s\S]*?min-height: 2\.75rem;/,
     );
   });
 });

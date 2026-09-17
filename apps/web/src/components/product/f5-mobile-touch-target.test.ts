@@ -21,7 +21,7 @@ const aiStyles = readFileSync(
 describe("F-5 mobile touch targets", () => {
   it("raises sync actions to 44px without changing desktop icon geometry", () => {
     expect(workbenchStyles).toMatch(
-      /@media \(max-width: 719px\) \{[\s\S]*?\.workbench-toolbar button\[aria-label="同步当前 Workspace"\][\s\S]*?min-width: 2\.75rem;[\s\S]*?min-height: 2\.75rem;/,
+      /@media \(max-width: 768px\) \{[\s\S]*?\.workbench-toolbar button\[aria-label="同步当前 Workspace"\][\s\S]*?min-width: 2\.75rem;[\s\S]*?min-height: 2\.75rem;/,
     );
     expect(workbenchStyles).toMatch(
       /\.workbench-toolbar button\[aria-label="立即同步"\][\s\S]*?min-width: 2\.75rem;[\s\S]*?min-height: 2\.75rem;/,

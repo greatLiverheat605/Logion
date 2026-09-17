@@ -245,6 +245,59 @@ describe("Today workbench", () => {
     expect(screen.getAllByText("私有空间").length).toBeGreaterThan(0);
   });
 
+  it("rejects 960 inline, then submits the latest 480-minute form without waiting", async () => {
+    const { commands, controller } = controllerFixture();
+    render(<TodayWorkbench controller={controller} />);
+    fireEvent.click(screen.getByRole("button", { name: "新建任务" }));
+    fireEvent.change(screen.getByLabelText("任务名称"), {
+      target: { value: "快速填写任务" },
+    });
+    fireEvent.change(screen.getByLabelText("预计分钟"), {
+      target: { value: "960" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存任务" }));
+    expect(commands.createTask).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain(
+      "预计分钟不能超过 480",
+    );
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("预计分钟"), {
+      target: { value: "480" },
+    });
+    fireEvent.change(screen.getByLabelText("说明（可选）"), {
+      target: { value: "最后输入的说明" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存任务" }));
+    await waitFor(() =>
+      expect(commands.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "快速填写任务",
+          estimatedMinutes: 480,
+          description: "最后输入的说明",
+          goalId: "goal-1",
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("retains the task draft when the local write fails", async () => {
+    const { commands, controller } = controllerFixture();
+    commands.createTask.mockResolvedValue(false);
+    render(<TodayWorkbench controller={controller} />);
+    fireEvent.click(screen.getByRole("button", { name: "新建任务" }));
+    fireEvent.change(screen.getByLabelText("任务名称"), {
+      target: { value: "保留草稿" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存任务" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("任务未保存"),
+    );
+    expect((screen.getByLabelText("任务名称") as HTMLInputElement).value).toBe(
+      "保留草稿",
+    );
+  });
+
   it("keeps Queue, NEXT ACTION and Inspector in one continuous DOM flow", () => {
     const { controller } = controllerFixture();
     render(<TodayWorkbench controller={controller} />);

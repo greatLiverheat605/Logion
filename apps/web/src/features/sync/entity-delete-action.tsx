@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import type { components } from "@logion/contracts";
 import { ProtectedOfflineRepository, SyncClient } from "@logion/offline";
@@ -13,10 +14,30 @@ import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 import styles from "./entity-delete-action.module.css";
 
-type EntityType = "learning_goal" | "note" | "task";
+type EntityType =
+  | "learning_goal"
+  | "note"
+  | "task"
+  | "inbox_item"
+  | "exam"
+  | "topic";
 type Preview = components["schemas"]["DeletionPreview"];
-const names = { learning_goal: "学习目标", note: "笔记", task: "任务" };
+const names = {
+  learning_goal: "学习目标",
+  note: "笔记",
+  task: "任务",
+  inbox_item: "收件箱条目",
+  exam: "考试",
+  topic: "知识点",
+};
 const impactNames: Record<string, string> = {
+  deleted_exam: "考试",
+  deleted_exam_subject: "考试科目",
+  deleted_syllabus_node: "大纲节点",
+  deleted_mock_exam: "模拟考试",
+  deleted_score_record: "成绩记录",
+  deleted_topic: "知识点",
+  deleted_inbox_item: "收件箱条目",
   deleted_learning_goal: "学习目标",
   deleted_task: "任务",
   deleted_note: "笔记",
@@ -192,6 +213,9 @@ function DeleteDialog({
 
   const evidence = preview?.blockers.evidence_count ?? 0;
   const citations = preview?.blockers.citation_count ?? 0;
+  const topicBlocked =
+    props.entityType === "topic" &&
+    Object.values(preview?.blockers ?? {}).some((count) => count > 0);
   return (
     <AppModal
       eyebrow={`删除${names[props.entityType]}`}
@@ -207,7 +231,13 @@ function DeleteDialog({
             ? "将软删除目标及其任务、笔记、资料和学习会话。历史证据与计划版本保留。"
             : props.entityType === "task"
               ? "将软删除任务和学习会话；笔记与资料保留，并解除任务关联。"
-              : "将软删除笔记。附件文件不在本次清除范围内。"}
+              : props.entityType === "inbox_item"
+                ? "将条目移出收件箱，不影响已建立的路线或项目。"
+                : props.entityType === "exam"
+                  ? "将软删除考试及其科目、大纲、模拟考试和成绩记录。请先确认影响范围。"
+                  : props.entityType === "topic"
+                    ? "将软删除知识点。有学习记录、依赖关系或知识引用的知识点会拒绝删除，保护关联历史。"
+                    : "将软删除笔记。附件文件不在本次清除范围内。"}
         </p>
         {preview ? (
           <ul>
@@ -222,22 +252,30 @@ function DeleteDialog({
         ) : !error ? (
           <p role="status">正在核对删除范围…</p>
         ) : null}
-        {evidence > 0 ? (
+        {topicBlocked ? (
+          <p role="alert">
+            此知识点有关联学习记录、依赖或引用，暂不可删除。请保留历史，或先解除可移除的引用。
+          </p>
+        ) : null}
+        {!topicBlocked && evidence > 0 ? (
           <p role="alert">
             {evidence} 条证据引用此笔记，请先解除引用后再删除。
           </p>
         ) : null}
-        {citations > 0 ? (
+        {!topicBlocked && citations > 0 ? (
           <p role="alert">
             {citations} 条知识引用关联此笔记，请先解除引用后再删除。
           </p>
         ) : null}
-        {preview && !preview.can_delete && evidence + citations === 0 ? (
+        {preview &&
+        !preview.can_delete &&
+        evidence + citations === 0 &&
+        !topicBlocked ? (
           <p role="alert">此对象当前不可删除，请刷新后重试。</p>
         ) : null}
         {error ? (
           <p role="alert">
-            {error} <a href="/app/sync">打开同步中心</a>
+            {error} <Link href="/app/sync">打开同步中心</Link>
           </p>
         ) : null}
         <div className={styles.actions}>

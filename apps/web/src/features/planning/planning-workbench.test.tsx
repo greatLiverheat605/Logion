@@ -46,6 +46,7 @@ function controller(
       setSpaceId: vi.fn(),
       setWorkspaceId: vi.fn(),
       synchronize: vi.fn(),
+      recoverSnapshot: vi.fn(),
       unlock: vi.fn(),
     },
     context: {

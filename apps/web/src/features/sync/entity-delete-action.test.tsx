@@ -71,7 +71,9 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function setup(entityType: "note" | "task" | "learning_goal" = "note") {
+function setup(
+  entityType: "note" | "task" | "learning_goal" | "topic" = "note",
+) {
   const onDeleted = vi.fn();
   const onStatus = vi.fn();
   render(
@@ -118,6 +120,39 @@ describe("deletion confirmation", () => {
       });
       setup();
       await screen.findByText(/3 条.*请先解除引用/);
+      expect(
+        screen
+          .getByRole("button", { name: "确认删除" })
+          .hasAttribute("disabled"),
+      ).toBe(true);
+      expect(mocks.commit).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "dependency_count",
+    "mastery_count",
+    "review_schedule_count",
+    "quiz_item_count",
+    "quiz_attempt_count",
+    "error_pattern_count",
+    "citation_count",
+  ])(
+    "explains topic deletion blocked by %s without suggesting a retry",
+    async (kind) => {
+      mocks.request.mockResolvedValue({
+        server_version: 2,
+        can_delete: false,
+        blockers: { [kind]: 1 },
+        impact: { deleted_topic: 1 },
+      });
+      setup("topic");
+      await screen.findByRole("alert");
+      expect(screen.getByRole("alert").textContent).toContain(
+        "此知识点有关联学习记录、依赖或引用",
+      );
+      expect(screen.queryByText(/请刷新后重试/)).toBeNull();
+      expect(screen.queryByText(/关联此笔记/)).toBeNull();
       expect(
         screen
           .getByRole("button", { name: "确认删除" })

@@ -208,7 +208,7 @@ function UnlockSheet({
             取消
           </button>
           <button className={styles.primaryButton} form={formId} type="submit">
-            解锁资料
+            解锁本地资料
           </button>
         </>
       }
@@ -1045,7 +1045,7 @@ export function CollaborationWorkbench({
       type="button"
     >
       <AppIcon name="unlock" size={16} />
-      解锁资料
+      解锁本地资料
     </button>
   );
   return (
