@@ -176,6 +176,21 @@ describe("Search workbench", () => {
     expect(commands.resetSearch).toHaveBeenCalledOnce();
   });
 
+  it("shows an empty online result even when the local vault is locked", () => {
+    const { controller } = controllerFixture({ empty: true });
+    controller.context.offlineUnlocked = false;
+    render(
+      <SearchWorkbench
+        controller={controller}
+        onScopeChange={vi.fn()}
+        scope="all"
+      />,
+    );
+    expect(screen.getByRole("heading", { name: /没有匹配/ })).toBeTruthy();
+    expect(screen.getByText("资料已锁定，解锁后读取")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "清除筛选" })).toBeTruthy();
+  });
+
   it("requires explicit impact confirmation before revoking a calendar URL", async () => {
     const { commands, controller } = controllerFixture();
     render(

@@ -503,7 +503,8 @@ function SearchResults({
           detail="本地加密缓存尚未读取；在线搜索仅包含服务器已收到且有权访问的内容。"
         />
       ) : null}
-      {noResults && controller.context.offlineUnlocked ? (
+      {noResults &&
+      (controller.context.online || controller.context.offlineUnlocked) ? (
         <SearchEmpty
           action={
             <div data-workbench-primary="true">

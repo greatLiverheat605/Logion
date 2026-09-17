@@ -594,7 +594,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByLabel("本地口令").fill("synthetic-local-passphrase");
     await page
       .getByRole("dialog", { name: "解锁本地资料" })
-      .getByRole("button", { name: "解锁资料", exact: true })
+      .getByRole("button", { name: "解锁本地资料", exact: true })
       .click();
     await expect(page.getByRole("textbox", { name: "笔记标题" })).toHaveValue(
       "本地附件测试",
