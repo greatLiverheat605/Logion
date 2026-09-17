@@ -1,4 +1,5 @@
 "use client";
+import { feedback } from "@/lib/feedback";
 
 import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
@@ -298,6 +299,7 @@ export interface PlanningControllerResult {
     setSpaceId: (spaceId: string) => void;
     setWorkspaceId: (workspaceId: string) => void;
     synchronize: () => Promise<boolean>;
+    recoverSnapshot: () => Promise<boolean>;
     unlock: (passphrase: string) => Promise<boolean>;
   };
   context: {
@@ -436,9 +438,11 @@ export function usePlanningController(): PlanningControllerResult {
       localVault: OfflineVault,
       selectedWorkspace: string,
       selectedDevice: string,
+      force = false,
     ) => {
       const current = await db.syncState.get(selectedWorkspace);
       if (
+        !force &&
         current?.bootstrap_state === "ready" &&
         current.device_id === selectedDevice
       ) {
@@ -473,6 +477,12 @@ export function usePlanningController(): PlanningControllerResult {
         throw new Error("invalid bootstrap response");
       }
       const manifest = validation.value;
+      if (
+        force &&
+        current?.sync_epoch &&
+        manifest.sync_epoch !== current.sync_epoch
+      )
+        throw new Error("同步世代已变更，请在同步中心执行恢复。");
       await repository.stageChunk(first, {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,
@@ -618,6 +628,45 @@ export function usePlanningController(): PlanningControllerResult {
     },
     [database, refresh, vault],
   );
+
+  useEffect(() => {
+    if (unlocked && online && workspaceId && deviceId) {
+      queueMicrotask(() => void synchronizeCore(true));
+    }
+  }, [unlocked, online, workspaceId, deviceId, synchronizeCore]);
+
+  async function recoverSnapshot(): Promise<boolean> {
+    const db = database.current,
+      localVault = vault.current;
+    const selectedWorkspace = workspaceIdRef.current,
+      selectedDevice = deviceIdRef.current;
+    if (!db || !localVault || !selectedWorkspace || !selectedDevice || !online)
+      return false;
+    setCommandPhase("pending");
+    try {
+      const pending = await db.outbox
+        .where("workspace_id")
+        .equals(selectedWorkspace)
+        .count();
+      const conflicts = await db.conflicts
+        .where("[workspace_id+status]")
+        .equals([selectedWorkspace, "open"])
+        .count();
+      if (pending || conflicts) {
+        setStatus(feedback.error("请先完成待同步操作并处理冲突，再补全资料。"));
+        return false;
+      }
+      await bootstrap(db, localVault, selectedWorkspace, selectedDevice, true);
+      await refresh(db, localVault, selectedWorkspace);
+      setStatus(feedback.success("已从服务器快照补全本地资料。"));
+      return true;
+    } catch (error) {
+      setStatus(feedback.error(userMessage(error)));
+      return false;
+    } finally {
+      setCommandPhase("idle");
+    }
+  }
 
   async function synchronize(): Promise<boolean> {
     setCommandPhase("pending");
@@ -853,6 +902,7 @@ export function usePlanningController(): PlanningControllerResult {
     },
     commands: {
       createGoal,
+      recoverSnapshot,
       loadContext,
       selectGoal: setSelectedGoalId,
       reportDeletion: setStatus,

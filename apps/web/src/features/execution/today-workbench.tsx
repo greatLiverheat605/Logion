@@ -2,6 +2,9 @@
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import Link from "next/link";
+import { LockedDataNotice } from "@/components/product/locked-data-notice";
+import { feedback } from "@/lib/feedback";
+import { validateForm } from "@/lib/form-validation";
 import {
   useEffect,
   useId,
@@ -139,11 +142,13 @@ function useSessionSeconds(startedAt: string | undefined): number {
 function Field({
   children,
   hint,
+  error,
   id,
   label,
 }: Readonly<{
   children: ReactNode;
   hint?: string;
+  error?: string;
   id: string;
   label: string;
 }>) {
@@ -151,6 +156,11 @@ function Field({
     <div className={styles.field}>
       <label htmlFor={id}>{label}</label>
       {children}
+      {error ? (
+        <small id={`${id}-error`} role="alert">
+          {error}
+        </small>
+      ) : null}
       {hint ? <small>{hint}</small> : null}
     </div>
   );
@@ -230,6 +240,7 @@ function NewTaskSheet({
   const [minutes, setMinutes] = useState(45);
   const [priority, setPriority] = useState(2);
   const [pending, setPending] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const goals = controller.viewModel.visibleGoals;
   const resolvedGoalId = goals.some((item) => item.entity.entity_id === goalId)
     ? goalId
@@ -240,18 +251,48 @@ function NewTaskSheet({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!title.trim() || !resolvedGoalId) return;
+    if (pending) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const value = (name: string) => String(data.get(name) ?? "").trim();
+    const goal = goals.find(
+      (item) => item.entity.entity_id === value("goalId"),
+    );
+    const extra: Record<string, string> = {};
+    if (!goal) extra.goalId = "请选择当前 Space 的关联目标。";
+    if (
+      value("phaseId") &&
+      !goal?.payload.phases.some((item) => item.id === value("phaseId"))
+    )
+      extra.phaseId = "请选择关联目标中的阶段。";
+    const nextErrors = validateForm(form, extra);
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     setPending(true);
-    const saved = await controller.commands.createTask({
-      description: description.trim(),
-      estimatedMinutes: minutes,
-      goalId: resolvedGoalId,
-      phaseId: phaseId || null,
-      priority,
-      title: title.trim(),
-    });
-    setPending(false);
-    if (!saved) return;
+    try {
+      const saved = await controller.commands.createTask({
+        description: value("description"),
+        estimatedMinutes: Number(value("minutes")),
+        goalId: value("goalId"),
+        phaseId: value("phaseId") || null,
+        priority: Number(value("priority")),
+        title: value("title"),
+      });
+      if (!saved) {
+        setErrors({
+          submit: feedback.error(
+            "任务未保存，请检查解锁状态、关联目标与同步提示后重试。",
+          ),
+        });
+        return;
+      }
+      feedback.success("任务已保存在本地，可在今日序列查看。");
+    } catch (error) {
+      setErrors({ submit: feedback.error(error) });
+      return;
+    } finally {
+      setPending(false);
+    }
     setTitle("");
     setDescription("");
     onOpenChange(false);
@@ -283,16 +324,29 @@ function NewTaskSheet({
       open={open}
       title="新建今日任务"
     >
-      {goals.length === 0 ? (
+      {!controller.context.unlocked ? (
+        <LockedDataNotice />
+      ) : goals.length === 0 ? (
         <div className={styles.sheetEmpty}>
           <p>当前 Space 还没有可关联的目标。</p>
           <Link href="/app/planning">前往规划</Link>
         </div>
       ) : (
-        <form className={styles.formStack} id={formId} onSubmit={submit}>
-          <Field id={`${formId}-title`} label="任务名称">
+        <form
+          className={styles.formStack}
+          id={formId}
+          noValidate
+          onSubmit={submit}
+        >
+          {errors.submit ? <p role="alert">{errors.submit}</p> : null}
+          <Field error={errors.title} id={`${formId}-title`} label="任务名称">
             <input
               autoFocus
+              name="title"
+              aria-invalid={Boolean(errors.title)}
+              aria-describedby={
+                errors.title ? `${formId}-title-error` : undefined
+              }
               id={`${formId}-title`}
               maxLength={200}
               onChange={(event) => setTitle(event.target.value)}
@@ -300,8 +354,13 @@ function NewTaskSheet({
               value={title}
             />
           </Field>
-          <Field id={`${formId}-goal`} label="关联目标">
+          <Field error={errors.goalId} id={`${formId}-goal`} label="关联目标">
             <select
+              name="goalId"
+              aria-invalid={Boolean(errors.goalId)}
+              aria-describedby={
+                errors.goalId ? `${formId}-goal-error` : undefined
+              }
               id={`${formId}-goal`}
               onChange={(event) => {
                 setGoalId(event.target.value);
@@ -319,8 +378,17 @@ function NewTaskSheet({
               ))}
             </select>
           </Field>
-          <Field id={`${formId}-phase`} label="阶段（可选）">
+          <Field
+            error={errors.phaseId}
+            id={`${formId}-phase`}
+            label="阶段（可选）"
+          >
             <select
+              name="phaseId"
+              aria-invalid={Boolean(errors.phaseId)}
+              aria-describedby={
+                errors.phaseId ? `${formId}-phase-error` : undefined
+              }
               id={`${formId}-phase`}
               onChange={(event) => setPhaseId(event.target.value)}
               value={phaseId}
@@ -334,8 +402,18 @@ function NewTaskSheet({
             </select>
           </Field>
           <div className={styles.formGrid}>
-            <Field id={`${formId}-minutes`} label="预计分钟">
+            <Field
+              error={errors.minutes}
+              id={`${formId}-minutes`}
+              label="预计分钟"
+              hint="每项任务 5–480 分钟，以 5 分钟递增。"
+            >
               <input
+                name="minutes"
+                aria-invalid={Boolean(errors.minutes)}
+                aria-describedby={
+                  errors.minutes ? `${formId}-minutes-error` : undefined
+                }
                 id={`${formId}-minutes`}
                 max={480}
                 min={5}
@@ -345,8 +423,17 @@ function NewTaskSheet({
                 value={minutes}
               />
             </Field>
-            <Field id={`${formId}-priority`} label="优先级">
+            <Field
+              error={errors.priority}
+              id={`${formId}-priority`}
+              label="优先级"
+            >
               <select
+                name="priority"
+                aria-invalid={Boolean(errors.priority)}
+                aria-describedby={
+                  errors.priority ? `${formId}-priority-error` : undefined
+                }
                 id={`${formId}-priority`}
                 onChange={(event) => setPriority(Number(event.target.value))}
                 value={priority}
@@ -359,8 +446,17 @@ function NewTaskSheet({
               </select>
             </Field>
           </div>
-          <Field id={`${formId}-description`} label="说明（可选）">
+          <Field
+            error={errors.description}
+            id={`${formId}-description`}
+            label="说明（可选）"
+          >
             <textarea
+              name="description"
+              aria-invalid={Boolean(errors.description)}
+              aria-describedby={
+                errors.description ? `${formId}-description-error` : undefined
+              }
               id={`${formId}-description`}
               maxLength={10000}
               onChange={(event) => setDescription(event.target.value)}

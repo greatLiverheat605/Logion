@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import {
@@ -613,7 +614,7 @@ function Inspector({
               <AppIcon name="refresh" size={15} />
               立即同步
             </button>
-            <a href="/app/sync">打开同步中心</a>
+            <Link href="/app/sync">打开同步中心</Link>
             <EntityDeleteAction
               entityType="note"
               entityId={note.entity.entity_id}
@@ -673,7 +674,7 @@ function ContextToolbar({
           type="button"
         >
           <AppIcon name="unlock" size={15} />
-          解锁资料
+          解锁本地资料
         </button>
       ) : null}
       <WorkbenchTooltip content="同步当前 Workspace">
@@ -1009,7 +1010,7 @@ function UnlockSheet({
             form={formId}
             type="submit"
           >
-            {pending ? "正在解锁" : "解锁资料"}
+            {pending ? "正在解锁" : "解锁本地资料"}
           </button>
         </>
       }
@@ -1178,7 +1179,7 @@ export function RecordsWorkbench({
                 type="button"
               >
                 <AppIcon name="unlock" size={16} />
-                解锁资料
+                解锁本地资料
               </button>
             )}
           </>

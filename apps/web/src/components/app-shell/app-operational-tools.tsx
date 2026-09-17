@@ -248,6 +248,7 @@ export function AppOperationalTools() {
   const {
     activeDatabase,
     activeVault,
+    expiresAt,
     lock,
     markChanged,
     phase: vaultPhase,
@@ -277,7 +278,8 @@ export function AppOperationalTools() {
   const unlocked = vaultPhase === "unlocked";
 
   const openOverlay = useCallback((nextOverlay: OperationalOverlay) => {
-    if (nextOverlay === "focus") setClockNow(Date.now());
+    if (nextOverlay === "focus" || nextOverlay === "vault")
+      setClockNow(Date.now());
     setFeedback(null);
     setOverlay(nextOverlay);
   }, []);
@@ -452,7 +454,11 @@ export function AppOperationalTools() {
     actionableTasks[0];
 
   useEffect(() => {
-    if (overlay !== "focus" || activeSession === undefined) return;
+    if (
+      overlay !== "vault" &&
+      (overlay !== "focus" || activeSession === undefined)
+    )
+      return;
     const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [activeSession, overlay]);
@@ -714,6 +720,7 @@ export function AppOperationalTools() {
       <label>
         工作区
         <select
+          aria-label="工作区"
           value={workspaceId}
           onChange={(event) => setWorkspaceId(event.target.value)}
         >
@@ -727,6 +734,7 @@ export function AppOperationalTools() {
       <label>
         空间
         <select
+          aria-label="Space"
           value={spaceId}
           onChange={(event) => setSpaceId(event.target.value)}
         >
@@ -795,11 +803,18 @@ export function AppOperationalTools() {
                       </strong>
                       <p>
                         {unlocked
-                          ? "密钥只保留在当前应用会话内存中；锁定后立即失去解密能力。"
+                          ? "密钥仅存内存；解锁 30 分钟后自动锁定，刷新页面也会锁定。"
                           : "输入本地口令后，今日、计划、复习、笔记与同步中心共享本次解锁状态。"}
                       </p>
                     </div>
                   </div>
+                  {unlocked && expiresAt ? (
+                    <p aria-label="解锁剩余时间">
+                      自动锁定剩余{" "}
+                      {Math.max(0, Math.ceil((expiresAt - clockNow) / 60000))}{" "}
+                      分钟
+                    </p>
+                  ) : null}
                   {unlocked ? (
                     <div className="app-modal-actions">
                       <button
@@ -1066,6 +1081,7 @@ export function AppOperationalTools() {
                             <select
                               data-modal-autofocus
                               id="app-focus-task"
+                              aria-label="选择真实任务"
                               value={selectedTask?.entity.entity_id ?? ""}
                               onChange={(event) =>
                                 setSelectedTaskId(event.target.value)

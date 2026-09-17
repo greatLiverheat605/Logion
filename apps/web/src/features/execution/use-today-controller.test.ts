@@ -82,7 +82,7 @@ describe("Today controller contract", () => {
     expect(model.selectedTask?.entity.entity_id).toBe("active");
   });
 
-  it("keeps an explicit selection while deriving real totals", () => {
+  it("moves completed selections out of focus while preserving totals", () => {
     const done = task("done", "done", 2);
     const selected = task("selected", "planned", 3);
     const model = deriveTodayViewModel({
@@ -109,7 +109,10 @@ describe("Today controller contract", () => {
       verifications: [],
     });
 
-    expect(model.selectedTask?.entity.entity_id).toBe("done");
+    expect(model.selectedTask?.entity.entity_id).toBe("selected");
+    expect(model.queue.map((item) => item.entity.entity_id)).toEqual([
+      "selected",
+    ]);
     expect(model.completedTaskCount).toBe(1);
     expect(model.completedMinutes).toBe(30);
     expect(model.completionRate).toBe(50);

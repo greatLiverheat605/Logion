@@ -100,6 +100,36 @@ export function SecurityCenter() {
     queueMicrotask(() => void load());
   }, [load]);
 
+  function revokeOtherDevices() {
+    const targets = devices.filter(
+      (device) => !device.current && device.revoked_at === null,
+    );
+    if (!targets.length) return;
+    setConfirmation({
+      title: "撤销其他设备",
+      description: `将撤销 ${targets.length} 个其他设备及其全部会话。当前设备保留；撤销无法恢复，其他设备需要重新登录。`,
+      confirmLabel: "撤销其他设备",
+      run: async () => {
+        let revoked = 0;
+        try {
+          for (const device of targets) {
+            await request(`/api/v1/auth/devices/${device.id}`, {
+              method: "DELETE",
+              csrf: true,
+            });
+            revoked += 1;
+          }
+          await load();
+          setStatus(`已撤销 ${revoked} 个其他设备。`);
+        } catch (error) {
+          await load();
+          setStatus(`已撤销 ${revoked} 个，剩余未完成。${message(error)}`);
+          throw error;
+        }
+      },
+    });
+  }
+
   async function revokeDevice(id: string) {
     setConfirmation({
       title: "撤销设备",
@@ -619,6 +649,22 @@ export function SecurityCenter() {
                   <p className={styles.muted}>
                     撤销会立即使该设备上的全部会话失效；当前设备不可被误操作隐藏。
                   </p>
+                  <p className={styles.muted}>
+                    设备记录不等于在线设备；会话按服务器有效期过期（默认刷新会话
+                    30 天），设备记录不会因会话过期自动删除。
+                  </p>
+                  <button
+                    type="button"
+                    disabled={
+                      !devices.some(
+                        (device) =>
+                          !device.current && device.revoked_at === null,
+                      )
+                    }
+                    onClick={revokeOtherDevices}
+                  >
+                    撤销其他设备
+                  </button>
                   {devices.length ? (
                     <ul className={styles.dataList}>
                       {devices.map((device) => (

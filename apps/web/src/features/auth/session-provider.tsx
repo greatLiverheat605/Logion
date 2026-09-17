@@ -43,7 +43,10 @@ export function SessionProvider({
   const runRefresh = useCallback(
     (showLoading: boolean) => {
       const currentGeneration = ++generation.current;
-      if (showLoading) setState({ status: "loading" });
+      if (showLoading)
+        setState((current) =>
+          current.status === "authenticated" ? current : { status: "loading" },
+        );
       void coordinator.refresh().then((nextState) => {
         if (generation.current === currentGeneration) setState(nextState);
       });

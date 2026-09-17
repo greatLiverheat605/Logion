@@ -128,13 +128,13 @@ async function openDeletionWorkbench(
     }
   } else {
     const trigger = page
-      .getByRole("button", { name: "解锁资料", exact: true })
+      .getByRole("button", { name: "解锁本地资料", exact: true })
       .first();
     if (await trigger.isVisible()) {
       await trigger.click();
       const unlock = page.getByRole("dialog", { name: "解锁本地资料" });
       await unlock.getByLabel("本地口令").fill(password);
-      await unlock.getByRole("button", { name: "解锁资料" }).click();
+      await unlock.getByRole("button", { name: "解锁本地资料" }).click();
       await expect(unlock).toHaveCount(0);
     }
   }
@@ -495,7 +495,9 @@ test("T05 offline Note deletion resolves a concurrent device update explicitly",
     const input = page.getByLabel("本地解锁口令", { exact: true });
     await expect(input).toBeVisible();
     await input.fill(password);
-    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await page
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
     await expect(input).toHaveCount(0);
     await page.getByRole("button", { name: "立即同步", exact: true }).click();
     await expect
@@ -545,7 +547,9 @@ test("T05 offline Note deletion resolves a concurrent device update explicitly",
     });
     const unlock = page.getByLabel("本地解锁口令", { exact: true });
     await unlock.fill(password);
-    await page.getByRole("button", { name: "解锁资料", exact: true }).click();
+    await page
+      .getByRole("button", { name: "解锁本地资料", exact: true })
+      .click();
     await expect(unlock).toHaveCount(0);
     await expect.poll(async () => (await snapshot()).outbox.length).toBe(0);
     expect((await snapshot()).entities[0]).toMatchObject({
@@ -566,7 +570,7 @@ test("Note preview exposes only safe external URLs at desktop and mobile widths"
   await page.goto("/app/records");
   await waitForWorkbenchReady(page, "/app/records");
   await page
-    .getByRole("button", { name: "解锁资料", exact: true })
+    .getByRole("button", { name: "解锁本地资料", exact: true })
     .first()
     .click();
   const unlock = page.getByRole("dialog", { name: "解锁本地资料" });
@@ -575,7 +579,7 @@ test("Note preview exposes only safe external URLs at desktop and mobile widths"
     .fill(
       process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
     );
-  await unlock.getByRole("button", { name: "解锁资料" }).click();
+  await unlock.getByRole("button", { name: "解锁本地资料" }).click();
   await expect(unlock).toHaveCount(0);
   await page.getByRole("button", { name: "新建笔记" }).click();
   const create = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
@@ -652,18 +656,18 @@ test("Records completes real encrypted object workflows at four breakpoints", as
 
   if (
     await page
-      .getByRole("button", { name: "解锁资料", exact: true })
+      .getByRole("button", { name: "解锁本地资料", exact: true })
       .first()
       .isVisible()
   ) {
     await page
-      .getByRole("button", { name: "解锁资料", exact: true })
+      .getByRole("button", { name: "解锁本地资料", exact: true })
       .first()
       .click();
     const unlockSheet = page.getByRole("dialog", { name: "解锁本地资料" });
     await expect(unlockSheet.getByLabel("本地口令")).toBeFocused();
     await unlockSheet.getByLabel("本地口令").fill(vaultPassphrase);
-    await unlockSheet.getByRole("button", { name: "解锁资料" }).click();
+    await unlockSheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(unlockSheet).toHaveCount(0);
   }
   await expect(

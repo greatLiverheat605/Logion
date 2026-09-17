@@ -1,7 +1,9 @@
 "use client";
+import { AppConfirmModal } from "@/components/app-shell/app-confirm-modal";
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 
 import Link from "next/link";
+import { LockedDataNotice } from "@/components/product/locked-data-notice";
 import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
@@ -86,7 +88,9 @@ function GoalMaster({
         </span>
       </header>
       <div aria-label="当前 Space 的目标" className={styles.goalList}>
-        {controller.viewModel.visibleGoals.length ? (
+        {!controller.context.unlocked ? (
+          <LockedDataNotice />
+        ) : controller.viewModel.visibleGoals.length ? (
           controller.viewModel.visibleGoals.map((goal) => {
             const active = selectedId === goal.id;
             return (
@@ -104,8 +108,9 @@ function GoalMaster({
                 <span className={styles.goalCopy}>
                   <strong>{goal.payload.title}</strong>
                   <small>
-                    每周{" "}
-                    {Math.round((goal.payload.weekly_minutes / 60) * 10) / 10}h
+                    {goal.payload.weekly_minutes > 0
+                      ? `每周 ${Math.round((goal.payload.weekly_minutes / 60) * 10) / 10}h`
+                      : "每周投入未设置"}
                     · {goal.payload.phases.length} 阶段
                   </small>
                   <span className={styles.goalTags}>
@@ -164,9 +169,11 @@ function GoalSummary({
       </div>
       <dl className={styles.goalStats}>
         <div>
-          <dt>每周投入</dt>
+          <dt>每周投入（创建时填写）</dt>
           <dd>
-            {Math.round((goal.payload.weekly_minutes / 60) * 10) / 10} 小时
+            {goal.payload.weekly_minutes > 0
+              ? `${Math.round((goal.payload.weekly_minutes / 60) * 10) / 10} 小时`
+              : "未设置"}
           </dd>
         </div>
         <div>
@@ -217,6 +224,10 @@ function PhaseRoute({
               <AppIcon name="plus" size={14} />
               新建阶段
             </button>
+            <p>
+              当前版本手动创建每目标限 1
+              个阶段；模板可包含多个阶段，新增阶段暂未开放。
+            </p>
           </span>
         </WorkbenchTooltip>
       </header>
@@ -476,6 +487,7 @@ function ContextSelectors({
 function ContextToolbar({
   controller,
 }: Readonly<{ controller: PlanningControllerResult }>) {
+  const [recovering, setRecovering] = useState(false);
   return (
     <WorkbenchToolbar label="Planning 上下文操作">
       <div className={styles.desktopContextControls}>
@@ -493,6 +505,36 @@ function ContextToolbar({
           </button>
         </WorkbenchTooltip>
       </div>
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        disabled={
+          !controller.capabilities.canSync || !controller.context.online
+        }
+        onClick={() => setRecovering(true)}
+      >
+        补全服务器资料
+      </button>
+      {recovering ? (
+        <AppConfirmModal
+          action={{
+            title: "补全服务器资料",
+            confirmLabel: "确认补全",
+            description:
+              "将通过加密快照补全当前工作区的本地缓存，包括旧模板安装产物。服务器对象不变；有待同步操作或冲突时会拒绝执行。失败可重试，无需清空本地资料。",
+            run: async () => {
+              if (!(await controller.commands.recoverSnapshot()))
+                throw new Error(
+                  "补全未完成，请先处理待同步操作、冲突或网络问题后重试。",
+                );
+            },
+          }}
+          onClose={() => setRecovering(false)}
+          errorText={(error) =>
+            error instanceof Error ? error.message : "补全失败"
+          }
+        />
+      ) : null}
       <div className={styles.mobileContextControls}>
         <WorkbenchPopover
           align="end"
@@ -614,8 +656,8 @@ function NewGoalSheet({
           required
           rows={3}
         />
-        <details className={styles.secondaryFields}>
-          <summary>背景与时间约束</summary>
+        <details className={styles.secondaryFields} open>
+          <summary>背景与时间约束（可设置每周投入）</summary>
           <div>
             <label htmlFor={`${formId}-description`}>背景说明</label>
             <textarea
@@ -628,7 +670,7 @@ function NewGoalSheet({
               <label>
                 <span>每周投入（分钟）</span>
                 <input
-                  defaultValue={360}
+                  defaultValue={0}
                   max={10080}
                   min={0}
                   name="weekly_minutes"
@@ -720,7 +762,7 @@ function UnlockSheet({
             form={formId}
             type="submit"
           >
-            {pending ? "正在解锁" : "解锁资料"}
+            {pending ? "正在解锁" : "解锁本地资料"}
           </button>
         </>
       }
@@ -773,7 +815,7 @@ export function PlanningWorkbench({
             type="button"
           >
             <AppIcon name="unlock" size={16} />
-            解锁资料
+            解锁本地资料
           </button>
         )
       }

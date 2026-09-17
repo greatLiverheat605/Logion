@@ -42,13 +42,13 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
   await page.goto("/app/self-study", { waitUntil: "domcontentloaded" });
   await waitForWorkbenchReady(page, "/app/self-study");
   const unlock = page
-    .getByRole("button", { exact: true, name: "解锁资料" })
+    .getByRole("button", { exact: true, name: "解锁本地资料" })
     .first();
   if (await unlock.isVisible()) {
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地学习资料" });
     await sheet.getByLabel("本地口令").fill(vaultPassphrase);
-    await sheet.getByRole("button", { name: "解锁资料" }).click();
+    await sheet.getByRole("button", { name: "解锁本地资料" }).click();
     await expect(sheet).toHaveCount(0);
   }
 
@@ -72,6 +72,9 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
   await routeSheet.getByLabel("路线目标").fill("形成可复核的系统设计能力。");
   await routeSheet.getByRole("button", { name: "新建学习路线" }).click();
   await expect(routeSheet).toHaveCount(0);
+  await expect(page.getByTestId("self-study-inbox")).not.toContainText(
+    inboxTitle,
+  );
   await expect(page.getByTestId("self-study-projects")).toContainText(
     routeTitle,
   );
@@ -115,6 +118,7 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
     deliverableTitle,
   );
 
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
   for (const viewport of WORKBENCH_VIEWPORTS) {
     await page.setViewportSize(viewport);
     await waitForWorkbenchReady(page, "/app/self-study");
@@ -148,4 +152,119 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
     runtimeProblems,
     "Self-study must not emit browser warnings or errors",
   ).toEqual([]);
+});
+
+test("Browser remaining: discard inbox and delete an unreferenced topic", async ({
+  page,
+  accountState,
+}) => {
+  await page.goto("/app/self-study");
+  await page
+    .getByRole("button", { name: "解锁本地资料", exact: true })
+    .first()
+    .click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByLabel("本地口令").fill(accountState.password);
+  await dialog
+    .getByRole("button", { name: "解锁本地资料", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await page.locator('[data-workbench-primary="true"]:visible').click();
+  dialog = page.getByRole("dialog", { name: "快速收集想法" });
+  await dialog.getByLabel("想法或资料标题").fill("待丢弃的测试条目");
+  await dialog
+    .getByRole("button", { name: "快速收集想法", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await page
+    .getByTestId("self-study-inbox")
+    .getByRole("button", { name: /待丢弃的测试条目/ })
+    .click();
+  await page
+    .getByRole("button", { name: "删除收件箱条目", exact: true })
+    .click();
+  dialog = page.getByRole("dialog", { name: "确认删除" });
+  await dialog.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(page.getByTestId("self-study-inbox")).toContainText(
+    "待丢弃的测试条目",
+  );
+  await page
+    .getByRole("button", { name: "删除收件箱条目", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "确认删除" })
+    .getByRole("button", { name: "确认删除", exact: true })
+    .click();
+  await expect(page.getByTestId("self-study-inbox")).not.toContainText(
+    "待丢弃的测试条目",
+  );
+  await expect(
+    page.locator("[data-sonner-toast]").filter({ hasText: "删除已同步。" }),
+  ).toBeVisible();
+  await page.goto("/app/review");
+  await page.getByRole("button", { name: "解锁本地资料", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("本地口令").fill(accountState.password);
+  await dialog
+    .getByRole("button", { name: "解锁本地资料", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "新建知识点", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "新建知识点" });
+  await dialog.getByLabel("名称").fill("可删除的测试知识点");
+  await dialog.getByRole("button", { name: "保存知识点", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: /可删除的测试知识点/ }).click();
+  await page.getByRole("button", { name: "删除知识点", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "确认删除" })
+    .getByRole("button", { name: "确认删除", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /可删除的测试知识点/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("[data-sonner-toast]").filter({ hasText: "删除已同步。" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "本地资料已解锁", exact: true })
+    .click();
+  await expect(page.getByLabel("解锁剩余时间")).toContainText("30 分钟");
+  await page
+    .getByRole("dialog", { name: "本地资料保护" })
+    .getByRole("button", { name: "关闭", exact: true })
+    .click();
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, {
+    timeout: 60000,
+  });
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      )
+      .toBe(true);
+    if (width <= 768)
+      await expect
+        .poll(() =>
+          page
+            .getByTestId("app-sidebar")
+            .evaluate((element) => element.getBoundingClientRect().right <= 1),
+        )
+        .toBe(true);
+    else
+      await expect
+        .poll(() =>
+          page
+            .getByTestId("app-sidebar")
+            .evaluate((element) => element.getBoundingClientRect().left >= 0),
+        )
+        .toBe(true);
+    if (width <= 768)
+      await expect(page.locator(".workbench-pane:visible")).toHaveCount(1);
+    await expect(page.locator("body")).toContainText("Personal workspace");
+    await page.screenshot({ path: `.local/text-review-${width}.png` });
+  }
 });

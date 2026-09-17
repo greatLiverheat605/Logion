@@ -210,6 +210,9 @@ class SyncPushService:
         register("planning", ("learning_goal",), "delete", self._delete_goal)
         register("execution", ("task",), "delete", self._delete_task)
         register("content", ("note",), "delete", self._delete_note)
+        register("self_study", ("inbox_item",), "delete", self._delete_entity)
+        register("exams", ("exam",), "delete", self._delete_entity)
+        register("memory", ("topic",), "delete", self._delete_entity)
         register("execution", ("task",), "create", self._create_task)
         register("execution", ("task",), "update", self._transition_task)
         register("execution", ("study_session",), "create", self._start_session)
@@ -2383,6 +2386,9 @@ class SyncPushService:
         space_id = raw.pop("space_id", None)
         if operation.base_version != 0 or not isinstance(space_id, str):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        source = raw.pop("inbox_source", None)
+        if source is not None and operation.entity_type not in ("learning_track", "study_project"):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         definitions: dict[str, tuple[Any, Any, Any]] = {
             "learning_track": (LearningTrack, TrackCreateRequest, self._self_study.create_track),
             "study_project": (StudyProject, ProjectCreateRequest, self._self_study.create_project),
@@ -2402,9 +2408,73 @@ class SyncPushService:
             ):
                 return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
             async with db.begin_nested():
+                source_item = None
+                if source is not None:
+                    if (
+                        not isinstance(source, dict)
+                        or set(source) != {"id", "version"}
+                        or not isinstance(source["id"], str)
+                        or type(source["version"]) is not int
+                        or source["version"] < 1
+                    ):
+                        raise ValueError("Invalid inbox source")
+                    scope = await deletion_scope(
+                        db,
+                        self._workspaces,
+                        context,
+                        request.workspace_id,
+                        "inbox_item",
+                        UUID(source["id"]),
+                        request_id,
+                    )
+                    source_item = scope.root
+                    if source_item.space_id != UUID(space_id):
+                        raise APIError(
+                            code="SYNC_OPERATION_FORBIDDEN",
+                            message="Source scope differs.",
+                            status_code=403,
+                        )
+                    if (
+                        source_item.deleted_at is not None
+                        or source_item.version != source["version"]
+                    ):
+                        raise APIError(
+                            code="RESOURCE_VERSION_CONFLICT",
+                            message="Inbox source changed.",
+                            status_code=409,
+                        )
                 item = await create(
                     db, context, request.workspace_id, UUID(space_id), payload, request_id
                 )
+                if source_item is not None:
+                    now = utc_now()
+                    source_item.deleted_at = now
+                    source_item.updated_at = now
+                    source_item.updated_by = context.user.id
+                    source_item.version += 1
+                    await self._append_derived(
+                        db,
+                        request.workspace_id,
+                        identity,
+                        suffix=f"triage:inbox_item:{source_item.id}",
+                        entity_type="inbox_item",
+                        entity_id=source_item.id,
+                        operation_type="delete",
+                        version=source_item.version,
+                        payload={},
+                        deleted_at=now,
+                    )
+                    db.add(
+                        new_audit_event(
+                            request_id=request_id,
+                            event_type="self_study.inbox_triaged",
+                            result="success",
+                            actor_id=context.user.id,
+                            workspace_id=request.workspace_id,
+                            target_type="inbox_item",
+                            target_id=source_item.id,
+                        )
+                    )
                 projection = self_study_payload(item)
                 return await self._append_entity(
                     db, request.workspace_id, identity, item.version, projection

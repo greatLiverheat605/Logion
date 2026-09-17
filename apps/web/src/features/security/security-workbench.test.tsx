@@ -185,3 +185,38 @@ it.each([
     );
   },
 );
+
+it("confirms bulk cleanup and never revokes the current device", async () => {
+  const base = request.getMockImplementation()!;
+  request.mockImplementation(async (path: string, options?: unknown) =>
+    path === "/api/v1/auth/devices"
+      ? {
+          devices: [
+            device,
+            { ...device, id: "other-1", current: false, name: "旧设备" },
+          ],
+        }
+      : base(path, options),
+  );
+  render(<SecurityCenter />);
+  fireEvent.click(screen.getByRole("button", { name: /^设备与会话/ }));
+  await screen.findByText("旧设备");
+  fireEvent.click(screen.getByRole("button", { name: "撤销其他设备" }));
+  expect(
+    request.mock.calls.some(([, options]) => options?.method === "DELETE"),
+  ).toBe(false);
+  const dialog = screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "撤销其他设备" }));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith("/api/v1/auth/devices/other-1", {
+      method: "DELETE",
+      csrf: true,
+    }),
+  );
+  expect(
+    request.mock.calls.some(
+      ([path, options]) =>
+        path.endsWith("/device-1") && options?.method === "DELETE",
+    ),
+  ).toBe(false);
+});

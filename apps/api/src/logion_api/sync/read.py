@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from sqlalchemy import select
+from sqlalchemy import select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.collaboration.models import GroupFeedback, ReportSnapshot, ReviewRequest, Rubric
@@ -294,12 +294,23 @@ class SyncReadService:
         # Only tombstone rows use retained identities. Historical live payloads
         # remain filtered by the existing non-deleted visibility queries.
         visible_tombstones: set[tuple[str, UUID]] = set()
+        tombstone_model: Any
+        private_tombstone_types = {
+            "inbox_item", "exam", "exam_subject", "syllabus_node", "mock_exam", "score_record"
+        }
         for tombstone_type, tombstone_model in (
             ("learning_goal", LearningGoal),
             ("task", Task),
             ("note", Note),
             ("resource", Resource),
             ("study_session", StudySession),
+            ("inbox_item", InboxItem),
+            ("topic", Topic),
+            ("exam", Exam),
+            ("exam_subject", Subject),
+            ("syllabus_node", SyllabusNode),
+            ("mock_exam", MockExam),
+            ("score_record", ScoreRecord),
         ):
             ids = {
                 row.entity_id for row in page if row.tombstone and row.entity_type == tombstone_type
@@ -313,6 +324,9 @@ class SyncReadService:
                     .join(Space, Space.id == tombstone_model.space_id)
                     .where(
                         tombstone_model.workspace_id == state.workspace_id,
+                        (tombstone_model.user_id == user_id)
+                        if tombstone_type in private_tombstone_types
+                        else true(),
                         tombstone_model.id.in_(ids),
                         tombstone_model.deleted_at.is_not(None),
                         Space.workspace_id == state.workspace_id,

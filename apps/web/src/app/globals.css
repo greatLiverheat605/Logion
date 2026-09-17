@@ -1832,7 +1832,7 @@ h1 {
   }
 }
 
-@media (max-width: 45rem) {
+@media (max-width: 48rem) {
   .app-sidebar {
     width: min(86vw, 18rem);
     box-shadow: 0 1.4rem 4.4rem rgb(0 0 0 / 34%);
@@ -2379,4 +2379,15 @@ h1 {
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
+}
+
+.session-skeleton {
+  display: grid;
+  gap: 1rem;
+  padding: 2rem;
+}
+.session-skeleton > div {
+  height: 6rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
 }

@@ -785,7 +785,7 @@ function UnlockSheet({
           当前 Workspace：{context.selectedWorkspace?.name ?? "未选择"}
         </p>
         <button className={styles.primaryButton} type="submit">
-          <AppIcon name="unlock" size={15} /> 解锁资料
+          <AppIcon name="unlock" size={15} /> 解锁本地资料
         </button>
       </form>
     </WorkbenchSheet>
@@ -1142,7 +1142,7 @@ export function ResearchWorkbench({
       ref={unlockRef}
       type="button"
     >
-      <AppIcon name="unlock" size={16} /> 解锁资料
+      <AppIcon name="unlock" size={16} /> 解锁本地资料
     </button>
   );
   return (

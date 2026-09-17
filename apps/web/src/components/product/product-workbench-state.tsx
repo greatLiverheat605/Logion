@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { type ReactNode } from "react";
 
 import { AppIcon, type AppIconName } from "@/components/app-shell/app-icon";
@@ -176,9 +177,9 @@ function OperationalRecovery({
 }: Readonly<{ recovery: ProductOperationalRecovery }>) {
   if (recovery.kind === "link") {
     return (
-      <a className="product-operational-recovery" href={recovery.href}>
+      <Link className="product-operational-recovery" href={recovery.href}>
         {recovery.label}
-      </a>
+      </Link>
     );
   }
 
