@@ -213,6 +213,9 @@ function DeleteDialog({
 
   const evidence = preview?.blockers.evidence_count ?? 0;
   const citations = preview?.blockers.citation_count ?? 0;
+  const topicBlocked =
+    props.entityType === "topic" &&
+    Object.values(preview?.blockers ?? {}).some((count) => count > 0);
   return (
     <AppModal
       eyebrow={`删除${names[props.entityType]}`}
@@ -249,17 +252,17 @@ function DeleteDialog({
         ) : !error ? (
           <p role="status">正在核对删除范围…</p>
         ) : null}
-        {preview?.blockers.topic_reference_count ? (
+        {topicBlocked ? (
           <p role="alert">
             此知识点有关联学习记录、依赖或引用，暂不可删除。请保留历史，或先解除可移除的引用。
           </p>
         ) : null}
-        {evidence > 0 ? (
+        {!topicBlocked && evidence > 0 ? (
           <p role="alert">
             {evidence} 条证据引用此笔记，请先解除引用后再删除。
           </p>
         ) : null}
-        {citations > 0 ? (
+        {!topicBlocked && citations > 0 ? (
           <p role="alert">
             {citations} 条知识引用关联此笔记，请先解除引用后再删除。
           </p>
@@ -267,7 +270,7 @@ function DeleteDialog({
         {preview &&
         !preview.can_delete &&
         evidence + citations === 0 &&
-        !preview.blockers.topic_reference_count ? (
+        !topicBlocked ? (
           <p role="alert">此对象当前不可删除，请刷新后重试。</p>
         ) : null}
         {error ? (
