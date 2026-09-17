@@ -17,9 +17,18 @@ import type {
   RecordsNotePayload,
 } from "./use-records-controller";
 
+const capabilityRequest = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api/client", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/client")>(
+      "@/lib/api/client",
+    );
+  return { ...actual, browserApiClient: { request: capabilityRequest } };
+});
 afterEach(cleanup);
 
 beforeEach(() => {
+  capabilityRequest.mockReset().mockResolvedValue({ ingest_enabled: true });
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockReturnValue({ matches: false }),
@@ -116,6 +125,49 @@ function controllerFixture() {
 }
 
 describe("Records workbench", () => {
+  it("blocks queuing until capability succeeds and supports retry after failure", async () => {
+    capabilityRequest.mockRejectedValueOnce(new Error("unavailable"));
+    const { controller, commands } = controllerFixture();
+    render(<RecordsWorkbench controller={controller} />);
+    fireEvent.click(screen.getByRole("button", { name: "添加附件" }));
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "加入附件队列",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    await screen.findByText(/无法确认服务端能力，当前不能加入队列/);
+    capabilityRequest.mockResolvedValueOnce({ ingest_enabled: false });
+    fireEvent.click(screen.getByRole("button", { name: "重新检查上传能力" }));
+    await screen.findByText(/服务端未启用附件上传，当前不能加入队列/);
+    expect(commands.queueAttachment).not.toHaveBeenCalled();
+    capabilityRequest.mockResolvedValueOnce({ ingest_enabled: true });
+    fireEvent.click(screen.getByRole("button", { name: "重新检查上传能力" }));
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "加入附件队列",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+  });
+  it("requires explicit offline staging consent and makes no capability request", async () => {
+    const { controller, commands } = controllerFixture();
+    controller.context.online = false;
+    render(<RecordsWorkbench controller={controller} />);
+    fireEvent.click(screen.getByRole("button", { name: "添加附件" }));
+    const submit = screen.getByRole("button", {
+      name: "加入附件队列",
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: /仅在本地暂存/ }));
+    expect(submit.disabled).toBe(false);
+    expect(capabilityRequest).not.toHaveBeenCalled();
+    expect(commands.queueAttachment).not.toHaveBeenCalled();
+  });
   it("renders the GLM master, inline editor and inspector with one page primary", () => {
     const { controller } = controllerFixture();
     render(<RecordsWorkbench controller={controller} />);

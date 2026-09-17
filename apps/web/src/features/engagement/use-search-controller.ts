@@ -53,6 +53,7 @@ export interface SearchGroup {
 }
 
 export interface SearchInput {
+  spaceId?: string;
   mode: SearchMode;
   query: string;
 }
@@ -338,7 +339,14 @@ export function useSearchController(
     if (session.status === "authenticated") {
       queueMicrotask(() => void loadWorkspaces());
     }
-    const updateOnline = () => setOnline(navigator.onLine);
+    const updateOnline = () => {
+      searchRequest.current += 1;
+      setResults([]);
+      setSelectedResultId("");
+      setSearched(false);
+      setSearchPhase("idle");
+      setOnline(navigator.onLine);
+    };
     updateOnline();
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
@@ -407,6 +415,15 @@ export function useSearchController(
       return false;
     }
     const requestId = ++searchRequest.current;
+    if (!online && input.spaceId) {
+      setResults([]);
+      setSelectedResultId("");
+      setSearchPhase("error");
+      setStatus(
+        "离线缓存不包含可核验的空间索引，请选择全部空间后搜索本机缓存。",
+      );
+      return false;
+    }
     const objectTypes = input.mode === "all" ? SEARCH_TYPES : [input.mode];
     lastInput.current = { ...input, query };
     setLastQuery(query);
@@ -420,6 +437,7 @@ export function useSearchController(
               {
                 body: JSON.stringify({
                   limit: 30,
+                  ...(input.spaceId ? { space_id: input.spaceId } : {}),
                   object_types: objectTypes,
                   query,
                 }),

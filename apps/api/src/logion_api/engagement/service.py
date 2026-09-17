@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, true
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,6 +61,7 @@ class EngagementService:
                     select(Space).where(
                         Space.workspace_id == workspace_id,
                         Space.status == "active",
+                        Space.id == payload.space_id if payload.space_id is not None else true(),
                         or_(
                             Space.visibility == "shared",
                             Space.owner_user_id == context.user.id,

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 
 from logion_api.content.attachment_dependencies import AttachmentServiceDependency
 from logion_api.content.attachment_schemas import (
+    AttachmentCapability,
     AttachmentComplete,
     AttachmentInit,
     AttachmentResponse,
@@ -26,12 +27,36 @@ from logion_api.identity.dependencies import (
     require_trusted_origin,
 )
 from logion_api.knowledge_space.errors import attachment_ingest_disabled_error
+from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 router = APIRouter(
     prefix="/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments",
     tags=["attachments"],
 )
 ERROR = {"model": ErrorResponse}
+
+
+@router.get(
+    "/capability",
+    response_model=AttachmentCapability,
+    operation_id="attachment_capability",
+    responses={401: ERROR, 403: ERROR, 404: ERROR},
+)
+async def attachment_capability(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    response: Response,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    settings: SettingsDependency,
+    workspaces: WorkspaceServiceDependency,
+) -> AttachmentCapability:
+    await workspaces.resolve_space(
+        db, context, workspace_id, space_id, request_id=request_id(request)
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return AttachmentCapability(ingest_enabled=settings.knowledge_space_attachment_ingest_enabled)
 
 
 async def require_attachment_feature(settings: SettingsDependency) -> None:

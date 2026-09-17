@@ -1774,6 +1774,20 @@
         "title": "AppliedOperationResult",
         "type": "object"
       },
+      "AttachmentCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "ingest_enabled": {
+            "title": "Ingest Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ingest_enabled"
+        ],
+        "title": "AttachmentCapability",
+        "type": "object"
+      },
       "AttachmentComplete": {
         "additionalProperties": false,
         "properties": {
@@ -9942,6 +9956,18 @@
             "minLength": 2,
             "title": "Query",
             "type": "string"
+          },
+          "space_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Space Id"
           }
         },
         "required": [
@@ -27919,6 +27945,89 @@
         "summary": "Get Space",
         "tags": [
           "workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/attachments/capability": {
+      "get": {
+        "operationId": "attachment_capability",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentCapability"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attachment Capability",
+        "tags": [
+          "attachments"
         ]
       }
     },

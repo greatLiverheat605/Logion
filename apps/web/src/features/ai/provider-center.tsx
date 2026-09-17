@@ -37,6 +37,7 @@ import { isRecentAuthRequired, LogionApiError } from "@/lib/api/client";
 
 import styles from "./ai-governance-workbench.module.css";
 import { useProviderController } from "./use-provider-controller";
+import { ProviderDiagnostics } from "./provider-diagnostics";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Provider = components["schemas"]["AIProviderResponse"];
@@ -758,13 +759,10 @@ export function ProviderCenter() {
                           密钥
                           {selectedProvider.credential_configured
                             ? "已配置"
-                            : "缺失"}{" "}
-                          · 最近检查 {selectedProvider.last_health_status}
-                          {selectedProvider.last_health_error_code
-                            ? ` · ${dnsErrorText(selectedProvider.last_health_error_code) ?? selectedProvider.last_health_error_code}`
-                            : ""}
+                            : "缺失"}
                         </span>
                       </div>
+                      <ProviderDiagnostics provider={selectedProvider} />
                       <div className={styles.inlineActions}>
                         <button
                           type="button"

@@ -527,6 +527,7 @@
 
 .providerDetail {
   display: flex;
+  flex-wrap: wrap;
   min-width: 0;
   align-items: center;
   justify-content: space-between;
@@ -778,4 +779,25 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+.diagnostics {
+  flex-basis: 100%;
+  min-width: 0;
+  order: 1;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.diagnostics h3 {
+  color: var(--text-primary);
+}
+.diagnostics dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+}
+.diagnostics dd {
+  margin: 0;
 }
