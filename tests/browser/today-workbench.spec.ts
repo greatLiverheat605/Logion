@@ -303,13 +303,26 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
   await expect(
     page.getByRole("complementary", { name: "今日序列" }),
   ).toContainText(`${goalTitle}-task`);
+  const goalsLoaded = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      /\/spaces\/[^/]+\/goals$/.test(new URL(response.url()).pathname),
+  );
   await page.locator('a[href="/app/templates"]').first().click();
+  const goalsResponse = await goalsLoaded;
+  expect(goalsResponse.ok(), await goalsResponse.text()).toBe(true);
+  const initialGoalCount = (
+    (await goalsResponse.json()) as { goals: Array<{ id: string }> }
+  ).goals.length;
+  const goalCount = page.getByTestId("templates-installed").locator("strong");
+  await expect(goalCount).toHaveText(String(initialGoalCount));
   await page.getByRole("button", { name: /研究项目 · 问题到证据/ }).click();
   await page.getByRole("button", { name: "安装独立副本", exact: true }).click();
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("安装起始日期").fill("2026-09-13");
   await dialog.getByRole("button", { name: "确认安装" }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(goalCount).toHaveText(String(initialGoalCount + 1));
   await page.locator('a[href="/app/planning"]').first().click();
   await expect(page.getByTestId("planning-goals")).toContainText("研究项目");
   // Simulate a pre-fix cache missing objects after its cursor has advanced.
@@ -384,9 +397,7 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
     "研究项目",
   );
   await page.locator('a[href="/app/templates"]').first().click();
-  await expect(
-    page.getByTestId("templates-installed").locator("strong"),
-  ).toHaveText("1");
+  await expect(goalCount).toHaveText(String(initialGoalCount));
   await page.locator('a[href="/app/planning"]').first().click();
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.locator(".app-mobile-menu")).toBeVisible();
