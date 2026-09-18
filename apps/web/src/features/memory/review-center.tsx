@@ -220,10 +220,17 @@ export function ReviewCenter() {
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       setWorkspaces(workspaceResult.workspaces);
+      const requestedWorkspace = new URLSearchParams(
+        window.location.search,
+      ).get("workspace");
       setWorkspaceId((current) =>
         workspaceResult.workspaces.some((item) => item.id === current)
           ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
+          : (workspaceResult.workspaces.find(
+              (item) => item.id === requestedWorkspace,
+            )?.id ??
+            workspaceResult.workspaces[0]?.id ??
+            ""),
       );
       setDeviceId(deviceResult.devices.find((item) => item.current)?.id ?? "");
       setStatus("请解锁本地学习记录。");
@@ -242,10 +249,15 @@ export function ReviewCenter() {
           `/api/v1/workspaces/${selected}/spaces`,
         );
         setSpaces(result.spaces);
+        const params = new URLSearchParams(window.location.search);
+        const requestedSpace =
+          params.get("workspace") === selected ? params.get("space") : null;
         setSpaceId((current) =>
           result.spaces.some((item) => item.id === current)
             ? current
-            : (result.spaces[0]?.id ?? ""),
+            : (result.spaces.find((item) => item.id === requestedSpace)?.id ??
+              result.spaces[0]?.id ??
+              ""),
         );
         setContextPhase("ready");
       } catch (error) {

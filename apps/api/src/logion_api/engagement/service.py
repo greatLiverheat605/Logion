@@ -510,6 +510,7 @@ class EngagementService:
                         ReviewSchedule.space_id.in_(spaces),
                         ReviewSchedule.status.not_in(("completed", "skipped")),
                         ReviewSchedule.deleted_at.is_(None),
+                        Topic.deleted_at.is_(None),
                     )
                 )
             ).all()

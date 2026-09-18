@@ -246,6 +246,13 @@ async def test_note_resource_sync_replay_conflict_and_bootstrap() -> None:
         replay = await push([resolution])
         assert replay.json()["results"][0]["status"] == "duplicate"
 
+        history = (await client.get(f"/api/v1/workspaces/{workspace_id}/notifications")).json()[
+            "notifications"
+        ]
+        resolved_receipts = [row for row in history if "已解决冲突 1 项" in row["summary"]]
+        assert len(resolved_receipts) == 1
+        assert resolved_receipts[0]["target_type"] == "sync"
+
         async with session_factory() as db:
             record = await db.get(SyncConflictRecord, UUID(conflict["conflict_id"]))
             assert record is not None

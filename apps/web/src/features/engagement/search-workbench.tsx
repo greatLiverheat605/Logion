@@ -856,6 +856,16 @@ function NotificationRow({
           )}
         </header>
         <p>{notification.summary}</p>
+        {notification.target_type === "review" ||
+        notification.target_type === "sync" ? (
+          <Link
+            href={`/app/${notification.target_type === "review" ? "review" : "sync"}?workspace=${encodeURIComponent(notification.workspace_id)}`}
+          >
+            {notification.target_type === "review"
+              ? "查看复习安排"
+              : "查看同步状态"}
+          </Link>
+        ) : null}
         <small>
           {CATEGORY_LABEL[notification.category] ?? notification.category} ·{" "}
           {formatDate(notification.created_at)}

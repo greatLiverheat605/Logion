@@ -41,6 +41,10 @@ import { offlineCapabilityMessage } from "@/features/offline/offline-error-messa
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
+import {
+  noteSelectionPayload,
+  type NoteSelectionInput,
+} from "./note-selection";
 
 export type RecordsWorkspace = components["schemas"]["WorkspaceResponse"];
 export type RecordsSpace = components["schemas"]["SpaceResponse"];
@@ -369,6 +373,11 @@ export interface RecordsControllerResult {
     canWrite: boolean;
   };
   commands: {
+    selectionTopics: () => Promise<Array<{ id: string; title: string }>>;
+    createFromSelection: (
+      noteId: string,
+      input: NoteSelectionInput,
+    ) => Promise<boolean>;
     createNote: (input: {
       markdownBody: string;
       title: string;
@@ -423,6 +432,7 @@ export function useRecordsController(): RecordsControllerResult {
   const recordsRequest = useRef(0);
   const attachmentContext = useRef(0);
   const attachmentBusy = useRef(false);
+  const selectionBusy = useRef(false);
   const unlocked = vaultPhase === "unlocked";
   const online = useSyncExternalStore(
     subscribeOnline,
@@ -726,10 +736,11 @@ export function useRecordsController(): RecordsControllerResult {
   }
 
   async function commit(
-    entityType: "note" | "resource",
+    entityType: "note" | "resource" | "topic" | "quiz_item",
     entityId: string,
     payload: JsonObject,
     existing?: LocalEntity,
+    dependencies: string[] = [],
   ) {
     const selectedWorkspace = workspaceIdRef.current;
     const selectedDevice = deviceIdRef.current;
@@ -753,6 +764,7 @@ export function useRecordsController(): RecordsControllerResult {
       created_by: existing?.created_by ?? session.user.id,
       deleted_at: null,
       device_id: selectedDevice,
+      dependencies,
       entity_id: entityId,
       entity_type: entityType,
       local_revision: (existing?.local_revision ?? 0) + 1,
@@ -764,6 +776,98 @@ export function useRecordsController(): RecordsControllerResult {
       updated_by: session.user.id,
       workspace_id: selectedWorkspace,
     });
+  }
+
+  async function selectionTopics(): Promise<
+    Array<{ id: string; title: string }>
+  > {
+    const db = database.current;
+    const localVault = vault.current;
+    const selectedWorkspace = workspaceIdRef.current;
+    const generation = attachmentContext.current;
+    if (!db || !localVault || !unlocked) throw new Error("请先解锁本地资料。");
+    const rows = await db.entities
+      .where("[workspace_id+entity_type]")
+      .equals([selectedWorkspace, "topic"])
+      .toArray();
+    const views = await Promise.all(
+      rows
+        .filter((row) => !row.deleted_at)
+        .map((row) =>
+          decrypt<{ space_id: string; title: string }>(localVault, row),
+        ),
+    );
+    if (
+      generation !== attachmentContext.current ||
+      selectedWorkspace !== workspaceIdRef.current
+    ) {
+      throw new Error("当前空间已切换，请重新选择内容。");
+    }
+    return views
+      .filter((view) => view.payload.space_id === spaceId)
+      .map((view) => ({
+        id: view.entity.entity_id,
+        title: view.payload.title,
+      }));
+  }
+
+  async function createFromSelection(
+    noteId: string,
+    input: NoteSelectionInput,
+  ): Promise<boolean> {
+    if (selectionBusy.current) return false;
+    const note = notes.find(
+      (item) =>
+        item.entity.entity_id === noteId && item.payload.space_id === spaceId,
+    );
+    if (!note || !canWrite || !unlocked || !spaceId)
+      throw new Error("请在有编辑权限的空间解锁并选择笔记。");
+    const db = database.current;
+    const generation = attachmentContext.current;
+    const selectedWorkspace = workspaceIdRef.current;
+    const payload = noteSelectionPayload(input, spaceId, note.payload.title);
+    selectionBusy.current = true;
+    try {
+      let dependencies: string[] = [];
+      if (input.kind === "quiz_item") {
+        const topics = await selectionTopics();
+        if (!topics.some((topic) => topic.id === input.topicId) || !db) {
+          throw new Error("请选择当前空间中仍可用的知识点。");
+        }
+        const operation = await db.outbox
+          .where("[workspace_id+entity_type+entity_id]")
+          .equals([selectedWorkspace, "topic", input.topicId])
+          .last();
+        dependencies = operation ? [operation.operation_id] : [];
+      }
+      if (
+        generation !== attachmentContext.current ||
+        selectedWorkspace !== workspaceIdRef.current
+      ) {
+        throw new Error("当前空间已切换，请重新选择内容。");
+      }
+      await commit(
+        input.kind,
+        crypto.randomUUID(),
+        payload,
+        undefined,
+        dependencies,
+      );
+      markChanged();
+      if (generation === attachmentContext.current) {
+        const synced = online && (await synchronizeCore());
+        if (generation === attachmentContext.current) {
+          setStatus(
+            synced
+              ? "选段已创建并同步，可前往复习页查看。"
+              : "选段已加密保存在本机，恢复网络后同步；可前往复习页查看。",
+          );
+        }
+      }
+      return true;
+    } finally {
+      selectionBusy.current = false;
+    }
   }
 
   async function createNote(input: {
@@ -1220,6 +1324,8 @@ export function useRecordsController(): RecordsControllerResult {
       canWrite,
     },
     commands: {
+      selectionTopics,
+      createFromSelection,
       createNote,
       createResource,
       loadContext,

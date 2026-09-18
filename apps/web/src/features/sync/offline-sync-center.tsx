@@ -174,10 +174,17 @@ export function OfflineSyncCenter() {
       setWorkspaces(workspaceResult.workspaces);
       setDevices(deviceResult.devices);
       setAccessIssue(null);
+      const requestedWorkspace = new URLSearchParams(
+        window.location.search,
+      ).get("workspace");
       setWorkspaceId((current) =>
         workspaceResult.workspaces.some((item) => item.id === current)
           ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
+          : (workspaceResult.workspaces.find(
+              (item) => item.id === requestedWorkspace,
+            )?.id ??
+            workspaceResult.workspaces[0]?.id ??
+            ""),
       );
       setDeviceId(currentDevice?.id ?? "");
       setStatus(

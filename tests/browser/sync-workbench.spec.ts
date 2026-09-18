@@ -128,6 +128,12 @@ test("device wipe clears populated local stores and bootstraps unchanged server 
     mimeType: "text/plain",
     buffer: Buffer.from("Synthetic local wipe fixture"),
   });
+  await expect(
+    attachment.getByRole("button", { name: "加入附件队列", exact: true }),
+  ).toBeDisabled();
+  await attachment
+    .getByRole("checkbox", { name: "我理解尚未确认上传能力，仅在本地暂存" })
+    .check();
   await attachment
     .getByRole("button", { name: "加入附件队列", exact: true })
     .click();

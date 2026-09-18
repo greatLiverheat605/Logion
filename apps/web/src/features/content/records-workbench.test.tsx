@@ -65,6 +65,8 @@ function controllerFixture() {
   );
   const second = note("note-2", "一致性模型", "# Consistency");
   const commands = {
+    selectionTopics: vi.fn(async () => [{ id: "topic-1", title: "共识" }]),
+    createFromSelection: vi.fn(async () => true),
     createNote: vi.fn(async () => "note-3"),
     createResource: vi.fn(async () => true),
     loadContext: vi.fn(async () => undefined),
@@ -125,6 +127,104 @@ function controllerFixture() {
 }
 
 describe("Records workbench", () => {
+  it("confirms selected text, retains a failed draft and prevents repeated submission", async () => {
+    const { controller, commands } = controllerFixture();
+    render(<RecordsWorkbench controller={controller} />);
+    const trigger = screen.getByRole("button", { name: "选段用于复习" });
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
+    const body = screen.getByLabelText("Markdown 正文") as HTMLTextAreaElement;
+    body.focus();
+    body.setSelectionRange(2, 6);
+    fireEvent.select(body);
+    fireEvent.click(trigger);
+    await screen.findByRole("dialog", { name: "将笔记选段用于复习" });
+    expect(
+      (screen.getByLabelText("所选原文") as HTMLTextAreaElement).value,
+    ).toBe("Raft");
+    fireEvent.change(screen.getByLabelText("知识点标题"), {
+      target: { value: "共识算法" },
+    });
+    commands.createFromSelection.mockRejectedValueOnce(
+      new Error("暂时无法保存"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "创建知识点" }));
+    await screen.findByRole("alert");
+    expect(
+      (screen.getByLabelText("知识点标题") as HTMLTextAreaElement).value,
+    ).toBe("共识算法");
+    let finish!: (value: boolean) => void;
+    commands.createFromSelection.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "创建知识点" }));
+    fireEvent.click(screen.getByRole("button", { name: "正在保存" }));
+    expect(commands.createFromSelection).toHaveBeenCalledTimes(2);
+    finish(true);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(commands.createFromSelection).toHaveBeenLastCalledWith(
+      "note-1",
+      expect.objectContaining({
+        kind: "topic",
+        excerpt: "Raft",
+        title: "共识算法",
+      }),
+    );
+  });
+
+  it("requires an existing topic and answer before creating a quiz, and drops the sheet when locked", async () => {
+    const { controller, commands } = controllerFixture();
+    const view = render(<RecordsWorkbench controller={controller} />);
+    const body = screen.getByLabelText("Markdown 正文") as HTMLTextAreaElement;
+    body.focus();
+    body.setSelectionRange(2, 6);
+    fireEvent.select(body);
+    fireEvent.click(screen.getByRole("button", { name: "选段用于复习" }));
+    await screen.findByRole("dialog");
+    fireEvent.change(screen.getByLabelText("创建类型"), {
+      target: { value: "quiz_item" },
+    });
+    await screen.findByRole("option", { name: "共识" });
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "创建题目",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("所属知识点"), {
+      target: { value: "topic-1" },
+    });
+    fireEvent.change(screen.getByLabelText("参考答案"), {
+      target: { value: "多数派" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建题目" }));
+    await waitFor(() =>
+      expect(commands.createFromSelection).toHaveBeenCalledWith(
+        "note-1",
+        expect.objectContaining({
+          kind: "quiz_item",
+          topicId: "topic-1",
+          answer: "多数派",
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "选段用于复习" }));
+    await screen.findByRole("dialog");
+    view.rerender(
+      <RecordsWorkbench
+        controller={{
+          ...controller,
+          capabilities: { ...controller.capabilities, canCreate: false },
+          context: { ...controller.context, unlocked: false },
+        }}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
   it("blocks queuing until capability succeeds and supports retry after failure", async () => {
     capabilityRequest.mockRejectedValueOnce(new Error("unavailable"));
     const { controller, commands } = controllerFixture();

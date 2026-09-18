@@ -12,6 +12,7 @@ from logion_api.workspaces.service import WorkspaceService
 
 from logion_worker.email_delivery import EmailDeliveryService
 from logion_worker.health import WorkerHealthTracker, health_payload
+from logion_worker.review_reminders import ReviewReminderService
 from logion_worker.scheduler import QueueHandler, RoundRobinScheduler
 
 
@@ -40,6 +41,7 @@ async def run_worker() -> None:
     portability = PortabilityService(settings, WorkspaceService(settings))
     deletion = AccountDeletionService(settings)
     email_delivery = EmailDeliveryService(settings)
+    review_reminders = ReviewReminderService()
     tracker = WorkerHealthTracker(settings.worker_health_state_path)
     scheduler = RoundRobinScheduler(
         [
@@ -47,6 +49,7 @@ async def run_worker() -> None:
             QueueHandler("export", portability.execute_next),
             QueueHandler("ai", execution.execute_next),
             QueueHandler("deletion", deletion.execute_next),
+            QueueHandler("review_reminders", review_reminders.execute_next),
         ]
     )
     heartbeat_task = asyncio.create_task(maintain_heartbeat(stop, tracker))
@@ -55,7 +58,7 @@ async def run_worker() -> None:
             {
                 **health_payload(),
                 "event": "worker_started",
-                "queues": ["email", "export", "ai", "deletion"],
+                "queues": ["email", "export", "ai", "deletion", "review_reminders"],
             }
         )
     )

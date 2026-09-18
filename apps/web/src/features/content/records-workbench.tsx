@@ -33,6 +33,7 @@ import {
 
 import { useAttachmentCapability } from "./attachment-capability";
 import { NoteExternalLinks } from "./note-external-links";
+import { NoteSelectionSheet } from "./note-selection-sheet";
 import styles from "./records-workbench.module.css";
 import {
   filterRecords,
@@ -422,6 +423,21 @@ function NoteEditor({
   const [title, setTitle] = useState(note.payload.title);
   const [markdownBody, setMarkdownBody] = useState(note.payload.markdown_body);
   const [dirty, setDirty] = useState(false);
+  const [selection, setSelection] = useState("");
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const selectionButton = useRef<HTMLButtonElement>(null);
+  const preview = useRef<HTMLDivElement>(null);
+  function selectPreview() {
+    const selected = window.getSelection();
+    if (
+      selected?.anchorNode &&
+      selected.focusNode &&
+      preview.current?.contains(selected.anchorNode) &&
+      preview.current.contains(selected.focusNode)
+    ) {
+      setSelection(selected.toString().trim());
+    } else setSelection("");
+  }
   const [pending, setPending] = useState(false);
   const changed =
     dirty &&
@@ -445,7 +461,32 @@ function NoteEditor({
       data-testid="records-editor"
     >
       <WorkbenchToolbar label="编辑器操作">
-        <EditorMode mode={mode} onChange={setMode} />
+        <EditorMode
+          mode={mode}
+          onChange={(value) => {
+            setMode(value);
+            setSelection("");
+          }}
+        />
+        <button
+          type="button"
+          ref={selectionButton}
+          className={styles.secondaryButton}
+          disabled={
+            !controller.capabilities.canCreate ||
+            !selection ||
+            selection.length > 9000
+          }
+          onClick={() => setSelectionOpen(true)}
+          title="先在正文中选择 1–9000 字内容"
+        >
+          选段用于复习
+        </button>
+        <Link
+          href={`/app/review?workspace=${encodeURIComponent(controller.context.workspaceId)}&space=${encodeURIComponent(controller.context.spaceId)}`}
+        >
+          前往复习
+        </Link>
         <span className={styles.editorMeta}>
           单条笔记上限 500 KB · revision {note.entity.local_revision}
         </span>
@@ -490,16 +531,31 @@ function NoteEditor({
               maxLength={500000}
               onChange={(event) => {
                 setMarkdownBody(event.target.value);
+                setSelection("");
                 setDirty(true);
               }}
               readOnly={!controller.capabilities.canWrite}
+              onSelect={(event) => {
+                const field = event.currentTarget;
+                setSelection(
+                  field.value
+                    .slice(field.selectionStart, field.selectionEnd)
+                    .trim(),
+                );
+              }}
               spellCheck={false}
               value={markdownBody}
             />
           </>
         ) : (
-          <div className={styles.previewBody}>
-            <ProductMarkdownPreview value={markdownBody} />
+          <div
+            className={styles.previewBody}
+            onMouseUp={selectPreview}
+            onKeyUp={selectPreview}
+          >
+            <div ref={preview}>
+              <ProductMarkdownPreview value={markdownBody} />
+            </div>
             <NoteExternalLinks value={markdownBody} />
             <p className={styles.previewNotice}>
               <AppIcon name="shield" size={14} />
@@ -508,6 +564,19 @@ function NoteEditor({
           </div>
         )}
       </div>
+      {selectionOpen &&
+      controller.capabilities.canCreate &&
+      controller.context.unlocked ? (
+        <NoteSelectionSheet
+          controller={controller}
+          excerpt={selection}
+          noteId={note.entity.entity_id}
+          onClose={() => {
+            setSelectionOpen(false);
+            selectionButton.current?.focus();
+          }}
+        />
+      ) : null}
       {!controller.context.online && changed ? (
         <p className={styles.offlineNote} role="status">
           离线保存会把修改写入本机 IndexedDB 与 Outbox；恢复网络后再推送。
@@ -1295,7 +1364,7 @@ export function RecordsWorkbench({
           {selectedNote ? (
             <NoteEditor
               controller={controller}
-              key={selectedNote.entity.entity_id}
+              key={`${controller.context.workspaceId}:${controller.context.spaceId}:${controller.context.unlocked}:${selectedNote.entity.entity_id}`}
               note={selectedNote}
             />
           ) : (
