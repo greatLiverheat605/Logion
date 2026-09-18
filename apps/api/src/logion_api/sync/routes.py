@@ -1,9 +1,11 @@
+import hashlib
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Request
 
 from logion_api.collaboration.dependencies import CollaborationServiceDependency
 from logion_api.content.dependencies import ContentServiceDependency
+from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.exam.dependencies import ExamServiceDependency
 from logion_api.execution.dependencies import ExecutionServiceDependency
@@ -220,6 +222,38 @@ async def push(
         # earlier successful operations and newly recorded conflicts.
         await db.rollback()
         return UpgradeControl(server_sync_epoch=payload.sync_epoch)
+    if any(result.status != "duplicate" for result in results):
+        applied = sum(isinstance(result, AppliedOperationResult) for result in results)
+        conflicts = sum(isinstance(result, ConflictOperationResult) for result in results)
+        resolved = sum(
+            operation.conflict_resolution is not None
+            and any(
+                result.operation_id == operation.operation_id
+                and isinstance(result, AppliedOperationResult)
+                for result in results
+            )
+            for operation in payload.operations
+        )
+        receipt = hashlib.sha256(
+            "|".join(
+                f"{result.operation_id}:"
+                f"{'applied' if isinstance(result, AppliedOperationResult) else result.status}"
+                for result in results
+            ).encode()
+        ).hexdigest()
+        await EngagementService.emit(
+            db,
+            workspace_id=workspace_id,
+            recipient_user_id=context.user.id,
+            category="sync",
+            title="同步推送回执",
+            summary=(
+                f"服务端已接收 {applied} 项；待处理冲突 {conflicts} 项；"
+                f"未接收 {len(results) - applied - conflicts} 项；已解决冲突 {resolved} 项。"
+            ),
+            dedupe_key=f"sync:push:{payload.sync_epoch}:{receipt}",
+            target_type="sync",
+        )
     await db.commit()
     return PushResponse(
         workspace_id=workspace_id,
@@ -266,6 +300,21 @@ async def pull(
         for change in response.changes
     ):
         return UpgradeControl(server_sync_epoch=payload.sync_epoch)
+    if response.changes:
+        await EngagementService.emit(
+            db,
+            workspace_id=workspace_id,
+            recipient_user_id=context.user.id,
+            category="sync",
+            title="同步拉取回执",
+            summary=f"服务端返回 {len(response.changes)} 条变更；设备应用结果请查看同步中心。",
+            dedupe_key=(
+                f"sync:pull:{payload.sync_epoch}:{context.device.id}:"
+                f"{response.from_cursor}:{response.next_cursor}"
+            ),
+            target_type="sync",
+        )
+        await db.commit()
     return response
 
 

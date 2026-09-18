@@ -21,6 +21,132 @@ import {
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
+test("Learning loop converts note selections offline and records real sync history", async ({
+  page,
+  accountState,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const marker = `Selection ${randomUUID().slice(0, 8)}`;
+  const excerpt = "Raft commits a log entry after a majority acknowledges it.";
+  await page.goto("/app/records");
+  await waitForWorkbenchReady(page, "/app/records");
+  await page.locator("#records-unlock").click();
+  const unlock = page.getByRole("dialog", { name: "解锁本地资料" });
+  await unlock
+    .getByLabel("本地口令")
+    .fill(
+      process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
+    );
+  await unlock.getByRole("button", { name: "解锁本地资料" }).click();
+  await expect(unlock).toHaveCount(0);
+  await page.getByRole("button", { name: "新建笔记", exact: true }).click();
+  const note = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
+  await note.getByLabel("标题", { exact: true }).fill(marker);
+  await note.getByRole("button", { name: "创建笔记" }).click();
+  await expect(note).toHaveCount(0);
+  const body = page.getByRole("textbox", { name: "Markdown 正文" });
+  await body.fill(excerpt);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByTestId("records-save-status")).toHaveText("已保存");
+  const reviewHref = await page
+    .getByRole("link", { name: "前往复习", exact: true })
+    .getAttribute("href");
+  const params = new URL(reviewHref!, "http://test").searchParams;
+  const workspace = params.get("workspace")!;
+  const space = params.get("space")!;
+  const selectAll = async () => {
+    await body.focus();
+    await body.press("ControlOrMeta+A");
+    await expect(
+      page.getByRole("button", { name: "选段用于复习" }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "选段用于复习" }).click();
+  };
+  await page.context().setOffline(true);
+  try {
+    await selectAll();
+    const sheet = page.getByRole("dialog", { name: "将笔记选段用于复习" });
+    await sheet.getByLabel("知识点标题").fill(marker);
+    for (const width of [1440, 375, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(sheet).toBeVisible();
+      expect(
+        await sheet.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`selection-${width}.png`),
+      });
+    }
+    const accessibility = await new AxeBuilder({ page })
+      .include('[role="dialog"]')
+      .withTags(wcagTags)
+      .analyze();
+    expect(accessibility.violations).toEqual([]);
+    await sheet
+      .getByRole("button", { name: "创建知识点", exact: true })
+      .click();
+    await expect(sheet).toHaveCount(0);
+    await page.getByRole("radio", { name: "安全预览" }).click();
+    await page.locator(".product-markdown-preview").evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    });
+    await page.getByRole("button", { name: "选段用于复习" }).click();
+    await sheet.getByLabel("创建类型").selectOption("quiz_item");
+    await sheet.getByLabel("所属知识点").selectOption({ label: marker });
+    await sheet
+      .getByLabel("题干")
+      .fill(`${marker}: when is an entry committed?`);
+    await sheet
+      .getByLabel("参考答案")
+      .fill("After a majority acknowledges it.");
+    await sheet.getByRole("button", { name: "创建题目", exact: true }).click();
+    await expect(sheet).toHaveCount(0);
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await page
+    .getByRole("button", { name: "同步当前 Workspace", exact: true })
+    .click();
+  const path = `/api/v1/workspaces/${workspace}/spaces/${space}`;
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`${path}/topics`);
+      return (await response.json()).topics.filter(
+        (row: { title: string }) => row.title === marker,
+      ).length;
+    })
+    .toBe(1);
+  const topics = (await (await page.request.get(`${path}/topics`)).json())
+    .topics;
+  const topic = topics.find((row: { title: string }) => row.title === marker);
+  expect(topic.description).toBe(`来源笔记：${marker}\n\n${excerpt}`);
+  const quizzes = (await (await page.request.get(`${path}/quiz-items`)).json())
+    .quiz_items;
+  expect(
+    quizzes.filter((row: { topic_id: string }) => row.topic_id === topic.id),
+  ).toHaveLength(1);
+  const receipts = (
+    await (
+      await page.request.get(`/api/v1/workspaces/${workspace}/notifications`)
+    ).json()
+  ).notifications;
+  expect(
+    receipts.some((row: { title: string }) => row.title === "同步推送回执"),
+  ).toBe(true);
+  expect(JSON.stringify(receipts)).not.toContain(excerpt);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("link", { name: "前往复习", exact: true }).click();
+  await waitForWorkbenchReady(page, "/app/review");
+  await expect(page.getByText(marker, { exact: true }).first()).toBeVisible();
+});
+
 async function seedDeletionScope(page: Page, referenced = false) {
   const csrf = (await page.context().cookies()).find(
     (cookie) => cookie.name === "logion_csrf",

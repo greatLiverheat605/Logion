@@ -102,6 +102,44 @@ async def test_sync_push_applies_replays_and_partially_rejects_in_order() -> Non
         assert replay.status_code == 200, replay.text
         assert replay.json()["results"][0]["status"] == "duplicate"
         assert "impact" not in replay.json()["results"][0]
+        notifications_url = f"/api/v1/workspaces/{workspace_id}/notifications"
+        history = (await client.get(notifications_url)).json()["notifications"]
+        assert len(history) == 1
+        assert history[0]["title"] == "同步推送回执"
+        assert "未接收 2 项" in history[0]["summary"]
+        assert "Offline research" not in str(history)
+        repeated = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/push",
+            headers={"X-CSRF-Token": csrf},
+            json=envelope,
+        )
+        assert repeated.status_code == 200
+        assert len((await client.get(notifications_url)).json()["notifications"]) == 1
+        pull_envelope = {
+            "message_type": "pull_request",
+            "protocol_version": "sync-v1",
+            "workspace_id": str(workspace_id),
+            "device_id": str(device_id),
+            "sync_epoch": str(sync_epoch),
+            "cursor": 0,
+            "limit": 100,
+        }
+        for _ in range(2):
+            pulled = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/sync/pull", json=pull_envelope
+            )
+            assert pulled.status_code == 200, pulled.text
+            assert len(pulled.json()["changes"]) == 1
+        history = (await client.get(notifications_url)).json()["notifications"]
+        assert len(history) == 2
+        assert history[0]["title"] == "同步拉取回执"
+        assert "设备应用结果" in history[0]["summary"]
+        empty_pull = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/sync/pull",
+            json={**pull_envelope, "cursor": pulled.json()["next_cursor"]},
+        )
+        assert empty_pull.json()["changes"] == []
+        assert len((await client.get(notifications_url)).json()["notifications"]) == 2
 
         goal_entity_id = uuid4()
         goal_operation_id = uuid4()
