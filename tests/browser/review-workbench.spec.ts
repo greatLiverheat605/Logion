@@ -46,10 +46,7 @@ test("Review exposes the due queue, answer sheet and knowledge inspector", async
   await expect(page.getByTestId("review-misconceptions")).toBeAttached();
   await expect(page.getByTestId("review-cycle")).toBeAttached();
 
-  const unlockTrigger = page.getByRole("button", {
-    exact: true,
-    name: "解锁本地资料",
-  });
+  const unlockTrigger = page.locator("#review-unlock");
   if (await unlockTrigger.isVisible()) {
     await unlockTrigger.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });

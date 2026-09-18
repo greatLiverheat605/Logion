@@ -865,16 +865,28 @@ test("Records completes real encrypted object workflows at four breakpoints", as
   await expect(renameSheet).toHaveCount(0);
   await expect(page.getByText(renamedLinkTitle, { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "添加附件" }).click();
-  const attachmentSheet = page.getByRole("dialog", { name: "添加笔记附件" });
   const attachmentName = `${marker}.txt`;
-  await attachmentSheet.getByLabel("附件").setInputFiles({
-    buffer: Buffer.from(`Records real attachment ${marker}`, "utf8"),
-    mimeType: "text/plain",
-    name: attachmentName,
-  });
-  await attachmentSheet.getByRole("button", { name: "加入附件队列" }).click();
-  await expect(attachmentSheet).toHaveCount(0);
+  // This workflow verifies local encrypted staging, not server ingest enablement.
+  await page.context().setOffline(true);
+  try {
+    await page.getByRole("button", { name: "添加附件" }).click();
+    const attachmentSheet = page.getByRole("dialog", { name: "添加笔记附件" });
+    await attachmentSheet.getByLabel("附件").setInputFiles({
+      buffer: Buffer.from(`Records real attachment ${marker}`, "utf8"),
+      mimeType: "text/plain",
+      name: attachmentName,
+    });
+    await expect(
+      attachmentSheet.getByRole("button", { name: "加入附件队列" }),
+    ).toBeDisabled();
+    await attachmentSheet
+      .getByRole("checkbox", { name: "我理解尚未确认上传能力，仅在本地暂存" })
+      .check();
+    await attachmentSheet.getByRole("button", { name: "加入附件队列" }).click();
+    await expect(attachmentSheet).toHaveCount(0);
+  } finally {
+    await page.context().setOffline(false);
+  }
   const attachmentRegion = page.getByTestId("records-attachments");
   await expect(
     attachmentRegion.getByText(attachmentName, { exact: true }),
