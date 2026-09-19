@@ -84,9 +84,16 @@
 
 .commandPane {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 0.65rem;
   padding: 0.8rem;
+}
+
+.commandPane select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .commandForm {

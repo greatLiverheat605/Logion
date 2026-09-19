@@ -382,12 +382,14 @@ function OfflineLearningCenter({
       () =>
         void refresh(db, localVault)
           .then(() =>
-            setStatus(
-              mode === "collaboration"
-                ? "共享审阅资料已在应用内解锁。"
-                : mode === "research"
-                  ? "研究资料已在应用内解锁。"
-                  : "自主学习资料已在应用内解锁。",
+            setStatus((current) =>
+              !current.startsWith("请解锁")
+                ? current
+                : mode === "collaboration"
+                  ? "共享审阅资料已在应用内解锁。"
+                  : mode === "research"
+                    ? "研究资料已在应用内解锁。"
+                    : "自主学习资料已在应用内解锁。",
             ),
           )
           .catch((error: unknown) => {

@@ -264,6 +264,7 @@ test("T05a removes one failed local attachment offline and preserves other data"
   await expect(page.getByRole("textbox", { name: "笔记标题" })).toHaveValue(
     marker,
   );
+  await page.context().setOffline(true);
   for (const name of [failedName, keepName]) {
     await page.getByRole("button", { name: "添加附件", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "添加笔记附件" });
@@ -272,11 +273,18 @@ test("T05a removes one failed local attachment offline and preserves other data"
       mimeType: "text/plain",
       buffer: Buffer.from(`Local attachment ${name}`),
     });
+    await expect(
+      dialog.getByRole("button", { name: "加入附件队列", exact: true }),
+    ).toBeDisabled();
+    await dialog
+      .getByRole("checkbox", { name: "我理解尚未确认上传能力，仅在本地暂存" })
+      .check();
     await dialog
       .getByRole("button", { name: "加入附件队列", exact: true })
       .click();
     await expect(dialog).toHaveCount(0);
   }
+  await page.context().setOffline(false);
   const attachments = (await localSnapshot(page)).attachmentQueue;
   const target = attachments.find((entry) => entry.filename === failedName)!;
   expect(target.target_type).toBe("note");

@@ -266,6 +266,7 @@ for (const width of [1440, 375, 320]) {
         .fill(`Feedback attachment ${Date.now()}`);
       await note.getByRole("button", { name: "创建笔记", exact: true }).click();
       await expect(note).toHaveCount(0);
+      await page.context().setOffline(true);
       await page.getByRole("button", { name: "添加附件", exact: true }).click();
       const sheet = page.getByRole("dialog", { name: "添加笔记附件" });
       await sheet.getByLabel("附件", { exact: true }).setInputFiles({
@@ -273,10 +274,17 @@ for (const width of [1440, 375, 320]) {
         mimeType: "text/plain",
         buffer: Buffer.from("Synthetic feedback test", "utf8"),
       });
+      await expect(
+        sheet.getByRole("button", { name: "加入附件队列", exact: true }),
+      ).toBeDisabled();
+      await sheet
+        .getByRole("checkbox", { name: "我理解尚未确认上传能力，仅在本地暂存" })
+        .check();
       await sheet
         .getByRole("button", { name: "加入附件队列", exact: true })
         .click();
       await expect(sheet).toHaveCount(0);
+      await page.context().setOffline(false);
       await page.goto("/app/sync");
       const password = page.getByLabel("本地解锁口令", { exact: true });
       await expect(password).toBeVisible();

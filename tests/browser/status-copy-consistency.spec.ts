@@ -442,10 +442,7 @@ for (const width of [1440, 320]) {
       await expect(
         page.getByRole("heading", { name: "把“看过”变成真正能回忆" }),
       ).toBeVisible();
-      const unlock = page.getByRole("button", {
-        name: "解锁本地资料",
-        exact: true,
-      });
+      const unlock = page.locator("#review-unlock");
       if (await unlock.isVisible()) {
         await unlock.click();
         const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });

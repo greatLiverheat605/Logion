@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -103,7 +104,7 @@ afterEach(() => {
 type Module = "review" | "exam" | "self-study";
 async function create(module: Module) {
   window.history.replaceState({}, "", `/app/${module}`);
-  render(
+  const view = render(
     module === "exam" ? (
       <ExamCenter />
     ) : module === "review" ? (
@@ -143,6 +144,7 @@ async function create(module: Module) {
   const dialog = screen.getByRole("dialog");
   fireEvent.submit(dialog.querySelector("form")!);
   await waitFor(() => expect(mocks.commit).toHaveBeenCalledTimes(1));
+  return view;
 }
 
 describe("F1/F2/F3 center feedback control flow", () => {
@@ -158,6 +160,7 @@ describe("F1/F2/F3 center feedback control flow", () => {
       );
       expect(toast.error).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(toast.success).toHaveBeenCalledTimes(1);
       expect(document.body.textContent).toContain("已同步");
     },
   );
@@ -177,7 +180,7 @@ describe("F1/F2/F3 center feedback control flow", () => {
           }),
         ),
       );
-      await create(module);
+      const view = await create(module);
       await waitFor(() =>
         expect(toast.error).toHaveBeenCalledWith(
           expect.stringContaining("T03_SYNC_UNAVAILABLE"),
@@ -185,6 +188,12 @@ describe("F1/F2/F3 center feedback control flow", () => {
         ),
       );
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      if (module === "self-study") {
+        await act(async () => {
+          mocks.vaultSession.revision = 2;
+          view.rerender(<SelfStudyCenter />);
+        });
+      }
       const inline = [...document.querySelectorAll('[aria-live="polite"]')]
         .map((node) => node.textContent)
         .join(" ");
@@ -192,11 +201,7 @@ describe("F1/F2/F3 center feedback control flow", () => {
       expect(inline).toContain("request-t03-sync");
       expect(inline).not.toContain("已加密保存");
       expect(inline).not.toContain("Private transport detail");
-      if (module === "exam")
-        expect(toast.success).toHaveBeenCalledWith("创建考试已保存在本地。", {
-          duration: 3000,
-        });
-      else expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
     },
   );
 

@@ -66,6 +66,11 @@ test("Self-study advances a real inbox item into a route, project and deliverabl
   await expect(page.getByTestId("self-study-inbox")).toContainText(inboxTitle);
 
   await page.getByRole("button", { name: "开始分诊", exact: true }).click();
+  await page
+    .getByTestId("self-study-inbox")
+    .getByRole("button", { name: new RegExp(inboxTitle) })
+    .click();
+
   await page.getByRole("button", { name: "建立路线", exact: true }).click();
   const routeSheet = page.getByRole("dialog", { name: "新建学习路线" });
   await routeSheet.getByLabel("路线名称").fill(routeTitle);
