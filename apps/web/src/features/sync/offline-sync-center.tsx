@@ -247,6 +247,10 @@ export function OfflineSyncCenter() {
       throw new Error("invalid bootstrap response");
     }
     const manifest = validation.value;
+    await repository.prepareDeviceRebootstrap(first, {
+      workspace_id: workspaceId,
+      device_id: deviceId,
+    });
     await repository.stageChunk(first, {
       workspace_id: workspaceId,
       device_id: deviceId,

@@ -21,7 +21,7 @@ import {
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
-test("Learning loop converts note selections offline and records real sync history", async ({
+test("Learning loop survives re-login, converts note selections offline and records real sync history", async ({
   page,
   accountState,
 }, testInfo) => {
@@ -48,6 +48,50 @@ test("Learning loop converts note selections offline and records real sync histo
   await body.fill(excerpt);
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(page.getByTestId("records-save-status")).toHaveText("已保存");
+  await page
+    .getByRole("button", { name: "同步当前 Workspace", exact: true })
+    .click();
+  await expect(
+    page.getByText("笔记与资料索引已同步。", { exact: true }).first(),
+  ).toBeVisible();
+  // Losing only the device cookie makes re-login allocate a new device while IndexedDB survives.
+  const deviceBefore = (
+    await (await page.request.get("/api/v1/auth/devices")).json()
+  ).devices.find((device: { current: boolean }) => device.current).id;
+  await page.context().clearCookies({ name: "logion_device" });
+  const relogin = await page.request.post("/api/v1/auth/login", {
+    data: {
+      email: accountState.email,
+      password: accountState.password,
+      device_name: "Browser E2E re-login",
+    },
+    headers: { Origin: new URL(page.url()).origin },
+  });
+  expect(relogin.status()).toBe(200);
+  const deviceAfter = (
+    await (await page.request.get("/api/v1/auth/devices")).json()
+  ).devices.find((device: { current: boolean }) => device.current).id;
+  expect(deviceAfter).not.toBe(deviceBefore);
+  await page.reload();
+  await waitForWorkbenchReady(page, "/app/records");
+  await page.locator("#records-unlock").click();
+  await unlock
+    .getByLabel("本地口令")
+    .fill(
+      process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password,
+    );
+  await unlock.getByRole("button", { name: "解锁本地资料" }).click();
+  await expect(unlock).toHaveCount(0);
+  await page
+    .getByRole("button", { name: new RegExp(`${marker}，更新于`) })
+    .click();
+  await expect(body).toHaveValue(excerpt);
+  await page
+    .getByRole("button", { name: "同步当前 Workspace", exact: true })
+    .click();
+  await expect(
+    page.getByText("笔记与资料索引已同步。", { exact: true }).first(),
+  ).toBeVisible();
   const reviewHref = await page
     .getByRole("link", { name: "前往复习", exact: true })
     .getAttribute("href");

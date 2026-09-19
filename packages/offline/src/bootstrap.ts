@@ -198,6 +198,114 @@ export class BootstrapRepository {
     }
   }
 
+  // Call only with the authenticated current device in the account-scoped database.
+  // Never reassign operations: a previous device's unsent work requires recovery.
+  async prepareDeviceRebootstrap(
+    value: unknown,
+    context: BootstrapContext,
+  ): Promise<void> {
+    validateUuid(context.workspace_id);
+    validateUuid(context.device_id);
+    const validation = validateSyncV1Message(value);
+    if (
+      !validation.ok ||
+      validation.value.message_type !== "bootstrap_response"
+    ) {
+      throw new OfflineStorageError("OFFLINE_BOOTSTRAP_INVALID");
+    }
+    const message = validation.value;
+    if (
+      message.workspace_id !== context.workspace_id ||
+      message.device_id !== context.device_id ||
+      message.chunk_index !== 0
+    ) {
+      throw new OfflineStorageError("OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH");
+    }
+    await this.database.transaction(
+      "rw",
+      [
+        this.database.syncState,
+        this.database.bootstrapManifests,
+        this.database.bootstrapRecords,
+        this.database.entities,
+        this.database.outbox,
+        this.database.conflicts,
+        this.database.attachmentQueue,
+      ],
+      async () => {
+        const state = await this.database.syncState.get(context.workspace_id);
+        if (state === undefined || state.device_id === context.device_id)
+          return;
+        const operations = await this.database.outbox
+          .where("workspace_id")
+          .equals(context.workspace_id)
+          .toArray();
+        const manifests = await this.database.bootstrapManifests
+          .where("workspace_id")
+          .equals(context.workspace_id)
+          .toArray();
+        const entities = await this.database.entities
+          .where("workspace_id")
+          .equals(context.workspace_id)
+          .toArray();
+        if (
+          !this.vault?.unlocked ||
+          state.bootstrap_state !== "ready" ||
+          state.sync_epoch !== message.sync_epoch ||
+          state.isolation_reason_code !== null ||
+          operations.some(
+            (op) =>
+              op.device_id !== context.device_id ||
+              op.outbox_state !== "pending" ||
+              op.attempt_count !== 0 ||
+              op.operation_type !== "create" ||
+              op.base_version !== 0,
+          ) ||
+          manifests.some(
+            (item) =>
+              item.status !== "complete" || item.device_id !== state.device_id,
+          ) ||
+          (await this.database.bootstrapRecords
+            .where("workspace_id")
+            .equals(context.workspace_id)
+            .count()) !== 0 ||
+          (await this.database.conflicts
+            .where("workspace_id")
+            .equals(context.workspace_id)
+            .count()) !== 0 ||
+          (await this.database.attachmentQueue
+            .where("workspace_id")
+            .equals(context.workspace_id)
+            .count()) !== 0 ||
+          entities.some(
+            (entity) =>
+              entity.sync_status !== "clean" &&
+              (entity.sync_status !== "pending" ||
+                !operations.some(
+                  (op) =>
+                    op.entity_type === entity.entity_type &&
+                    op.entity_id === entity.entity_id,
+                )),
+          )
+        ) {
+          throw new OfflineStorageError("OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH");
+        }
+        // Only discard completed transport metadata. Readable data, Vault and queues stay intact.
+        await this.database.bootstrapManifests
+          .where("workspace_id")
+          .equals(context.workspace_id)
+          .delete();
+        await this.database.syncState.put({
+          ...state,
+          device_id: context.device_id,
+          bootstrap_state: "rebootstrap_required",
+          cursor: 0,
+          last_sync_at: null,
+        });
+      },
+    );
+  }
+
   async getProgress(
     context: BootstrapContext,
     snapshotId: string,

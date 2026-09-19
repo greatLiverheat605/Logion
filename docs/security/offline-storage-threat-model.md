@@ -37,3 +37,7 @@
 - 浏览器真实配额、Safari/iOS PWA、崩溃点和多设备故障注入。
 
 上述项目不是可豁免风险；任一数据丢失、静默覆盖或跨租户泄露均阻止 Phase 2 关闭。
+
+## 同账号重新登录后的设备绑定恢复
+
+Web 从认证设备列表取得当前设备，并在账号独立数据库内解锁 Vault 后，可用首块合法 Bootstrap 响应重建旧设备的已完成同步元数据。恢复要求 epoch 未变化、旧状态 ready、没有隔离原因、未完成快照、冲突、附件或旧设备 Outbox；仅保留当前设备尚未尝试发送的 create 操作及其本地 overlay。任何其他待处理数据均失败关闭，不改变 operation_id、device_id、payload_hash 或正文。元数据清理与新设备 rebootstrap_required 状态在一个事务提交，完整快照仍必须通过原有 context/hash 校验才能激活。默认 stageChunk 不放宽跨设备校验，数据库、服务端授权及 sync-v1 wire 均不改变。
