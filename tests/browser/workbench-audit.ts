@@ -45,6 +45,11 @@ export async function waitForWorkbenchReady(page: Page, route: string) {
 export async function auditHorizontalOverflow(
   page: Page,
 ): Promise<HorizontalOverflowAudit> {
+  // Success feedback has separate contrast coverage; don't scan its fade-out.
+  await page.mouse.move(0, 0);
+  await expect(
+    page.locator('[data-sonner-toast][data-type="success"]'),
+  ).toHaveCount(0);
   await page.evaluate(async () => {
     await Promise.allSettled(
       document
