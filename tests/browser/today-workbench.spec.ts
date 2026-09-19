@@ -254,6 +254,7 @@ test("Today completes a real execution loop and four-breakpoint audit", async ({
   await page.getByRole("button", { name: "结束会话" }).click();
   const finishSheet = page.getByRole("dialog", { name: "结束专注会话" });
   await finishSheet.getByLabel("实际分钟").fill("1");
+  await finishSheet.getByLabel("结束方式").selectOption("completed");
   await finishSheet
     .getByLabel("反思与下一步（可选）")
     .fill("会话完成，继续提交验收证据。");
