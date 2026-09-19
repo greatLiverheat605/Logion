@@ -740,6 +740,10 @@ export function useTodayController(): TodayControllerResult {
       throw new Error("invalid bootstrap response");
     }
     const manifest = validation.value;
+    await repository.prepareDeviceRebootstrap(first, {
+      device_id: deviceId,
+      workspace_id: workspaceId,
+    });
     await repository.stageChunk(first, {
       device_id: deviceId,
       workspace_id: workspaceId,

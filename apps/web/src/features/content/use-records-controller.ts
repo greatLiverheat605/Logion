@@ -578,6 +578,10 @@ export function useRecordsController(): RecordsControllerResult {
         throw new Error("invalid bootstrap response");
       }
       const manifest = validation.value;
+      await repository.prepareDeviceRebootstrap(first, {
+        device_id: selectedDevice,
+        workspace_id: selectedWorkspace,
+      });
       await repository.stageChunk(first, {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,
@@ -707,6 +711,7 @@ export function useRecordsController(): RecordsControllerResult {
     }
     let synchronized = false;
     try {
+      await bootstrap(db, localVault, selectedWorkspace, selectedDevice);
       await new SyncClient(
         db,
         transport(selectedWorkspace),
@@ -726,7 +731,7 @@ export function useRecordsController(): RecordsControllerResult {
       await refresh(db, localVault, selectedWorkspace).catch(() => undefined);
     }
     return synchronized;
-  }, [database, refresh, vault]);
+  }, [bootstrap, database, refresh, vault]);
 
   async function synchronize(): Promise<boolean> {
     setCommandPhase("pending");
@@ -1318,8 +1323,15 @@ export function useRecordsController(): RecordsControllerResult {
 
   return {
     capabilities: {
-      canCreate: canWrite && unlocked && Boolean(spaceId && deviceId),
-      canSync: unlocked && Boolean(workspaceId && deviceId),
+      canCreate:
+        canWrite &&
+        unlocked &&
+        commandPhase !== "pending" &&
+        Boolean(spaceId && deviceId),
+      canSync:
+        unlocked &&
+        commandPhase !== "pending" &&
+        Boolean(workspaceId && deviceId),
       canUnlock: Boolean(workspaceId && deviceId),
       canWrite,
     },

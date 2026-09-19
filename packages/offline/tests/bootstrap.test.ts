@@ -178,6 +178,193 @@ function mutation(): LocalMutationInput {
 }
 
 describe("IndexedDB v2 bootstrap staging and atomic activation", () => {
+  it("rebootstraps a relogged-in device without rewriting current-device queued work", async () => {
+    const database = await open();
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    const repository = new BootstrapRepository(database, {}, vault);
+    const [original] = await messages([
+      [await record(ids.entityA, { title: "original" })],
+    ]);
+    await repository.stageChunk(original, context);
+    await new OfflineRepository(database).commitMutation({
+      ...mutation(),
+      device_id: ids.deviceB,
+      entity_id: ids.entityB,
+    });
+    const queued = await database.outbox.toArray();
+    const before = await database.entities.toArray();
+    const next = { ...context, device_id: ids.deviceB };
+    const [message] = await messages(
+      [[await record(ids.entityA, { title: "server" }, 2)]],
+      {
+        device_id: ids.deviceB,
+        snapshot_id: "01900000-0000-7000-8000-000000000029",
+      },
+    );
+    await expect(repository.stageChunk(message, next)).rejects.toMatchObject({
+      code: "OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH",
+    });
+    await repository.prepareDeviceRebootstrap(message, next);
+    expect(await database.entities.toArray()).toEqual(before);
+    expect(await database.outbox.toArray()).toEqual(queued);
+    expect(await database.syncState.get(ids.workspace)).toMatchObject({
+      device_id: ids.deviceB,
+      bootstrap_state: "rebootstrap_required",
+      cursor: 0,
+    });
+    await repository.stageChunk(message, next);
+    expect(
+      await database.entities.get([ids.workspace, "space", ids.entityA]),
+    ).toMatchObject({ payload: { title: "server" }, sync_status: "clean" });
+    expect(
+      await database.entities.get([ids.workspace, "space", ids.entityB]),
+    ).toMatchObject({
+      payload: { markdown: "pending local overlay" },
+      sync_status: "pending",
+    });
+    expect(await database.outbox.toArray()).toEqual(queued);
+    expect(await database.syncState.get(ids.workspace)).toMatchObject({
+      device_id: ids.deviceB,
+      bootstrap_state: "ready",
+    });
+    expect(await database.bootstrapManifests.count()).toBe(1);
+  });
+
+  it.each([
+    "attachment",
+    "conflict",
+    "old queue",
+    "attempted queue",
+    "dirty without operation",
+    "staging",
+    "epoch",
+    "locked",
+    "cross workspace",
+    "cross device",
+  ])(
+    "preserves all local state when device recovery encounters %s",
+    async (reason) => {
+      const database = await open();
+      const vault = new OfflineVault(database);
+      await vault.initialize(ids.user, "correct horse battery staple");
+      const repository = new BootstrapRepository(database, {}, vault);
+      await database.entities.put(oldEntity());
+      await putState(database);
+      if (reason === "old queue" || reason === "attempted queue") {
+        await new OfflineRepository(database).commitMutation({
+          ...mutation(),
+          entity_id: ids.entityB,
+          device_id: reason === "old queue" ? ids.device : ids.deviceB,
+        });
+        if (reason === "attempted queue")
+          await database.outbox.update(ids.operation, { attempt_count: 1 });
+      }
+      if (reason === "dirty without operation")
+        await database.entities.put(oldEntity("pending"));
+      if (reason === "staging") {
+        const chunks = await messages([
+          [await record(ids.entityA, { title: "staged" })],
+          [],
+        ]);
+        await repository.stageChunk(chunks[0], context);
+      }
+      if (reason === "attachment")
+        await database.attachmentQueue.put({
+          attachment_id: ids.entityB,
+          workspace_id: ids.workspace,
+          space_id: ids.entityA,
+          device_id: ids.device,
+          target_type: "note",
+          target_id: ids.entityA,
+          filename: "pending.txt",
+          media_type: "text/plain",
+          byte_size: 1,
+          sha256: "a".repeat(64),
+          state: "pending_upload",
+          blob: new Blob(["x"]),
+          queued_at: "2026-07-21T00:00:00Z",
+          last_error_code: null,
+          server_version: null,
+        });
+      if (reason === "conflict")
+        await database.conflicts.put({
+          conflict_id: ids.entityB,
+          workspace_id: ids.workspace,
+          entity_type: "space",
+          entity_id: ids.entityA,
+          status: "open",
+          conflict_kind: "content",
+          base_version: 1,
+          local_payload: {},
+          local_payload_hash: `sha256:${"a".repeat(64)}`,
+          remote_version: 2,
+          remote_payload: {},
+          remote_payload_hash: `sha256:${"b".repeat(64)}`,
+          resolution_options: ["keep_local"],
+          source_operation_id: ids.operation,
+          source_device_id: ids.device,
+          resolution_operation_id: null,
+          requested_resolution: null,
+          server_recorded: true,
+          created_at: "2026-07-21T00:00:00Z",
+          resolved_at: null,
+        });
+      if (reason === "locked") vault.lock();
+      const [message] = await messages([[]], {
+        device_id: ids.deviceB,
+        sync_epoch: reason === "epoch" ? ids.epochB : ids.epochA,
+      });
+      const next = {
+        workspace_id:
+          reason === "cross workspace" ? ids.workspaceB : ids.workspace,
+        device_id: reason === "cross device" ? ids.device : ids.deviceB,
+      };
+      const tables = [
+        database.syncState,
+        database.entities,
+        database.outbox,
+        database.bootstrapManifests,
+        database.bootstrapRecords,
+        database.vaultRecords,
+        database.attachmentQueue,
+        database.conflicts,
+      ];
+      const before = await Promise.all(tables.map((table) => table.toArray()));
+      await expect(
+        repository.prepareDeviceRebootstrap(message, next),
+      ).rejects.toMatchObject({ code: "OFFLINE_BOOTSTRAP_CONTEXT_MISMATCH" });
+      expect(await Promise.all(tables.map((table) => table.toArray()))).toEqual(
+        before,
+      );
+    },
+  );
+
+  it("rolls back device metadata if the rebootstrap state write fails", async () => {
+    const database = await open();
+    const vault = new OfflineVault(database);
+    await vault.initialize(ids.user, "correct horse battery staple");
+    const repository = new BootstrapRepository(database, {}, vault);
+    const [original] = await messages([[]]);
+    await repository.stageChunk(original, context);
+    const state = await database.syncState.toArray();
+    const manifests = await database.bootstrapManifests.toArray();
+    const fail = () => {
+      throw new Error("quota failure");
+    };
+    database.syncState.hook("updating", fail);
+    const [message] = await messages([[]], { device_id: ids.deviceB });
+    await expect(
+      repository.prepareDeviceRebootstrap(message, {
+        ...context,
+        device_id: ids.deviceB,
+      }),
+    ).rejects.toThrow("quota failure");
+    database.syncState.hook("updating").unsubscribe(fail);
+    expect(await database.syncState.toArray()).toEqual(state);
+    expect(await database.bootstrapManifests.toArray()).toEqual(manifests);
+  });
+
   it("encrypts protected bootstrap payloads before IndexedDB staging", async () => {
     const database = await open();
     const vault = new OfflineVault(database);

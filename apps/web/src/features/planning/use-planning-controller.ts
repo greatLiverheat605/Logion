@@ -483,6 +483,10 @@ export function usePlanningController(): PlanningControllerResult {
         manifest.sync_epoch !== current.sync_epoch
       )
         throw new Error("同步世代已变更，请在同步中心执行恢复。");
+      await repository.prepareDeviceRebootstrap(first, {
+        device_id: selectedDevice,
+        workspace_id: selectedWorkspace,
+      });
       await repository.stageChunk(first, {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,

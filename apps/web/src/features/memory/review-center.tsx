@@ -307,6 +307,10 @@ export function ReviewCenter() {
     ) {
       throw new Error("invalid bootstrap response");
     }
+    await repository.prepareDeviceRebootstrap(first, {
+      workspace_id: workspaceId,
+      device_id: deviceId,
+    });
     await repository.stageChunk(first, {
       workspace_id: workspaceId,
       device_id: deviceId,
