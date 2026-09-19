@@ -34,6 +34,7 @@ async function csrfHeaders(page: Page) {
 }
 
 test("Search completes real retrieval and utility workflows at four breakpoints", async ({
+  accountState,
   page,
 }) => {
   test.setTimeout(300_000);
@@ -51,7 +52,14 @@ test("Search completes real retrieval and utility workflows at four breakpoints"
   );
 
   const glmManifest = loadGlmTargetManifest();
-  await page.goto("/app/search", { waitUntil: "domcontentloaded" });
+  // Saving preferences and managing feeds require a recent login.
+  await page.context().clearCookies();
+  await page.goto("/auth/login?next=%2Fapp%2Fsearch");
+  await page.getByLabel("邮箱", { exact: true }).fill(accountState.email);
+  await page.getByLabel("密码", { exact: true }).fill(accountState.password);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/search$/);
+  accountState.authenticatedAt = Date.now();
   await waitForWorkbenchReady(page, "/app/search");
   await expect(page.getByTestId("search-command")).toBeVisible();
 

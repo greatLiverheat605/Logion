@@ -116,7 +116,9 @@ test("Templates completes real version, install, import and share workflows", as
       .getByRole("button", { name: "确认安装" })
       .click();
     await expect(officialInstallSheet).toHaveCount(0);
-    await expect(page.getByText(/模板已安装为独立计划/)).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: /模板已安装为独立计划/ }),
+    ).toBeVisible();
   }
 
   const workspaceResponse = await page.request.get("/api/v1/workspaces");
@@ -225,7 +227,9 @@ test("Templates completes real version, install, import and share workflows", as
   await expect(installSheet.getByText("目标 Space")).toBeVisible();
   await installSheet.getByRole("button", { name: "确认安装" }).click();
   await expect(installSheet).toHaveCount(0);
-  await expect(page.getByText(/模板已安装为独立计划/)).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: /模板已安装为独立计划/ }),
+  ).toBeVisible();
 
   const goalsAfterInstall = await page.request.get(
     `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/goals`,

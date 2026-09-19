@@ -1451,9 +1451,7 @@ export function useTodayController(): TodayControllerResult {
     capabilities: {
       canSync: unlocked && Boolean(deviceId),
       canUnlock:
-        session.status === "authenticated" &&
-        contextPhase === "ready" &&
-        Boolean(workspaceId && deviceId),
+        session.status === "authenticated" && Boolean(workspaceId && deviceId),
       canWrite,
     },
     commands: {

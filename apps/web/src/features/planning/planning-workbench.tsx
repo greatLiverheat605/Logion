@@ -97,6 +97,7 @@ function GoalMaster({
               <button
                 aria-current={active ? "true" : undefined}
                 className={styles.goalRow}
+                data-goal-id={goal.id}
                 data-selected={active}
                 key={goal.id}
                 onClick={() => controller.commands.selectGoal(goal.id)}

@@ -20,6 +20,44 @@ import {
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
+test("Today can unlock while the Space list is still loading", async ({
+  accountState,
+  page,
+}) => {
+  let releaseSpaces!: () => void;
+  let spaceRequested!: () => void;
+  const held = new Promise<void>((resolve) => {
+    releaseSpaces = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    spaceRequested = resolve;
+  });
+  await page.route("**/api/v1/workspaces/*/spaces", async (route) => {
+    spaceRequested();
+    await held;
+    await route.continue();
+  });
+  try {
+    await page.goto("/app/today");
+    await requested;
+    await page
+      .getByLabel("本地资料口令")
+      .fill(
+        process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() ||
+          accountState.password,
+      );
+    const unlock = page.getByRole("button", { name: "解锁", exact: true });
+    await expect(unlock).toBeEnabled();
+    await unlock.click();
+    await expect(
+      page.getByRole("button", { name: "本地资料已解锁" }),
+    ).toBeVisible();
+  } finally {
+    releaseSpaces();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
 test("Today completes a real execution loop and four-breakpoint audit", async ({
   accountState,
   page,
@@ -247,8 +285,26 @@ test("Today completes a real execution loop and four-breakpoint audit", async ({
 
   const closeButton = page.getByRole("button", { name: "关闭已验收任务" });
   await expect(closeButton).toBeVisible();
+  const closedTask = page.waitForResponse(async (response) => {
+    if (!response.url().endsWith("/sync/pull") || !response.ok()) return false;
+    const body = (await response.json()) as {
+      changes?: Array<{
+        entity_type: string;
+        payload: { title?: string; status?: string };
+      }>;
+    };
+    return Boolean(
+      body.changes?.some(
+        (change) =>
+          change.entity_type === "task" &&
+          change.payload.title === taskTitle &&
+          change.payload.status === "done",
+      ),
+    );
+  });
   await closeButton.click();
-  await expect(page.getByText("已关闭", { exact: true }).first()).toBeVisible();
+  await closedTask;
+  await expect(page.getByTestId("today-queue")).not.toContainText(taskTitle);
   expect(
     runtimeProblems,
     "Today must not emit browser warnings or errors",
@@ -320,11 +376,22 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
   await page.getByRole("button", { name: "安装独立副本", exact: true }).click();
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("安装起始日期").fill("2026-09-13");
+  const installationResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/template-installations"),
+  );
   await dialog.getByRole("button", { name: "确认安装" }).click();
+  const installation = await installationResponse;
+  expect(installation.ok(), await installation.text()).toBe(true);
+  const installedGoalId = (
+    (await installation.json()) as { installed_object_ids: { goal_id: string } }
+  ).installed_object_ids.goal_id;
+  const installedGoal = page.locator(`[data-goal-id="${installedGoalId}"]`);
   await expect(dialog).toHaveCount(0);
   await expect(goalCount).toHaveText(String(initialGoalCount + 1));
   await page.locator('a[href="/app/planning"]').first().click();
-  await expect(page.getByTestId("planning-goals")).toContainText("研究项目");
+  await expect(installedGoal).toContainText("研究项目");
   // Simulate a pre-fix cache missing objects after its cursor has advanced.
   await page.evaluate(async () => {
     const info = (await indexedDB.databases()).find((item) =>
@@ -369,9 +436,7 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
   });
   await page.locator('a[href="/app/today"]').first().click();
   await page.locator('a[href="/app/planning"]').first().click();
-  await expect(page.getByTestId("planning-goals")).not.toContainText(
-    "研究项目",
-  );
+  await expect(installedGoal).toHaveCount(0);
   await page
     .getByRole("button", { name: "补全服务器资料", exact: true })
     .click();
@@ -380,22 +445,17 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
     .getByRole("button", { name: "确认补全" })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByTestId("planning-goals")).toContainText("研究项目");
+  await expect(installedGoal).toContainText("研究项目");
 
   await page.screenshot({
     path: testInfo.outputPath("p1-template-planning.png"),
   });
-  await page
-    .getByTestId("planning-goals")
-    .getByRole("button", { name: /研究项目/ })
-    .click();
+  await installedGoal.click();
   await page.getByRole("button", { name: "删除学习目标", exact: true }).click();
   dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "确认删除" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByTestId("planning-goals")).not.toContainText(
-    "研究项目",
-  );
+  await expect(installedGoal).toHaveCount(0);
   await page.locator('a[href="/app/templates"]').first().click();
   await expect(goalCount).toHaveText(String(initialGoalCount));
   await page.locator('a[href="/app/planning"]').first().click();

@@ -22,6 +22,12 @@
   background: var(--bg-surface);
 }
 
+.masterPane select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .mainPane {
   background: var(--bg-surface);
 }
@@ -87,6 +93,7 @@
 
 .filterBlock {
   display: grid;
+  min-width: 0;
   gap: 0.4rem;
   padding: 0 0.75rem 0.75rem;
   margin: 0;
@@ -126,6 +133,12 @@
   font-size: 0.7rem;
   font-weight: 650;
   cursor: pointer;
+}
+
+.filterButton,
+.filterButtonActive {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .filterButton:hover,
