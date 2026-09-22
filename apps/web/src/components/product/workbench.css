@@ -68,6 +68,7 @@
 
 .workbench-context-bar {
   display: flex;
+  flex-wrap: wrap;
   min-height: 2.2rem;
   align-items: center;
   gap: 1rem;
@@ -75,22 +76,27 @@
   border-bottom: 1px solid var(--border);
   margin: 0;
   background: var(--bg-muted);
-  overflow-x: auto;
 }
 
 .workbench-context-item {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: baseline;
   gap: 0.35rem;
   white-space: nowrap;
 }
 
 .workbench-context-item dt {
+  flex-shrink: 0;
   color: var(--text-tertiary);
   font-size: 0.68rem;
 }
 
 .workbench-context-item dd {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.72rem;
@@ -275,8 +281,6 @@
 
   .workbench-context-bar {
     gap: 0.35rem 1rem;
-    overflow-x: visible;
-    flex-wrap: wrap;
   }
 }
 

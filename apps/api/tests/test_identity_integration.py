@@ -1,14 +1,263 @@
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import get_settings
 from logion_api.db import session_factory
-from logion_api.identity.models import AuditEvent, RefreshToken
+from logion_api.identity.models import AuditEvent, AuthSession, Device, RefreshToken, User
 from logion_api.identity.security import IdentitySecurity
 from logion_api.main import app
 from sqlalchemy import select
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("device_state", "client_ip"),
+    [
+        ("missing", "192.0.2.241"),
+        ("malformed", "192.0.2.242"),
+        ("unknown", "192.0.2.243"),
+        ("revoked", "192.0.2.244"),
+        ("cross_user", "192.0.2.245"),
+    ],
+)
+async def test_login_never_reuses_untrusted_device_identity(
+    device_state: str, client_ip: str
+) -> None:
+    # Isolate test peers while preserving the real per-IP registration limit.
+    headers = {"Origin": "http://test"}
+    payload = {
+        "email": f"device-boundary-{uuid4()}@example.com",
+        "password": "a-strong-password-123",
+        "device_name": "Original browser",
+    }
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers=headers,
+    ) as original:
+        registered = await original.post("/api/v1/auth/register", json=payload)
+        assert registered.status_code == 201, registered.text
+        user_id = UUID(registered.json()["user"]["id"])
+        original_id = original.cookies["logion_device"]
+        supplied_id = original_id
+        if device_state == "revoked":
+            revoked = await original.delete(
+                f"/api/v1/auth/devices/{original_id}",
+                headers={"X-CSRF-Token": original.cookies["logion_csrf"]},
+            )
+            assert revoked.status_code == 200, revoked.text
+        elif device_state == "cross_user":
+            other = await original.post(
+                "/api/v1/auth/register",
+                json={**payload, "email": f"other-device-{uuid4()}@example.com"},
+            )
+            assert other.status_code == 201, other.text
+            supplied_id = original.cookies["logion_device"]
+        elif device_state == "malformed":
+            supplied_id = "invalid-device-id"
+        elif device_state == "unknown":
+            supplied_id = str(uuid4())
+
+    async with session_factory() as db:
+        old = await db.get(Device, UUID(original_id))
+        assert old is not None
+        revoked_at = old.revoked_at
+        borrowed = await db.get(Device, UUID(supplied_id)) if device_state == "cross_user" else None
+        borrowed_snapshot = (
+            (borrowed.user_id, borrowed.name, borrowed.last_seen_at) if borrowed else None
+        )
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers=headers,
+    ) as login:
+        if device_state != "missing":
+            login.cookies.set("logion_device", supplied_id, domain="test.local", path="/")
+        assert (await login.get("/api/v1/auth/session")).status_code == 401
+        signed_in = await login.post(
+            "/api/v1/auth/login", json={**payload, "device_name": "New browser"}
+        )
+        assert signed_in.status_code == 200, signed_in.text
+        assert UUID(signed_in.json()["user"]["id"]) == user_id
+        new_id = UUID(login.cookies["logion_device"])
+        assert str(new_id) not in (original_id, supplied_id)
+        devices = await login.get("/api/v1/auth/devices")
+        assert devices.status_code == 200
+        current = [device for device in devices.json()["devices"] if device["current"]]
+        assert len(current) == 1
+        assert UUID(current[0]["id"]) == new_id
+        security = IdentitySecurity(get_settings().secret_key.get_secret_value())
+        async with session_factory() as db:
+            owned = list(await db.scalars(select(Device).where(Device.user_id == user_id)))
+            assert len(owned) == 2
+            new = await db.get(Device, new_id)
+            assert new is not None and new.user_id == user_id and new.revoked_at is None
+            old = await db.get(Device, UUID(original_id))
+            assert old is not None and old.revoked_at == revoked_at
+            session = await db.scalar(
+                select(AuthSession).where(
+                    AuthSession.access_token_hash
+                    == security.token_hash(login.cookies["logion_access"])
+                )
+            )
+            assert (
+                session is not None and session.device_id == new_id and session.user_id == user_id
+            )
+            if borrowed_snapshot:
+                borrowed = await db.get(Device, UUID(supplied_id))
+                assert borrowed is not None
+                assert (borrowed.user_id, borrowed.name, borrowed.last_seen_at) == borrowed_snapshot
+                assert (
+                    len(
+                        list(
+                            await db.scalars(
+                                select(Device).where(Device.user_id == borrowed.user_id)
+                            )
+                        )
+                    )
+                    == 1
+                )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("terminal", "client_ip"),
+    [
+        ("session_revoked", "192.0.2.246"),
+        ("device_revoked", "192.0.2.247"),
+        ("refresh_expired", "192.0.2.248"),
+        ("suspended", "192.0.2.249"),
+    ],
+)
+async def test_invalid_access_never_bypasses_terminal_refresh_rejection(
+    terminal: str, client_ip: str
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers={"Origin": "http://test"},
+    ) as client:
+        registered = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": f"terminal-{uuid4()}@example.com",
+                "password": "a-strong-password-123",
+                "device_name": "Terminal browser",
+            },
+        )
+        assert registered.status_code == 201, registered.text
+        security = IdentitySecurity(get_settings().secret_key.get_secret_value())
+        async with session_factory() as db:
+            session = await db.scalar(
+                select(AuthSession).where(
+                    AuthSession.access_token_hash
+                    == security.token_hash(client.cookies["logion_access"])
+                )
+            )
+            assert session is not None
+            if terminal == "session_revoked":
+                session.revoked_at = datetime.now(UTC)
+            elif terminal == "device_revoked":
+                device = await db.get(Device, session.device_id)
+                assert device is not None
+                device.revoked_at = datetime.now(UTC)
+            elif terminal == "refresh_expired":
+                session.refresh_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            else:
+                user = await db.get(User, session.user_id)
+                assert user is not None
+                user.status = "suspended"
+            session.access_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            await db.commit()
+        denied = await client.get("/api/v1/auth/session")
+        assert denied.status_code == 401
+        assert denied.headers.get_list("set-cookie") == []
+        csrf = client.cookies["logion_csrf"]
+        refreshed = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": csrf})
+        assert refreshed.status_code == 401
+        assert refreshed.json()["code"] == "AUTH_INVALID_SESSION"
+        assert len(refreshed.headers.get_list("set-cookie")) == 4
+        assert not any(
+            name in client.cookies
+            for name in ("logion_access", "logion_refresh", "logion_csrf", "logion_device")
+        )
+        assert (await client.get("/api/v1/auth/session")).status_code == 401
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "client_ip"),
+    [
+        ("missing", "192.0.2.250"),
+        ("expired", "192.0.2.251"),
+        ("rotated", "192.0.2.252"),
+    ],
+)
+async def test_access_failure_can_refresh_without_replacing_device(
+    failure: str, client_ip: str
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers={"Origin": "http://test"},
+    ) as client:
+        payload = {
+            "email": f"continuity-{uuid4()}@example.com",
+            "password": "a-strong-password-123",
+            "device_name": "Continuity browser",
+        }
+        registered = await client.post("/api/v1/auth/register", json=payload)
+        assert registered.status_code == 201, registered.text
+        device_id = client.cookies["logion_device"]
+        csrf = client.cookies["logion_csrf"]
+        old_access = client.cookies["logion_access"]
+        security = IdentitySecurity(get_settings().secret_key.get_secret_value())
+        async with session_factory() as db:
+            session = await db.scalar(
+                select(AuthSession).where(
+                    AuthSession.access_token_hash == security.token_hash(old_access)
+                )
+            )
+            assert session is not None
+            session_id = session.id
+            created_at = session.created_at
+            if failure == "expired":
+                session.access_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+                await db.commit()
+        if failure == "missing":
+            client.cookies.delete("logion_access")
+        elif failure == "rotated":
+            rotated = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": csrf})
+            assert rotated.status_code == 200, rotated.text
+            # Simulate a request sent before rotation, processed after it. Keep the
+            # new browser jar and verify the stale response does not clear it.
+        for path in ("/api/v1/auth/session", "/api/v1/auth/devices"):
+            headers = {"Cookie": f"logion_access={old_access}"} if failure == "rotated" else {}
+            failed = await client.get(path, headers=headers)
+            assert failed.status_code == 401
+            assert failed.headers["cache-control"] == "no-store"
+            assert failed.headers.get_list("set-cookie") == []
+        if failure == "rotated":
+            assert (await client.get("/api/v1/auth/session")).status_code == 200
+        recovered = await client.post("/api/v1/auth/refresh", headers={"X-CSRF-Token": csrf})
+        assert recovered.status_code == 200, recovered.text
+        assert client.cookies["logion_device"] == device_id
+        assert (await client.get("/api/v1/auth/session")).status_code == 200
+        async with session_factory() as db:
+            session = await db.get(AuthSession, session_id)
+            assert session is not None
+            assert session.created_at == created_at
+        for _ in range(3):
+            signed_in = await client.post("/api/v1/auth/login", json=payload)
+            assert signed_in.status_code == 200, signed_in.text
+            assert client.cookies["logion_device"] == device_id
+        devices = await client.get("/api/v1/auth/devices")
+        assert len(devices.json()["devices"]) == 1
 
 
 @pytest.mark.integration
@@ -17,7 +266,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
     email = f"phase1-{uuid4()}@example.com"
     headers = {"Origin": "http://test"}
     async with AsyncClient(
-        transport=ASGITransport(app=app),
+        transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
         base_url="http://test",
         headers=headers,
     ) as client:
@@ -60,7 +309,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert client.cookies["logion_refresh"] != old_refresh
 
         invalid_csrf_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": "invalid-csrf"},
         )
@@ -84,7 +333,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert invalid_csrf.json()["code"] == "AUTH_CSRF_INVALID"
 
         recovery_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
         )
@@ -108,7 +357,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert recovery_client.cookies["logion_refresh"] != old_refresh
 
         second_recovery_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
         )
@@ -153,7 +402,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
             await db.commit()
 
         reuse_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
         )
@@ -184,7 +433,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert revoked_me.status_code == 401
 
     async with AsyncClient(
-        transport=ASGITransport(app),
+        transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
         base_url="http://test",
         headers=headers,
     ) as login_client:

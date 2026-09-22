@@ -301,6 +301,7 @@ describe("IntegrationHub", () => {
           artifact_sha256: "sha256-value",
           expires_at: "2026-08-02T00:00:00Z",
           id: "export-ready",
+          workspace_id: "workspace-1",
           status: "succeeded",
           version: 3,
         },
@@ -333,10 +334,11 @@ describe("IntegrationHub", () => {
       await screen.findByText("需要重新登录后才能创建数据导出。"),
     ).toBeTruthy();
 
-    const download = screen.getByRole("link", { name: "下载" });
-    expect(download.getAttribute("href")).toBe(
-      "/api/v1/workspaces/workspace-1/data-exports/export-ready/download",
-    );
+    const download = screen.getByRole<HTMLButtonElement>("button", {
+      name: "下载",
+    });
+    expect(download.disabled).toBe(true);
+    expect(screen.getByText("已过期，请重新创建导出。")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     await waitFor(() => expect(service.cancelExport).toHaveBeenCalled());
     expect(service.cancelExport).toHaveBeenCalledWith(

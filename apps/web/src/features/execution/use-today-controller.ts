@@ -32,6 +32,13 @@ import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import {
+  incompleteSyncMessage,
+  matchesVaultSession,
+  readWorkspaceSyncFacts,
+  workspaceSyncStatus,
+  type WorkspaceSyncFacts,
+} from "@/features/sync/sync-diagnostics";
+import {
   buildPersonaDashboard,
   type PersonaDashboardModel,
   PersonaDashboardRecord,
@@ -528,6 +535,10 @@ export function useTodayController(): TodayControllerResult {
     TodayLocalView<TodayContentReferencePayload>[]
   >([]);
   const [conflictCount, setConflictCount] = useState(0);
+  const [syncFacts, setSyncFacts] = useState<WorkspaceSyncFacts | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const syncContext = useRef(0);
+  const unlockRequest = useRef(0);
   const [dashboardRecords, setDashboardRecords] = useState<
     PersonaDashboardRecord[]
   >([]);
@@ -535,9 +546,12 @@ export function useTodayController(): TodayControllerResult {
   const spacesRequestRef = useRef<AbortController | null>(null);
   const dataRequestIdRef = useRef(0);
   const currentWorkspaceIdRef = useRef(workspaceId);
+  const currentDeviceIdRef = useRef(deviceId);
 
   const resetWorkspaceData = useCallback(() => {
     dataRequestIdRef.current += 1;
+    setSyncFacts(null);
+    setSyncing(false);
     setSpaces([]);
     setMembers([]);
     setMembersAvailable(false);
@@ -557,8 +571,11 @@ export function useTodayController(): TodayControllerResult {
 
   const selectWorkspace = useCallback(
     (nextWorkspaceId: string) => {
+      unlockRequest.current += 1;
+      contextRequestRef.current?.abort();
       if (nextWorkspaceId === currentWorkspaceIdRef.current) return;
       spacesRequestRef.current?.abort();
+      syncContext.current += 1;
       currentWorkspaceIdRef.current = nextWorkspaceId;
       resetWorkspaceData();
       setContextPhase("loading");
@@ -600,9 +617,20 @@ export function useTodayController(): TodayControllerResult {
         spacesRequestRef.current?.abort();
         resetWorkspaceData();
       }
+      const nextDeviceId = currentDevice?.id ?? "";
+      if (
+        nextWorkspaceId !== currentWorkspaceIdRef.current ||
+        nextDeviceId !== currentDeviceIdRef.current
+      ) {
+        syncContext.current += 1;
+        unlockRequest.current += 1;
+        setSyncing(false);
+        setSyncFacts(null);
+      }
       currentWorkspaceIdRef.current = nextWorkspaceId;
+      currentDeviceIdRef.current = nextDeviceId;
       setWorkspaceId(nextWorkspaceId);
-      setDeviceId(currentDevice?.id ?? "");
+      setDeviceId(nextDeviceId);
       setStatus(currentDevice ? "请解锁本地资料。" : "未找到当前设备。");
       setContextPhase("ready");
     } catch (error) {
@@ -713,8 +741,10 @@ export function useTodayController(): TodayControllerResult {
   async function bootstrap(
     db: LogionOfflineDatabase,
     localVault: OfflineVault,
+    isCurrent: () => boolean,
   ): Promise<void> {
     const current = await db.syncState.get(workspaceId);
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     if (canResumeSync(current, deviceId)) return;
     const repository = new BootstrapRepository(db, {}, localVault);
     const first = await browserApiClient.request<unknown>(
@@ -732,6 +762,7 @@ export function useTodayController(): TodayControllerResult {
         method: "POST",
       },
     );
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     const validation = validateSyncV1Message(first);
     if (
       !validation.ok ||
@@ -744,11 +775,13 @@ export function useTodayController(): TodayControllerResult {
       device_id: deviceId,
       workspace_id: workspaceId,
     });
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     await repository.stageChunk(first, {
       device_id: deviceId,
       workspace_id: workspaceId,
     });
     for (let index = 1; index < manifest.chunk_count; index += 1) {
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       const chunk = await browserApiClient.request<unknown>(
         `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
         {
@@ -764,11 +797,13 @@ export function useTodayController(): TodayControllerResult {
           method: "POST",
         },
       );
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       await repository.stageChunk(chunk, {
         device_id: deviceId,
         workspace_id: workspaceId,
       });
     }
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     markChanged();
   }
 
@@ -777,141 +812,172 @@ export function useTodayController(): TodayControllerResult {
     localVault = vault.current,
   ): Promise<void> {
     const targetWorkspaceId = workspaceId;
-    if (db === null || localVault === null || !targetWorkspaceId) return;
+    if (
+      db === null ||
+      localVault === null ||
+      !targetWorkspaceId ||
+      db !== database.current ||
+      localVault !== vault.current ||
+      targetWorkspaceId !== currentWorkspaceIdRef.current
+    )
+      return;
     const requestId = ++dataRequestIdRef.current;
     setDashboardPhase("loading");
-    const entityRows = await Promise.all(
-      [
-        "task",
-        "study_session",
-        "learning_goal",
-        "evidence",
-        "verification",
-        "note",
-        "resource",
-        ...DASHBOARD_ENTITY_TYPES,
-      ].map((entityType) =>
-        db.entities
-          .where("[workspace_id+entity_type]")
-          .equals([targetWorkspaceId, entityType])
-          .toArray(),
-      ),
-    );
-    const openConflicts = await db.conflicts
-      .where("[workspace_id+status]")
-      .equals([targetWorkspaceId, "open"])
-      .count();
-    const [
-      taskRows = [],
-      sessionRows = [],
-      goalRows = [],
-      evidenceRows = [],
-      verificationRows = [],
-      noteRows = [],
-      resourceRows = [],
-    ] = entityRows;
-    const dashboardRows = entityRows.slice(7).flat();
-    const [
-      nextTasks,
-      nextSessions,
-      nextGoals,
-      nextEvidence,
-      nextVerifications,
-      nextNotes,
-      nextResources,
-      nextDashboardViews,
-    ] = await Promise.all([
-      Promise.all(
-        taskRows.map((item) => decrypted<TodayTaskPayload>(localVault, item)),
-      ),
-      Promise.all(
-        sessionRows.map(async (item) => {
-          const view = await decrypted<TodaySessionPayload>(localVault, item);
-          // outcome 是结束命令参数；回读投影统一以持久化的 status 为准。
-          return {
-            ...view,
-            payload: {
-              ...view.payload,
-              outcome:
-                view.payload.status === "active" ? null : view.payload.status,
-            },
-          };
-        }),
-      ),
-      Promise.all(
-        goalRows.map((item) => decrypted<TodayGoalPayload>(localVault, item)),
-      ),
-      Promise.all(
-        evidenceRows.map((item) =>
-          decrypted<TodayEvidencePayload>(localVault, item),
+    try {
+      const entityRows = await Promise.all(
+        [
+          "task",
+          "study_session",
+          "learning_goal",
+          "evidence",
+          "verification",
+          "note",
+          "resource",
+          ...DASHBOARD_ENTITY_TYPES,
+        ].map((entityType) =>
+          db.entities
+            .where("[workspace_id+entity_type]")
+            .equals([targetWorkspaceId, entityType])
+            .toArray(),
         ),
-      ),
-      Promise.all(
-        verificationRows.map((item) =>
-          decrypted<TodayVerificationPayload>(localVault, item),
+      );
+      const facts = await readWorkspaceSyncFacts(db, targetWorkspaceId);
+      const [
+        taskRows = [],
+        sessionRows = [],
+        goalRows = [],
+        evidenceRows = [],
+        verificationRows = [],
+        noteRows = [],
+        resourceRows = [],
+      ] = entityRows;
+      const dashboardRows = entityRows.slice(7).flat();
+      const [
+        nextTasks,
+        nextSessions,
+        nextGoals,
+        nextEvidence,
+        nextVerifications,
+        nextNotes,
+        nextResources,
+        nextDashboardViews,
+      ] = await Promise.all([
+        Promise.all(
+          taskRows.map((item) => decrypted<TodayTaskPayload>(localVault, item)),
         ),
-      ),
-      Promise.all(
-        noteRows.map((item) =>
-          decrypted<TodayContentReferencePayload>(localVault, item),
-        ),
-      ),
-      Promise.all(
-        resourceRows.map((item) =>
-          decrypted<TodayContentReferencePayload>(localVault, item),
-        ),
-      ),
-      Promise.all(
-        dashboardRows.map((item) => decrypted<JsonObject>(localVault, item)),
-      ),
-    ]);
-    if (
-      dataRequestIdRef.current !== requestId ||
-      currentWorkspaceIdRef.current !== targetWorkspaceId
-    ) {
-      return;
-    }
-    setTasks(nextTasks);
-    setSessions(nextSessions);
-    setGoals(nextGoals);
-    setEvidence(nextEvidence);
-    setVerifications(nextVerifications);
-    setNotes(nextNotes);
-    setResources(nextResources);
-    setConflictCount(openConflicts);
-    setDashboardRecords(
-      nextDashboardViews.flatMap(({ entity, payload }) => {
-        const dashboardSpaceId = payload.space_id;
-        return typeof dashboardSpaceId === "string"
-          ? [
-              {
-                createdAt: entity.created_at,
-                entityType: entity.entity_type,
-                id: entity.entity_id,
-                payload,
-                spaceId: dashboardSpaceId,
-                syncStatus: entity.sync_status,
-                updatedAt: entity.updated_at,
+        Promise.all(
+          sessionRows.map(async (item) => {
+            const view = await decrypted<TodaySessionPayload>(localVault, item);
+            // outcome 是结束命令参数；回读投影统一以持久化的 status 为准。
+            return {
+              ...view,
+              payload: {
+                ...view.payload,
+                outcome:
+                  view.payload.status === "active" ? null : view.payload.status,
               },
-            ]
-          : [];
-      }),
-    );
-    setDashboardPhase("ready");
+            };
+          }),
+        ),
+        Promise.all(
+          goalRows.map((item) => decrypted<TodayGoalPayload>(localVault, item)),
+        ),
+        Promise.all(
+          evidenceRows.map((item) =>
+            decrypted<TodayEvidencePayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          verificationRows.map((item) =>
+            decrypted<TodayVerificationPayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          noteRows.map((item) =>
+            decrypted<TodayContentReferencePayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          resourceRows.map((item) =>
+            decrypted<TodayContentReferencePayload>(localVault, item),
+          ),
+        ),
+        Promise.all(
+          dashboardRows.map((item) => decrypted<JsonObject>(localVault, item)),
+        ),
+      ]);
+      if (
+        db !== database.current ||
+        localVault !== vault.current ||
+        dataRequestIdRef.current !== requestId ||
+        currentWorkspaceIdRef.current !== targetWorkspaceId
+      ) {
+        return;
+      }
+      setTasks(nextTasks);
+      setSessions(nextSessions);
+      setGoals(nextGoals);
+      setEvidence(nextEvidence);
+      setVerifications(nextVerifications);
+      setNotes(nextNotes);
+      setResources(nextResources);
+      setConflictCount(facts.conflicts);
+      setSyncFacts(facts);
+      setDashboardRecords(
+        nextDashboardViews.flatMap(({ entity, payload }) => {
+          const dashboardSpaceId = payload.space_id;
+          return typeof dashboardSpaceId === "string"
+            ? [
+                {
+                  createdAt: entity.created_at,
+                  entityType: entity.entity_type,
+                  id: entity.entity_id,
+                  payload,
+                  spaceId: dashboardSpaceId,
+                  syncStatus: entity.sync_status,
+                  updatedAt: entity.updated_at,
+                },
+              ]
+            : [];
+        }),
+      );
+      setDashboardPhase("ready");
+    } catch (error) {
+      if (
+        requestId === dataRequestIdRef.current &&
+        targetWorkspaceId === currentWorkspaceIdRef.current &&
+        db === database.current &&
+        localVault === vault.current
+      ) {
+        setDashboardPhase("error");
+        throw error;
+      }
+    }
   }
 
   async function unlock(passphrase: string): Promise<boolean> {
     if (session.status !== "authenticated" || !workspaceId || !deviceId)
       return false;
+    const requestId = ++unlockRequest.current;
+    const current = () =>
+      requestId === unlockRequest.current &&
+      workspaceId === currentWorkspaceIdRef.current &&
+      deviceId === currentDeviceIdRef.current;
+    let available: (() => boolean) | null = null;
     try {
       const { database: db, vault: localVault } = await unlockVault(passphrase);
-      await bootstrap(db, localVault);
+      available = () =>
+        current() && matchesVaultSession(database, vault, db, localVault);
+      if (!available()) return false;
+      await bootstrap(db, localVault, available);
       await refresh(db, localVault);
+      if (!available()) return false;
       setStatus(
         "本地资料已在应用内解锁；断网后仍可完整编辑。完成会话不会自动验收任务。",
       );
       return true;
     } catch (error) {
+      if (!current() || (available !== null && !available())) return false;
       setStatus(errorMessage(error));
       setDashboardPhase("error");
       return false;
@@ -921,13 +987,36 @@ export function useTodayController(): TodayControllerResult {
   useEffect(() => {
     const db = database.current;
     const localVault = vault.current;
-    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    if (!unlocked || db === null || localVault === null) {
+      syncContext.current += 1;
+      dataRequestIdRef.current += 1;
+      queueMicrotask(() => {
+        setTasks([]);
+        setSessions([]);
+        setGoals([]);
+        setEvidence([]);
+        setVerifications([]);
+        setNotes([]);
+        setResources([]);
+        setDashboardRecords([]);
+        setConflictCount(0);
+        setSyncFacts(null);
+        setSyncing(false);
+        setDashboardPhase("idle");
+      });
+      return;
+    }
+    if (!workspaceId) return;
     const targetWorkspaceId = workspaceId;
     queueMicrotask(() => {
       // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault)
         .then(() => {
-          if (currentWorkspaceIdRef.current === targetWorkspaceId) {
+          if (
+            currentWorkspaceIdRef.current === targetWorkspaceId &&
+            db === database.current &&
+            localVault === vault.current
+          ) {
             setStatus((current) =>
               current === "请解锁本地资料。"
                 ? "本地资料已在应用内解锁；完成会话不会自动验收任务。"
@@ -936,55 +1025,73 @@ export function useTodayController(): TodayControllerResult {
           }
         })
         .catch((error: unknown) => {
-          if (currentWorkspaceIdRef.current !== targetWorkspaceId) return;
+          if (
+            currentWorkspaceIdRef.current !== targetWorkspaceId ||
+            db !== database.current ||
+            localVault !== vault.current
+          )
+            return;
           setDashboardPhase("error");
           setStatus(errorMessage(error));
         });
     });
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unlocked, vaultRevision, workspaceId]);
+  }, [deviceId, unlocked, vaultRevision, workspaceId]);
 
   async function synchronize(): Promise<void> {
-    const db = database.current;
-    const localVault = vault.current;
-    if (db === null || localVault === null || !workspaceId || !deviceId) return;
+    const db = database.current,
+      localVault = vault.current;
+    const generation = syncContext.current;
+    const current = () =>
+      generation === syncContext.current &&
+      workspaceId === currentWorkspaceIdRef.current &&
+      db === database.current &&
+      localVault === vault.current;
+    if (!db || !localVault || !workspaceId || !deviceId || !current()) return;
+    setSyncing(true);
     try {
-      await bootstrap(db, localVault);
-      await new SyncClient(db, transport(workspaceId), localVault).synchronize(
-        workspaceId,
-        deviceId,
-      );
+      await bootstrap(db, localVault, current);
+      if (!current()) return;
+      const result = await new SyncClient(
+        db,
+        transport(workspaceId),
+        localVault,
+      ).synchronize(workspaceId, deviceId);
       const remaining = await db.outbox
-        .where("[workspace_id+device_id]")
-        .equals([workspaceId, deviceId])
+        .where("workspace_id")
+        .equals(workspaceId)
         .toArray();
-      const blocked = remaining.filter(
-        (item) => item.outbox_state === "blocked",
-      ).length;
-      const conflicts = remaining.filter(
-        (item) => item.outbox_state === "conflict",
-      ).length;
-      const pending = remaining.length - blocked - conflicts;
-      if (conflicts > 0) {
-        setStatus(`有 ${conflicts} 项修改发生冲突，需要明确选择保留版本。`);
-      } else if (blocked > 0) {
+      if (current())
         setStatus(
-          `有 ${blocked} 项修改因权限、版本或输入校验未同步，请检查同步中心。`,
+          incompleteSyncMessage(result, remaining) ??
+            "本地修改已与服务器同步。",
         );
-      } else if (pending > 0) {
-        setStatus(`仍有 ${pending} 项本地修改等待网络恢复后同步。`);
-      } else {
-        setStatus("本地修改已与服务器同步。");
-      }
     } catch (error) {
-      setStatus(errorMessage(error));
+      if (current()) setStatus(errorMessage(error));
     } finally {
-      await refresh(db, localVault);
+      if (current()) {
+        await refresh(db, localVault).catch((error: unknown) => {
+          if (current()) setStatus(errorMessage(error));
+        });
+        if (current()) setSyncing(false);
+      }
     }
   }
 
+  function operationIsCurrent() {
+    const generation = syncContext.current;
+    const db = database.current;
+    const localVault = vault.current;
+    const selectedWorkspace = currentWorkspaceIdRef.current;
+    return () =>
+      generation === syncContext.current &&
+      selectedWorkspace === currentWorkspaceIdRef.current &&
+      matchesVaultSession(database, vault, db, localVault);
+  }
+
   async function commit(
+    isCurrent: () => boolean,
     entityType: "evidence" | "study_session" | "task" | "verification",
     entityId: string,
     payload: JsonObject,
@@ -996,6 +1103,7 @@ export function useTodayController(): TodayControllerResult {
     const db = database.current;
     const localVault = vault.current;
     if (db === null || localVault === null) throw new Error("vault locked");
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     const now = new Date().toISOString();
     return new ProtectedOfflineRepository(db, localVault).commitMutation({
       base_version: existing?.server_version ?? 0,
@@ -1019,14 +1127,16 @@ export function useTodayController(): TodayControllerResult {
   }
 
   async function createTask(input: TodayCreateTaskInput): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     if (!unlocked || !spaceId) return false;
     if (!goals.some((item) => item.entity.entity_id === input.goalId)) {
+      if (!isCurrent()) return false;
       setStatus("请先在规划页创建目标并完成同步。");
       return false;
     }
     const now = new Date().toISOString();
     try {
-      await commit("task", crypto.randomUUID(), {
+      await commit(isCurrent, "task", crypto.randomUUID(), {
         blocked_reason: null,
         description: input.description,
         due_at: null,
@@ -1039,10 +1149,12 @@ export function useTodayController(): TodayControllerResult {
         status: "planned",
         title: input.title,
       });
+      if (!isCurrent()) return false;
       setStatus("任务已保存在本地；正在尝试同步。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1054,10 +1166,12 @@ export function useTodayController(): TodayControllerResult {
     next: TodayTaskStatus,
     blockedReason = "",
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const task = tasks.find((item) => item.entity.entity_id === taskId);
     if (!task || (next === "blocked" && !blockedReason.trim())) return false;
     try {
       await commit(
+        isCurrent,
         "task",
         taskId,
         {
@@ -1067,10 +1181,12 @@ export function useTodayController(): TodayControllerResult {
         },
         task.entity,
       );
+      if (!isCurrent()) return false;
       setStatus("任务状态已在本地更新；正在尝试同步。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1078,14 +1194,17 @@ export function useTodayController(): TodayControllerResult {
   }
 
   async function startSession(taskId: string): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const task = tasks.find((item) => item.entity.entity_id === taskId);
     if (!task) return false;
     try {
       if (sessions.some((item) => item.payload.status === "active")) {
+        if (!isCurrent()) return false;
         setStatus("当前工作区已有进行中的会话，请先结束该会话。");
         return false;
       }
       if (task.payload.status === "backlog") {
+        if (!isCurrent()) return false;
         setStatus("请先将任务安排为计划中，再开始学习会话。");
         return false;
       }
@@ -1093,6 +1212,7 @@ export function useTodayController(): TodayControllerResult {
       let dependencies: string[] = [];
       if (task.payload.status === "planned") {
         const transitioned = await commit(
+          isCurrent,
           "task",
           taskId,
           { ...task.payload, blocked_reason: null, status: "in_progress" },
@@ -1103,6 +1223,7 @@ export function useTodayController(): TodayControllerResult {
       }
       const now = new Date().toISOString();
       await commit(
+        isCurrent,
         "study_session",
         crypto.randomUUID(),
         {
@@ -1118,10 +1239,12 @@ export function useTodayController(): TodayControllerResult {
         undefined,
         dependencies,
       );
+      if (!isCurrent()) return false;
       setStatus("学习会话已在本地开始。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1131,10 +1254,12 @@ export function useTodayController(): TodayControllerResult {
   async function finishSession(
     input: TodayFinishSessionInput,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const active = sessions.find((item) => item.payload.status === "active");
     if (!active) return false;
     try {
       await commit(
+        isCurrent,
         "study_session",
         active.entity.entity_id,
         {
@@ -1147,10 +1272,12 @@ export function useTodayController(): TodayControllerResult {
         },
         active.entity,
       );
+      if (!isCurrent()) return false;
       setStatus("会话记录已保存；任务不会因此自动完成或通过验收。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1161,15 +1288,18 @@ export function useTodayController(): TodayControllerResult {
     taskId: string,
     input: TodayEvidenceInput,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const task = tasks.find((item) => item.entity.entity_id === taskId);
     if (!task) return false;
     const summary = input.summary.trim();
     const externalUrl = input.externalUrl.trim();
     if (input.evidenceType === "text" && !summary) {
+      if (!isCurrent()) return false;
       setStatus("文字证据需要填写内容。");
       return false;
     }
     if (input.evidenceType === "link" && !/^https?:\/\//i.test(externalUrl)) {
+      if (!isCurrent()) return false;
       setStatus("链接证据必须使用 HTTP 或 HTTPS 地址。");
       return false;
     }
@@ -1183,6 +1313,7 @@ export function useTodayController(): TodayControllerResult {
           item.payload.space_id === task.payload.space_id,
       )
     ) {
+      if (!isCurrent()) return false;
       setStatus("请选择当前空间中已保存的笔记或资料。");
       return false;
     }
@@ -1190,6 +1321,7 @@ export function useTodayController(): TodayControllerResult {
       let dependencies: string[] = [];
       if (task.payload.status === "in_progress") {
         const transition = await commit(
+          isCurrent,
           "task",
           taskId,
           { ...task.payload, blocked_reason: null, status: "submitted" },
@@ -1198,6 +1330,7 @@ export function useTodayController(): TodayControllerResult {
         dependencies = [transition.operation.operation_id];
       }
       await commit(
+        isCurrent,
         "evidence",
         crypto.randomUUID(),
         {
@@ -1214,10 +1347,12 @@ export function useTodayController(): TodayControllerResult {
         undefined,
         dependencies,
       );
+      if (!isCurrent()) return false;
       setStatus("证据和待验收状态已保存在本地；正在尝试同步。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1228,12 +1363,14 @@ export function useTodayController(): TodayControllerResult {
     verificationId: string,
     input: TodayVerificationInput,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const verification = verifications.find(
       (item) => item.entity.entity_id === verificationId,
     );
     if (!verification) return false;
     try {
       await commit(
+        isCurrent,
         "verification",
         verificationId,
         {
@@ -1244,10 +1381,12 @@ export function useTodayController(): TodayControllerResult {
         },
         verification.entity,
       );
+      if (!isCurrent()) return false;
       setStatus("人工验收决定已保存在本地；正在尝试同步。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1258,6 +1397,7 @@ export function useTodayController(): TodayControllerResult {
     verificationId: string,
     taskId: string,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const verification = verifications.find(
       (item) => item.entity.entity_id === verificationId,
     );
@@ -1265,6 +1405,7 @@ export function useTodayController(): TodayControllerResult {
     if (!verification || !task) return false;
     try {
       await commit(
+        isCurrent,
         "verification",
         verificationId,
         {
@@ -1274,10 +1415,12 @@ export function useTodayController(): TodayControllerResult {
         },
         verification.entity,
       );
+      if (!isCurrent()) return false;
       setStatus("关闭任务操作已保存在本地；正在尝试同步。");
       await synchronize();
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(errorMessage(error));
       await refresh();
       return false;
@@ -1287,15 +1430,24 @@ export function useTodayController(): TodayControllerResult {
   const viewModel = useMemo(
     () =>
       deriveTodayViewModel({
-        evidence,
-        goals,
+        evidence: unlocked ? evidence : [],
+        goals: unlocked ? goals : [],
         selectedTaskId,
-        sessions,
+        sessions: unlocked ? sessions : [],
         spaceId,
-        tasks,
-        verifications,
+        tasks: unlocked ? tasks : [],
+        verifications: unlocked ? verifications : [],
       }),
-    [evidence, goals, selectedTaskId, sessions, spaceId, tasks, verifications],
+    [
+      evidence,
+      goals,
+      selectedTaskId,
+      sessions,
+      spaceId,
+      tasks,
+      verifications,
+      unlocked,
+    ],
   );
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
@@ -1396,9 +1548,9 @@ export function useTodayController(): TodayControllerResult {
     })),
     membersAvailable,
     now: new Date(),
-    records: dashboardRecords,
+    records: unlocked ? dashboardRecords : [],
     selectedSpaceId: spaceId,
-    sessions: sessions.map((item) => ({
+    sessions: (unlocked ? sessions : []).map((item) => ({
       manualMinutes: item.payload.manual_minutes,
       spaceId: item.payload.space_id,
       startedAt: item.payload.started_at,
@@ -1408,7 +1560,7 @@ export function useTodayController(): TodayControllerResult {
       id: space.id,
       visibility: space.visibility,
     })),
-    tasks: tasks.map((item) => ({
+    tasks: (unlocked ? tasks : []).map((item) => ({
       dueAt: item.payload.due_at,
       estimatedMinutes: item.payload.estimated_minutes,
       plannedAt: item.payload.planned_at,
@@ -1433,15 +1585,16 @@ export function useTodayController(): TodayControllerResult {
     space: selectedSpace
       ? { id: selectedSpace.id, name: selectedSpace.name }
       : undefined,
-    sync: {
-      label:
-        conflictCount > 0
-          ? `${conflictCount} 项冲突`
-          : hasPendingDashboardData
-            ? "待同步"
-            : "已同步",
-      tone: conflictCount > 0 || hasPendingDashboardData ? "warn" : "good",
-    },
+    sync: workspaceSyncStatus({
+      facts: syncFacts,
+      workspaceId,
+      deviceId,
+      unlocked,
+      online,
+      busy: syncing,
+      loading: dashboardPhase === "loading",
+      error: dashboardPhase === "error",
+    }),
     vault: {
       label: unlocked ? "已解锁" : "已锁定",
       tone: unlocked ? "good" : "warn",
@@ -1466,7 +1619,10 @@ export function useTodayController(): TodayControllerResult {
       loadContext,
       setSelectedTaskId,
       reportDeletion: setStatus,
-      setSpaceId,
+      setSpaceId: (nextSpaceId: string) => {
+        syncContext.current += 1;
+        setSpaceId(nextSpaceId);
+      },
       setWorkspaceId: selectWorkspace,
       startSession,
       submitEvidence,
@@ -1486,8 +1642,12 @@ export function useTodayController(): TodayControllerResult {
     },
     persona: { dashboardModel, dashboardSource, dashboardState },
     references: {
-      notes: notes.filter((item) => item.payload.space_id === spaceId),
-      resources: resources.filter((item) => item.payload.space_id === spaceId),
+      notes: unlocked
+        ? notes.filter((item) => item.payload.space_id === spaceId)
+        : [],
+      resources: unlocked
+        ? resources.filter((item) => item.payload.space_id === spaceId)
+        : [],
     },
     selection: {
       taskId: viewModel.selectedTask?.entity.entity_id ?? "",

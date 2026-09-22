@@ -26,7 +26,7 @@ import {
 import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 
 import type { ConflictView } from "./offline-sync-center";
-import type { SyncQueueSummary } from "./sync-diagnostics";
+import { workspaceSyncStatus, type SyncQueueSummary } from "./sync-diagnostics";
 import styles from "./sync-workbench.module.css";
 import deleteStyles from "./entity-delete-action.module.css";
 
@@ -68,6 +68,8 @@ export interface SyncWorkbenchProps {
   devices: Device[];
   lock: () => void;
   loading: boolean;
+  dataLoading?: boolean;
+  dataError?: boolean;
   mergeConflictId: string | null;
   mergeDraft: string;
   onClearConfirmationChange: (value: string) => void;
@@ -101,6 +103,8 @@ export interface SyncWorkbenchProps {
 
 export function SyncWorkbench({
   uploading = false,
+  dataLoading = false,
+  dataError = false,
   accessIssue,
   attachments,
   clearConfirmation,
@@ -242,7 +246,36 @@ export function SyncWorkbench({
     }
   };
 
+  const syncStatus = workspaceSyncStatus({
+    facts: {
+      workspaceId,
+      state: syncState,
+      queue: queueSummary,
+      conflicts: conflicts.length,
+      attachments: attachments.length,
+    },
+    workspaceId,
+    deviceId,
+    unlocked,
+    online: connection === "online",
+    busy: syncing,
+    loading: loading || dataLoading,
+    error: dataError || Boolean(accessIssue),
+  });
+  const dataUnknown =
+    !unlocked || loading || dataLoading || dataError || Boolean(accessIssue);
+  const unknownLabel = !unlocked
+    ? "解锁后确认"
+    : dataError || accessIssue
+      ? "读取失败，请重试"
+      : "读取中";
   const contextItems = [
+    {
+      key: "sync",
+      label: "同步",
+      value: syncStatus.label,
+      tone: syncStatus.tone,
+    },
     {
       key: "workspace",
       label: "Workspace",
@@ -264,7 +297,9 @@ export function SyncWorkbench({
       key: "conflicts",
       label: "冲突",
       tone: conflicts.length ? ("warn" as const) : ("default" as const),
-      value: conflicts.length ? (
+      value: dataUnknown ? (
+        unknownLabel
+      ) : conflicts.length ? (
         <Link className={styles.contextLink} href="/app/sync?tab=conflict">
           {conflicts.length} 项待处理
         </Link>
@@ -275,7 +310,9 @@ export function SyncWorkbench({
     {
       key: "epoch",
       label: "Sync epoch",
-      value: syncState?.sync_epoch ?? "尚未 bootstrap",
+      value: dataUnknown
+        ? unknownLabel
+        : (syncState?.sync_epoch ?? "尚未 bootstrap"),
     },
   ];
 
@@ -490,16 +527,20 @@ export function SyncWorkbench({
                 label="同步诊断视图"
                 onValueChange={selectTab}
                 tabs={[
-                  { label: "Outbox", value: "outbox", count: outbox.length },
+                  {
+                    label: "Outbox",
+                    value: "outbox",
+                    count: dataUnknown ? undefined : outbox.length,
+                  },
                   {
                     label: "冲突",
                     value: "conflicts",
-                    count: conflicts.length,
+                    count: dataUnknown ? undefined : conflicts.length,
                   },
                   {
                     label: "附件队列",
                     value: "attachments",
-                    count: attachments.length,
+                    count: dataUnknown ? undefined : attachments.length,
                   },
                   { label: "设备", value: "devices", count: devices.length },
                 ]}
@@ -515,25 +556,33 @@ export function SyncWorkbench({
                         <span className={styles.kicker}>OUTBOX</span>
                         <h2>待推送操作</h2>
                       </div>
-                      <ProductTag tone={queueSummary.pending ? "warn" : "good"}>
-                        {queueSummary.pending
-                          ? `${queueSummary.pending} 待推送`
-                          : "已清空"}
+                      <ProductTag
+                        tone={
+                          dataUnknown || queueSummary.total ? "warn" : "good"
+                        }
+                      >
+                        {dataUnknown
+                          ? unknownLabel
+                          : queueSummary.total
+                            ? `${queueSummary.total} 待处理`
+                            : "已清空"}
                       </ProductTag>
                     </header>
-                    <div
-                      aria-label="Outbox 状态摘要"
-                      className={styles.queueSummary}
-                    >
-                      <span>pending {queueSummary.pending}</span>
-                      <span>in-flight {queueSummary.in_flight}</span>
-                      <span>conflict {queueSummary.conflict}</span>
-                      <span>blocked {queueSummary.blocked}</span>
-                      <span>isolated {queueSummary.isolated}</span>
-                    </div>
-                    {loading ? (
+                    {!dataUnknown ? (
+                      <div
+                        aria-label="Outbox 状态摘要"
+                        className={styles.queueSummary}
+                      >
+                        <span>pending {queueSummary.pending}</span>
+                        <span>in-flight {queueSummary.in_flight}</span>
+                        <span>conflict {queueSummary.conflict}</span>
+                        <span>blocked {queueSummary.blocked}</span>
+                        <span>isolated {queueSummary.isolated}</span>
+                      </div>
+                    ) : null}
+                    {dataUnknown ? (
                       <div className={styles.loadingState} role="status">
-                        <strong>正在读取 Outbox…</strong>
+                        <strong>{unknownLabel}</strong>
                         <span>
                           本地队列和同步 epoch 读取完成后会显示在这里。
                         </span>
@@ -593,15 +642,19 @@ export function SyncWorkbench({
                         <span className={styles.kicker}>CONFLICT REVIEW</span>
                         <h2>显式解决冲突</h2>
                       </div>
-                      <ProductTag tone={conflicts.length ? "warn" : "good"}>
-                        {conflicts.length
-                          ? `${conflicts.length} 项待处理`
-                          : "无冲突"}
+                      <ProductTag
+                        tone={dataUnknown || conflicts.length ? "warn" : "good"}
+                      >
+                        {dataUnknown
+                          ? unknownLabel
+                          : conflicts.length
+                            ? `${conflicts.length} 项待处理`
+                            : "无冲突"}
                       </ProductTag>
                     </header>
-                    {!unlocked ? (
+                    {dataUnknown ? (
                       <p className={styles.lockedNote}>
-                        解锁本地 Vault 后，才能安全读取冲突对比。
+                        {unknownLabel}；本地状态确认后才能安全读取冲突对比。
                       </p>
                     ) : conflicts.length === 0 ? (
                       <ProductEmptyState
@@ -728,8 +781,18 @@ export function SyncWorkbench({
                           附件上传队列
                         </h2>
                       </div>
-                      <ProductTag tone={attachments.length ? "info" : "good"}>
-                        {attachments.length} 项
+                      <ProductTag
+                        tone={
+                          dataUnknown
+                            ? "warn"
+                            : attachments.length
+                              ? "info"
+                              : "good"
+                        }
+                      >
+                        {dataUnknown
+                          ? unknownLabel
+                          : `${attachments.length} 项`}
                       </ProductTag>
                     </header>
                     <div
@@ -742,7 +805,12 @@ export function SyncWorkbench({
                         上传初始化由服务器校验用户配额；本地队列不会伪造剩余额度。
                       </span>
                     </div>
-                    {attachments.length ? (
+                    {dataUnknown ? (
+                      <ProductEmptyState
+                        title={unknownLabel}
+                        description="本地附件状态尚未确认。"
+                      />
+                    ) : attachments.length ? (
                       <ul className={styles.attachmentList}>
                         {attachments.map((attachment) => (
                           <li key={attachment.attachment_id}>
@@ -773,7 +841,17 @@ export function SyncWorkbench({
                                       : "上传并验证"}
                                 </button>
                               ) : (
-                                <ProductTag tone="good">已验证</ProductTag>
+                                <ProductTag
+                                  tone={
+                                    attachment.state === "verified"
+                                      ? "good"
+                                      : "info"
+                                  }
+                                >
+                                  {attachment.state === "verified"
+                                    ? "已验证"
+                                    : "上传中"}
+                                </ProductTag>
                               )}
                               {attachment.state === "failed" ? (
                                 <button
@@ -962,16 +1040,20 @@ export function SyncWorkbench({
               ) : null}
               <nav aria-label="同步工作区分区" className={styles.masterNav}>
                 {[
-                  { label: "Outbox", value: "outbox", count: outbox.length },
+                  {
+                    label: "Outbox",
+                    value: "outbox",
+                    count: dataUnknown ? undefined : outbox.length,
+                  },
                   {
                     label: "冲突",
                     value: "conflicts",
-                    count: conflicts.length,
+                    count: dataUnknown ? undefined : conflicts.length,
                   },
                   {
                     label: "附件队列",
                     value: "attachments",
-                    count: attachments.length,
+                    count: dataUnknown ? undefined : attachments.length,
                   },
                   { label: "设备", value: "devices", count: devices.length },
                 ].map((item) => (
@@ -1012,7 +1094,7 @@ export function SyncWorkbench({
           }
         />
       </main>
-      {removal ? (
+      {unlocked && removal ? (
         <AppModal
           eyebrow="本地附件队列"
           title="移除失败附件"
@@ -1051,7 +1133,7 @@ export function SyncWorkbench({
       <WorkbenchSheet
         description="只提交显式选择的合并 JSON；不会静默覆盖本地或服务器版本。"
         onOpenChange={onMergeOpenChange}
-        open={mergeConflictId !== null}
+        open={unlocked && mergeConflictId !== null}
         title="编辑合并版本"
       >
         <form

@@ -20,6 +20,46 @@ import type {
 
 afterEach(cleanup);
 
+it("preserves locked Vault input while initial workspace and Space resolve", async () => {
+  const { commands, controller } = controllerFixture();
+  const locked = {
+    ...controller,
+    capabilities: { ...controller.capabilities, canUnlock: false },
+    context: {
+      ...controller.context,
+      unlocked: false,
+      workspaceId: "",
+      spaceId: "",
+    },
+  };
+  const { rerender } = render(<TodayWorkbench controller={locked} />);
+  const input = screen.getByLabelText("本地资料口令") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "synthetic-local-passphrase" } });
+  const workspaceReady = {
+    ...locked,
+    capabilities: { ...locked.capabilities, canUnlock: true },
+    context: { ...locked.context, workspaceId: "workspace-1" },
+  };
+  rerender(<TodayWorkbench controller={workspaceReady} />);
+  expect(screen.getByLabelText("本地资料口令")).toBe(input);
+  expect(input.value).toBe("synthetic-local-passphrase");
+  const spaceReady = {
+    ...workspaceReady,
+    context: { ...workspaceReady.context, spaceId: "space-1" },
+  };
+  rerender(<TodayWorkbench controller={spaceReady} />);
+  expect(screen.getByLabelText("本地资料口令")).toBe(input);
+  expect(input.value).toBe("synthetic-local-passphrase");
+  fireEvent.click(screen.getByRole("button", { name: "解锁" }));
+  await waitFor(() => expect(commands.unlock).toHaveBeenCalledTimes(1));
+  expect(commands.unlock).toHaveBeenCalledWith("synthetic-local-passphrase");
+  rerender(<TodayWorkbench controller={controller} />);
+  rerender(<TodayWorkbench controller={spaceReady} />);
+  expect(
+    (screen.getByLabelText("本地资料口令") as HTMLInputElement).value,
+  ).toBe("");
+});
+
 function entity(id: string, type: string): LocalEntity {
   return {
     created_at: "2026-08-26T00:00:00.000Z",

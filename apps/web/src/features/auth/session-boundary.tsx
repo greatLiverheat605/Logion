@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { resolveOnboardingAccess } from "@/features/onboarding/onboarding-access";
 
@@ -61,6 +61,9 @@ function SessionStateBoundary({
 }>) {
   const { refresh, state } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  // Preserve the route without copying arbitrary query text or URL credentials.
+  const loginHref = `/auth/login?next=${encodeURIComponent(pathname ?? "/app/today")}`;
   const [gateState, setGateState] = useState<OnboardingGateState>("checking");
   const [gateAttempt, setGateAttempt] = useState(0);
 
@@ -121,7 +124,7 @@ function SessionStateBoundary({
             <Link
               className="primary-action"
               data-workbench-primary="true"
-              href="/auth/login"
+              href={loginHref}
             >
               前往登录
             </Link>
@@ -137,9 +140,11 @@ function SessionStateBoundary({
     return (
       <main id="main-content" className="session-state">
         <h1>需要登录</h1>
-        <p>当前浏览器没有有效的 Logion 会话。</p>
-        <Link className="text-link" href="/">
-          返回首页
+        <p role="alert">
+          会话已失效，请重新登录后继续。已加密保存的本地内容会保留。
+        </p>
+        <Link className="primary-action" href={loginHref}>
+          重新登录并返回
         </Link>
       </main>
     );

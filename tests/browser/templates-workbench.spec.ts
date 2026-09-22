@@ -6,6 +6,7 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import { readLocalSnapshot } from "./local-snapshot";
 import {
   assertGlmPrimaryContract,
   assertGlmRouteRegions,
@@ -141,6 +142,8 @@ test("Templates completes real version, install, import and share workflows", as
   const headers = await csrfHeaders(page);
   const goalId = randomUUID();
   const phaseId = randomUUID();
+  const planId = randomUUID();
+  const planVersionId = randomUUID();
   const goalResponse = await page.request.post(
     `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/goals`,
     {
@@ -161,8 +164,8 @@ test("Templates completes real version, install, import and share workflows", as
             title: `${marker} phase`,
           },
         ],
-        plan_id: randomUUID(),
-        plan_version_id: randomUUID(),
+        plan_id: planId,
+        plan_version_id: planVersionId,
         target_date: null,
         title: `${marker} source goal`,
         weekly_minutes: 120,
@@ -219,25 +222,83 @@ test("Templates completes real version, install, import and share workflows", as
   ).toBeVisible();
 
   const primary = page.locator('[data-workbench-primary="true"]:visible');
+  type Goal = {
+    goal_id: string;
+    plan_id: string;
+    plan_version_id: string;
+    phases: Array<{ id: string }>;
+  };
+  const goalsUrl = `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/goals`;
+  const readGoals = async (): Promise<Goal[]> => {
+    const response = await page.request.get(goalsUrl);
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()).goals;
+  };
+  const goalsBeforeInstall = await readGoals();
+  const beforeIds = goalsBeforeInstall.map((goal) => goal.goal_id).sort();
+  const sourceGoal = goalsBeforeInstall.find((goal) => goal.goal_id === goalId);
+  expect(sourceGoal).toBeDefined();
+  const templateBefore = JSON.parse(createTemplateBody);
   await expect(primary).toHaveText(/安装独立副本/);
   await primary.click();
   const installSheet = page.getByRole("dialog", {
     name: "安装独立模板副本",
   });
   await expect(installSheet.getByText("目标 Space")).toBeVisible();
+  const installationResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/template-installations"),
+  );
   await installSheet.getByRole("button", { name: "确认安装" }).click();
   await expect(installSheet).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: /模板已安装为独立计划/ }),
   ).toBeVisible();
 
-  const goalsAfterInstall = await page.request.get(
-    `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/goals`,
-  );
-  expect(goalsAfterInstall.ok(), await goalsAfterInstall.text()).toBe(true);
+  const installedResponse = await installationResponse;
+  expect(installedResponse.status()).toBe(201);
+  const installed = (await installedResponse.json()).installed_object_ids as {
+    goal_id: string;
+    plan_id: string;
+    plan_version_id: string;
+    phase_ids: string[];
+    task_ids: string[];
+    resource_ids: string[];
+  };
+  expect(installed.phase_ids).toHaveLength(1);
+  expect(installed.task_ids).toEqual([]);
+  expect(installed.resource_ids).toEqual([]);
   expect(
-    ((await goalsAfterInstall.json()) as { goals: unknown[] }).goals.length,
-  ).toBeGreaterThan(1);
+    [
+      installed.goal_id,
+      installed.plan_id,
+      installed.plan_version_id,
+      ...installed.phase_ids,
+    ].every((id) => ![goalId, planId, planVersionId, phaseId].includes(id)),
+  ).toBe(true);
+  const goalsAfterInstall = await readGoals();
+  expect(
+    goalsAfterInstall
+      .filter((goal) => !beforeIds.includes(goal.goal_id))
+      .map((goal) => goal.goal_id),
+  ).toEqual([installed.goal_id]);
+  expect(goalsAfterInstall.map((goal) => goal.goal_id).sort()).toEqual(
+    [...beforeIds, installed.goal_id].sort(),
+  );
+  expect(goalsAfterInstall.find((goal) => goal.goal_id === goalId)).toEqual(
+    sourceGoal,
+  );
+  const installedGoal = goalsAfterInstall.find(
+    (goal) => goal.goal_id === installed.goal_id,
+  )!;
+  expect(installedGoal).toMatchObject({
+    plan_id: installed.plan_id,
+    plan_version_id: installed.plan_version_id,
+  });
+  expect(installedGoal.phases.map((phase) => phase.id)).toEqual(
+    installed.phase_ids,
+  );
 
   await page.getByRole("button", { name: "更多模板操作" }).click();
   await page.getByRole("menuitem", { name: "导入模板包" }).click();
@@ -305,6 +366,63 @@ test("Templates completes real version, install, import and share workflows", as
   await expect(
     page.getByText("分享已撤销，原链接立即失效。", { exact: true }),
   ).toBeVisible();
+
+  // Delete only the synthetic installation through its real local/sync workflow.
+  await page.goto("/app/records");
+  await waitForWorkbenchReady(page, "/app/records");
+  await page.locator("#records-unlock").click();
+  const unlock = page.getByRole("dialog", { name: "解锁本地资料" });
+  const passphrase =
+    process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;
+  await unlock.getByLabel("本地口令").fill(passphrase);
+  await unlock.getByRole("button", { name: "解锁本地资料" }).click();
+  await expect(unlock).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "本地资料已解锁" }),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await readLocalSnapshot(page)).stores.entities.some(
+        (row) => row.entity_id === installed.goal_id,
+      ),
+    )
+    .toBe(true);
+  await page.locator('a[href="/app/planning"]').first().click();
+  await waitForWorkbenchReady(page, "/app/planning");
+  await page.locator(`[data-goal-id="${installed.goal_id}"]`).click();
+  await expect(
+    page.locator(`[data-goal-id="${installed.goal_id}"]`),
+  ).toHaveAttribute("data-selected", "true");
+  const deletionPreview = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      response
+        .url()
+        .endsWith(`/sync/deletion-preview/learning_goal/${installed.goal_id}`),
+  );
+  await page.getByRole("button", { name: "删除学习目标", exact: true }).click();
+  expect((await deletionPreview).status()).toBe(200);
+  const deletion = page.getByRole("dialog", { name: "确认删除", exact: true });
+  await expect(deletion).toContainText("1 个学习目标");
+  await deletion.getByRole("button", { name: "确认删除", exact: true }).click();
+  await expect(deletion).toHaveCount(0);
+  await expect
+    .poll(async () => (await readGoals()).map((goal) => goal.goal_id).sort())
+    .toEqual(beforeIds);
+  expect((await readGoals()).find((goal) => goal.goal_id === goalId)).toEqual(
+    sourceGoal,
+  );
+  const templateResponse = await page.request.get(
+    `/api/v1/workspaces/${workspaceId}/templates`,
+  );
+  expect(templateResponse.ok()).toBe(true);
+  expect(
+    (await templateResponse.json()).templates.find(
+      (item: { id: string }) => item.id === templateBefore.id,
+    ),
+  ).toEqual(templateBefore);
+  await page.goto("/app/templates");
+  await waitForWorkbenchReady(page, "/app/templates");
 
   for (const viewport of WORKBENCH_VIEWPORTS) {
     await page.setViewportSize(viewport);

@@ -23,7 +23,10 @@ import {
 import { ProductOperationalStateNotice } from "@/components/product/product-workbench-state";
 import { ProductTag } from "@/components/product/product-ui";
 import { WorkbenchHeader } from "@/components/product/workbench";
-import { NOTIFICATION_CATEGORIES } from "@/features/engagement/notification-center-model";
+import {
+  groupNotifications,
+  NOTIFICATION_CATEGORIES,
+} from "@/features/engagement/notification-center-model";
 import type { CalendarFeed } from "@/features/integrations/integration-capability-model";
 
 import styles from "./search-workbench.module.css";
@@ -758,7 +761,7 @@ function NotificationPreferences({
     <form
       className={styles.preferenceForm}
       id={formId}
-      key={preference?.version ?? 0}
+      key={`${controller.context.workspaceId}:${preference?.version ?? 0}`}
       onSubmit={submit}
     >
       <header className={styles.utilityHeader}>
@@ -844,7 +847,10 @@ function NotificationRow({
 }>) {
   const [pending, setPending] = useState(false);
   return (
-    <article className={styles.notificationRow}>
+    <article
+      className={styles.notificationRow}
+      data-notification-id={notification.id}
+    >
       <span aria-hidden="true">
         <AppIcon name="bell" size={16} />
       </span>
@@ -896,12 +902,20 @@ function NotificationsPanel({
 }: {
   controller: SearchControllerResult;
 }) {
+  const groups = groupNotifications(controller.utilities.notifications);
+  const unreadGroups = groups.filter((group) => group.unreadCount > 0).length;
   return (
     <div className={styles.utilityPanel}>
+      {controller.context.operationalState ? (
+        <ProductOperationalStateNotice
+          state={controller.context.operationalState}
+        />
+      ) : null}
       <p aria-live="polite" className={styles.statusLine} role="status">
         {controller.context.status}
       </p>
       <NotificationPreferences
+        key={controller.context.workspaceId}
         controller={controller}
         preference={controller.utilities.preference}
       />
@@ -916,18 +930,40 @@ function NotificationsPanel({
               controller.utilities.unreadNotificationCount ? "warn" : "good"
             }
           >
-            {controller.utilities.unreadNotificationCount} 条未读
+            {controller.utilities.unreadNotificationCount} 条未读 ·{" "}
+            {unreadGroups} 组
           </ProductTag>
         </header>
+        <p className={styles.calendarNotice}>
+          显示最近 200
+          条中的通知。普通同步回执按类型合并，可展开逐条查看；不代表同一轮同步或设备已应用。
+        </p>
         {controller.utilities.notifications.length ? (
           <div className={styles.notificationList}>
-            {controller.utilities.notifications.map((notification) => (
-              <NotificationRow
-                controller={controller}
-                key={notification.id}
-                notification={notification}
-              />
-            ))}
+            {groups.map((group) =>
+              group.members.length === 1 ? (
+                <NotificationRow
+                  controller={controller}
+                  key={group.id}
+                  notification={group.members[0]!}
+                />
+              ) : (
+                <details key={group.id} data-notification-group={group.id}>
+                  <summary>
+                    {group.title} · {group.members.length} 条 ·{" "}
+                    {group.unreadCount} 条未读
+                  </summary>
+                  <p>{group.summary}</p>
+                  {group.members.map((notification) => (
+                    <NotificationRow
+                      controller={controller}
+                      key={notification.id}
+                      notification={notification}
+                    />
+                  ))}
+                </details>
+              ),
+            )}
           </div>
         ) : (
           <SearchEmpty
@@ -1139,6 +1175,11 @@ function CalendarPanel({ controller }: { controller: SearchControllerResult }) {
   const [createOpen, setCreateOpen] = useState(false);
   return (
     <div className={styles.utilityPanel}>
+      {controller.context.operationalState ? (
+        <ProductOperationalStateNotice
+          state={controller.context.operationalState}
+        />
+      ) : null}
       <p aria-live="polite" className={styles.statusLine} role="status">
         {controller.context.status}
       </p>

@@ -22,7 +22,14 @@ import {
   type SyncTransport,
   type WorkspaceSyncState,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { useSession } from "@/features/auth/session-provider";
 import {
@@ -162,14 +169,52 @@ export function OfflineSyncCenter() {
   const [mergeConflictId, setMergeConflictId] = useState<string | null>(null);
   const [mergeDraft, setMergeDraft] = useState("");
   const [clearConfirmation, setClearConfirmation] = useState("");
+  const contextVersion = useRef(0);
+  const mergeVersion = useRef(0);
+  const unlockRequest = useRef(0);
+  const contextRequest = useRef(0);
+  useLayoutEffect(() => {
+    unlockRequest.current += 1;
+  }, [workspaceId, deviceId]);
+  const refreshRequest = useRef(0);
+  const currentWorkspace = useRef("");
+  const [loadedWorkspace, setLoadedWorkspace] = useState("");
+  const [dataError, setDataError] = useState(false);
+  useLayoutEffect(() => {
+    currentWorkspace.current = workspaceId;
+    contextVersion.current += 1;
+    refreshRequest.current += 1;
+    const generation = contextVersion.current;
+    queueMicrotask(() => {
+      if (generation !== contextVersion.current) return;
+      setLoadedWorkspace("");
+      setDataError(false);
+      setStatus(unlocked ? "正在读取本地同步状态…" : "本地资料已锁定。");
+      setConflicts([]);
+      setAttachments([]);
+      setOutbox([]);
+      setQueueSummary(EMPTY_QUEUE_SUMMARY);
+      setSyncState(null);
+      setMergeConflictId(null);
+      setMergeDraft("");
+      setSyncing(false);
+      setUploading(false);
+    });
+    return () => {
+      contextVersion.current += 1;
+      refreshRequest.current += 1;
+    };
+  }, [workspaceId, deviceId, unlocked]);
 
   const loadContext = useCallback(async () => {
+    const requestId = ++contextRequest.current;
     setLoading(true);
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
         request<{ workspaces: Workspace[] }>("/api/v1/workspaces"),
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
+      if (requestId !== contextRequest.current) return;
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(workspaceResult.workspaces);
       setDevices(deviceResult.devices);
@@ -193,6 +238,7 @@ export function OfflineSyncCenter() {
           : "没有找到当前设备，无法安全同步。",
       );
     } catch (error) {
+      if (requestId !== contextRequest.current) return;
       setAccessIssue(
         error instanceof LogionApiError &&
           (error.status === 401 || error.status === 403)
@@ -201,7 +247,7 @@ export function OfflineSyncCenter() {
       );
       setStatus(userMessage(error));
     } finally {
-      setLoading(false);
+      if (requestId === contextRequest.current) setLoading(false);
     }
   }, [request]);
 
@@ -212,6 +258,7 @@ export function OfflineSyncCenter() {
     window.addEventListener("offline", update);
     queueMicrotask(() => void loadContext());
     return () => {
+      contextRequest.current += 1;
       window.removeEventListener("online", update);
       window.removeEventListener("offline", update);
     };
@@ -220,8 +267,10 @@ export function OfflineSyncCenter() {
   async function bootstrap(
     db: LogionOfflineDatabase,
     localVault: OfflineVault,
+    isCurrent: () => boolean,
   ): Promise<void> {
     const current = await db.syncState.get(workspaceId);
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     if (canResumeSync(current, deviceId)) return;
     const repository = new BootstrapRepository(db, {}, localVault);
     const first = await request<unknown>(
@@ -239,6 +288,7 @@ export function OfflineSyncCenter() {
         }),
       },
     );
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     const validation = validateSyncV1Message(first);
     if (
       !validation.ok ||
@@ -251,11 +301,13 @@ export function OfflineSyncCenter() {
       workspace_id: workspaceId,
       device_id: deviceId,
     });
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     await repository.stageChunk(first, {
       workspace_id: workspaceId,
       device_id: deviceId,
     });
     for (let index = 1; index < manifest.chunk_count; index += 1) {
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       const chunk = await request<unknown>(
         `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
         {
@@ -271,11 +323,13 @@ export function OfflineSyncCenter() {
           }),
         },
       );
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       await repository.stageChunk(chunk, {
         workspace_id: workspaceId,
         device_id: deviceId,
       });
     }
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     markChanged();
   }
 
@@ -283,33 +337,68 @@ export function OfflineSyncCenter() {
     db = database.current,
     localVault = vault.current,
   ): Promise<void> {
-    if (db === null || localVault === null || !workspaceId) return;
-    const [rows, queued, outbox, currentSyncState] = await Promise.all([
-      new ConflictRepository(db, localVault).listOpen(workspaceId),
-      db.attachmentQueue.where("workspace_id").equals(workspaceId).toArray(),
-      db.outbox.where("workspace_id").equals(workspaceId).toArray(),
-      db.syncState.get(workspaceId),
-    ]);
-    const views = await Promise.all(
-      rows.map(async (conflict) => ({
-        conflict,
-        local: await reveal(localVault, workspaceId, conflict.local_payload),
-        remote: await reveal(localVault, workspaceId, conflict.remote_payload),
-      })),
-    );
-    setConflicts(views);
-    setAttachments(
-      queued
-        .filter((entry) => entry.state !== "verified")
-        .sort(
-          (left, right) =>
-            left.queued_at.localeCompare(right.queued_at) ||
-            left.attachment_id.localeCompare(right.attachment_id),
-        ),
-    );
-    setQueueSummary(summarizeSyncQueue(outbox));
-    setOutbox(outbox);
-    setSyncState(currentSyncState ?? null);
+    if (
+      db === null ||
+      localVault === null ||
+      !workspaceId ||
+      db !== database.current ||
+      localVault !== vault.current ||
+      workspaceId !== currentWorkspace.current
+    )
+      return;
+    const requestId = ++refreshRequest.current;
+    setDataError(false);
+    try {
+      const [rows, queued, outbox, currentSyncState] = await Promise.all([
+        new ConflictRepository(db, localVault).listOpen(workspaceId),
+        db.attachmentQueue.where("workspace_id").equals(workspaceId).toArray(),
+        db.outbox.where("workspace_id").equals(workspaceId).toArray(),
+        db.syncState.get(workspaceId),
+      ]);
+      const views = await Promise.all(
+        rows.map(async (conflict) => ({
+          conflict,
+          local: await reveal(localVault, workspaceId, conflict.local_payload),
+          remote: await reveal(
+            localVault,
+            workspaceId,
+            conflict.remote_payload,
+          ),
+        })),
+      );
+      if (
+        requestId !== refreshRequest.current ||
+        workspaceId !== currentWorkspace.current ||
+        db !== database.current ||
+        localVault !== vault.current
+      )
+        return;
+      setLoadedWorkspace(workspaceId);
+      setConflicts(views);
+      setAttachments(
+        queued
+          .filter((entry) => entry.state !== "verified")
+          .sort(
+            (left, right) =>
+              left.queued_at.localeCompare(right.queued_at) ||
+              left.attachment_id.localeCompare(right.attachment_id),
+          ),
+      );
+      setQueueSummary(summarizeSyncQueue(outbox));
+      setOutbox(outbox);
+      setSyncState(currentSyncState ?? null);
+    } catch (error) {
+      if (
+        requestId === refreshRequest.current &&
+        workspaceId === currentWorkspace.current &&
+        db === database.current &&
+        localVault === vault.current
+      ) {
+        setLoadedWorkspace("");
+        setDataError(true);
+        throw error;
+      }
+    }
   }
 
   async function unlock(event: FormEvent<HTMLFormElement>) {
@@ -319,13 +408,25 @@ export function OfflineSyncCenter() {
     const passphrase = String(
       new FormData(event.currentTarget).get("passphrase") ?? "",
     );
+    const requestId = ++unlockRequest.current;
+    const current = () =>
+      requestId === unlockRequest.current &&
+      workspaceId === currentWorkspace.current;
+    let available: (() => boolean) | null = null;
     try {
       const { database: db, vault: localVault } = await unlockVault(passphrase);
-      await bootstrap(db, localVault);
+      available = () =>
+        current() && db === database.current && localVault === vault.current;
+      if (!current() || db !== database.current || localVault !== vault.current)
+        return;
+      await bootstrap(db, localVault, available);
       await refresh(db, localVault);
+      if (!current() || db !== database.current || localVault !== vault.current)
+        return;
       setStatus("本地资料已解锁；冲突正文只在当前页面内存中显示。");
       form.reset();
     } catch (error) {
+      if (!current() || (available !== null && !available())) return;
       setStatus(offlineUnlockMessage(error) ?? userMessage(error));
     }
   }
@@ -334,17 +435,24 @@ export function OfflineSyncCenter() {
     const db = database.current;
     const localVault = vault.current;
     if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    const generation = contextVersion.current;
+    const current = () =>
+      generation === contextVersion.current &&
+      db === database.current &&
+      localVault === vault.current;
     queueMicrotask(
       () =>
         void refresh(db, localVault)
-          .then(() => setStatus("本地资料已在应用内解锁。"))
-          .catch((error: unknown) =>
-            setStatus(feedback.error(userMessage(error))),
-          ),
+          .then(() => {
+            if (current()) setStatus("本地资料已在应用内解锁。");
+          })
+          .catch((error: unknown) => {
+            if (current()) setStatus(feedback.error(userMessage(error)));
+          }),
     );
     // Refresh follows the shared Vault revision and selected workspace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unlocked, vaultRevision, workspaceId]);
+  }, [unlocked, vaultRevision, workspaceId, deviceId]);
 
   function lock() {
     lockVault();
@@ -381,39 +489,66 @@ export function OfflineSyncCenter() {
   }
 
   async function synchronize(): Promise<void> {
-    const db = database.current;
-    const localVault = vault.current;
-    if (db === null || localVault === null || !workspaceId || !deviceId) return;
+    const db = database.current,
+      localVault = vault.current;
+    const generation = contextVersion.current;
+    const current = () =>
+      generation === contextVersion.current &&
+      workspaceId === currentWorkspace.current &&
+      db === database.current &&
+      localVault === vault.current;
+    if (!db || !localVault || !workspaceId || !deviceId || !current()) return;
     setSyncing(true);
     try {
-      await bootstrap(db, localVault);
+      await bootstrap(db, localVault, current);
+      if (!current()) return;
       const result = await new SyncClient(
         db,
         transport(request, workspaceId),
         localVault,
       ).synchronize(workspaceId, deviceId);
       const remaining = await db.outbox
-        .where("[workspace_id+device_id]")
-        .equals([workspaceId, deviceId])
+        .where("workspace_id")
+        .equals(workspaceId)
         .toArray();
+      if (!current()) return;
       const incomplete = incompleteSyncMessage(result, remaining);
-      if (incomplete) {
-        setStatus(feedback.error(incomplete));
-        return;
-      }
-      setStatus(feedback.success("同步完成；仍需选择的冲突会继续保留。 "));
+      setStatus(
+        incomplete
+          ? feedback.error(incomplete)
+          : feedback.success("同步完成；仍需选择的冲突会继续保留。 "),
+      );
     } catch (error) {
-      setStatus(feedback.error(userMessage(error)));
+      if (current()) setStatus(feedback.error(userMessage(error)));
     } finally {
-      await refresh(db, localVault);
-      setSyncing(false);
+      if (current()) {
+        await refresh(db, localVault).catch((error: unknown) => {
+          if (current()) setStatus(feedback.error(userMessage(error)));
+        });
+        if (current()) setSyncing(false);
+      }
     }
+  }
+
+  function operationIsCurrent() {
+    const generation = contextVersion.current;
+    const db = database.current;
+    const localVault = vault.current;
+    return () =>
+      generation === contextVersion.current &&
+      workspaceId === currentWorkspace.current &&
+      db !== null &&
+      localVault !== null &&
+      db === database.current &&
+      localVault === vault.current;
   }
 
   async function resolve(
     view: ConflictView,
     resolution: "keep_local" | "keep_remote" | "merge",
   ) {
+    const isCurrent = operationIsCurrent();
+    const draftVersion = mergeVersion.current;
     const db = database.current;
     const localVault = vault.current;
     if (
@@ -434,6 +569,7 @@ export function OfflineSyncCenter() {
           throw new Error("merge must be an object");
         mergedPayload = parsed as JsonObject;
       }
+      if (!isCurrent()) return;
       await new ConflictRepository(db, localVault).queueResolution({
         workspace_id: workspaceId,
         conflict_id: view.conflict.conflict_id,
@@ -444,17 +580,23 @@ export function OfflineSyncCenter() {
         resolution,
         merged_payload: mergedPayload,
       });
-      setMergeConflictId(null);
-      setMergeDraft("");
+      if (!isCurrent()) return;
+      if (draftVersion === mergeVersion.current) {
+        setMergeConflictId(null);
+        setMergeDraft("");
+      }
+      if (!isCurrent()) return;
       setStatus("解决方案已安全写入本地 Outbox，正在尝试同步。");
       await synchronize();
     } catch (error) {
+      if (!isCurrent()) return;
       setStatus(feedback.error(userMessage(error)));
       await refresh(db, localVault);
     }
   }
 
   async function copyLocal(view: ConflictView) {
+    const isCurrent = operationIsCurrent();
     const db = database.current;
     const localVault = vault.current;
     if (
@@ -484,6 +626,7 @@ export function OfflineSyncCenter() {
         updated_by: session.user.id,
         payload: view.local,
       });
+      if (!isCurrent()) return;
       await new ConflictRepository(db, localVault).queueResolution({
         workspace_id: workspaceId,
         conflict_id: view.conflict.conflict_id,
@@ -493,28 +636,34 @@ export function OfflineSyncCenter() {
         client_occurred_at: now,
         resolution: "keep_remote",
       });
+      if (!isCurrent()) return;
       setStatus("已复制本地版本为新对象；原对象将采用服务器版本。");
       await synchronize();
     } catch (error) {
+      if (!isCurrent()) return;
       setStatus(feedback.error(userMessage(error)));
       await refresh(db, localVault);
     }
   }
 
   async function dismiss(view: ConflictView) {
+    const isCurrent = operationIsCurrent();
     const db = database.current;
     const localVault = vault.current;
     if (db === null || localVault === null) return;
     try {
+      if (!isCurrent()) return;
       await new ConflictRepository(db, localVault).dismiss(
         workspaceId,
         view.conflict.conflict_id,
       );
+      if (!isCurrent()) return;
       setStatus(
         feedback.success("冲突已暂不处理；本地版本与服务器版本均未被覆盖。 "),
       );
       await refresh(db, localVault);
     } catch (error) {
+      if (!isCurrent()) return;
       setStatus(feedback.error(userMessage(error)));
       await refresh(db, localVault);
     }
@@ -523,6 +672,8 @@ export function OfflineSyncCenter() {
   async function removeAttachment(
     attachment: AttachmentQueueEntry,
   ): Promise<void> {
+    const generation = contextVersion.current;
+    const current = () => generation === contextVersion.current;
     try {
       const db = database.current;
       if (
@@ -537,6 +688,7 @@ export function OfflineSyncCenter() {
         workspaceId,
         attachment.attachment_id,
       );
+      if (!current()) return;
       setAttachments((current) =>
         current.filter(
           (entry) => entry.attachment_id !== attachment.attachment_id,
@@ -546,6 +698,7 @@ export function OfflineSyncCenter() {
         feedback.success(`已从本设备队列移除附件「${attachment.filename}」。`),
       );
     } catch (error) {
+      if (!current()) return;
       let message = userMessage(error);
       try {
         await refresh();
@@ -558,6 +711,7 @@ export function OfflineSyncCenter() {
       } catch (refreshError) {
         message = `${message} 队列读取失败：${userMessage(refreshError)}`;
       }
+      if (!current()) return;
       setStatus(feedback.error(message));
       throw new Error(message);
     }
@@ -565,7 +719,16 @@ export function OfflineSyncCenter() {
 
   async function upload(attachment: AttachmentQueueEntry) {
     const db = database.current;
-    if (db === null || uploading) return;
+    const generation = contextVersion.current;
+    const current = () =>
+      generation === contextVersion.current && db === database.current;
+    if (
+      db === null ||
+      uploading ||
+      !unlocked ||
+      attachment.workspace_id !== workspaceId
+    )
+      return;
     setUploading(true);
     const repository = new AttachmentQueueRepository(db);
     const uploadTransport = new ApiAttachmentUploadTransport();
@@ -578,6 +741,7 @@ export function OfflineSyncCenter() {
         uploadTransport,
         attachment.attachment_id,
       );
+      if (!current()) return;
       if (result === null) {
         setStatus(feedback.error("附件队列中没有待上传项。"));
       } else if (result.state === "verified") {
@@ -594,42 +758,52 @@ export function OfflineSyncCenter() {
         );
       }
     } catch (error) {
-      setStatus(feedback.error(userMessage(error)));
+      if (current()) setStatus(feedback.error(userMessage(error)));
     } finally {
-      try {
-        await refresh();
-      } catch (error) {
-        setStatus(feedback.error(userMessage(error)));
-      } finally {
-        setUploading(false);
+      if (current()) {
+        try {
+          await refresh();
+        } catch (error) {
+          if (current()) setStatus(feedback.error(userMessage(error)));
+        } finally {
+          if (current()) setUploading(false);
+        }
       }
     }
   }
 
+  const visible = unlocked && loadedWorkspace === workspaceId;
   return (
     <SyncWorkbench
       uploading={uploading}
       accessIssue={accessIssue}
-      attachments={attachments}
+      attachments={visible ? attachments : []}
       clearConfirmation={clearConfirmation}
       connection={connection}
-      conflicts={conflicts}
+      conflicts={visible ? conflicts : []}
       deviceId={deviceId}
       devices={devices}
       lock={lock}
       loading={loading}
-      mergeConflictId={mergeConflictId}
-      mergeDraft={mergeDraft}
+      dataLoading={unlocked && !visible && !dataError}
+      dataError={dataError}
+      mergeConflictId={visible ? mergeConflictId : null}
+      mergeDraft={visible ? mergeDraft : ""}
       onClearConfirmationChange={setClearConfirmation}
       onClearDevice={clearThisDevice}
       onCopyLocal={(view) => void copyLocal(view)}
       onDismiss={(view) => void dismiss(view)}
-      onMergeDraftChange={setMergeDraft}
+      onMergeDraftChange={(draft) => {
+        mergeVersion.current += 1;
+        setMergeDraft(draft);
+      }}
       onMergeOpen={(view) => {
+        mergeVersion.current += 1;
         setMergeConflictId(view.conflict.conflict_id);
         setMergeDraft(JSON.stringify(view.local, null, 2));
       }}
       onMergeOpenChange={(open) => {
+        mergeVersion.current += 1;
         if (!open) {
           setMergeConflictId(null);
           setMergeDraft("");
@@ -639,13 +813,18 @@ export function OfflineSyncCenter() {
       onSynchronize={() => void synchronize()}
       onUnlock={(event) => void unlock(event)}
       onUpload={(attachment) => void upload(attachment)}
-      onWorkspaceChange={setWorkspaceId}
+      onWorkspaceChange={(id) => {
+        unlockRequest.current += 1;
+        contextVersion.current += 1;
+        currentWorkspace.current = id;
+        setWorkspaceId(id);
+      }}
       onReload={() => void loadContext()}
       onRemoveAttachment={removeAttachment}
-      outbox={outbox}
-      queueSummary={queueSummary}
+      outbox={visible ? outbox : []}
+      queueSummary={visible ? queueSummary : EMPTY_QUEUE_SUMMARY}
       status={status}
-      syncState={syncState}
+      syncState={visible ? syncState : null}
       syncing={syncing}
       unlocked={unlocked}
       vaultPhase={vaultPhase}

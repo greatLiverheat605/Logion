@@ -45,7 +45,7 @@ export function RegisterForm() {
   return (
     <AuthFormShell
       eyebrow="REGISTRATION"
-      title="创建账户"
+      title="受邀注册"
       description="输入邮箱后，我们会发送一次性确认链接。无论账户是否存在，页面都会显示相同结果。"
     >
       <p className="auth-policy" data-testid="register-policy">

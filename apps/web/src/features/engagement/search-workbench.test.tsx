@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -250,6 +251,102 @@ describe("Search workbench", () => {
 
     await waitFor(() =>
       expect(commands.markRead).toHaveBeenCalledWith(notification),
+    );
+  });
+
+  it("expands original sync receipts while keeping conflicts visible and read actions exact", async () => {
+    const { commands, controller } = controllerFixture();
+    const receipt = {
+      category: "sync" as const,
+      created_at: "2026-09-01T00:00:00Z",
+      read_at: null,
+      target_id: null,
+      target_type: "sync",
+      title: "同步推送回执",
+      workspace_id: "workspace-1",
+      summary:
+        "服务端已接收 2 项；待处理冲突 0 项；未接收 0 项；已解决冲突 0 项。",
+    };
+    controller.utilities.notifications = [
+      { ...receipt, id: "one" },
+      { ...receipt, id: "two" },
+      {
+        ...receipt,
+        id: "conflict",
+        summary:
+          "服务端已接收 2 项；待处理冲突 1 项；未接收 0 项；已解决冲突 0 项。",
+      },
+    ];
+    controller.utilities.unreadNotificationCount = 3;
+    render(
+      <SearchWorkbench
+        controller={controller}
+        onScopeChange={vi.fn()}
+        scope="all"
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("tab", { name: "搜索" }), {
+      code: "ArrowRight",
+      key: "ArrowRight",
+    });
+    expect(await screen.findByText("3 条未读 · 2 组")).toBeTruthy();
+    expect(screen.getByText(/待处理冲突 1 项/)).toBeTruthy();
+    const summary = screen.getByText("普通同步推送回执 · 2 条 · 2 条未读");
+    fireEvent.click(summary);
+    const first = document.querySelector(
+      '[data-notification-id="one"]',
+    )! as HTMLElement;
+    fireEvent.click(within(first).getByRole("button", { name: "标为已读" }));
+    await waitFor(() =>
+      expect(commands.markRead).toHaveBeenCalledWith(
+        controller.utilities.notifications[0],
+      ),
+    );
+    expect(screen.getByText(/最近 200 条/)).toBeTruthy();
+  });
+
+  it("resets uncontrolled preference inputs on workspace change even at the same version", async () => {
+    const { controller } = controllerFixture();
+    controller.utilities.preference = {
+      workspace_id: "workspace-1",
+      user_id: "user",
+      version: 1,
+      timezone: "UTC",
+      enabled_categories: ["security"],
+      quiet_start_minute: null,
+      quiet_end_minute: null,
+    };
+    const view = render(
+      <SearchWorkbench
+        controller={controller}
+        onScopeChange={vi.fn()}
+        scope="all"
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("tab", { name: "搜索" }), {
+      code: "ArrowRight",
+      key: "ArrowRight",
+    });
+    const input = await screen.findByLabelText("时区");
+    fireEvent.change(input, { target: { value: "Asia/Tokyo" } });
+    const next = {
+      ...controller,
+      context: { ...controller.context, workspaceId: "workspace-2" },
+      utilities: {
+        ...controller.utilities,
+        preference: {
+          ...controller.utilities.preference,
+          workspace_id: "workspace-2",
+          timezone: "Europe/London",
+        },
+      },
+    };
+    view.rerender(
+      <SearchWorkbench controller={next} onScopeChange={vi.fn()} scope="all" />,
+    );
+    expect(screen.getByLabelText("时区")).toHaveProperty(
+      "value",
+      "Europe/London",
     );
   });
 

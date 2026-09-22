@@ -21,6 +21,9 @@ interface ElementDiagnostic {
 }
 
 interface HorizontalOverflowAudit {
+  innerWidth: number;
+  scrollbarWidth: number;
+  bodyWidth: number;
   clientWidth: number;
   offenders: ElementDiagnostic[];
   scrollWidth: number;
@@ -107,6 +110,9 @@ export async function auditHorizontalOverflow(
       .slice(0, 8);
 
     return {
+      innerWidth,
+      scrollbarWidth: innerWidth - root.clientWidth,
+      bodyWidth: document.body.getBoundingClientRect().width,
       clientWidth: root.clientWidth,
       offenders,
       scrollWidth: root.scrollWidth,
@@ -197,13 +203,10 @@ export async function assertPrimaryActionContract(
     diagnostic.hasInteractiveTarget,
     `${auditLabel(route, viewport)} primary has no interactive target: ${JSON.stringify(diagnostic)}`,
   ).toBe(true);
-  expect(
-    diagnostic.rect.right > 0 &&
-      diagnostic.rect.left < diagnostic.viewport.width &&
-      diagnostic.rect.bottom > 0 &&
-      diagnostic.rect.top < diagnostic.viewport.height,
+  await expect(
+    primary,
     `${auditLabel(route, viewport)} primary is outside the viewport: ${JSON.stringify(diagnostic)}`,
-  ).toBe(true);
+  ).toBeInViewport();
 }
 
 export async function auditReducedMotion(page: Page, selector: string) {

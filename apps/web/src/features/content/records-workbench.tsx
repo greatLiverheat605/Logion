@@ -639,7 +639,9 @@ function Inspector({
                 <ProductTag
                   tone={note.entity.sync_status === "clean" ? "good" : "warn"}
                 >
-                  {note.entity.sync_status === "clean" ? "已同步" : "待推送"}
+                  {note.entity.sync_status === "clean"
+                    ? "上次确认已同步"
+                    : "待推送"}
                 </ProductTag>
               </dd>
             </div>
@@ -1242,7 +1244,7 @@ function RenameResourceSheet({
   );
 }
 
-export function RecordsWorkbench({
+function RecordsWorkbenchContent({
   controller,
 }: Readonly<{ controller: RecordsControllerResult }>) {
   const [kind, setKind] = useState<RecordsKind>("all");
@@ -1256,10 +1258,24 @@ export function RecordsWorkbench({
   const [renameResource, setRenameResource] =
     useState<RecordsLocalView<RecordsResourcePayload> | null>(null);
   const filtered = useMemo(
-    () => filterRecords(controller.viewModel, kind, query),
-    [controller.viewModel, kind, query],
+    () =>
+      filterRecords(
+        controller.context.unlocked
+          ? controller.viewModel
+          : {
+              ...controller.viewModel,
+              notes: [],
+              resources: [],
+              attachments: [],
+            },
+        kind,
+        query,
+      ),
+    [controller.viewModel, controller.context.unlocked, kind, query],
   );
-  const selectedNote = controller.viewModel.selectedNote;
+  const selectedNote = controller.context.unlocked
+    ? controller.viewModel.selectedNote
+    : null;
 
   return (
     <main className={styles.root} id="main-content">
@@ -1380,26 +1396,44 @@ export function RecordsWorkbench({
           onAddAttachment={() => setAttachmentOpen(true)}
         />
       </section>
-      <ResourceSheet
-        controller={controller}
-        kind={resourceKind}
-        onOpenChange={setResourceKind}
-      />
-      <AttachmentSheet
-        controller={controller}
-        onOpenChange={setAttachmentOpen}
-        open={attachmentOpen}
-      />
+      {controller.context.unlocked ? (
+        <>
+          <ResourceSheet
+            controller={controller}
+            kind={resourceKind}
+            onOpenChange={setResourceKind}
+          />
+          <AttachmentSheet
+            controller={controller}
+            onOpenChange={setAttachmentOpen}
+            open={attachmentOpen}
+          />
+        </>
+      ) : null}
       <UnlockSheet
         controller={controller}
         onOpenChange={setUnlockOpen}
         open={unlockOpen}
       />
-      <RenameResourceSheet
-        controller={controller}
-        onOpenChange={setRenameResource}
-        resource={renameResource}
-      />
+      {controller.context.unlocked ? (
+        <RenameResourceSheet
+          controller={controller}
+          onOpenChange={setRenameResource}
+          resource={renameResource}
+        />
+      ) : null}
     </main>
+  );
+}
+
+export function RecordsWorkbench({
+  controller,
+}: Readonly<{ controller: RecordsControllerResult }>) {
+  const { unlocked, workspaceId, spaceId } = controller.context;
+  return (
+    <RecordsWorkbenchContent
+      key={`${unlocked}:${workspaceId}:${spaceId}`}
+      controller={controller}
+    />
   );
 }

@@ -63,11 +63,18 @@ export interface ApiRequestOptions extends Omit<
   query?: Readonly<Record<string, string>>;
   signal?: AbortSignal;
   timeoutMs?: number;
+  responseType?: "zip";
+}
+
+export interface ApiZipResponse {
+  blob: Blob;
+  filename: string | null;
 }
 
 export interface ApiClientOptions {
   cookieSource?: () => string;
   fetchImplementation?: typeof fetch;
+  onAuthenticationRequired?: () => void;
 }
 
 export interface ApiClient {
@@ -128,7 +135,12 @@ function prepareHeaders(
       });
     }
   }
-  headers.set("Accept", "application/json");
+  headers.set(
+    "Accept",
+    options.responseType === "zip"
+      ? "application/zip, application/json"
+      : "application/json",
+  );
   if (options.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -193,6 +205,21 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   const cookieSource =
     options.cookieSource ?? (() => globalThis.document?.cookie ?? "");
 
+  const reportAuthenticationFailure = (path: string, error: unknown) => {
+    if (
+      ![
+        "/api/v1/auth/session",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+      ].includes(path) &&
+      error instanceof LogionApiError &&
+      ((error.status === 401 && error.code === "AUTH_INVALID_SESSION") ||
+        error.code === "WEB_CSRF_MISSING")
+    ) {
+      options.onAuthenticationRequired?.();
+    }
+  };
+
   return {
     async request<T>(
       path: string,
@@ -207,7 +234,13 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
           status: 0,
         });
       }
-      const headers = prepareHeaders(requestOptions, cookieSource);
+      let headers: Headers;
+      try {
+        headers = prepareHeaders(requestOptions, cookieSource);
+      } catch (error) {
+        reportAuthenticationFailure(path, error);
+        throw error;
+      }
       if (
         /^\/api\/v1\/workspaces\/[^/]+\/sync\/(?:push|pull|bootstrap)$/.test(
           path,
@@ -223,6 +256,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         csrf: _csrf,
         query,
         timeoutMs: _timeoutMs,
+        responseType,
         ...fetchOptions
       } = requestOptions;
       void _csrf;
@@ -241,6 +275,50 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
             signal,
           },
         );
+        if (response.ok && responseType === "zip") {
+          if (
+            response.headers
+              .get("content-type")
+              ?.split(";", 1)[0]
+              ?.trim()
+              .toLowerCase() !== "application/zip"
+          ) {
+            throw new LogionApiError({
+              code: "WEB_API_RESPONSE_INVALID",
+              message: "The server did not return a ZIP archive.",
+              status: response.status,
+            });
+          }
+          const filename =
+            response.headers
+              .get("content-disposition")
+              ?.match(/filename="([A-Za-z0-9._-]+)"/i)?.[1] ?? null;
+          return { blob: await response.blob(), filename } as T;
+        }
+        if (response.status === 204) return undefined as T;
+        const payload = await readJson(response);
+        if (!response.ok) {
+          if (isErrorResponse(payload)) {
+            const error = new LogionApiError({
+              code: payload.code,
+              details: isRecord(payload) ? payload.details : undefined,
+              message: payload.message,
+              requestId: payload.request_id,
+              retryable: payload.retryable,
+              status: response.status,
+            });
+            reportAuthenticationFailure(path, error);
+            throw error;
+          }
+          throw new LogionApiError({
+            code: "WEB_API_RESPONSE_INVALID",
+            message: "The server returned an invalid error response.",
+            requestId: response.headers.get("x-request-id") ?? undefined,
+            retryable: response.status >= 500,
+            status: response.status,
+          });
+        }
+        return payload as T;
       } catch (error) {
         if (error instanceof LogionApiError) throw error;
         throw new LogionApiError({
@@ -254,31 +332,23 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       } finally {
         cleanup();
       }
-
-      if (response.status === 204) return undefined as T;
-      const payload = await readJson(response);
-      if (!response.ok) {
-        if (isErrorResponse(payload)) {
-          throw new LogionApiError({
-            code: payload.code,
-            details: isRecord(payload) ? payload.details : undefined,
-            message: payload.message,
-            requestId: payload.request_id,
-            retryable: payload.retryable,
-            status: response.status,
-          });
-        }
-        throw new LogionApiError({
-          code: "WEB_API_RESPONSE_INVALID",
-          message: "The server returned an invalid error response.",
-          requestId: response.headers.get("x-request-id") ?? undefined,
-          retryable: response.status >= 500,
-          status: response.status,
-        });
-      }
-      return payload as T;
     },
   };
 }
 
-export const browserApiClient = createApiClient();
+const authenticationListeners = new Set<() => void>();
+
+export function subscribeAuthenticationRequired(
+  listener: () => void,
+): () => void {
+  authenticationListeners.add(listener);
+  return () => {
+    authenticationListeners.delete(listener);
+  };
+}
+
+export const browserApiClient = createApiClient({
+  onAuthenticationRequired: () => {
+    for (const listener of authenticationListeners) listener();
+  },
+});

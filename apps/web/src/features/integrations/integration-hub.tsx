@@ -1,4 +1,5 @@
 "use client";
+import { ExportDownload } from "@/features/data/export-download";
 
 import { secureRandomUuid } from "@logion/offline";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -791,7 +792,7 @@ export function IntegrationHub({
                   </form>
                   <ul className={styles.dataList}>
                     {data.exports.map((item) => (
-                      <li key={item.id}>
+                      <li key={item.id} data-export-id={item.id}>
                         <span>
                           <strong>{item.status}</strong>
                           <small>
@@ -803,11 +804,7 @@ export function IntegrationHub({
                           </small>
                         </span>
                         {item.status === "succeeded" ? (
-                          <a
-                            href={`/api/v1/workspaces/${workspaceId}/data-exports/${item.id}/download`}
-                          >
-                            下载
-                          </a>
+                          <ExportDownload item={item}>下载</ExportDownload>
                         ) : item.status === "queued" ||
                           item.status === "running" ? (
                           <button

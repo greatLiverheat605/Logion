@@ -1,57 +1,66 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
+import type { BootstrapResponse } from "../../packages/contracts/src/sync-v1";
+
 import { expect, test } from "./fixtures";
+import { readLocalSnapshot } from "./local-snapshot";
+
+test("M03 shares Vault across navigation and removes plaintext on lock", async ({
+  page,
+  accountState,
+}) => {
+  test.setTimeout(120_000);
+  await page.goto("/app/sync");
+  await expect(page.getByTestId("sync-summary")).toContainText("解锁后确认");
+  await page
+    .getByLabel("本地解锁口令", { exact: true })
+    .fill(accountState.password);
+  await page.getByRole("button", { name: "解锁本地资料", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "本地资料已解锁" }),
+  ).toBeVisible();
+  for (const route of ["/app/planning", "/app/today", "/app/records"]) {
+    await page.locator(`a[href="${route}"]`).first().click();
+    await expect(page).toHaveURL(new RegExp(`${route}$`));
+    await expect(
+      page.getByRole("button", { name: "本地资料已解锁" }),
+    ).toBeVisible();
+  }
+  await page.getByRole("button", { name: "新建笔记", exact: true }).click();
+  const create = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
+  await create
+    .getByLabel("标题", { exact: true })
+    .fill(`M03 lock ${Date.now()}`);
+  await create.getByRole("button", { name: "创建笔记", exact: true }).click();
+  await expect(create).toHaveCount(0);
+  const editor = page.getByRole("textbox", {
+    name: "Markdown 正文",
+    exact: true,
+  });
+  await editor.fill("M03 unsubmitted private text");
+  await page.context().setOffline(true);
+  await expect(page.getByLabel("当前工作台上下文")).toContainText("离线");
+  await page.getByRole("button", { name: "本地资料已解锁" }).click();
+  await page.getByRole("button", { name: "立即锁定", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(
+    page.getByRole("dialog", { name: "本地资料保护" }),
+  ).toContainText("本地资料已锁定");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "本地资料已锁定" }),
+  ).toBeVisible();
+  await page.context().setOffline(false);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "本地资料已锁定" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("当前工作台上下文")).toContainText("解锁后确认");
+});
 
 async function localSnapshot(page: Page) {
-  return page.evaluate(async () => {
-    const databases = await indexedDB.databases();
-    const snapshots: Record<string, Record<string, unknown>[]> = {};
-    for (const { name } of databases) {
-      if (!name) continue;
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(name);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      if (!db.objectStoreNames.contains("attachmentQueue")) {
-        db.close();
-        continue;
-      }
-      try {
-        for (const store of Array.from(db.objectStoreNames)) {
-          const rows = await new Promise<Record<string, unknown>[]>(
-            (resolve, reject) => {
-              const request = db.transaction(store).objectStore(store).getAll();
-              request.onsuccess = () =>
-                resolve(request.result as Record<string, unknown>[]);
-              request.onerror = () => reject(request.error);
-            },
-          );
-          for (const row of rows) {
-            if (row.blob instanceof Blob) {
-              row.blob = {
-                size: row.blob.size,
-                type: row.blob.type,
-                digest: Array.from(
-                  new Uint8Array(
-                    await crypto.subtle.digest(
-                      "SHA-256",
-                      await row.blob.arrayBuffer(),
-                    ),
-                  ),
-                ),
-              };
-            }
-          }
-          snapshots[store] = rows;
-        }
-      } finally {
-        db.close();
-      }
-    }
-    return snapshots;
-  });
+  return (await readLocalSnapshot(page)).stores;
 }
 
 test("device wipe clears populated local stores and bootstraps unchanged server data", async ({
@@ -89,28 +98,64 @@ test("device wipe clears populated local stores and bootstraps unchanged server 
     (state) => state.workspace_id === note!.workspace_id,
   )!;
   const readServer = async () => {
-    const response = await page.request.post(
-      `/api/v1/workspaces/${note!.workspace_id}/sync/bootstrap`,
-      {
-        headers: { Origin: new URL(page.url()).origin },
-        data: {
-          message_type: "bootstrap_request",
-          protocol_version: "sync-v1",
-          workspace_id: note!.workspace_id,
-          device_id: syncState.device_id,
-          known_sync_epoch: null,
-          snapshot_id: null,
-          chunk_index: null,
+    const readChunk = async (
+      snapshotId: string | null = null,
+      chunkIndex: number | null = null,
+    ) => {
+      const response = await page.request.post(
+        `/api/v1/workspaces/${note!.workspace_id}/sync/bootstrap`,
+        {
+          headers: { Origin: new URL(page.url()).origin },
+          data: {
+            message_type: "bootstrap_request",
+            protocol_version: "sync-v1",
+            workspace_id: note!.workspace_id,
+            device_id: syncState.device_id,
+            known_sync_epoch: null,
+            snapshot_id: snapshotId,
+            chunk_index: chunkIndex,
+          },
         },
-      },
+      );
+      expect(response.status()).toBe(200);
+      const chunk = (await response.json()) as BootstrapResponse;
+      expect(chunk).toMatchObject({
+        message_type: "bootstrap_response",
+        protocol_version: "sync-v1",
+        workspace_id: note!.workspace_id,
+        device_id: syncState.device_id,
+        chunk_index: chunkIndex ?? 0,
+      });
+      return chunk;
+    };
+    const first = await readChunk();
+    expect(Number.isInteger(first.chunk_count)).toBe(true);
+    expect(first.chunk_count).toBeGreaterThan(0);
+    const records = [...first.records];
+    for (let index = 1; index < first.chunk_count; index++) {
+      const chunk = await readChunk(first.snapshot_id, index);
+      expect(chunk).toMatchObject({
+        snapshot_id: first.snapshot_id,
+        chunk_count: first.chunk_count,
+        sync_epoch: first.sync_epoch,
+        cursor: first.cursor,
+        snapshot_checksum: first.snapshot_checksum,
+        snapshot_schema_version: first.snapshot_schema_version,
+        min_supported_version: first.min_supported_version,
+      });
+      records.push(...chunk.records);
+    }
+    expect(
+      new Set(records.map((entry) => `${entry.entity_type}:${entry.entity_id}`))
+        .size,
+    ).toBe(records.length);
+    const matches = records.filter(
+      (entry) =>
+        entry.entity_type === note!.entity_type &&
+        entry.entity_id === note!.entity_id,
     );
-    expect(response.status()).toBe(200);
-    const body = await response.json();
-    expect(body.chunk_count).toBe(1);
-    const stored = body.records.find(
-      (entry: { entity_id: string }) => entry.entity_id === note!.entity_id,
-    );
-    expect(stored).toBeDefined();
+    expect(matches).toHaveLength(1);
+    const stored = matches[0]!;
     expect(stored.payload.title).toBe(marker);
     return stored;
   };

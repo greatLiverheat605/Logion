@@ -1163,10 +1163,11 @@ function validateContext(context, roles, errors) {
 
 async function loadTaskEvents(path, errors, runRootReal) {
   const { raw } = await readUtf8FileStrict(path, "tasks.jsonl", runRootReal);
-  scanRawText(raw, "tasks.jsonl", errors);
+  scanRawText(raw, "tasks.jsonl", errors, false);
   const events = [];
   for (const [index, line] of raw.split(/\r?\n/gu).entries()) {
     if (line.trim().length === 0) continue;
+    scanRawText(line, `tasks.jsonl:${index + 1}`, errors);
     try {
       const event = parseJsonText(line, `tasks.jsonl:${index + 1}`);
       events.push(event);
@@ -2324,7 +2325,35 @@ async function validateRunUnchecked(runDirectory) {
     [graphRaw, "graph.json", graph],
     [rolesRaw, "roles.json", rolesDocument],
   ]) {
-    scanRawText(raw, label, errors);
+    if (label === "graph.json" && isObject(value)) {
+      // A growing graph must not exhaust a single record's decoding budget.
+      // Keep the whole-file limits; decode every bounded record and value.
+      scanRawText(raw, label, errors, false);
+      const { nodes, edges, ...metadata } = value;
+      scanRawText(JSON.stringify(metadata), label, errors);
+      for (const [collection, records] of [
+        ["nodes", nodes],
+        ["edges", edges],
+      ]) {
+        if (Array.isArray(records)) {
+          records.forEach((record, index) =>
+            scanRawText(
+              JSON.stringify(record),
+              `${label}.${collection}[${index}]`,
+              errors,
+            ),
+          );
+        } else if (records !== undefined) {
+          scanRawText(
+            JSON.stringify(records),
+            `${label}.${collection}`,
+            errors,
+          );
+        }
+      }
+    } else {
+      scanRawText(raw, label, errors);
+    }
     scanSensitiveKeys(value, label, errors);
   }
 

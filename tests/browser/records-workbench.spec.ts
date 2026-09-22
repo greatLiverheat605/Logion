@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import { readLocalSnapshot } from "./local-snapshot";
 import {
   assertGlmPrimaryContract,
   assertGlmRouteRegions,
@@ -39,11 +40,21 @@ test("Learning loop survives re-login, converts note selections offline and reco
     );
   await unlock.getByRole("button", { name: "解锁本地资料" }).click();
   await expect(unlock).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "同步当前 Workspace", exact: true })
+    .click();
+  await expect(
+    page.getByText("笔记与资料索引已同步。", { exact: true }).first(),
+  ).toBeVisible();
+  const beforeCreation = await readLocalSnapshot(page);
   await page.getByRole("button", { name: "新建笔记", exact: true }).click();
   const note = page.getByRole("dialog", { name: "新建 Markdown 笔记" });
   await note.getByLabel("标题", { exact: true }).fill(marker);
   await note.getByRole("button", { name: "创建笔记" }).click();
   await expect(note).toHaveCount(0);
+  await expect(
+    page.getByText("笔记已创建并同步。", { exact: true }),
+  ).toBeVisible();
   const body = page.getByRole("textbox", { name: "Markdown 正文" });
   await body.fill(excerpt);
   await page.getByRole("button", { name: "保存", exact: true }).click();
@@ -55,6 +66,16 @@ test("Learning loop survives re-login, converts note selections offline and reco
     page.getByText("笔记与资料索引已同步。", { exact: true }).first(),
   ).toBeVisible();
   // Losing only the device cookie makes re-login allocate a new device while IndexedDB survives.
+  const beforeRecovery = await readLocalSnapshot(page);
+  const priorIds = new Set(
+    beforeCreation.stores.entities.map((item) => item.entity_id),
+  );
+  const createdNotes = beforeRecovery.stores.entities.filter(
+    (item) => item.entity_type === "note" && !priorIds.has(item.entity_id),
+  );
+  expect(createdNotes).toHaveLength(1);
+  const preservedNote = createdNotes[0];
+  expect(beforeRecovery.stores.outbox).toHaveLength(0);
   const deviceBefore = (
     await (await page.request.get("/api/v1/auth/devices")).json()
   ).devices.find((device: { current: boolean }) => device.current).id;
@@ -72,6 +93,15 @@ test("Learning loop survives re-login, converts note selections offline and reco
     await (await page.request.get("/api/v1/auth/devices")).json()
   ).devices.find((device: { current: boolean }) => device.current).id;
   expect(deviceAfter).not.toBe(deviceBefore);
+  const afterLogin = await readLocalSnapshot(page);
+  expect(afterLogin.databaseName).toBe(beforeRecovery.databaseName);
+  expect(afterLogin.stores.vaultMetadata).toEqual(
+    beforeRecovery.stores.vaultMetadata,
+  );
+  expect(afterLogin.stores.vaultRecords).toEqual(
+    expect.arrayContaining(beforeRecovery.stores.vaultRecords),
+  );
+  expect(afterLogin.stores.entities).toContainEqual(preservedNote);
   await page.reload();
   await waitForWorkbenchReady(page, "/app/records");
   await page.locator("#records-unlock").click();
@@ -86,12 +116,33 @@ test("Learning loop survives re-login, converts note selections offline and reco
     .getByRole("button", { name: new RegExp(`${marker}，更新于`) })
     .click();
   await expect(body).toHaveValue(excerpt);
+  // Device recovery first preserves readable data, then explicit sync completes
+  // the new-device bootstrap. Inspect the settled state after that action.
   await page
     .getByRole("button", { name: "同步当前 Workspace", exact: true })
     .click();
   await expect(
     page.getByText("笔记与资料索引已同步。", { exact: true }).first(),
   ).toBeVisible();
+  const recovered = await readLocalSnapshot(page);
+  expect(recovered.databaseName).toBe(beforeRecovery.databaseName);
+  expect(recovered.stores.vaultMetadata).toEqual(
+    beforeRecovery.stores.vaultMetadata,
+  );
+  expect(recovered.stores.entities).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        entity_id: preservedNote.entity_id,
+        workspace_id: preservedNote.workspace_id,
+      }),
+    ]),
+  );
+  expect(
+    recovered.stores.syncState.find(
+      (state) => state.workspace_id === preservedNote.workspace_id,
+    ),
+  ).toMatchObject({ device_id: deviceAfter, bootstrap_state: "ready" });
+  expect(recovered.stores.outbox).toHaveLength(0);
   const reviewHref = await page
     .getByRole("link", { name: "前往复习", exact: true })
     .getAttribute("href");
@@ -132,6 +183,12 @@ test("Learning loop survives re-login, converts note selections offline and reco
       .getByRole("button", { name: "创建知识点", exact: true })
       .click();
     await expect(sheet).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "知识点已加密保存在本机；服务器同步暂未完成，可前往复习页查看。",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await page.getByRole("radio", { name: "安全预览" }).click();
     await page.locator(".product-markdown-preview").evaluate((element) => {
       const range = document.createRange();
@@ -152,6 +209,12 @@ test("Learning loop survives re-login, converts note selections offline and reco
       .fill("After a majority acknowledges it.");
     await sheet.getByRole("button", { name: "创建题目", exact: true }).click();
     await expect(sheet).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "题目已加密保存在本机；服务器同步暂未完成，可前往复习页查看。",
+        { exact: true },
+      ),
+    ).toBeVisible();
   } finally {
     await page.context().setOffline(false);
   }

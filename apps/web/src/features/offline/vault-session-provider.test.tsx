@@ -46,6 +46,8 @@ function Probe() {
       </button>
       <button onClick={session.lock}>lock</button>
       <span>{session.phase}</span>
+      <output data-testid="revision">{session.revision}</output>
+      <output data-testid="deadline">{session.expiresAt}</output>
     </>
   );
 }
@@ -53,8 +55,40 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   mocks.unlock.mockResolvedValue(undefined);
   mocks.session.status = "authenticated";
+});
+it("refreshes local views when visible without extending the deadline and locks on a late focus", async () => {
+  vi.useFakeTimers();
+  render(
+    <VaultSessionProvider>
+      <Probe />
+    </VaultSessionProvider>,
+  );
+  await act(async () => fireEvent.click(screen.getByText("unlock")));
+  const deadline = Number(screen.getByTestId("deadline").textContent);
+  const revision = Number(screen.getByTestId("revision").textContent);
+  const visibility = vi
+    .spyOn(document, "visibilityState", "get")
+    .mockReturnValue("hidden");
+  fireEvent(document, new Event("visibilitychange"));
+  fireEvent(window, new Event("focus"));
+  expect(Number(screen.getByTestId("revision").textContent)).toBe(revision);
+  visibility.mockReturnValue("visible");
+  fireEvent(document, new Event("visibilitychange"));
+  fireEvent(window, new Event("focus"));
+  expect(Number(screen.getByTestId("revision").textContent)).toBeGreaterThan(
+    revision,
+  );
+  expect(Number(screen.getByTestId("deadline").textContent)).toBe(deadline);
+  const refreshed = screen.getByTestId("revision").textContent;
+  vi.setSystemTime(deadline + 1);
+  fireEvent(window, new Event("focus"));
+  expect(screen.getByText("locked")).toBeTruthy();
+  expect(screen.getByTestId("deadline").textContent).toBe("");
+  expect(screen.getByTestId("revision").textContent).toBe(refreshed);
+  expect(mocks.close).toHaveBeenCalled();
 });
 it("keeps the same session through navigation and clears keys at the deadline", async () => {
   vi.useFakeTimers();

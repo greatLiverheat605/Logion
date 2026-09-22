@@ -18,6 +18,7 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,7 +32,12 @@ import { operationalEventName } from "@/components/app-shell/app-operational-eve
 import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import {
+  incompleteSyncMessage,
+  matchesVaultSession,
+} from "@/features/sync/sync-diagnostics";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { feedback as globalFeedback } from "@/lib/feedback";
 import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -139,8 +145,10 @@ async function ensureBootstrap(
   vault: OfflineVault,
   workspaceId: string,
   deviceId: string,
+  isCurrent: () => boolean,
 ): Promise<void> {
   const current = await database.syncState.get(workspaceId);
+  if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
   if (current?.bootstrap_state === "ready" && current.device_id === deviceId) {
     return;
   }
@@ -162,6 +170,7 @@ async function ensureBootstrap(
       },
     );
   const first = await fetchChunk(null, null);
+  if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
   const validation = validateSyncV1Message(first);
   if (
     !validation.ok ||
@@ -174,12 +183,16 @@ async function ensureBootstrap(
     workspace_id: workspaceId,
     device_id: deviceId,
   });
+  if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
   await repository.stageChunk(first, {
     workspace_id: workspaceId,
     device_id: deviceId,
   });
   for (let index = 1; index < manifest.chunk_count; index += 1) {
-    await repository.stageChunk(await fetchChunk(manifest.snapshot_id, index), {
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+    const chunk = await fetchChunk(manifest.snapshot_id, index);
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+    await repository.stageChunk(chunk, {
       workspace_id: workspaceId,
       device_id: deviceId,
     });
@@ -191,12 +204,21 @@ async function synchronizeWorkspace(
   vault: OfflineVault,
   workspaceId: string,
   deviceId: string,
+  isCurrent: () => boolean,
 ): Promise<void> {
-  await ensureBootstrap(database, vault, workspaceId, deviceId);
-  await new SyncClient(database, transport(workspaceId), vault).synchronize(
-    workspaceId,
-    deviceId,
-  );
+  await ensureBootstrap(database, vault, workspaceId, deviceId, isCurrent);
+  if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+  const result = await new SyncClient(
+    database,
+    transport(workspaceId),
+    vault,
+  ).synchronize(workspaceId, deviceId);
+  const entries = await database.outbox
+    .where("workspace_id")
+    .equals(workspaceId)
+    .toArray();
+  const incomplete = incompleteSyncMessage(result, entries);
+  if (incomplete) throw new Error(incomplete);
 }
 
 async function decrypt<T extends JsonObject>(
@@ -247,16 +269,19 @@ function OperationFeedback({
   );
 }
 
-export function AppOperationalTools() {
+function AppOperationalToolsContent() {
   const { state: session } = useSession();
   const {
     activeDatabase,
     activeVault,
+    database,
     expiresAt,
     lock,
     markChanged,
     phase: vaultPhase,
+    revision,
     unlock,
+    vault,
   } = useVaultSession();
   const [overlay, setOverlay] = useState<OperationalOverlay | null>(null);
   const [captureType, setCaptureType] = useState<CaptureType>("inbox_item");
@@ -279,7 +304,38 @@ export function AppOperationalTools() {
   const vaultButtonRef = useRef<HTMLButtonElement>(null);
   const captureButtonRef = useRef<HTMLButtonElement>(null);
   const focusButtonRef = useRef<HTMLButtonElement>(null);
+  const captureInFlight = useRef<number | null>(null);
   const unlocked = vaultPhase === "unlocked";
+  const generation = useRef(0);
+  const contextRequest = useRef(0);
+  const spaceRequest = useRef(0);
+  const focusRequest = useRef(0);
+  const currentWorkspace = useRef(workspaceId);
+  const [spacesWorkspace, setSpacesWorkspace] = useState("");
+
+  useLayoutEffect(() => {
+    const version = ++generation.current;
+    currentWorkspace.current = workspaceId;
+    focusRequest.current += 1;
+    queueMicrotask(() => {
+      if (version !== generation.current) return;
+      setTasks([]);
+      setSessions([]);
+      setSelectedTaskId("");
+      setFeedback(null);
+      setBusy(false);
+    });
+    return () => {
+      generation.current += 1;
+    };
+  }, [activeDatabase, activeVault, workspaceId, deviceId, spaceId, overlay]);
+
+  const operationIsCurrent = useCallback(() => {
+    const version = generation.current;
+    return () =>
+      version === generation.current &&
+      matchesVaultSession(database, vault, activeDatabase, activeVault);
+  }, [activeDatabase, activeVault, database, vault]);
 
   const openOverlay = useCallback((nextOverlay: OperationalOverlay) => {
     if (nextOverlay === "focus" || nextOverlay === "vault")
@@ -300,6 +356,7 @@ export function AppOperationalTools() {
   }, [openOverlay]);
 
   const loadContext = useCallback(async () => {
+    const request = ++contextRequest.current;
     setFeedback({ message: "正在读取工作区与设备…", tone: "loading" });
     try {
       const [workspaceResult, deviceResult] = await Promise.all([
@@ -308,6 +365,7 @@ export function AppOperationalTools() {
         ),
         browserApiClient.request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
+      if (request !== contextRequest.current) return;
       const nextWorkspaces = workspaceResult.workspaces;
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(nextWorkspaces);
@@ -327,6 +385,7 @@ export function AppOperationalTools() {
             },
       );
     } catch (error) {
+      if (request !== contextRequest.current) return;
       setFeedback({
         message: actionError(error),
         retry: "context",
@@ -336,17 +395,32 @@ export function AppOperationalTools() {
   }, []);
 
   const loadSpaces = useCallback(async (selectedWorkspaceId: string) => {
+    const request = ++spaceRequest.current;
+    setSpaces([]);
+    setSpaceId("");
+    setSpacesWorkspace("");
     try {
       const result = await browserApiClient.request<{ spaces: Space[] }>(
         `/api/v1/workspaces/${selectedWorkspaceId}/spaces`,
       );
+      if (
+        request !== spaceRequest.current ||
+        selectedWorkspaceId !== currentWorkspace.current
+      )
+        return;
       setSpaces(result.spaces);
+      setSpacesWorkspace(selectedWorkspaceId);
       setSpaceId((current) =>
         result.spaces.some((item) => item.id === current)
           ? current
           : (result.spaces[0]?.id ?? ""),
       );
     } catch (error) {
+      if (
+        request !== spaceRequest.current ||
+        selectedWorkspaceId !== currentWorkspace.current
+      )
+        return;
       setSpaces([]);
       setSpaceId("");
       setFeedback({
@@ -361,16 +435,30 @@ export function AppOperationalTools() {
     if (session.status === "authenticated") {
       queueMicrotask(() => void loadContext());
     }
+    return () => {
+      contextRequest.current += 1;
+    };
   }, [loadContext, session.status]);
 
   useEffect(() => {
     if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
+    return () => {
+      spaceRequest.current += 1;
+    };
   }, [loadSpaces, workspaceId]);
 
   const readFocusData = useCallback(async () => {
     const db = activeDatabase;
     const localVault = activeVault;
-    if (db === null || localVault === null || !workspaceId) return;
+    if (
+      !matchesVaultSession(database, vault, db, localVault) ||
+      db === null ||
+      localVault === null ||
+      !workspaceId
+    )
+      return;
+    const version = generation.current;
+    const request = ++focusRequest.current;
     const [taskRows, sessionRows] = await Promise.all([
       db.entities
         .where("[workspace_id+entity_type]")
@@ -389,25 +477,42 @@ export function AppOperationalTools() {
         sessionRows.map((item) => decrypt<SessionPayload>(localVault, item)),
       ),
     ]);
+    if (
+      version !== generation.current ||
+      request !== focusRequest.current ||
+      !matchesVaultSession(database, vault, db, localVault)
+    )
+      return;
     setTasks(nextTasks);
     setSessions(nextSessions);
-  }, [activeDatabase, activeVault, workspaceId]);
+  }, [activeDatabase, activeVault, database, vault, workspaceId]);
 
   const loadFocusData = useCallback(async () => {
     const db = activeDatabase;
     const localVault = activeVault;
     if (db === null || localVault === null || !workspaceId || !deviceId) return;
+    const isCurrent = operationIsCurrent();
+    if (!isCurrent()) return;
     setBusy(true);
     setFeedback({ message: "正在读取真实任务与专注会话…", tone: "loading" });
     let syncError: unknown;
     try {
-      await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+      await synchronizeWorkspace(
+        db,
+        localVault,
+        workspaceId,
+        deviceId,
+        isCurrent,
+      );
+      if (!isCurrent()) return;
       markChanged();
     } catch (error) {
       syncError = error;
     }
     try {
+      if (!isCurrent()) return;
       await readFocusData();
+      if (!isCurrent()) return;
       setFeedback(
         syncError
           ? {
@@ -418,28 +523,60 @@ export function AppOperationalTools() {
           : { message: "任务与专注会话已更新。", tone: "success" },
       );
     } catch (error) {
+      if (!isCurrent()) return;
       setFeedback({
         message: actionError(error),
         retry: "focus",
         tone: "error",
       });
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }, [
     activeDatabase,
     activeVault,
     deviceId,
     markChanged,
+    operationIsCurrent,
     readFocusData,
     workspaceId,
   ]);
 
   useEffect(() => {
-    if (overlay === "focus" && unlocked && workspaceId && deviceId) {
+    if (
+      overlay === "focus" &&
+      unlocked &&
+      workspaceId &&
+      deviceId &&
+      spaceId &&
+      spacesWorkspace === workspaceId
+    ) {
       queueMicrotask(() => void loadFocusData());
     }
-  }, [deviceId, loadFocusData, overlay, unlocked, workspaceId]);
+  }, [
+    deviceId,
+    loadFocusData,
+    overlay,
+    unlocked,
+    workspaceId,
+    spaceId,
+    spacesWorkspace,
+  ]);
+
+  useEffect(() => {
+    if (overlay !== "focus" || !unlocked) return;
+    queueMicrotask(() => {
+      const isCurrent = operationIsCurrent();
+      void readFocusData().catch((error: unknown) => {
+        if (isCurrent())
+          setFeedback({
+            message: actionError(error),
+            retry: "focus",
+            tone: "error",
+          });
+      });
+    });
+  }, [revision, spaceId, overlay, unlocked, operationIsCurrent, readFocusData]);
 
   const activeSession = sessions.find(
     (item) => item.payload.status === "active",
@@ -468,14 +605,15 @@ export function AppOperationalTools() {
   }, [activeSession, overlay]);
 
   async function commitEntity(
+    isCurrent: () => boolean,
     entityType: "inbox_item" | "note" | "study_session" | "task",
     entityId: string,
     payload: JsonObject,
     existing?: LocalEntity,
     dependencies: string[] = [],
   ) {
-    if (session.status !== "authenticated") {
-      throw new Error("not authenticated");
+    if (!isCurrent() || session.status !== "authenticated") {
+      throw new Error("context changed");
     }
     const db = activeDatabase;
     const localVault = activeVault;
@@ -511,6 +649,7 @@ export function AppOperationalTools() {
       const result = await unlock(
         String(new FormData(form).get("passphrase") ?? ""),
       );
+      if (!form.isConnected) return;
       form.reset();
       setFeedback({
         message: result.initialized
@@ -519,9 +658,10 @@ export function AppOperationalTools() {
         tone: "success",
       });
     } catch (error) {
+      if (!form.isConnected) return;
       setFeedback({ message: unlockError(error), tone: "error" });
     } finally {
-      setBusy(false);
+      if (form.isConnected) setBusy(false);
     }
   }
 
@@ -529,45 +669,79 @@ export function AppOperationalTools() {
     const db = activeDatabase;
     const localVault = activeVault;
     if (db === null || localVault === null || !workspaceId || !deviceId) return;
+    const isCurrent = operationIsCurrent();
+    if (!isCurrent()) return;
     setBusy(true);
     setFeedback({ message: "正在重试同步…", tone: "loading" });
     try {
-      await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+      await synchronizeWorkspace(
+        db,
+        localVault,
+        workspaceId,
+        deviceId,
+        isCurrent,
+      );
+      if (!isCurrent()) return;
       markChanged();
+      if (!isCurrent()) return;
       await readFocusData();
+      if (!isCurrent()) return;
       setFeedback({ message: "本地修改已与服务器同步。", tone: "success" });
     } catch (error) {
+      if (!isCurrent()) return;
       setFeedback({
         message: `${actionError(error)} 本地记录仍保留。`,
         retry: "sync",
         tone: "error",
       });
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   function retry(action: RetryAction) {
-    if (action === "context") void loadContext();
+    if (action === "context") {
+      void loadContext();
+      if (workspaceId) void loadSpaces(workspaceId);
+    }
     if (action === "focus") void loadFocusData();
     if (action === "sync") void retrySync();
   }
 
   async function saveCapture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const captureVersion = generation.current;
+    if (captureInFlight.current === captureVersion) return;
     const form = event.currentTarget;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const closeAfterSave =
+      submitter instanceof HTMLButtonElement && submitter.value === "close";
     const db = activeDatabase;
     const localVault = activeVault;
-    if (db === null || localVault === null || !workspaceId || !spaceId) return;
+    if (
+      db === null ||
+      localVault === null ||
+      !workspaceId ||
+      !spaceId ||
+      spacesWorkspace !== workspaceId ||
+      !spaces.some((space) => space.id === spaceId)
+    )
+      return;
     const data = new FormData(form);
+    const isCurrent = operationIsCurrent();
+    if (!isCurrent()) return;
+    captureInFlight.current = captureVersion;
+    let saved = false;
     setBusy(true);
     setFeedback({ message: "正在加密保存…", tone: "loading" });
     try {
-      await ensureBootstrap(db, localVault, workspaceId, deviceId);
+      await ensureBootstrap(db, localVault, workspaceId, deviceId, isCurrent);
+      if (!isCurrent()) return;
       markChanged();
       const title = String(data.get("title") ?? "").trim();
       const body = String(data.get("body") ?? "").trim();
       await commitEntity(
+        isCurrent,
         captureType,
         crypto.randomUUID(),
         captureType === "note"
@@ -579,28 +753,54 @@ export function AppOperationalTools() {
             }
           : { space_id: spaceId, title, note: body },
       );
+      if (!isCurrent()) return;
       markChanged();
+      if (!isCurrent()) return;
       form.reset();
+      saved = true;
+      const destination = captureType === "note" ? "笔记" : "学习收件箱内容";
+      let result: Feedback;
       try {
-        await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
-        setFeedback({
-          message:
-            captureType === "note"
-              ? "笔记已加密保存并同步。"
-              : "内容已加密保存到学习收件箱并同步。",
+        await synchronizeWorkspace(
+          db,
+          localVault,
+          workspaceId,
+          deviceId,
+          isCurrent,
+        );
+        if (!isCurrent()) return;
+        result = {
+          message: `${destination}已加密保存并同步。`,
           tone: "success",
-        });
+        };
       } catch {
-        setFeedback({
-          message: "内容已加密保存在本机；服务器同步暂未完成。",
+        if (!isCurrent()) return;
+        result = {
+          message: `${destination}已加密保存在本机；服务器同步暂未完成。`,
           retry: "sync",
           tone: "warning",
-        });
+        };
+      }
+      if (closeAfterSave) {
+        closeOverlay();
+        globalFeedback.success(result.message);
+      } else {
+        setFeedback(result);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       setFeedback({ message: actionError(error), tone: "error" });
     } finally {
-      setBusy(false);
+      if (captureInFlight.current === captureVersion)
+        captureInFlight.current = null;
+      if (isCurrent()) {
+        setBusy(false);
+        if (saved)
+          requestAnimationFrame(() => {
+            if (isCurrent())
+              form.querySelector<HTMLInputElement>('[name="title"]')?.focus();
+          });
+      }
     }
   }
 
@@ -609,6 +809,8 @@ export function AppOperationalTools() {
     const db = activeDatabase;
     const localVault = activeVault;
     if (db === null || localVault === null) return;
+    const isCurrent = operationIsCurrent();
+    if (!isCurrent()) return;
     setBusy(true);
     setFeedback({ message: "正在开始专注会话…", tone: "loading" });
     try {
@@ -616,6 +818,7 @@ export function AppOperationalTools() {
       let dependencies: string[] = [];
       if (selectedTask.payload.status === "planned") {
         const transition = await commitEntity(
+          isCurrent,
           "task",
           selectedTask.entity.entity_id,
           {
@@ -629,6 +832,7 @@ export function AppOperationalTools() {
         dependencies = [transition.operation.operation_id];
       }
       await commitEntity(
+        isCurrent,
         "study_session",
         crypto.randomUUID(),
         {
@@ -644,13 +848,25 @@ export function AppOperationalTools() {
         undefined,
         dependencies,
       );
+      if (!isCurrent()) return;
       markChanged();
+      if (!isCurrent()) return;
       await readFocusData();
       try {
-        await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+        await synchronizeWorkspace(
+          db,
+          localVault,
+          workspaceId,
+          deviceId,
+          isCurrent,
+        );
+        if (!isCurrent()) return;
+        if (!isCurrent()) return;
         await readFocusData();
+        if (!isCurrent()) return;
         setFeedback({ message: "专注会话已开始并同步。", tone: "success" });
       } catch {
+        if (!isCurrent()) return;
         setFeedback({
           message: "专注会话已在本机开始；服务器同步暂未完成。",
           retry: "sync",
@@ -658,10 +874,12 @@ export function AppOperationalTools() {
         });
       }
     } catch (error) {
+      if (!isCurrent()) return;
       setFeedback({ message: actionError(error), tone: "error" });
+      if (!isCurrent()) return;
       await readFocusData();
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
@@ -674,10 +892,13 @@ export function AppOperationalTools() {
     const form = event.currentTarget;
     const data = new FormData(form);
     const outcome = String(data.get("outcome")) as "abandoned" | "completed";
+    const isCurrent = operationIsCurrent();
+    if (!isCurrent()) return;
     setBusy(true);
     setFeedback({ message: "正在保存会话结果…", tone: "loading" });
     try {
       await commitEntity(
+        isCurrent,
         "study_session",
         activeSession.entity.entity_id,
         {
@@ -690,16 +911,27 @@ export function AppOperationalTools() {
         },
         activeSession.entity,
       );
+      if (!isCurrent()) return;
       markChanged();
+      if (!isCurrent()) return;
       form.reset();
+      if (!isCurrent()) return;
       await readFocusData();
       try {
-        await synchronizeWorkspace(db, localVault, workspaceId, deviceId);
+        await synchronizeWorkspace(
+          db,
+          localVault,
+          workspaceId,
+          deviceId,
+          isCurrent,
+        );
+        if (!isCurrent()) return;
         setFeedback({
           message: "会话结果已保存并同步；任务状态未被自动验收。",
           tone: "success",
         });
       } catch {
+        if (!isCurrent()) return;
         setFeedback({
           message: "会话结果已保存在本机；服务器同步暂未完成。",
           retry: "sync",
@@ -707,14 +939,17 @@ export function AppOperationalTools() {
         });
       }
     } catch (error) {
+      if (!isCurrent()) return;
       setFeedback({ message: actionError(error), tone: "error" });
+      if (!isCurrent()) return;
       await readFocusData();
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
 
   function closeOverlay() {
+    generation.current += 1;
     setOverlay(null);
     setFeedback(null);
   }
@@ -725,6 +960,7 @@ export function AppOperationalTools() {
         工作区
         <select
           aria-label="工作区"
+          disabled={busy}
           value={workspaceId}
           onChange={(event) => setWorkspaceId(event.target.value)}
         >
@@ -739,10 +975,11 @@ export function AppOperationalTools() {
         空间
         <select
           aria-label="Space"
+          disabled={busy || spacesWorkspace !== workspaceId}
           value={spaceId}
           onChange={(event) => setSpaceId(event.target.value)}
         >
-          {spaces.map((space) => (
+          {(spacesWorkspace === workspaceId ? spaces : []).map((space) => (
             <option key={space.id} value={space.id}>
               {space.name} · {space.visibility === "private" ? "私有" : "共享"}
             </option>
@@ -904,6 +1141,7 @@ export function AppOperationalTools() {
                         aria-label="捕获类型"
                       >
                         <button
+                          disabled={busy}
                           aria-pressed={captureType === "inbox_item"}
                           className={
                             captureType === "inbox_item" ? "active" : ""
@@ -914,6 +1152,7 @@ export function AppOperationalTools() {
                           学习收件箱
                         </button>
                         <button
+                          disabled={busy}
                           aria-pressed={captureType === "note"}
                           className={captureType === "note" ? "active" : ""}
                           type="button"
@@ -927,6 +1166,7 @@ export function AppOperationalTools() {
                       <input
                         data-modal-autofocus
                         id="app-capture-title"
+                        disabled={busy}
                         maxLength={200}
                         name="title"
                         placeholder="先记录，稍后再整理"
@@ -937,6 +1177,7 @@ export function AppOperationalTools() {
                       </label>
                       <textarea
                         id="app-capture-body"
+                        disabled={busy}
                         maxLength={10000}
                         name="body"
                         placeholder={
@@ -948,6 +1189,19 @@ export function AppOperationalTools() {
                       />
                       <div className="app-modal-actions">
                         <button
+                          className="app-primary-link"
+                          disabled={
+                            busy ||
+                            !deviceId ||
+                            !spaceId ||
+                            spacesWorkspace !== workspaceId
+                          }
+                          type="submit"
+                          value="continue"
+                        >
+                          {busy ? "正在保存…" : "保存并继续"}
+                        </button>
+                        <button
                           className="app-secondary-link"
                           type="button"
                           onClick={closeOverlay}
@@ -955,15 +1209,17 @@ export function AppOperationalTools() {
                           取消
                         </button>
                         <button
-                          className="app-primary-link"
-                          disabled={busy || !deviceId || !spaceId}
+                          className="app-secondary-link"
+                          disabled={
+                            busy ||
+                            !deviceId ||
+                            !spaceId ||
+                            spacesWorkspace !== workspaceId
+                          }
                           type="submit"
+                          value="close"
                         >
-                          {busy
-                            ? "正在保存…"
-                            : captureType === "note"
-                              ? "保存到笔记库"
-                              : "保存到收件箱"}
+                          保存并关闭
                         </button>
                       </div>
                     </form>
@@ -1149,5 +1405,14 @@ export function AppOperationalTools() {
           )
         : null}
     </>
+  );
+}
+
+export function AppOperationalTools() {
+  const { state } = useSession();
+  return (
+    <AppOperationalToolsContent
+      key={state.status === "authenticated" ? state.user.id : "anonymous"}
+    />
   );
 }

@@ -21,6 +21,7 @@ import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 
 import type { DataControllerResult, DataTab } from "./use-data-controller";
 import { useDataController } from "./use-data-controller";
+import { ExportDownload } from "./export-download";
 import styles from "./data-workbench.module.css";
 
 const DATA_FORMATS = [
@@ -213,13 +214,10 @@ function ExportDetail({
       ) : null}
       <div className={styles.detailActions}>
         {item.status === "succeeded" ? (
-          <a
-            className={styles.secondaryButton}
-            href={`/api/v1/workspaces/${item.workspace_id}/data-exports/${item.id}/download`}
-          >
+          <ExportDownload item={item} className={styles.secondaryButton}>
             <AppIcon name="download" size={14} />
             下载 ZIP
-          </a>
+          </ExportDownload>
         ) : null}
         {item.status === "queued" || item.status === "running" ? (
           <button

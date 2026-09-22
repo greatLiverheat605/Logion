@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createApiClient, LogionApiError } from "./client";
+import { createApiClient, LogionApiError, type ApiZipResponse } from "./client";
 
 function jsonResponse(value: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(value), {
@@ -10,6 +10,151 @@ function jsonResponse(value: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("API client security boundary", () => {
+  it("downloads an explicit ZIP response with the server filename and normal request protections", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("zip-bytes", {
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition":
+            'attachment; filename="logion-export-test.zip"',
+        },
+      }),
+    );
+    const client = createApiClient({ fetchImplementation });
+    const result = await client.request<ApiZipResponse>(
+      "/api/v1/workspaces/a/data-exports/b/download",
+      { responseType: "zip" },
+    );
+    expect(await result.blob.text()).toBe("zip-bytes");
+    expect(result.filename).toBe("logion-export-test.zip");
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    const options = fetchImplementation.mock.calls[0]![1]!;
+    expect(options).toMatchObject({
+      cache: "no-store",
+      credentials: "same-origin",
+      redirect: "error",
+    });
+    expect(options).not.toHaveProperty("responseType");
+    expect(new Headers(options.headers).get("accept")).toContain(
+      "application/zip",
+    );
+  });
+
+  it.each([
+    [404, "EXPORT_NOT_FOUND"],
+    [401, "AUTH_INVALID_SESSION"],
+  ])(
+    "rejects download error %s and notifies authentication only when required",
+    async (status, code) => {
+      const onAuthenticationRequired = vi.fn();
+      const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse(
+          {
+            code,
+            message: "Denied",
+            request_id: "download-rejected",
+            retryable: false,
+          },
+          { status },
+        ),
+      );
+      const client = createApiClient({
+        fetchImplementation,
+        onAuthenticationRequired,
+      });
+      await expect(
+        client.request("/api/v1/workspaces/a/data-exports/b/download", {
+          responseType: "zip",
+        }),
+      ).rejects.toMatchObject({ code, status });
+      expect(fetchImplementation).toHaveBeenCalledTimes(1);
+      expect(onAuthenticationRequired).toHaveBeenCalledTimes(
+        status === 401 ? 1 : 0,
+      );
+    },
+  );
+
+  it("rejects a successful JSON or HTML payload requested as a ZIP", async () => {
+    for (const type of ["application/json", "text/html"]) {
+      const client = createApiClient({
+        fetchImplementation: vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(
+            new Response("not a zip", { headers: { "Content-Type": type } }),
+          ),
+      });
+      await expect(
+        client.request("/api/v1/workspaces/a/data-exports/b/download", {
+          responseType: "zip",
+        }),
+      ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
+    }
+  });
+  it("reports rejected business writes once without replaying them", async () => {
+    const onAuthenticationRequired = vi.fn();
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () =>
+        jsonResponse(
+          {
+            code: "AUTH_INVALID_SESSION",
+            message: "Sign in",
+            request_id: "request-1",
+            retryable: false,
+          },
+          { status: 401 },
+        ),
+      );
+    const client = createApiClient({
+      fetchImplementation,
+      onAuthenticationRequired,
+    });
+    await expect(
+      client.request("/api/v1/workspaces", { method: "POST", body: "{}" }),
+    ).rejects.toMatchObject({ code: "AUTH_INVALID_SESSION" });
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
+    for (const path of [
+      "/api/v1/auth/session",
+      "/api/v1/auth/refresh",
+      "/api/v1/auth/logout",
+    ]) {
+      await expect(client.request(path)).rejects.toMatchObject({ status: 401 });
+    }
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports missing business CSRF but never turns a permission denial into login", async () => {
+    const onAuthenticationRequired = vi.fn();
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () =>
+        jsonResponse(
+          {
+            code: "AUTH_CSRF_INVALID",
+            message: "Denied",
+            request_id: "request-1",
+            retryable: false,
+          },
+          { status: 403 },
+        ),
+      );
+    const client = createApiClient({
+      cookieSource: () => "",
+      fetchImplementation,
+      onAuthenticationRequired,
+    });
+    await expect(
+      client.request("/api/v1/workspaces", { method: "POST", csrf: true }),
+    ).rejects.toMatchObject({ code: "WEB_CSRF_MISSING" });
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
+    expect(fetchImplementation).not.toHaveBeenCalled();
+    await expect(client.request("/api/v1/workspaces")).rejects.toMatchObject({
+      code: "AUTH_CSRF_INVALID",
+    });
+    expect(onAuthenticationRequired).toHaveBeenCalledTimes(1);
+  });
+
   it("advertises deletion handling on all sync transports without changing other requests", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

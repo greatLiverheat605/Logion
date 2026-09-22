@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,6 +32,7 @@ import { useSession } from "@/features/auth/session-provider";
 import {
   NOTIFICATION_CENTER_UPDATED_EVENT,
   notificationSummary,
+  type NotificationGroup,
 } from "@/features/engagement/notification-center-model";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { mobileNavigationForPersona } from "@/features/personas/mobile-persona-navigation";
@@ -53,6 +55,10 @@ const WORKSPACE_ROLE_LABEL: Readonly<Record<Workspace["role"], string>> = {
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
   const { state: session } = useSession();
+  const userId = session.status === "authenticated" ? session.user.id : null;
+  const notificationAccount = useRef<string | null>(null);
+  const notificationRequest = useRef(0);
+  const notificationWorkspace = useRef("");
   const { phase: vaultPhase } = useVaultSession();
   const {
     activePersona,
@@ -64,7 +70,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [query, setQuery] = useState("");
   const [notificationState, setNotificationState] = useState<{
-    latest: Notification[];
+    latest: NotificationGroup[];
     status: "error" | "loading" | "ready";
     total: number;
     unread: number;
@@ -81,6 +87,19 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     workspaceRole: null,
   });
   const commandButtonRef = useRef<HTMLButtonElement>(null);
+  const [stateAccount, setStateAccount] = useState(userId);
+  if (stateAccount !== userId) {
+    setStateAccount(userId);
+    setNotificationState({
+      latest: [],
+      status: "loading",
+      total: 0,
+      unread: 0,
+      workspaceId: "",
+      workspaceName: "",
+      workspaceRole: null,
+    });
+  }
 
   const visibleNavGroups = useMemo(
     () =>
@@ -124,16 +143,30 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
   const loadNotificationSummary = useCallback(
     async (preferredWorkspaceId = "") => {
-      if (session.status !== "authenticated") return;
-      setNotificationState((current) => ({ ...current, status: "loading" }));
+      if (!userId || notificationAccount.current !== userId) return;
+      const request = ++notificationRequest.current;
+      const isCurrent = () =>
+        notificationAccount.current === userId &&
+        notificationRequest.current === request;
+      const selected = preferredWorkspaceId || notificationWorkspace.current;
+      notificationWorkspace.current = selected;
+      setNotificationState({
+        latest: [],
+        status: "loading",
+        total: 0,
+        unread: 0,
+        workspaceId: "",
+        workspaceName: "",
+        workspaceRole: null,
+      });
       try {
         const workspaceResult = await browserApiClient.request<{
           workspaces: Workspace[];
         }>("/api/v1/workspaces");
+        if (!isCurrent()) return;
         const workspace =
-          workspaceResult.workspaces.find(
-            (item) => item.id === preferredWorkspaceId,
-          ) ?? workspaceResult.workspaces[0];
+          workspaceResult.workspaces.find((item) => item.id === selected) ??
+          workspaceResult.workspaces[0];
         if (!workspace) {
           setNotificationState({
             latest: [],
@@ -149,8 +182,14 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         const result = await browserApiClient.request<{
           notifications: Notification[];
         }>(`/api/v1/workspaces/${workspace.id}/notifications`);
+        if (!isCurrent()) return;
+        notificationWorkspace.current = workspace.id;
         const summary = notificationSummary(
-          Array.isArray(result.notifications) ? result.notifications : [],
+          Array.isArray(result.notifications)
+            ? result.notifications.filter(
+                (item) => item.workspace_id === workspace.id,
+              )
+            : [],
         );
         setNotificationState({
           ...summary,
@@ -160,6 +199,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           workspaceRole: workspace.role,
         });
       } catch {
+        if (!isCurrent()) return;
         setNotificationState((current) => ({
           ...current,
           latest: [],
@@ -169,7 +209,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         }));
       }
     },
-    [session.status],
+    [userId],
   );
 
   useEffect(() => {
@@ -183,20 +223,31 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     };
   }, []);
 
-  useEffect(() => {
-    if (session.status === "authenticated")
-      queueMicrotask(() => void loadNotificationSummary());
+  useLayoutEffect(() => {
+    notificationAccount.current = userId;
+    notificationRequest.current += 1;
+    notificationWorkspace.current = "";
+    let active = true;
+    if (userId)
+      queueMicrotask(() => {
+        if (active) void loadNotificationSummary();
+      });
     const refresh = (event: Event) => {
-      const workspaceId =
-        event instanceof CustomEvent && typeof event.detail === "string"
-          ? event.detail
-          : "";
-      void loadNotificationSummary(workspaceId);
+      if (
+        event instanceof CustomEvent &&
+        event.detail?.userId === userId &&
+        typeof event.detail.workspaceId === "string"
+      )
+        void loadNotificationSummary(event.detail.workspaceId);
     };
     window.addEventListener(NOTIFICATION_CENTER_UPDATED_EVENT, refresh);
-    return () =>
+    return () => {
+      active = false;
+      notificationAccount.current = null;
+      notificationRequest.current += 1;
       window.removeEventListener(NOTIFICATION_CENTER_UPDATED_EVENT, refresh);
-  }, [loadNotificationSummary, session.status]);
+    };
+  }, [loadNotificationSummary, userId]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -353,7 +404,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               type="button"
               onClick={() => {
                 setOverlay("notifications");
-                void loadNotificationSummary(notificationState.workspaceId);
+                void loadNotificationSummary();
               }}
             >
               <AppIcon name="bell" />
@@ -513,7 +564,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               : notificationState.status === "error"
                 ? "通知暂时无法读取，请进入通知中心重试。"
                 : notificationState.workspaceName
-                  ? `${notificationState.workspaceName} · ${notificationState.total} 条通知`
+                  ? `${notificationState.workspaceName} · 最近 200 条中的 ${notificationState.total} 条通知`
                   : "当前没有可读取通知的工作区。"}
           </p>
           {notificationState.latest.length ? (
@@ -524,8 +575,10 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
                   <small>
                     {notification.category} · {notification.summary}
                   </small>
-                  {notification.read_at === null ? (
-                    <span className="product-tag tone-warn">未读</span>
+                  {notification.unreadCount > 0 ? (
+                    <span className="product-tag tone-warn">
+                      {notification.unreadCount} 条未读
+                    </span>
                   ) : null}
                 </li>
               ))}
