@@ -14,9 +14,19 @@ from sqlalchemy import select
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "device_state", ["missing", "malformed", "unknown", "revoked", "cross_user"]
+    ("device_state", "client_ip"),
+    [
+        ("missing", "192.0.2.241"),
+        ("malformed", "192.0.2.242"),
+        ("unknown", "192.0.2.243"),
+        ("revoked", "192.0.2.244"),
+        ("cross_user", "192.0.2.245"),
+    ],
 )
-async def test_login_never_reuses_untrusted_device_identity(device_state: str) -> None:
+async def test_login_never_reuses_untrusted_device_identity(
+    device_state: str, client_ip: str
+) -> None:
+    # Isolate test peers while preserving the real per-IP registration limit.
     headers = {"Origin": "http://test"}
     payload = {
         "email": f"device-boundary-{uuid4()}@example.com",
@@ -24,7 +34,9 @@ async def test_login_never_reuses_untrusted_device_identity(device_state: str) -
         "device_name": "Original browser",
     }
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers=headers
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers=headers,
     ) as original:
         registered = await original.post("/api/v1/auth/register", json=payload)
         assert registered.status_code == 201, registered.text
@@ -58,7 +70,9 @@ async def test_login_never_reuses_untrusted_device_identity(device_state: str) -
             (borrowed.user_id, borrowed.name, borrowed.last_seen_at) if borrowed else None
         )
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers=headers
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers=headers,
     ) as login:
         if device_state != "missing":
             login.cookies.set("logion_device", supplied_id, domain="test.local", path="/")
@@ -111,11 +125,21 @@ async def test_login_never_reuses_untrusted_device_identity(device_state: str) -
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "terminal", ["session_revoked", "device_revoked", "refresh_expired", "suspended"]
+    ("terminal", "client_ip"),
+    [
+        ("session_revoked", "192.0.2.246"),
+        ("device_revoked", "192.0.2.247"),
+        ("refresh_expired", "192.0.2.248"),
+        ("suspended", "192.0.2.249"),
+    ],
 )
-async def test_invalid_access_never_bypasses_terminal_refresh_rejection(terminal: str) -> None:
+async def test_invalid_access_never_bypasses_terminal_refresh_rejection(
+    terminal: str, client_ip: str
+) -> None:
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers={"Origin": "http://test"}
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
+        base_url="http://test",
+        headers={"Origin": "http://test"},
     ) as client:
         registered = await client.post(
             "/api/v1/auth/register",
@@ -166,10 +190,19 @@ async def test_invalid_access_never_bypasses_terminal_refresh_rejection(terminal
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", ["missing", "expired", "rotated"])
-async def test_access_failure_can_refresh_without_replacing_device(failure: str) -> None:
+@pytest.mark.parametrize(
+    ("failure", "client_ip"),
+    [
+        ("missing", "192.0.2.250"),
+        ("expired", "192.0.2.251"),
+        ("rotated", "192.0.2.252"),
+    ],
+)
+async def test_access_failure_can_refresh_without_replacing_device(
+    failure: str, client_ip: str
+) -> None:
     async with AsyncClient(
-        transport=ASGITransport(app=app),
+        transport=ASGITransport(app=app, client=(client_ip, 55000)),
         base_url="http://test",
         headers={"Origin": "http://test"},
     ) as client:
@@ -233,7 +266,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
     email = f"phase1-{uuid4()}@example.com"
     headers = {"Origin": "http://test"}
     async with AsyncClient(
-        transport=ASGITransport(app=app),
+        transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
         base_url="http://test",
         headers=headers,
     ) as client:
@@ -276,7 +309,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert client.cookies["logion_refresh"] != old_refresh
 
         invalid_csrf_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": "invalid-csrf"},
         )
@@ -300,7 +333,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert invalid_csrf.json()["code"] == "AUTH_CSRF_INVALID"
 
         recovery_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
         )
@@ -324,7 +357,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert recovery_client.cookies["logion_refresh"] != old_refresh
 
         second_recovery_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
         )
@@ -369,7 +402,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
             await db.commit()
 
         reuse_client = AsyncClient(
-            transport=ASGITransport(app=app),
+            transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
             base_url="http://test",
             headers={**headers, "X-CSRF-Token": csrf},
         )
@@ -400,7 +433,7 @@ async def test_register_login_refresh_reuse_and_device_revocation() -> None:
         assert revoked_me.status_code == 401
 
     async with AsyncClient(
-        transport=ASGITransport(app),
+        transport=ASGITransport(app=app, client=("192.0.2.253", 55000)),
         base_url="http://test",
         headers=headers,
     ) as login_client:
