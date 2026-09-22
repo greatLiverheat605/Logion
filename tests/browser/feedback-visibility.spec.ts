@@ -191,7 +191,11 @@ for (const width of [1440, 375, 320]) {
           await page
             .getByRole("button", { name: "创建审查", exact: true })
             .click();
-          const day = new Date(Date.UTC(failure ? 2040 : 2045, 0, width))
+          const year =
+            (failure ? 2040 : 2045) +
+            testInfo.repeatEachIndex * 10 +
+            testInfo.retry;
+          const day = new Date(Date.UTC(year, 0, width))
             .toISOString()
             .slice(0, 10);
           await page.getByLabel("开始日期").fill(day);

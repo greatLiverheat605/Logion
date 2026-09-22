@@ -29,6 +29,10 @@
   background: var(--bg-muted);
 }
 
+.root :global(.headless-tab-panel[data-state="inactive"]) {
+  display: none;
+}
+
 .master,
 .main,
 .inspector {

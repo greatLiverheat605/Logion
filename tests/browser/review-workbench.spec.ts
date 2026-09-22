@@ -22,6 +22,33 @@ import {
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 type Schemas = components["schemas"];
 
+for (const width of [320, 1440]) {
+  test(`Review shows only the selected panel at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 320 ? 568 : 900 });
+    await page.goto("/app/review");
+    if (width === 320) {
+      await page
+        .getByRole("button", { name: "复习工作面", exact: true })
+        .click();
+    }
+    const tabs = page.getByTestId("review-tabs");
+    for (const name of ["到期复习", "掌握与图谱", "错因模式", "周期审查"]) {
+      await tabs.getByRole("tab", { name: new RegExp(name) }).click();
+      await expect(tabs.getByRole("tabpanel")).toHaveCount(1);
+      await expect(tabs.getByRole("tabpanel")).toHaveAccessibleName(
+        new RegExp(name),
+      );
+      await expect(tabs.getByRole("tabpanel")).toBeVisible();
+      // Keep inactive forms mounted while excluding them from layout and focus.
+      await expect(
+        tabs.getByRole("tabpanel", { includeHidden: true }),
+      ).toHaveCount(4);
+    }
+  });
+}
+
 test("Review exposes the due queue, answer sheet and knowledge inspector", async ({
   page,
   accountState,
