@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { components } from "@logion/contracts";
 
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
@@ -61,6 +61,8 @@ export function LoginForm() {
   const [deviceName, setDeviceName] = useState("此浏览器");
   const [passkeyAvailable, setPasskeyAvailable] = useState(true);
   const [pending, setPending] = useState(false);
+  const loginInFlight = useRef(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [requestId, setRequestId] = useState<string | null>(null);
   const [authenticated, setAuthenticated] = useState<AuthResponse | null>(null);
   const [settingsBlocked, setSettingsBlocked] = useState(false);
@@ -105,8 +107,30 @@ export function LoginForm() {
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loginInFlight.current) return;
     const form = event.currentTarget;
+    const errors: Record<string, string> = {};
+    let firstInvalid: HTMLInputElement | undefined;
+    for (const field of form.querySelectorAll<HTMLInputElement>("input")) {
+      if (field.validity.valid) continue;
+      firstInvalid ??= field;
+      errors[field.name] =
+        field.name === "email"
+          ? field.validity.valueMissing
+            ? "请输入邮箱。"
+            : "请输入有效的邮箱地址。"
+          : field.name === "password"
+            ? "请输入密码。"
+            : "请输入设备名称（最多 80 个字符）。";
+    }
+    setFieldErrors(errors);
+    if (firstInvalid) {
+      setRequestId(null);
+      firstInvalid.focus();
+      return;
+    }
     const data = new FormData(form);
+    loginInFlight.current = true;
     setPending(true);
     setRequestId(null);
     try {
@@ -128,8 +152,14 @@ export function LoginForm() {
         error instanceof LogionApiError ? error.requestId : "unavailable",
       );
     } finally {
+      loginInFlight.current = false;
       setPending(false);
     }
+  }
+
+  function clearFieldError(event: FormEvent<HTMLInputElement>) {
+    const name = event.currentTarget.name;
+    setFieldErrors((current) => ({ ...current, [name]: "" }));
   }
 
   async function verifyMfa(event: FormEvent<HTMLFormElement>) {
@@ -268,6 +298,7 @@ export function LoginForm() {
           className="auth-form"
           data-testid="login-credentials"
           method="post"
+          noValidate
           onSubmit={login}
         >
           <div className="auth-field">
@@ -278,8 +309,18 @@ export function LoginForm() {
               type="email"
               autoComplete="email"
               maxLength={320}
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={
+                fieldErrors.email ? "login-email-error" : undefined
+              }
+              onInput={clearFieldError}
               required
             />
+            {fieldErrors.email ? (
+              <p className="form-error" id="login-email-error" role="alert">
+                {fieldErrors.email}
+              </p>
+            ) : null}
           </div>
           <PasswordField
             id="login-password"
@@ -288,8 +329,18 @@ export function LoginForm() {
             autoComplete="current-password"
             minLength={1}
             maxLength={128}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={
+              fieldErrors.password ? "login-password-error" : undefined
+            }
+            onInput={clearFieldError}
             required
           />
+          {fieldErrors.password ? (
+            <p className="form-error" id="login-password-error" role="alert">
+              {fieldErrors.password}
+            </p>
+          ) : null}
           <div className="auth-field">
             <label htmlFor="device-name">设备名称</label>
             <input
@@ -299,12 +350,27 @@ export function LoginForm() {
               value={deviceName}
               minLength={1}
               maxLength={80}
+              aria-invalid={Boolean(fieldErrors.device_name)}
+              aria-describedby={
+                fieldErrors.device_name ? "login-device-error" : undefined
+              }
+              onInput={clearFieldError}
               onChange={(event) => setDeviceName(event.currentTarget.value)}
               required
             />
             <p className="auth-field-hint">用于识别和管理此设备会话。</p>
+            {fieldErrors.device_name ? (
+              <p className="form-error" id="login-device-error" role="alert">
+                {fieldErrors.device_name}
+              </p>
+            ) : null}
           </div>
-          {requestId !== null ? <FormError requestId={requestId} /> : null}
+          {requestId !== null ? (
+            <FormError
+              message="登录未完成，请核对登录信息或稍后重试；忘记密码可使用下方“找回密码”。"
+              requestId={requestId}
+            />
+          ) : null}
           <button
             data-workbench-primary="true"
             type="submit"
@@ -408,7 +474,7 @@ export function LoginForm() {
         aria-label="账户帮助"
         data-testid="login-recovery"
       >
-        <Link href="/auth/register">使用邀请注册</Link>
+        <Link href="/auth/register">受邀注册</Link>
         <Link href="/auth/recover">找回密码</Link>
       </nav>
     </AuthFormShell>

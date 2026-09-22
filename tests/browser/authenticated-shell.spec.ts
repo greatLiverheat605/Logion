@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures";
 import {
   assertNoHorizontalOverflow,
+  auditHorizontalOverflow,
   assertPrimaryActionContract,
   assertReducedMotion,
   captureEvidenceScreenshot,
@@ -10,6 +11,63 @@ import {
 } from "./workbench-audit";
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+
+test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
+test.describe("M07 authenticated classic scrollbars", () => {
+  for (const theme of ["light", "dark"] as const) {
+    test(`today and records fit three widths in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      test.setTimeout(120_000);
+      await page.evaluate(
+        (value) => localStorage.setItem("app-shell-theme", value),
+        theme,
+      );
+      const measurements: unknown[] = [];
+      for (const width of [320, 375, 1440]) {
+        await page.setViewportSize({ width, height: 640 });
+        for (const route of ["/app/today", "/app/records"]) {
+          await page.goto(route);
+          await waitForWorkbenchReady(page, route);
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-theme",
+            theme,
+          );
+          const audit = await auditHorizontalOverflow(page);
+          measurements.push({ route, width, theme, ...audit });
+          expect(audit.offenders, JSON.stringify(audit)).toEqual([]);
+          expect(audit.scrollWidth, JSON.stringify(audit)).toBe(
+            audit.clientWidth,
+          );
+          const axe = await new AxeBuilder({ page })
+            .withTags(wcagTags)
+            .analyze();
+          expect(axe.violations).toEqual([]);
+          if (width < 720) {
+            await page
+              .getByRole("button", { name: "打开主导航", exact: true })
+              .click();
+            await expect(
+              page.getByRole("complementary", { name: "主导航" }),
+            ).toBeVisible();
+            await page.keyboard.press("Escape");
+            await expect(
+              page.getByRole("button", { name: "打开主导航", exact: true }),
+            ).toBeFocused();
+          }
+          if (width === 320)
+            await page.screenshot({
+              path: testInfo.outputPath(route.replaceAll("/", "-") + ".png"),
+            });
+        }
+      }
+      await testInfo.attach("geometry", {
+        body: JSON.stringify(measurements, null, 2),
+        contentType: "application/json",
+      });
+    });
+  }
+});
 const authenticatedRoutes = [
   "/app/today",
   "/app/planning",
@@ -353,6 +411,63 @@ test.describe("authenticated shell", () => {
     ).toBeVisible();
     await focusDialog.getByRole("button", { name: "关闭" }).click();
     await expect(focusButton).toBeFocused();
+  });
+
+  test("capture saves consecutive notes, closes with visible feedback and restores focus", async ({
+    page,
+    accountState,
+  }) => {
+    await page
+      .getByRole("button", { name: "本地资料已锁定", exact: true })
+      .click();
+    const vault = page.getByRole("dialog", { name: "本地资料保护" });
+    await vault
+      .getByLabel("本地口令", { exact: true })
+      .fill(accountState.password);
+    await vault.getByRole("button", { name: /解锁本地资料/ }).click();
+    await expect(
+      vault.getByText("本地资料已解锁", { exact: true }),
+    ).toBeVisible();
+    await vault.getByRole("button", { name: "关闭", exact: true }).click();
+    const trigger = page.getByRole("button", {
+      name: "打开快速捕获",
+      exact: true,
+    });
+    await trigger.click();
+    const capture = page.getByRole("dialog", { name: "快速捕获" });
+    await capture
+      .getByRole("button", { name: "Markdown 笔记", exact: true })
+      .click();
+    const title = capture.getByLabel("标题", { exact: true });
+    const marker = `M04 capture ${Date.now()}`;
+    await title.fill(`${marker} first`);
+    await expect(
+      capture.getByRole("button", { name: "保存并继续", exact: true }),
+    ).toBeEnabled();
+    await title.press("Enter");
+    await expect(capture.getByRole("status")).toHaveText(
+      "笔记已加密保存并同步。",
+    );
+    await expect(title).toHaveValue("");
+    await expect(title).toBeFocused();
+    await title.fill(`${marker} second`);
+    await capture
+      .getByRole("button", { name: "保存并关闭", exact: true })
+      .click();
+    await expect(capture).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    const toast = page.locator("[data-sonner-toast]");
+    await expect(toast).toHaveCount(1);
+    await expect(toast).toContainText("笔记已加密保存并同步。");
+    await page.locator('a[href="/app/records"]').first().click();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`${marker} first，更新于`) }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole("button", {
+        name: new RegExp(`${marker} second，更新于`),
+      }),
+    ).toHaveCount(1);
   });
 
   test("device data clearing is explicit and scoped", async ({ page }) => {

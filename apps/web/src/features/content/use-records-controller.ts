@@ -39,6 +39,13 @@ import type { WorkbenchOperationalContext } from "@/components/product/workbench
 import { useSession } from "@/features/auth/session-provider";
 import { offlineCapabilityMessage } from "@/features/offline/offline-error-message";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import {
+  incompleteSyncMessage,
+  matchesVaultSession,
+  readWorkspaceSyncFacts,
+  workspaceSyncStatus,
+  type WorkspaceSyncFacts,
+} from "@/features/sync/sync-diagnostics";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 import {
@@ -426,6 +433,8 @@ export function useRecordsController(): RecordsControllerResult {
     vault,
   } = useVaultSession();
   const workspaceIdRef = useRef("");
+  const syncContext = useRef(0);
+  const unlockRequest = useRef(0);
   const deviceIdRef = useRef("");
   const contextRequest = useRef(0);
   const spaceRequest = useRef(0);
@@ -455,6 +464,7 @@ export function useRecordsController(): RecordsControllerResult {
   >([]);
   const [attachments, setAttachments] = useState<AttachmentQueueEntry[]>([]);
   const [conflictCount, setConflictCount] = useState(0);
+  const [syncFacts, setSyncFacts] = useState<WorkspaceSyncFacts | null>(null);
   const [contextPhase, setContextPhase] =
     useState<Exclude<Phase, "idle">>("loading");
   const [dataPhase, setDataPhase] = useState<Phase>("idle");
@@ -474,11 +484,21 @@ export function useRecordsController(): RecordsControllerResult {
       if (requestId !== contextRequest.current) return;
       const currentDevice = deviceResult.devices.find((item) => item.current);
       const nextWorkspace = workspaceResult.workspaces[0]?.id ?? "";
+      const nextDevice = currentDevice?.id ?? "";
+      if (
+        nextWorkspace !== workspaceIdRef.current ||
+        nextDevice !== deviceIdRef.current
+      ) {
+        syncContext.current += 1;
+        unlockRequest.current += 1;
+        setCommandPhase("idle");
+        setSyncFacts(null);
+      }
       workspaceIdRef.current = nextWorkspace;
-      deviceIdRef.current = currentDevice?.id ?? "";
+      deviceIdRef.current = nextDevice;
       setWorkspaces(workspaceResult.workspaces);
       setWorkspaceIdState(nextWorkspace);
-      setDeviceId(currentDevice?.id ?? "");
+      setDeviceId(nextDevice);
       setIssue(null);
       setStatus(
         currentDevice
@@ -544,8 +564,10 @@ export function useRecordsController(): RecordsControllerResult {
       localVault: OfflineVault,
       selectedWorkspace: string,
       selectedDevice: string,
+      isCurrent: () => boolean,
     ) => {
       const current = await db.syncState.get(selectedWorkspace);
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       if (canResumeSync(current, selectedDevice)) {
         return;
       }
@@ -570,6 +592,7 @@ export function useRecordsController(): RecordsControllerResult {
           },
         );
       const first = await fetchChunk(null, null);
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       const validation = validateSyncV1Message(first);
       if (
         !validation.ok ||
@@ -582,19 +605,21 @@ export function useRecordsController(): RecordsControllerResult {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,
       });
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       await repository.stageChunk(first, {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,
       });
       for (let index = 1; index < manifest.chunk_count; index += 1) {
-        await repository.stageChunk(
-          await fetchChunk(manifest.snapshot_id, index),
-          {
-            device_id: selectedDevice,
-            workspace_id: selectedWorkspace,
-          },
-        );
+        if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+        const chunk = await fetchChunk(manifest.snapshot_id, index);
+        if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+        await repository.stageChunk(chunk, {
+          device_id: selectedDevice,
+          workspace_id: selectedWorkspace,
+        });
       }
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       markChanged();
     },
     [markChanged],
@@ -606,7 +631,14 @@ export function useRecordsController(): RecordsControllerResult {
       localVault: OfflineVault | null,
       selectedWorkspace: string,
     ) => {
-      if (db === null || localVault === null || !selectedWorkspace) return;
+      if (
+        db === null ||
+        localVault === null ||
+        !selectedWorkspace ||
+        !matchesVaultSession(database, vault, db, localVault) ||
+        selectedWorkspace !== workspaceIdRef.current
+      )
+        return;
       const requestId = ++recordsRequest.current;
       setDataPhase("loading");
       try {
@@ -624,10 +656,7 @@ export function useRecordsController(): RecordsControllerResult {
               .where("workspace_id")
               .equals(selectedWorkspace)
               .toArray(),
-            db.conflicts
-              .where("[workspace_id+status]")
-              .equals([selectedWorkspace, "open"])
-              .count(),
+            readWorkspaceSyncFacts(db, selectedWorkspace),
           ]);
         const [nextNotes, nextResources] = await Promise.all([
           Promise.all(
@@ -642,6 +671,7 @@ export function useRecordsController(): RecordsControllerResult {
           ),
         ]);
         if (
+          !matchesVaultSession(database, vault, db, localVault) ||
           !shouldApplyRecordsResponse(
             requestId,
             recordsRequest.current,
@@ -654,10 +684,12 @@ export function useRecordsController(): RecordsControllerResult {
         setNotes(nextNotes);
         setResources(nextResources);
         setAttachments(attachmentRows);
-        setConflictCount(openConflicts);
+        setConflictCount(openConflicts.conflicts);
+        setSyncFacts(openConflicts);
         setDataPhase("ready");
       } catch (error) {
         if (
+          !matchesVaultSession(database, vault, db, localVault) ||
           !shouldApplyRecordsResponse(
             requestId,
             recordsRequest.current,
@@ -673,18 +705,37 @@ export function useRecordsController(): RecordsControllerResult {
         throw error;
       }
     },
-    [],
+    [database, vault],
   );
 
   useEffect(() => {
     const db = database.current;
     const localVault = vault.current;
-    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    if (!unlocked || db === null || localVault === null) {
+      syncContext.current += 1;
+      recordsRequest.current += 1;
+      queueMicrotask(() => {
+        setNotes([]);
+        setResources([]);
+        setAttachments([]);
+        setConflictCount(0);
+        setSyncFacts(null);
+        setDataPhase("idle");
+        setCommandPhase("idle");
+        setIssue(null);
+      });
+      return;
+    }
+    if (!workspaceId) return;
     queueMicrotask(() => {
       // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault, workspaceId)
         .then(() => {
-          if (workspaceId === workspaceIdRef.current) {
+          if (
+            workspaceId === workspaceIdRef.current &&
+            db === database.current &&
+            localVault === vault.current
+          ) {
             setStatus((current) =>
               current === "请选择 Space 并解锁本地资料。"
                 ? "本地资料已解锁；安全预览只渲染 Markdown 结构，不执行 HTML。"
@@ -694,53 +745,89 @@ export function useRecordsController(): RecordsControllerResult {
         })
         .catch(() => undefined);
     });
-  }, [database, refresh, unlocked, vault, vaultRevision, workspaceId]);
+  }, [
+    database,
+    deviceId,
+    refresh,
+    unlocked,
+    vault,
+    vaultRevision,
+    workspaceId,
+  ]);
 
   const synchronizeCore = useCallback(async (): Promise<boolean> => {
     const db = database.current;
     const localVault = vault.current;
     const selectedWorkspace = workspaceIdRef.current;
     const selectedDevice = deviceIdRef.current;
-    if (
-      db === null ||
-      localVault === null ||
-      !selectedWorkspace ||
-      !selectedDevice
-    ) {
+    const generation = syncContext.current;
+    const current = () =>
+      generation === syncContext.current &&
+      db === database.current &&
+      localVault === vault.current &&
+      selectedWorkspace === workspaceIdRef.current &&
+      selectedDevice === deviceIdRef.current;
+    if (!db || !localVault || !selectedWorkspace || !selectedDevice)
       return false;
-    }
-    let synchronized = false;
     try {
-      await bootstrap(db, localVault, selectedWorkspace, selectedDevice);
-      await new SyncClient(
+      await bootstrap(
+        db,
+        localVault,
+        selectedWorkspace,
+        selectedDevice,
+        current,
+      );
+      if (!current()) return false;
+      const result = await new SyncClient(
         db,
         transport(selectedWorkspace),
         localVault,
       ).synchronize(selectedWorkspace, selectedDevice);
-      synchronized = true;
-      if (selectedWorkspace === workspaceIdRef.current) {
-        setIssue(null);
-        setStatus("笔记与资料索引已同步。");
-      }
+      const remaining = await db.outbox
+        .where("workspace_id")
+        .equals(selectedWorkspace)
+        .toArray();
+      if (!current()) return false;
+      const incomplete = incompleteSyncMessage(result, remaining);
+      setIssue(incomplete ? { kind: "error" } : null);
+      setStatus(incomplete ?? "笔记与资料索引已同步。");
+      return incomplete === null;
     } catch (error) {
-      if (selectedWorkspace === workspaceIdRef.current) {
+      if (current()) {
         setIssue(issueFrom(error));
         setStatus(userMessage(error));
       }
+      return false;
     } finally {
-      await refresh(db, localVault, selectedWorkspace).catch(() => undefined);
+      if (current())
+        await refresh(db, localVault, selectedWorkspace).catch(() => undefined);
     }
-    return synchronized;
   }, [bootstrap, database, refresh, vault]);
 
   async function synchronize(): Promise<boolean> {
+    const generation = syncContext.current;
     setCommandPhase("pending");
     const result = await synchronizeCore();
-    setCommandPhase(result ? "success" : "idle");
+    if (generation === syncContext.current)
+      setCommandPhase(result ? "success" : "idle");
     return result;
   }
 
+  function operationIsCurrent() {
+    const generation = syncContext.current;
+    const db = database.current;
+    const localVault = vault.current;
+    const selectedWorkspace = workspaceIdRef.current;
+    const selectedDevice = deviceIdRef.current;
+    return () =>
+      generation === syncContext.current &&
+      selectedWorkspace === workspaceIdRef.current &&
+      selectedDevice === deviceIdRef.current &&
+      matchesVaultSession(database, vault, db, localVault);
+  }
+
   async function commit(
+    isCurrent: () => boolean,
     entityType: "note" | "resource" | "topic" | "quiz_item",
     entityId: string,
     payload: JsonObject,
@@ -758,6 +845,7 @@ export function useRecordsController(): RecordsControllerResult {
     ) {
       throw new Error("locked");
     }
+    if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
     const now = new Date().toISOString();
     return new ProtectedOfflineRepository(
       database.current,
@@ -791,6 +879,7 @@ export function useRecordsController(): RecordsControllerResult {
     const selectedWorkspace = workspaceIdRef.current;
     const generation = attachmentContext.current;
     if (!db || !localVault || !unlocked) throw new Error("请先解锁本地资料。");
+    const isCurrent = operationIsCurrent();
     const rows = await db.entities
       .where("[workspace_id+entity_type]")
       .equals([selectedWorkspace, "topic"])
@@ -803,6 +892,7 @@ export function useRecordsController(): RecordsControllerResult {
         ),
     );
     if (
+      !isCurrent() ||
       generation !== attachmentContext.current ||
       selectedWorkspace !== workspaceIdRef.current
     ) {
@@ -820,6 +910,7 @@ export function useRecordsController(): RecordsControllerResult {
     noteId: string,
     input: NoteSelectionInput,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     if (selectionBusy.current) return false;
     const note = notes.find(
       (item) =>
@@ -852,24 +943,28 @@ export function useRecordsController(): RecordsControllerResult {
         throw new Error("当前空间已切换，请重新选择内容。");
       }
       await commit(
+        isCurrent,
         input.kind,
         crypto.randomUUID(),
         payload,
         undefined,
         dependencies,
       );
+      if (!isCurrent()) return false;
       markChanged();
       if (generation === attachmentContext.current) {
         const synced = online && (await synchronizeCore());
         if (generation === attachmentContext.current) {
+          if (!isCurrent()) return false;
+          const objectName = input.kind === "topic" ? "知识点" : "题目";
           setStatus(
             synced
-              ? "选段已创建并同步，可前往复习页查看。"
-              : "选段已加密保存在本机，恢复网络后同步；可前往复习页查看。",
+              ? `${objectName}已创建并同步，可前往复习页查看。`
+              : `${objectName}已加密保存在本机；服务器同步暂未完成，可前往复习页查看。`,
           );
         }
       }
-      return true;
+      return isCurrent();
     } finally {
       selectionBusy.current = false;
     }
@@ -879,23 +974,34 @@ export function useRecordsController(): RecordsControllerResult {
     markdownBody: string;
     title: string;
   }): Promise<string | null> {
+    const isCurrent = operationIsCurrent();
     const title = input.title.trim();
     if (!title || !spaceId) return null;
     const noteId = crypto.randomUUID();
     setCommandPhase("pending");
     try {
-      await commit("note", noteId, {
+      await commit(isCurrent, "note", noteId, {
         markdown_body: input.markdownBody,
         space_id: spaceId,
         task_id: null,
         title,
       });
+      if (!isCurrent()) return null;
       setSelectedNoteId(noteId);
+      if (!isCurrent()) return null;
       const synchronized = await synchronizeCore();
+      if (!isCurrent()) return null;
       setCommandPhase(synchronized ? "success" : "idle");
+      setStatus(
+        synchronized
+          ? "笔记已创建并同步。"
+          : "笔记已加密保存在本机；服务器同步暂未完成。",
+      );
       return noteId;
     } catch (error) {
+      if (!isCurrent()) return null;
       setIssue(issueFrom(error));
+      if (!isCurrent()) return null;
       setStatus(userMessage(error));
       setCommandPhase("idle");
       await refresh(
@@ -911,6 +1017,7 @@ export function useRecordsController(): RecordsControllerResult {
     noteId: string,
     input: { markdownBody: string; title: string },
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const note = notes.find((item) => item.entity.entity_id === noteId);
     if (!note) return false;
     const title = input.title.trim();
@@ -924,6 +1031,7 @@ export function useRecordsController(): RecordsControllerResult {
           "note_document_state",
           noteDocumentStateId(workspaceIdRef.current, noteId),
         ])) !== undefined;
+      if (!isCurrent()) return false;
       const mode = recordsNoteSaveMode({
         bodyChanged: input.markdownBody !== note.payload.markdown_body,
         hasYjsState,
@@ -951,6 +1059,7 @@ export function useRecordsController(): RecordsControllerResult {
         });
       } else if (mode === "commit") {
         await commit(
+          isCurrent,
           "note",
           noteId,
           {
@@ -962,11 +1071,15 @@ export function useRecordsController(): RecordsControllerResult {
           note.entity,
         );
       }
+      if (!isCurrent()) return false;
       const synchronized = await synchronizeCore();
+      if (!isCurrent()) return false;
       setCommandPhase(synchronized ? "success" : "idle");
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
       setStatus(userMessage(error));
       setCommandPhase("idle");
       await refresh(
@@ -979,6 +1092,7 @@ export function useRecordsController(): RecordsControllerResult {
   }
 
   async function createResource(input: RecordsResourceInput): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const title = input.title.trim();
     const sourceUrl = input.sourceUrl?.trim() ?? "";
     if (
@@ -987,6 +1101,7 @@ export function useRecordsController(): RecordsControllerResult {
       (input.resourceType === "link" &&
         safeRecordsExternalUrl(sourceUrl) === null)
     ) {
+      if (!isCurrent()) return false;
       setStatus("请输入名称和有效的 HTTP(S) 地址。");
       return false;
     }
@@ -999,6 +1114,7 @@ export function useRecordsController(): RecordsControllerResult {
         pageCount < 1 ||
         page > pageCount)
     ) {
+      if (!isCurrent()) return false;
       setStatus("请输入有效的 PDF 文件名、总页数与索引页。");
       return false;
     }
@@ -1027,12 +1143,16 @@ export function useRecordsController(): RecordsControllerResult {
     };
     setCommandPhase("pending");
     try {
-      await commit("resource", crypto.randomUUID(), payload);
+      await commit(isCurrent, "resource", crypto.randomUUID(), payload);
+      if (!isCurrent()) return false;
       const synchronized = await synchronizeCore();
+      if (!isCurrent()) return false;
       setCommandPhase(synchronized ? "success" : "idle");
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
       setStatus(userMessage(error));
       setCommandPhase("idle");
       await refresh(
@@ -1048,6 +1168,7 @@ export function useRecordsController(): RecordsControllerResult {
     resourceId: string,
     title: string,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const resource = resources.find(
       (item) => item.entity.entity_id === resourceId,
     );
@@ -1056,16 +1177,21 @@ export function useRecordsController(): RecordsControllerResult {
     setCommandPhase("pending");
     try {
       await commit(
+        isCurrent,
         "resource",
         resourceId,
         { ...resource.payload, title: nextTitle },
         resource.entity,
       );
+      if (!isCurrent()) return false;
       const synchronized = await synchronizeCore();
+      if (!isCurrent()) return false;
       setCommandPhase(synchronized ? "success" : "idle");
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
       setStatus(userMessage(error));
       setCommandPhase("idle");
       await refresh(
@@ -1082,6 +1208,7 @@ export function useRecordsController(): RecordsControllerResult {
     file: File,
     allowOffline = false,
   ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     if (attachmentBusy.current) return false;
     const db = database.current;
     if (
@@ -1093,6 +1220,7 @@ export function useRecordsController(): RecordsControllerResult {
       !noteId ||
       file.size === 0
     ) {
+      if (!isCurrent()) return false;
       setStatus("请选择已有笔记和一个受支持的附件。");
       return false;
     }
@@ -1107,6 +1235,7 @@ export function useRecordsController(): RecordsControllerResult {
         online,
         allowOffline,
       );
+      if (!isCurrent()) return false;
       if (
         selectedWorkspace !== workspaceIdRef.current ||
         db !== database.current ||
@@ -1127,15 +1256,20 @@ export function useRecordsController(): RecordsControllerResult {
         target_type: "note",
         workspace_id: workspaceIdRef.current,
       });
+      if (!isCurrent()) return false;
       setIssue(null);
+      if (!isCurrent()) return false;
       setStatus("附件已进入真实上传队列；可在同步中心上传并完成哈希验证。");
       await refresh(db, vault.current, workspaceIdRef.current).catch(
         () => undefined,
       );
+      if (!isCurrent()) return false;
       setCommandPhase("success");
-      return true;
+      return isCurrent();
     } catch (error) {
+      if (!isCurrent()) return false;
       setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
       setStatus(userMessage(error));
       setCommandPhase("idle");
       return false;
@@ -1156,10 +1290,26 @@ export function useRecordsController(): RecordsControllerResult {
     const selectedWorkspace = workspaceIdRef.current;
     const selectedDevice = deviceIdRef.current;
     setCommandPhase("pending");
+    const requestId = ++unlockRequest.current;
+    const current = () =>
+      requestId === unlockRequest.current &&
+      selectedWorkspace === workspaceIdRef.current &&
+      selectedDevice === deviceIdRef.current;
+    let available: (() => boolean) | null = null;
     try {
       const { database: db, vault: localVault } = await unlockVault(passphrase);
-      await bootstrap(db, localVault, selectedWorkspace, selectedDevice);
+      available = () =>
+        current() && matchesVaultSession(database, vault, db, localVault);
+      if (!available()) return false;
+      await bootstrap(
+        db,
+        localVault,
+        selectedWorkspace,
+        selectedDevice,
+        available,
+      );
       await refresh(db, localVault, selectedWorkspace);
+      if (!available()) return false;
       if (selectedWorkspace === workspaceIdRef.current) {
         setIssue(null);
         setStatus(
@@ -1169,6 +1319,7 @@ export function useRecordsController(): RecordsControllerResult {
       setCommandPhase("success");
       return true;
     } catch (error) {
+      if (!current() || (available !== null && !available())) return false;
       if (selectedWorkspace === workspaceIdRef.current) {
         setIssue(issueFrom(error));
         setStatus(userMessage(error));
@@ -1179,6 +1330,9 @@ export function useRecordsController(): RecordsControllerResult {
   }
 
   function setWorkspaceId(nextWorkspaceId: string) {
+    unlockRequest.current += 1;
+    contextRequest.current += 1;
+    syncContext.current += 1;
     if (nextWorkspaceId === workspaceIdRef.current) return;
     attachmentContext.current += 1;
     workspaceIdRef.current = nextWorkspaceId;
@@ -1193,11 +1347,13 @@ export function useRecordsController(): RecordsControllerResult {
     setConflictCount(0);
     setSelectedNoteId("");
     setDataPhase("idle");
+    setSyncFacts(null);
     setCommandPhase("idle");
     setIssue(null);
   }
 
   function setSpaceId(nextSpaceId: string) {
+    syncContext.current += 1;
     attachmentContext.current += 1;
     setSpaceIdState(nextSpaceId);
     setSelectedNoteId("");
@@ -1207,13 +1363,13 @@ export function useRecordsController(): RecordsControllerResult {
   const viewModel = useMemo(
     () =>
       deriveRecordsViewModel({
-        attachments,
-        notes,
-        resources,
+        attachments: unlocked ? attachments : [],
+        notes: unlocked ? notes : [],
+        resources: unlocked ? resources : [],
         selectedNoteId,
         spaceId,
       }),
-    [attachments, notes, resources, selectedNoteId, spaceId],
+    [attachments, notes, resources, selectedNoteId, spaceId, unlocked],
   );
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
   const selectedSpace = spaces.find((item) => item.id === spaceId);
@@ -1303,15 +1459,16 @@ export function useRecordsController(): RecordsControllerResult {
     space: selectedSpace
       ? { id: selectedSpace.id, name: selectedSpace.name }
       : undefined,
-    sync: {
-      label:
-        conflictCount > 0
-          ? `${conflictCount} 项冲突`
-          : stale
-            ? "待同步"
-            : "已同步",
-      tone: conflictCount > 0 || stale ? "warn" : "good",
-    },
+    sync: workspaceSyncStatus({
+      facts: syncFacts,
+      workspaceId,
+      deviceId,
+      unlocked,
+      online,
+      busy: commandPhase === "pending",
+      loading: dataPhase === "loading",
+      error: dataPhase === "error",
+    }),
     vault: {
       label: unlocked ? "已解锁" : "已锁定",
       tone: unlocked ? "good" : "warn",
@@ -1332,7 +1489,8 @@ export function useRecordsController(): RecordsControllerResult {
         unlocked &&
         commandPhase !== "pending" &&
         Boolean(workspaceId && deviceId),
-      canUnlock: Boolean(workspaceId && deviceId),
+      canUnlock:
+        contextPhase === "ready" && Boolean(workspaceId && spaceId && deviceId),
       canWrite,
     },
     commands: {

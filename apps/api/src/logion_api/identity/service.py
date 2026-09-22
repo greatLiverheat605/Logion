@@ -212,7 +212,7 @@ class IdentityService:
 
     async def authenticate_access(self, db: AsyncSession, access_token: str | None) -> AuthContext:
         if not access_token:
-            raise self._authentication_error()
+            raise self._authentication_error(clear_cookies=False)
         now = datetime.now(UTC)
         result = await db.execute(
             select(AuthSession, User, Device)
@@ -227,7 +227,7 @@ class IdentityService:
         )
         row = result.one_or_none()
         if row is None:
-            raise self._authentication_error()
+            raise self._authentication_error(clear_cookies=False)
         if row[1].status == "pending_deletion":
             raise APIError(
                 code="AUTH_ACCOUNT_PENDING_DELETION",
@@ -235,14 +235,14 @@ class IdentityService:
                 status_code=403,
             )
         if row[1].status != "active":
-            raise self._authentication_error()
+            raise self._authentication_error(clear_cookies=False)
         return AuthContext(session=row[0], user=row[1], device=row[2])
 
     async def authenticate_deletion_access(
         self, db: AsyncSession, access_token: str | None
     ) -> AuthContext:
         if not access_token:
-            raise self._authentication_error()
+            raise self._authentication_error(clear_cookies=False)
         now = datetime.now(UTC)
         result = await db.execute(
             select(AuthSession, User, Device)
@@ -258,7 +258,7 @@ class IdentityService:
         )
         row = result.one_or_none()
         if row is None:
-            raise self._authentication_error()
+            raise self._authentication_error(clear_cookies=False)
         return AuthContext(session=row[0], user=row[1], device=row[2])
 
     def require_recent_authentication(self, context: AuthContext) -> None:
@@ -599,12 +599,15 @@ class IdentityService:
         )
 
     @staticmethod
-    def _authentication_error() -> APIError:
+    def _authentication_error(*, clear_cookies: bool = True) -> APIError:
+        # Access failures can arrive after a successful rotation. Only a terminal
+        # refresh failure may clear the browser's current recovery credentials.
         return APIError(
             code="AUTH_INVALID_SESSION",
             message="Authentication is required or the session has expired.",
             status_code=401,
-            clear_auth_cookies=True,
+            clear_auth_cookies=clear_cookies,
+            headers={"Cache-Control": "no-store"},
         )
 
     @staticmethod

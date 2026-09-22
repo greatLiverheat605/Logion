@@ -179,14 +179,19 @@ export function VaultSessionProvider({
       if (Date.now() >= expiresAt) lock();
     };
     const timer = window.setInterval(check, 1000);
-    window.addEventListener("focus", check);
-    document.addEventListener("visibilitychange", check);
+    const resume = () => {
+      check();
+      if (Date.now() < expiresAt && document.visibilityState === "visible")
+        markChanged();
+    };
+    window.addEventListener("focus", resume);
+    document.addEventListener("visibilitychange", resume);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener("focus", check);
-      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", resume);
+      document.removeEventListener("visibilitychange", resume);
     };
-  }, [expiresAt, lock]);
+  }, [expiresAt, lock, markChanged]);
 
   useEffect(() => lock, [lock]);
 

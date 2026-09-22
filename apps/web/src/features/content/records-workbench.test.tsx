@@ -127,6 +127,21 @@ function controllerFixture() {
 }
 
 describe("Records workbench", () => {
+  it("removes the editor immediately when the Vault locks even before old data is cleared", () => {
+    const { controller } = controllerFixture();
+    const { rerender } = render(<RecordsWorkbench controller={controller} />);
+    expect(screen.getByLabelText("Markdown 正文")).toBeTruthy();
+    rerender(
+      <RecordsWorkbench
+        controller={{
+          ...controller,
+          context: { ...controller.context, unlocked: false },
+        }}
+      />,
+    );
+    expect(screen.queryByLabelText("Markdown 正文")).toBeNull();
+  });
+
   it("confirms selected text, retains a failed draft and prevents repeated submission", async () => {
     const { controller, commands } = controllerFixture();
     render(<RecordsWorkbench controller={controller} />);

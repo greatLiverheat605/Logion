@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import type {
   PullResponse,
   PushRequest,
@@ -400,12 +402,8 @@ for (const width of [1440, 320]) {
     expect(bytes).toBeGreaterThanOrEqual(1024);
     expect(bytes).toBeLessThan(1048576);
     await expect(detail).toContainText(`${(bytes / 1024).toFixed(1)} KB`);
-    const download = detail.getByRole("link", { name: "下载 ZIP" });
-    await expect(download).toBeVisible();
-    await expect(download).toHaveAttribute(
-      "href",
-      new RegExp(`/data-exports/${job.id}/download$`),
-    );
+    const download = detail.getByRole("button", { name: "下载 ZIP" });
+    await expect(download).toBeEnabled();
     await expect(detail).not.toContainText("0.0 MB");
     await detail.scrollIntoViewIfNeeded();
     await page.screenshot({
@@ -417,12 +415,23 @@ for (const width of [1440, 320]) {
     await page.screenshot({
       path: testInfo.outputPath(`export-download-${width}.png`),
     });
-    const artifact = await page.request.get(
-      (await download.getAttribute("href"))!,
+    const artifactResponse = page.waitForResponse(
+      (entry) =>
+        entry.request().method() === "GET" &&
+        new URL(entry.url()).pathname.endsWith(
+          `/data-exports/${job.id}/download`,
+        ),
     );
+    const downloaded = page.waitForEvent("download");
+    await download.click();
+    const artifact = await artifactResponse;
     expect(artifact.status()).toBe(200);
     expect(artifact.headers()["content-type"]).toContain("application/zip");
-    const archive = await artifact.body();
+    const saved = await downloaded;
+    expect(await saved.failure()).toBeNull();
+    const archivePath = testInfo.outputPath(`export-${width}.zip`);
+    await saved.saveAs(archivePath);
+    const archive = readFileSync(archivePath);
     expect(archive.byteLength).toBe(bytes);
     expect(archive.subarray(0, 4).toString("hex")).toBe("504b0304");
     await expect(page.locator("main")).not.toContainText("加密数据包");

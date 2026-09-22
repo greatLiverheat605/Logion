@@ -481,10 +481,12 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
     page.getByTestId("planning-goals").getByText("资料已锁定，解锁后读取"),
   ).toBeVisible();
   await page.goto("/app/today");
-  await page.getByRole("button", { name: "新建任务", exact: true }).click();
-  dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("资料已锁定，解锁后读取")).toBeVisible();
-  await expect(dialog.getByText("当前 Space 还没有可关联的目标。")).toHaveCount(
+  await expect(
+    page.getByRole("button", { name: "新建任务", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByLabel("本地资料口令")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("当前 Space 还没有可关联的目标。")).toHaveCount(
     0,
   );
   await page.goto("/app/search");

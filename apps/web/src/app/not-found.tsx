@@ -9,10 +9,9 @@ export default function NotFoundPage() {
         <AccessShellHeader minimal />
         <div className="public-flow-stage">
           <section className="public-flow-panel">
-            <h1 className="sr-only">页面不存在</h1>
             <div className="auth-heading" data-testid="not-found-state">
               <p className="auth-kicker">LOGION · RECOVERY</p>
-              <h2>页面不存在</h2>
+              <h1>页面不存在</h1>
               <div className="auth-note">
                 <p>这个地址没有对应的 Logion 页面，或者该入口尚未开放。</p>
               </div>

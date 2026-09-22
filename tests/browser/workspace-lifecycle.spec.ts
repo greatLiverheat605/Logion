@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { BrowserContext } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { expect, reauthenticateForSensitiveJourney, test } from "./fixtures";
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
@@ -25,6 +25,7 @@ test("ownership transfer and account deletion preserve live permission boundarie
       !/^m5-.*@example\.com$/.test(accountState.email),
     "Account lifecycle acceptance requires an isolated local M5 synthetic account",
   );
+  await reauthenticateForSensitiveJourney(page, accountState);
   const recipient = await browser.newContext({ serviceWorkers: "block" });
   try {
     const email = `m5-lifecycle-${randomUUID()}@example.com`;

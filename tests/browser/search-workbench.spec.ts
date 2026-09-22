@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { expect, reauthenticateForSensitiveJourney, test } from "./fixtures";
 import {
   assertGlmPrimaryContract,
   assertGlmRouteRegions,
@@ -22,6 +22,145 @@ import {
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
+test("M06 groups real sync receipts with persistent individual reads and explicit rejected operations", async ({
+  accountState,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await reauthenticateForSensitiveJourney(page, accountState);
+  const workspaceId = (
+    await (await page.request.get("/api/v1/workspaces")).json()
+  ).workspaces[0].id as string;
+  const deviceId = (
+    await (await page.request.get("/api/v1/auth/devices")).json()
+  ).devices.find((device: { current: boolean }) => device.current).id as string;
+  const headers = await csrfHeaders(page);
+  const bootstrap = await page.request.post(
+    `/api/v1/workspaces/${workspaceId}/sync/bootstrap`,
+    {
+      headers,
+      data: {
+        message_type: "bootstrap_request",
+        protocol_version: "sync-v1",
+        workspace_id: workspaceId,
+        device_id: deviceId,
+        known_sync_epoch: null,
+        snapshot_id: null,
+        chunk_index: null,
+      },
+    },
+  );
+  expect(bootstrap.status(), await bootstrap.text()).toBe(200);
+  const epoch = (await bootstrap.json()).sync_epoch as string;
+  const operation = (index: number, entityType = "space") => {
+    const payload = {
+      name: `M06 synthetic ${index} ${Date.now()}`,
+      visibility: "private",
+    };
+    return {
+      operation_id: randomUUID(),
+      protocol_version: "sync-v1",
+      workspace_id: workspaceId,
+      device_id: deviceId,
+      entity_type: entityType,
+      entity_id: randomUUID(),
+      operation_type: "create",
+      base_version: 0,
+      client_occurred_at: new Date().toISOString(),
+      payload,
+      payload_hash:
+        "sha256:" +
+        createHash("sha256").update(JSON.stringify(payload)).digest("hex"),
+      dependencies: [],
+    };
+  };
+  for (let index = 0; index < 3; index++) {
+    const pushed = await page.request.post(
+      `/api/v1/workspaces/${workspaceId}/sync/push`,
+      {
+        headers,
+        data: {
+          message_type: "push_request",
+          protocol_version: "sync-v1",
+          workspace_id: workspaceId,
+          device_id: deviceId,
+          sync_epoch: epoch,
+          operations:
+            index === 2
+              ? [operation(index), operation(9, "note")]
+              : [operation(index)],
+        },
+      },
+    );
+    expect(pushed.status(), await pushed.text()).toBe(200);
+    expect(
+      (await pushed.json()).results.map(
+        (result: { status: string }) => result.status,
+      ),
+    ).toEqual(index === 2 ? ["applied", "rejected"] : ["applied"]);
+  }
+  const notificationsUrl = `/api/v1/workspaces/${workspaceId}/notifications`;
+  const list = (await (await page.request.get(notificationsUrl)).json())
+    .notifications as Array<{
+    id: string;
+    summary: string;
+    read_at: string | null;
+    category: string;
+  }>;
+  const ordinary = list.filter(
+    (item) =>
+      item.summary ===
+      "服务端已接收 1 项；待处理冲突 0 项；未接收 0 项；已解决冲突 0 项。",
+  );
+  const rejected = list.find((item) => item.summary.includes("未接收 1 项"))!;
+  expect(ordinary.length).toBeGreaterThanOrEqual(2);
+  expect(rejected).toBeTruthy();
+  await page.goto("/app/search");
+  await page.getByRole("tab", { name: /通知/ }).click();
+  const summary = page
+    .locator("summary")
+    .filter({ hasText: "普通同步推送回执" });
+  await expect(summary).toBeVisible();
+  const rejectedRow = page.locator(`[data-notification-id="${rejected.id}"]`);
+  await expect(rejectedRow).toBeVisible();
+  await expect(rejectedRow).toContainText("未接收 1 项");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  const first = page.locator(`[data-notification-id="${ordinary[0]!.id}"]`);
+  await expect(first).toBeVisible();
+  await first.getByRole("button", { name: "标为已读" }).click();
+  await expect(first.getByText("已读", { exact: true })).toBeVisible();
+  const reread = (await (await page.request.get(notificationsUrl)).json())
+    .notifications as typeof list;
+  expect(
+    reread.find((item) => item.id === ordinary[0]!.id)?.read_at,
+  ).toBeTruthy();
+  const unread = reread.filter(
+    (item) => item.read_at === null && item.category !== "billing",
+  ).length;
+  await page.getByRole("button", { name: "打开通知中心" }).click();
+  await expect(
+    page.getByRole("dialog", { name: `${unread} 条未读通知` }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(
+      (value) => (document.documentElement.dataset.theme = value),
+      theme,
+    );
+    const axe = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
+    expect(axe.violations).toEqual([]);
+  }
+  await page.reload();
+  await page.getByRole("tab", { name: /通知/ }).click();
+  await page.locator("summary").filter({ hasText: "普通同步推送回执" }).click();
+  await expect(
+    page
+      .locator(`[data-notification-id="${ordinary[0]!.id}"]`)
+      .getByText("已读", { exact: true }),
+  ).toBeVisible();
+});
+
 async function csrfHeaders(page: Page) {
   const csrf = (await page.context().cookies()).find(
     (cookie) => cookie.name === "logion_csrf",
@@ -39,7 +178,18 @@ test("Search completes real retrieval and utility workflows at four breakpoints"
 }) => {
   test.setTimeout(300_000);
   const runtimeProblems: string[] = [];
+  let expectedFeedFailureUrl = "";
+  let expectedFeedFailures = 0;
   page.on("console", (entry) => {
+    if (
+      entry.type() === "error" &&
+      entry.location().url === expectedFeedFailureUrl &&
+      entry.text() ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ) {
+      expectedFeedFailures++;
+      return;
+    }
     if (entry.text() === "Service Worker registration blocked by Playwright") {
       return;
     }
@@ -214,8 +364,35 @@ test("Search completes real retrieval and utility workflows at four breakpoints"
   await expect(revokeButton).toBeDisabled();
   await revokeSheet.getByLabel("输入 REVOKE 确认").fill("REVOKE");
   await expect(revokeButton).toBeEnabled();
+  const feedListUrl = `**/api/v1/workspaces/${workspaceId}/calendar-feeds`;
+  expectedFeedFailureUrl = new URL(
+    `/api/v1/workspaces/${workspaceId}/calendar-feeds`,
+    page.url(),
+  ).href;
+  await page.route(feedListUrl, (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        code: "SERVICE_UNAVAILABLE",
+        message: "Synthetic read failure",
+        request_id: "m06-calendar-refresh",
+        retryable: true,
+      },
+    }),
+  );
   await revokeButton.click();
   await expect(revokeSheet).toHaveCount(0);
+  await expect(feedRow.getByText("已撤销", { exact: true })).toBeVisible();
+  await expect(page.getByText(/日历订阅已撤销，但列表尚未刷新/)).toBeVisible();
+  expect(expectedFeedFailures).toBe(1);
+  await expect(
+    feedRow.getByRole("button", { name: "撤销", exact: true }),
+  ).toHaveCount(0);
+  await page.unroute(feedListUrl);
+  await page.getByRole("button", { name: "重试当前操作", exact: true }).click();
+  await expect(
+    page.getByText("当前工作区的通知与日历已更新。", { exact: true }),
+  ).toBeVisible();
   await expect(feedRow.getByText("已撤销", { exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "搜索", exact: true }).click();

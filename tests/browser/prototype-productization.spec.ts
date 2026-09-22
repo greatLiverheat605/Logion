@@ -42,6 +42,7 @@ test.describe("prototype productization", () => {
   });
 
   test("shared Shell and Today Workbench honor frozen desktop geometry", async ({
+    accountState,
     page,
   }) => {
     const manifest = loadGlmTargetManifest();
@@ -49,7 +50,21 @@ test.describe("prototype productization", () => {
     await page.goto("/app/today", { waitUntil: "domcontentloaded" });
 
     await assertGlmShellGeometry(page, manifest);
-    await assertGlmWorkbenchGeometry(page, manifest);
+    await page
+      .getByLabel("本地资料口令")
+      .fill(
+        process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() ||
+          accountState.password,
+      );
+    await page.getByRole("button", { name: "解锁", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "本地资料已解锁" }),
+    ).toBeVisible();
+    // Unlocking replaces the scoped workbench; keep the exact geometry contract
+    // while waiting for that render to settle.
+    await expect(async () => {
+      await assertGlmWorkbenchGeometry(page, manifest);
+    }).toPass({ timeout: 20_000 });
   });
 
   test("rejects missing routes, targets, deviation records and tampered evidence", () => {

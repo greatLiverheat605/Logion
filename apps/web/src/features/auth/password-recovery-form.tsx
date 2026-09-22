@@ -89,7 +89,7 @@ export function PasswordRecoveryForm() {
       description={
         completing
           ? "启用 TOTP 的账户还需要认证器动态码或恢复码。成功后所有在线会话都会退出。"
-          : "所有邮箱都会得到相同响应，避免泄漏账户是否存在。"
+          : "输入注册时使用的邮箱，按恢复邮件中的指引重设密码。"
       }
     >
       <div data-testid="recover-form">

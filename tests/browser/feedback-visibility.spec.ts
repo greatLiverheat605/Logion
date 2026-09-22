@@ -4,6 +4,33 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 
+test("Alt+T focuses existing operation feedback and creates nothing when feedback is absent", async ({
+  page,
+  accountState,
+}) => {
+  await page.goto("/app/sync");
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+  await page.keyboard.press("Alt+t");
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "快速捕获" })).toHaveCount(0);
+  await page
+    .getByLabel("本地解锁口令", { exact: true })
+    .fill(accountState.password);
+  await page.getByRole("button", { name: "解锁本地资料", exact: true }).click();
+  await expect(page.getByLabel("本地解锁口令", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "立即同步", exact: true }).click();
+  const toast = page.locator('[data-sonner-toast][data-type="success"]');
+  await expect(toast).toContainText("同步完成");
+  await page.keyboard.press("Alt+t");
+  await expect(page.locator("[data-sonner-toaster]")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(toast).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(toast.getByRole("button", { name: "关闭反馈" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+});
+
 async function setTheme(page: Page, theme: "light" | "dark") {
   await expect(page.locator(".app-shell-frame")).toBeVisible();
   const toggle = page.getByRole("button", {

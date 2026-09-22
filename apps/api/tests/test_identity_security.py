@@ -1,11 +1,12 @@
 import base64
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import Settings
-from logion_api.errors import APIError
+from logion_api.errors import APIError, api_error_handler
 from logion_api.identity.models import AuthSession, Device, User
 from logion_api.identity.passkeys import _authentication_credential_statement
 from logion_api.identity.routes import _enforce_login_rate_limits
@@ -14,6 +15,63 @@ from logion_api.identity.service import AuthContext, IdentityService
 from logion_api.main import app
 from pydantic import SecretStr, ValidationError
 from sqlalchemy.dialects import postgresql
+from starlette.requests import Request
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["authenticate_access", "authenticate_deletion_access"])
+@pytest.mark.parametrize("access_token", [None, "expired-or-rotated-access"])
+async def test_access_failure_preserves_refresh_and_concurrent_rotation_cookies(
+    method: str, access_token: str | None
+) -> None:
+    settings = Settings()
+    service = IdentityService(settings, IdentitySecurity(settings.secret_key.get_secret_value()))
+    db = AsyncMock()
+    db.execute.return_value = Mock(one_or_none=Mock(return_value=None))
+
+    with pytest.raises(APIError) as raised:
+        await getattr(service, method)(db, access_token)
+
+    request = Request({"type": "http", "path": "/", "headers": []})
+    response = await api_error_handler(request, raised.value)
+    assert raised.value.code == "AUTH_INVALID_SESSION"
+    assert response.status_code == 401
+    assert response.headers["cache-control"] == "no-store"
+    # A late response must not delete even the access cookie installed by another request.
+    assert response.headers.getlist("set-cookie") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refresh_token", [None, "unrecognized-refresh"])
+async def test_terminal_refresh_failure_still_clears_all_auth_cookies(
+    refresh_token: str | None,
+) -> None:
+    settings = Settings()
+    service = IdentityService(settings, IdentitySecurity(settings.secret_key.get_secret_value()))
+    db = AsyncMock()
+    db.execute.return_value = Mock(one_or_none=Mock(return_value=None))
+    with pytest.raises(APIError) as raised:
+        await service.refresh(
+            db,
+            refresh_token=refresh_token,
+            csrf_header="csrf",
+            csrf_cookie="csrf",
+            request_id="unit-refresh",
+        )
+    response = await api_error_handler(
+        Request({"type": "http", "path": "/", "headers": []}), raised.value
+    )
+    assert response.status_code == 401
+    assert response.headers["cache-control"] == "no-store"
+    cleared = response.headers.getlist("set-cookie")
+    assert len(cleared) == 4
+    assert {cookie.split("=", 1)[0] for cookie in cleared} == {
+        "logion_access",
+        "logion_refresh",
+        "logion_csrf",
+        "logion_device",
+    }
+    assert all("Max-Age=0" in cookie for cookie in cleared)
 
 
 class RecordingRateLimiter:

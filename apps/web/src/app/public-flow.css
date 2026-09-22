@@ -215,8 +215,8 @@
 
 .public-flow-page .auth-form [data-workbench-primary="true"],
 .public-flow-page [data-workbench-primary="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--primary);
+  background: var(--primary);
   color: var(--primary-foreground);
 }
 
@@ -234,8 +234,8 @@
   .auth-form
   [data-workbench-primary="true"]:hover:not(:disabled),
 .public-flow-page [data-workbench-primary="true"]:hover:not(:disabled) {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
   color: var(--primary-foreground);
 }
 

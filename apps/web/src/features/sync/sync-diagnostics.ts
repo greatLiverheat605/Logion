@@ -2,7 +2,102 @@ import type {
   OutboxEntry,
   OutboxState,
   SyncCycleResult,
+  LogionOfflineDatabase,
+  WorkspaceSyncState,
+  OfflineVault,
 } from "@logion/offline";
+
+export function matchesVaultSession(
+  database: { current: LogionOfflineDatabase | null },
+  vault: { current: OfflineVault | null },
+  db: LogionOfflineDatabase | null,
+  localVault: OfflineVault | null,
+): boolean {
+  return (
+    db !== null &&
+    localVault !== null &&
+    database.current === db &&
+    vault.current === localVault
+  );
+}
+
+export interface WorkspaceSyncFacts {
+  workspaceId: string;
+  state: WorkspaceSyncState | null;
+  queue: SyncQueueSummary;
+  conflicts: number;
+  attachments: number;
+}
+
+export async function readWorkspaceSyncFacts(
+  db: LogionOfflineDatabase,
+  workspaceId: string,
+): Promise<WorkspaceSyncFacts> {
+  const [state, outbox, conflicts, attachments] = await Promise.all([
+    db.syncState.get(workspaceId),
+    db.outbox.where("workspace_id").equals(workspaceId).toArray(),
+    db.conflicts
+      .where("[workspace_id+status]")
+      .equals([workspaceId, "open"])
+      .count(),
+    db.attachmentQueue.where("workspace_id").equals(workspaceId).toArray(),
+  ]);
+  return {
+    workspaceId,
+    state: state ?? null,
+    queue: summarizeSyncQueue(outbox),
+    conflicts,
+    attachments: attachments.filter((entry) => entry.state !== "verified")
+      .length,
+  };
+}
+
+export function workspaceSyncStatus({
+  facts,
+  workspaceId,
+  deviceId,
+  unlocked,
+  online,
+  busy = false,
+  loading = false,
+  error = false,
+}: {
+  facts: WorkspaceSyncFacts | null;
+  workspaceId: string;
+  deviceId: string;
+  unlocked: boolean;
+  online: boolean;
+  busy?: boolean;
+  loading?: boolean;
+  error?: boolean;
+}): { label: string; tone: "default" | "good" | "warn" } {
+  const pending = (label: string) => ({ label, tone: "warn" as const });
+  if (!unlocked) return pending("解锁后确认");
+  if (!workspaceId || !deviceId) return pending("等待同步上下文");
+  if (error) return pending("同步状态待确认");
+  if (loading || !facts || facts.workspaceId !== workspaceId)
+    return { label: "读取中", tone: "default" };
+  const state = facts.state;
+  if (state?.outbox_isolated_at || facts.queue.isolated)
+    return pending("同步已隔离");
+  if (state?.bootstrap_state === "upgrade_required")
+    return pending("需要更新应用");
+  if (
+    !state ||
+    state.workspace_id !== workspaceId ||
+    state.device_id !== deviceId ||
+    state.bootstrap_state !== "ready" ||
+    !state.sync_epoch
+  )
+    return pending("等待同步初始化");
+  if (facts.conflicts || facts.queue.conflict) return pending("有同步冲突");
+  if (facts.queue.blocked) return pending("同步受阻");
+  if (!online) return pending("离线·本地保留");
+  if (busy || facts.queue.in_flight)
+    return { label: "同步中", tone: "default" };
+  if (facts.queue.total || facts.attachments) return pending("待同步");
+  return { label: "已同步", tone: "good" };
+}
 
 export function incompleteSyncMessage(
   result: SyncCycleResult,

@@ -10,7 +10,10 @@ import {
   useState,
 } from "react";
 
-import { browserApiClient } from "@/lib/api/client";
+import {
+  browserApiClient,
+  subscribeAuthenticationRequired,
+} from "@/lib/api/client";
 
 import {
   createAuthApi,
@@ -60,6 +63,11 @@ export function SessionProvider({
 
   const sessionExpiresAt =
     state.status === "authenticated" ? state.sessionExpiresAt : null;
+
+  useEffect(
+    () => subscribeAuthenticationRequired(() => runRefresh(false)),
+    [runRefresh],
+  );
 
   useEffect(() => {
     if (sessionExpiresAt === null) return;

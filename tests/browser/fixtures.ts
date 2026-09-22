@@ -140,6 +140,21 @@ async function openAuthenticatedApp(
   await expect(shell).toBeVisible();
 }
 
+// Call explicitly before a sensitive journey; never refresh login inside a
+// continuity/expiry test or from the shared per-test fixture.
+export async function reauthenticateForSensitiveJourney(
+  page: Page,
+  account: { authenticatedAt: number; email: string; password: string },
+): Promise<void> {
+  const returnPath = new URL(page.url()).pathname;
+  await page.goto(`/auth/login?next=${encodeURIComponent(returnPath)}`);
+  await page.getByLabel("邮箱", { exact: true }).fill(account.email);
+  await page.getByLabel("密码", { exact: true }).fill(account.password);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(new URL(returnPath, e2eBaseUrl).href);
+  account.authenticatedAt = Date.now();
+}
+
 export const test = base.extend<
   AuthenticatedFixtures,
   AuthenticatedWorkerFixtures

@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { expect, reauthenticateForSensitiveJourney, test } from "./fixtures";
 import {
   assertGlmPrimaryContract,
   assertGlmRouteRegions,
@@ -70,6 +70,7 @@ test("Collaboration completes shared review, feedback and immutable snapshot wor
   page,
 }) => {
   test.setTimeout(300_000);
+  await reauthenticateForSensitiveJourney(page, accountState);
   const manifest = loadGlmTargetManifest();
   const vaultPassphrase =
     process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() || accountState.password;

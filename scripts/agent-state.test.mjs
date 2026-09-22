@@ -34,6 +34,183 @@ const fixture = join(
 );
 const agentStateScript = join(repoRoot, "scripts", "agent-state.mjs");
 
+test("scans journal encodings per event while preserving scan limits", async (t) => {
+  await t.test("ordinary accumulated events remain valid", async () => {
+    await withFixture(async (runDir) => {
+      const events = await readEvents(runDir);
+      for (const event of events.filter(
+        (item) => item.type === "task.created",
+      )) {
+        event.data.title = "ordinary-module-review-text ".repeat(70).trim();
+      }
+      await writeEvents(runDir, events);
+      const result = await validateRun(runDir);
+      assert.equal(result.taskStates["task-review"], "accepted");
+    });
+  });
+  for (const [name, title, expected] of [
+    [
+      "dense single event",
+      "ordinary-module-review-text ".repeat(129),
+      /safe scan budget/u,
+    ],
+    [
+      "encoded secret",
+      Buffer.from("Bearer synthetic_sensitive_token_value", "utf8").toString(
+        "base64",
+      ),
+      /bearer credential/u,
+    ],
+  ]) {
+    await t.test(name, async () => {
+      await withFixture(async (runDir) => {
+        const events = await readEvents(runDir);
+        events.find((event) => event.type === "task.created").data.title =
+          title;
+        await writeEvents(runDir, events);
+        await assert.rejects(() => validateRun(runDir), expected);
+      });
+    });
+  }
+  await t.test("whole journal size remains bounded", async () => {
+    await withFixture(async (runDir) => {
+      const path = join(runDir, "tasks.jsonl");
+      await writeFile(
+        path,
+        (await readFile(path, "utf8")) + "\n".repeat(1_048_576),
+        "utf8",
+      );
+      await assert.rejects(() => validateRun(runDir), /safe text scan size/u);
+    });
+  });
+});
+
+test("scans graph encodings per record without weakening secret or size limits", async (t) => {
+  await t.test("large ordinary graph remains valid", async () => {
+    await withFixture(async (runDir) => {
+      const path = join(runDir, "graph.json");
+      const graph = await readJson(path);
+      for (let index = 0; index < 150; index += 1) {
+        graph.nodes.push({
+          id: `requirement-extra-${index}`,
+          type: "requirement",
+          label: "ordinary-module-review-text",
+          data: {},
+        });
+      }
+      await writeJson(path, graph);
+      assert.equal(
+        (await validateRun(runDir)).taskStates["task-review"],
+        "accepted",
+      );
+    });
+  });
+  for (const [name, label, expected] of [
+    [
+      "dense node",
+      "ordinary-module-review-text ".repeat(129),
+      /safe scan budget/u,
+    ],
+    [
+      "encoded secret",
+      Buffer.from("Bearer synthetic_sensitive_token_value", "utf8").toString(
+        "base64",
+      ),
+      /bearer credential/u,
+    ],
+    [
+      "nested encoding",
+      Buffer.from(
+        Buffer.from("Bearer synthetic_sensitive_token_value", "utf8").toString(
+          "base64",
+        ),
+        "utf8",
+      ).toString("base64"),
+      /bearer credential/u,
+    ],
+  ]) {
+    await t.test(name, async () => {
+      await withFixture(async (runDir) => {
+        const path = join(runDir, "graph.json");
+        const graph = await readJson(path);
+        graph.nodes.push({
+          id: "requirement-extra",
+          type: "requirement",
+          label,
+          data: {},
+        });
+        await writeJson(path, graph);
+        await assert.rejects(() => validateRun(runDir), expected);
+      });
+    });
+  }
+  await t.test("whole graph size remains bounded", async () => {
+    await withFixture(async (runDir) => {
+      const path = join(runDir, "graph.json");
+      await writeFile(
+        path,
+        (await readFile(path, "utf8")) + " ".repeat(1_048_576),
+        "utf8",
+      );
+      await assert.rejects(() => validateRun(runDir), /safe text scan size/u);
+    });
+  });
+  await t.test(
+    "record budget counts candidates across distinct fields",
+    async () => {
+      await withFixture(async (runDir) => {
+        const path = join(runDir, "graph.json");
+        const graph = await readJson(path);
+        graph.nodes.push({
+          id: "requirement-extra-long-identifier",
+          type: "requirement",
+          label: "ordinary-module-review-text ".repeat(128),
+          data: {},
+        });
+        await writeJson(path, graph);
+        await assert.rejects(
+          () => validateRun(runDir),
+          /graph.json.nodes\[.*safe scan budget/u,
+        );
+      });
+    },
+  );
+  for (const location of ["metadata", "node", "edge"]) {
+    await t.test(`encoded ${location} keys remain scanned`, async () => {
+      await withFixture(async (runDir) => {
+        const path = join(runDir, "graph.json");
+        const graph = await readJson(path);
+        const target =
+          location === "metadata"
+            ? graph
+            : location === "node"
+              ? graph.nodes[0]
+              : graph.edges[0];
+        target[
+          Buffer.from(
+            "Bearer synthetic_sensitive_token_value",
+            "utf8",
+          ).toString("base64")
+        ] = "ordinary";
+        await writeJson(path, graph);
+        await assert.rejects(() => validateRun(runDir), /bearer credential/u);
+      });
+    });
+  }
+  await t.test("encoded edge data remains rejected", async () => {
+    await withFixture(async (runDir) => {
+      const path = join(runDir, "graph.json");
+      const graph = await readJson(path);
+      graph.edges[0].id = Buffer.from(
+        "Bearer synthetic_sensitive_token_value",
+        "utf8",
+      ).toString("base64");
+      await writeJson(path, graph);
+      await assert.rejects(() => validateRun(runDir), /bearer credential/u);
+    });
+  });
+});
+
 async function copyFixture() {
   const root = await mkdtemp(join(tmpdir(), "logion-agent-state-"));
   const runDir = join(root, "run-minimal");

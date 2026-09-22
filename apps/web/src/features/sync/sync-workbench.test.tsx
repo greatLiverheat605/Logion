@@ -1,6 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { OutboxEntry } from "@logion/offline";
@@ -9,6 +15,35 @@ import { SyncWorkbench, type SyncWorkbenchProps } from "./sync-workbench";
 import type { ConflictView } from "./offline-sync-center";
 
 afterEach(cleanup);
+
+it.each([
+  { unlocked: false },
+  { dataLoading: true },
+  { dataError: true },
+  { accessIssue: "permission" as const },
+])("does not present unread queues as empty: %j", (unknown) => {
+  render(<SyncWorkbench {...props(unknown)} />);
+  expect(screen.queryByText("已清空")).toBeNull();
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "附件队列" }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  const panel = within(screen.getByTestId("sync-attachments"));
+  expect(panel.queryByText("附件队列为空")).toBeNull();
+  expect(panel.queryByText("0 项")).toBeNull();
+});
+
+it("closes a decrypted merge draft immediately on automatic lock", () => {
+  const open = props({
+    mergeConflictId: "conflict-1",
+    mergeDraft: "private draft",
+    conflicts: [conflict()],
+  });
+  const { rerender } = render(<SyncWorkbench {...open} />);
+  expect(screen.getByRole("dialog", { name: "编辑合并版本" })).toBeTruthy();
+  rerender(<SyncWorkbench {...open} unlocked={false} vaultPhase="locked" />);
+  expect(screen.queryByRole("dialog", { name: "编辑合并版本" })).toBeNull();
+});
 
 const workspace = {
   created_at: "2026-08-28T00:00:00.000Z",

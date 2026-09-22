@@ -5,6 +5,7 @@ import type { components } from "@logion/contracts";
 import { validateSyncV1Message } from "@logion/contracts";
 import {
   BootstrapRepository,
+  canResumeSync,
   OfflineVault,
   ProtectedOfflineRepository,
   SyncClient,
@@ -29,6 +30,13 @@ import type {
 } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
+import {
+  incompleteSyncMessage,
+  matchesVaultSession,
+  readWorkspaceSyncFacts,
+  workspaceSyncStatus,
+  type WorkspaceSyncFacts,
+} from "@/features/sync/sync-diagnostics";
 import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
@@ -328,6 +336,8 @@ export function usePlanningController(): PlanningControllerResult {
   } = useVaultSession();
   const { activePersona } = usePersona();
   const workspaceIdRef = useRef("");
+  const syncContext = useRef(0);
+  const unlockRequest = useRef(0);
   const deviceIdRef = useRef("");
   const contextRequest = useRef(0);
   const spaceRequest = useRef(0);
@@ -348,6 +358,7 @@ export function usePlanningController(): PlanningControllerResult {
   const [goals, setGoals] = useState<PlanningGoalRecord[]>([]);
   const [tasks, setTasks] = useState<PlanningTaskRecord[]>([]);
   const [conflictCount, setConflictCount] = useState(0);
+  const [syncFacts, setSyncFacts] = useState<WorkspaceSyncFacts | null>(null);
   const [status, setStatus] = useState("正在准备目标与路线工作台……");
   const [contextPhase, setContextPhase] =
     useState<Exclude<Phase, "idle">>("loading");
@@ -368,11 +379,21 @@ export function usePlanningController(): PlanningControllerResult {
       if (requestId !== contextRequest.current) return;
       const currentDevice = deviceResult.devices.find((item) => item.current);
       const nextWorkspace = workspaceResult.workspaces[0]?.id ?? "";
+      const nextDevice = currentDevice?.id ?? "";
+      if (
+        nextWorkspace !== workspaceIdRef.current ||
+        nextDevice !== deviceIdRef.current
+      ) {
+        syncContext.current += 1;
+        unlockRequest.current += 1;
+        setCommandPhase("idle");
+        setSyncFacts(null);
+      }
       workspaceIdRef.current = nextWorkspace;
-      deviceIdRef.current = currentDevice?.id ?? "";
+      deviceIdRef.current = nextDevice;
       setWorkspaces(workspaceResult.workspaces);
       setWorkspaceIdState(nextWorkspace);
-      setDeviceId(currentDevice?.id ?? "");
+      setDeviceId(nextDevice);
       setIssue(null);
       setStatus(
         currentDevice
@@ -438,14 +459,12 @@ export function usePlanningController(): PlanningControllerResult {
       localVault: OfflineVault,
       selectedWorkspace: string,
       selectedDevice: string,
+      isCurrent: () => boolean,
       force = false,
     ) => {
       const current = await db.syncState.get(selectedWorkspace);
-      if (
-        !force &&
-        current?.bootstrap_state === "ready" &&
-        current.device_id === selectedDevice
-      ) {
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+      if (!force && canResumeSync(current, selectedDevice)) {
         return;
       }
       const repository = new BootstrapRepository(db, {}, localVault);
@@ -469,6 +488,7 @@ export function usePlanningController(): PlanningControllerResult {
           },
         );
       const first = await fetchChunk(null, null);
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       const validation = validateSyncV1Message(first);
       if (
         !validation.ok ||
@@ -487,19 +507,21 @@ export function usePlanningController(): PlanningControllerResult {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,
       });
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       await repository.stageChunk(first, {
         device_id: selectedDevice,
         workspace_id: selectedWorkspace,
       });
       for (let index = 1; index < manifest.chunk_count; index += 1) {
-        await repository.stageChunk(
-          await fetchChunk(manifest.snapshot_id, index),
-          {
-            device_id: selectedDevice,
-            workspace_id: selectedWorkspace,
-          },
-        );
+        if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+        const chunk = await fetchChunk(manifest.snapshot_id, index);
+        if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
+        await repository.stageChunk(chunk, {
+          device_id: selectedDevice,
+          workspace_id: selectedWorkspace,
+        });
       }
+      if (!isCurrent()) throw new Error("操作上下文已改变，请重新操作。");
       markChanged();
     },
     [markChanged],
@@ -511,7 +533,14 @@ export function usePlanningController(): PlanningControllerResult {
       localVault: OfflineVault | null,
       selectedWorkspace: string,
     ) => {
-      if (db === null || localVault === null || !selectedWorkspace) return;
+      if (
+        db === null ||
+        localVault === null ||
+        !selectedWorkspace ||
+        !matchesVaultSession(database, vault, db, localVault) ||
+        selectedWorkspace !== workspaceIdRef.current
+      )
+        return;
       const requestId = ++planningRequest.current;
       setDataPhase("loading");
       try {
@@ -524,10 +553,7 @@ export function usePlanningController(): PlanningControllerResult {
             .where("[workspace_id+entity_type]")
             .equals([selectedWorkspace, "task"])
             .toArray(),
-          db.conflicts
-            .where("[workspace_id+status]")
-            .equals([selectedWorkspace, "open"])
-            .count(),
+          readWorkspaceSyncFacts(db, selectedWorkspace),
         ]);
         const [nextGoals, nextTasks] = await Promise.all([
           Promise.all(
@@ -542,6 +568,7 @@ export function usePlanningController(): PlanningControllerResult {
           ),
         ]);
         if (
+          !matchesVaultSession(database, vault, db, localVault) ||
           !shouldApplyPlanningResponse(
             requestId,
             planningRequest.current,
@@ -553,10 +580,12 @@ export function usePlanningController(): PlanningControllerResult {
         }
         setGoals(nextGoals.map(goalRecord));
         setTasks(nextTasks.map(taskRecord));
-        setConflictCount(openConflicts);
+        setConflictCount(openConflicts.conflicts);
+        setSyncFacts(openConflicts);
         setDataPhase("ready");
       } catch (error) {
         if (
+          !matchesVaultSession(database, vault, db, localVault) ||
           !shouldApplyPlanningResponse(
             requestId,
             planningRequest.current,
@@ -572,18 +601,36 @@ export function usePlanningController(): PlanningControllerResult {
         throw error;
       }
     },
-    [],
+    [database, vault],
   );
 
   useEffect(() => {
     const db = database.current;
     const localVault = vault.current;
-    if (!unlocked || db === null || localVault === null || !workspaceId) return;
+    if (!unlocked || db === null || localVault === null) {
+      syncContext.current += 1;
+      planningRequest.current += 1;
+      queueMicrotask(() => {
+        setGoals([]);
+        setTasks([]);
+        setConflictCount(0);
+        setSyncFacts(null);
+        setDataPhase("idle");
+        setCommandPhase("idle");
+        setIssue(null);
+      });
+      return;
+    }
+    if (!workspaceId) return;
     queueMicrotask(() => {
       // Passive reloads must not replace a deletion rejection or queued status.
       void refresh(db, localVault, workspaceId)
         .then(() => {
-          if (workspaceId === workspaceIdRef.current) {
+          if (
+            workspaceId === workspaceIdRef.current &&
+            db === database.current &&
+            localVault === vault.current
+          ) {
             setStatus((current) =>
               current === "请选择 Space 并解锁本地资料。"
                 ? "目标、阶段和关联任务已从本地加密资料读取。"
@@ -601,36 +648,52 @@ export function usePlanningController(): PlanningControllerResult {
       const localVault = vault.current;
       const selectedWorkspace = workspaceIdRef.current;
       const selectedDevice = deviceIdRef.current;
-      if (
-        db === null ||
-        localVault === null ||
-        !selectedWorkspace ||
-        !selectedDevice
-      ) {
+      const generation = syncContext.current;
+      const current = () =>
+        generation === syncContext.current &&
+        db === database.current &&
+        localVault === vault.current &&
+        selectedWorkspace === workspaceIdRef.current &&
+        selectedDevice === deviceIdRef.current;
+      if (!db || !localVault || !selectedWorkspace || !selectedDevice)
         return false;
-      }
       try {
-        await new SyncClient(
+        await bootstrap(
+          db,
+          localVault,
+          selectedWorkspace,
+          selectedDevice,
+          current,
+        );
+        if (!current()) return false;
+        const result = await new SyncClient(
           db,
           transport(selectedWorkspace),
           localVault,
         ).synchronize(selectedWorkspace, selectedDevice);
-        if (selectedWorkspace === workspaceIdRef.current) {
-          setIssue(null);
-          setStatus("目标与任务已同步。");
-        }
-        return true;
+        const remaining = await db.outbox
+          .where("workspace_id")
+          .equals(selectedWorkspace)
+          .toArray();
+        if (!current()) return false;
+        const incomplete = incompleteSyncMessage(result, remaining);
+        setIssue(incomplete ? { kind: "error" } : null);
+        setStatus(incomplete ?? "目标与任务已同步。");
+        return incomplete === null;
       } catch (error) {
-        if (reportFailure && selectedWorkspace === workspaceIdRef.current) {
+        if (current() && reportFailure) {
           setIssue(issueFrom(error));
           setStatus(userMessage(error));
         }
         return false;
       } finally {
-        await refresh(db, localVault, selectedWorkspace).catch(() => undefined);
+        if (current())
+          await refresh(db, localVault, selectedWorkspace).catch(
+            () => undefined,
+          );
       }
     },
-    [database, refresh, vault],
+    [bootstrap, database, refresh, vault],
   );
 
   useEffect(() => {
@@ -639,7 +702,21 @@ export function usePlanningController(): PlanningControllerResult {
     }
   }, [unlocked, online, workspaceId, deviceId, synchronizeCore]);
 
+  function operationIsCurrent() {
+    const generation = syncContext.current;
+    const db = database.current;
+    const localVault = vault.current;
+    const selectedWorkspace = workspaceIdRef.current;
+    const selectedDevice = deviceIdRef.current;
+    return () =>
+      generation === syncContext.current &&
+      selectedWorkspace === workspaceIdRef.current &&
+      selectedDevice === deviceIdRef.current &&
+      matchesVaultSession(database, vault, db, localVault);
+  }
+
   async function recoverSnapshot(): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
     const db = database.current,
       localVault = vault.current;
     const selectedWorkspace = workspaceIdRef.current,
@@ -657,37 +734,63 @@ export function usePlanningController(): PlanningControllerResult {
         .equals([selectedWorkspace, "open"])
         .count();
       if (pending || conflicts) {
+        if (!isCurrent()) return false;
         setStatus(feedback.error("请先完成待同步操作并处理冲突，再补全资料。"));
         return false;
       }
-      await bootstrap(db, localVault, selectedWorkspace, selectedDevice, true);
+      if (!isCurrent()) return false;
+      await bootstrap(
+        db,
+        localVault,
+        selectedWorkspace,
+        selectedDevice,
+        isCurrent,
+        true,
+      );
       await refresh(db, localVault, selectedWorkspace);
+      if (!isCurrent()) return false;
       setStatus(feedback.success("已从服务器快照补全本地资料。"));
       return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       setStatus(feedback.error(userMessage(error)));
       return false;
     } finally {
-      setCommandPhase("idle");
+      if (isCurrent()) setCommandPhase("idle");
     }
   }
 
   async function synchronize(): Promise<boolean> {
+    const generation = syncContext.current;
     setCommandPhase("pending");
     const synchronized = await synchronizeCore(true);
-    setCommandPhase(synchronized ? "success" : "idle");
+    if (generation === syncContext.current)
+      setCommandPhase(synchronized ? "success" : "idle");
     return synchronized;
   }
 
   async function unlock(passphrase: string): Promise<boolean> {
     if (session.status !== "authenticated") return false;
+    const selectedWorkspace = workspaceIdRef.current;
+    const selectedDevice = deviceIdRef.current;
+    const requestId = ++unlockRequest.current;
+    const current = () =>
+      requestId === unlockRequest.current &&
+      selectedWorkspace === workspaceIdRef.current &&
+      selectedDevice === deviceIdRef.current;
+    let available: (() => boolean) | null = null;
     try {
       const { database: db, vault: localVault } = await unlockVault(passphrase);
-      await refresh(db, localVault, workspaceIdRef.current);
+      available = () =>
+        current() && matchesVaultSession(database, vault, db, localVault);
+      if (!available()) return false;
+      await refresh(db, localVault, selectedWorkspace);
+      if (!available()) return false;
       setIssue(null);
       setStatus("本地资料已解锁；口令只保留在当前应用会话内存中。");
       return true;
     } catch (error) {
+      if (!current() || (available !== null && !available())) return false;
       setIssue(issueFrom(error));
       setStatus(userMessage(error));
       return false;
@@ -697,6 +800,7 @@ export function usePlanningController(): PlanningControllerResult {
   async function createGoal(
     input: PlanningCreateGoalInput,
   ): Promise<string | null> {
+    const isCurrent = operationIsCurrent();
     const db = database.current;
     const localVault = vault.current;
     const selectedWorkspace = workspaceIdRef.current;
@@ -711,6 +815,7 @@ export function usePlanningController(): PlanningControllerResult {
       !selectedSpace ||
       !selectedDevice
     ) {
+      if (!isCurrent()) return null;
       setStatus("请先选择 Workspace 和 Space，并解锁本地资料。");
       return null;
     }
@@ -723,7 +828,15 @@ export function usePlanningController(): PlanningControllerResult {
     const now = new Date().toISOString();
     setCommandPhase("pending");
     try {
-      await bootstrap(db, localVault, selectedWorkspace, selectedDevice);
+      if (!isCurrent()) return null;
+      await bootstrap(
+        db,
+        localVault,
+        selectedWorkspace,
+        selectedDevice,
+        isCurrent,
+      );
+      if (!isCurrent()) return null;
       await new ProtectedOfflineRepository(db, localVault).commitMutation({
         base_version: 0,
         client_occurred_at: now,
@@ -742,10 +855,14 @@ export function usePlanningController(): PlanningControllerResult {
         updated_by: session.user.id,
         workspace_id: selectedWorkspace,
       });
+      if (!isCurrent()) return null;
       const synchronized = await synchronizeCore(false);
+      if (!isCurrent()) return null;
       setSelectedGoalId(ids.goalId);
+      if (!isCurrent()) return null;
       setIssue(null);
       setCommandPhase("success");
+      if (!isCurrent()) return null;
       setStatus(
         synchronized
           ? "目标与首个阶段已保存并同步。"
@@ -753,15 +870,19 @@ export function usePlanningController(): PlanningControllerResult {
       );
       return ids.goalId;
     } catch (error) {
+      if (!isCurrent()) return null;
       setIssue(issueFrom(error));
+      if (!isCurrent()) return null;
       setStatus(userMessage(error));
-      setCommandPhase("idle");
+      if (isCurrent()) setCommandPhase("idle");
       await refresh(db, localVault, selectedWorkspace).catch(() => undefined);
       return null;
     }
   }
 
   function setWorkspaceId(nextWorkspaceId: string) {
+    unlockRequest.current += 1;
+    syncContext.current += 1;
     contextRequest.current += 1;
     spaceRequest.current += 1;
     planningRequest.current += 1;
@@ -774,11 +895,13 @@ export function usePlanningController(): PlanningControllerResult {
     setConflictCount(0);
     setSelectedGoalId("");
     setDataPhase("idle");
+    setSyncFacts(null);
     setCommandPhase("idle");
     setIssue(null);
   }
 
   function setSpaceId(nextSpaceId: string) {
+    syncContext.current += 1;
     setSpaceIdState(nextSpaceId);
     setSelectedGoalId("");
     setCommandPhase("idle");
@@ -787,12 +910,12 @@ export function usePlanningController(): PlanningControllerResult {
   const viewModel = useMemo(
     () =>
       derivePlanningViewModel({
-        goals,
+        goals: unlocked ? goals : [],
         selectedGoalId,
         spaceId,
-        tasks,
+        tasks: unlocked ? tasks : [],
       }),
-    [goals, selectedGoalId, spaceId, tasks],
+    [goals, selectedGoalId, spaceId, tasks, unlocked],
   );
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
   const selectedSpace = spaces.find((item) => item.id === spaceId);
@@ -879,15 +1002,16 @@ export function usePlanningController(): PlanningControllerResult {
     space: selectedSpace
       ? { id: selectedSpace.id, name: selectedSpace.name }
       : undefined,
-    sync: {
-      label:
-        conflictCount > 0
-          ? `${conflictCount} 项冲突`
-          : stale
-            ? "待同步"
-            : "已同步",
-      tone: conflictCount > 0 || stale ? "warn" : "good",
-    },
+    sync: workspaceSyncStatus({
+      facts: syncFacts,
+      workspaceId,
+      deviceId,
+      unlocked,
+      online,
+      busy: commandPhase === "pending",
+      loading: dataPhase === "loading",
+      error: dataPhase === "error",
+    }),
     vault: {
       label: unlocked ? "已解锁" : "已锁定",
       tone: unlocked ? "good" : "warn",

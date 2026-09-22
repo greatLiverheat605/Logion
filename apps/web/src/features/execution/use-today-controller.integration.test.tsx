@@ -42,11 +42,21 @@ import { useTodayController } from "./use-today-controller";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
+
+const syncTables = {
+  attachmentQueue: {
+    where: () => ({ equals: () => ({ toArray: async () => [] }) }),
+  },
+  outbox: { where: () => ({ equals: () => ({ toArray: async () => [] }) }) },
+  syncState: { get: async () => undefined },
+};
 
 function task(workspaceId: string, spaceId: string, id: string) {
   return {
@@ -90,6 +100,67 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("ignores a late D1 unlock failure after accepting device D2", async () => {
+  let currentDevice = "device-1";
+  const delayed = deferred<unknown>();
+  let bootstrapStarted = false;
+  const db = {
+    ...syncTables,
+    conflicts: { where: () => ({ equals: () => ({ count: async () => 0 }) }) },
+    entities: {
+      where: () => ({ equals: () => ({ toArray: async () => [] }) }),
+    },
+  };
+  const localVault = {};
+  Object.assign(mocks.vaultSession, {
+    database: { current: db },
+    vault: { current: localVault },
+    phase: "unlocked",
+    revision: 1,
+    markChanged: vi.fn(),
+    unlock: vi.fn(async () => ({
+      database: db,
+      vault: localVault,
+      initialized: false,
+    })),
+  });
+  mocks.request.mockImplementation(async (path: string) => {
+    if (path === "/api/v1/workspaces")
+      return { workspaces: [{ id: "workspace-1", name: "A", role: "owner" }] };
+    if (path === "/api/v1/auth/devices")
+      return { devices: [{ id: currentDevice, current: true }] };
+    if (path.endsWith("/spaces"))
+      return {
+        spaces: [{ id: "space-1", name: "Private", visibility: "private" }],
+      };
+    if (path.endsWith("/members")) return { members: [] };
+    if (path.endsWith("/sync/bootstrap")) {
+      bootstrapStarted = true;
+      return delayed.promise;
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  const { result } = renderHook(() => useTodayController());
+  await waitFor(() => expect(result.current.context.spaceId).toBe("space-1"));
+  let unlocking!: Promise<boolean>;
+  act(() => {
+    unlocking = result.current.commands.unlock("synthetic passphrase");
+  });
+  await waitFor(() => expect(bootstrapStarted).toBe(true));
+  currentDevice = "device-2";
+  await act(async () => {
+    await result.current.commands.loadContext();
+  });
+  act(() =>
+    result.current.commands.reportDeletion("D2 current context feedback"),
+  );
+  await act(async () => {
+    delayed.reject(new Error("late D1 bootstrap failure"));
+    expect(await unlocking).toBe(false);
+  });
+  expect(result.current.context.status).toBe("D2 current context feedback");
+});
+
 describe("Today 会话同步投影", () => {
   it.each(["completed", "abandoned"] as const)(
     "结束为 %s 后保留会话及非空 outcome，并可重新加载",
@@ -115,6 +186,7 @@ describe("Today 会话同步投影", () => {
       Object.assign(mocks.vaultSession, {
         database: {
           current: {
+            ...syncTables,
             conflicts: {
               where: () => ({ equals: () => ({ count: async () => 0 }) }),
             },
@@ -232,37 +304,35 @@ describe("Today 会话同步投影", () => {
 });
 
 describe("Today controller Workspace isolation", () => {
-  it("drops a late local read after switching Workspace", async () => {
-    const firstRead = deferred<Record<string, unknown>[]>();
-    const firstReadStarted = deferred<void>();
-    const workspaceA = { id: "workspace-1", name: "工作区 A", role: "owner" };
-    const workspaceB = { id: "workspace-2", name: "工作区 B", role: "owner" };
-    const spaceA = { id: "space-1", name: "空间 A", visibility: "private" };
-    const spaceB = { id: "space-2", name: "空间 B", visibility: "private" };
-
+  it("does not continue an old session command after switching workspace", async () => {
+    const firstCommit =
+      deferred<
+        Awaited<ReturnType<ProtectedOfflineRepository["commitMutation"]>>
+      >();
+    const taskA: LocalEntity = {
+      ...task("workspace-1", "space-1", "task-a"),
+      entity_type: "task",
+      payload_hash: `sha256:${"a".repeat(64)}`,
+      sync_status: "clean",
+    };
     Object.assign(mocks.vaultSession, {
       database: {
         current: {
+          ...syncTables,
           conflicts: {
-            where: () => ({
-              equals: () => ({ count: () => Promise.resolve(0) }),
-            }),
+            where: () => ({ equals: () => ({ count: async () => 0 }) }),
           },
           entities: {
             where: () => ({
-              equals: ([workspaceId, entityType]: [string, string]) => ({
-                toArray: () => {
-                  if (workspaceId === "workspace-1" && entityType === "task") {
-                    firstReadStarted.resolve();
-                    return firstRead.promise;
-                  }
-                  if (workspaceId === "workspace-2" && entityType === "task") {
-                    return Promise.resolve([
-                      task("workspace-2", "space-2", "task-b"),
-                    ]);
-                  }
-                  return Promise.resolve([]);
-                },
+              equals: ([workspaceId, entityType]: string[]) => ({
+                toArray: async () =>
+                  entityType === "task"
+                    ? [
+                        workspaceId === "workspace-1"
+                          ? taskA
+                          : task("workspace-2", "space-2", "task-b"),
+                      ]
+                    : [],
               }),
             }),
           },
@@ -270,54 +340,193 @@ describe("Today controller Workspace isolation", () => {
       },
       phase: "unlocked",
       revision: 1,
+      markChanged: vi.fn(),
       unlock: vi.fn(),
       vault: { current: { get: vi.fn() } },
     });
-
-    mocks.request.mockImplementation((path: string) => {
-      if (path === "/api/v1/workspaces") {
-        return Promise.resolve({ workspaces: [workspaceA, workspaceB] });
+    mocks.request.mockImplementation(async (path: string) => {
+      if (path === "/api/v1/workspaces")
+        return {
+          workspaces: [1, 2].map((id) => ({
+            id: `workspace-${id}`,
+            name: `Workspace ${id}`,
+            role: "owner",
+          })),
+        };
+      if (path === "/api/v1/auth/devices")
+        return { devices: [{ current: true, id: "device-1" }] };
+      if (path.endsWith("/spaces")) {
+        const id = path.includes("workspace-1") ? 1 : 2;
+        return {
+          spaces: [
+            { id: `space-${id}`, name: `Space ${id}`, visibility: "private" },
+          ],
+        };
       }
-      if (path === "/api/v1/auth/devices") {
-        return Promise.resolve({
-          devices: [{ current: true, id: "device-1" }],
-        });
-      }
-      if (path === "/api/v1/workspaces/workspace-1/spaces") {
-        return Promise.resolve({ spaces: [spaceA] });
-      }
-      if (path === "/api/v1/workspaces/workspace-2/spaces") {
-        return Promise.resolve({ spaces: [spaceB] });
-      }
-      if (path.endsWith("/members")) return Promise.resolve({ members: [] });
+      if (path.endsWith("/members")) return { members: [] };
       throw new Error(`Unexpected request: ${path}`);
     });
-
+    const commit = vi
+      .spyOn(ProtectedOfflineRepository.prototype, "commitMutation")
+      .mockImplementation(() => firstCommit.promise);
+    const synchronize = vi.spyOn(SyncClient.prototype, "synchronize");
     const { result } = renderHook(() => useTodayController());
-
-    await firstReadStarted.promise;
+    await waitFor(() =>
+      expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe(
+        "task-a",
+      ),
+    );
+    let starting!: Promise<boolean>;
+    act(() => {
+      starting = result.current.commands.startSession("task-a");
+    });
+    expect(commit).toHaveBeenCalledOnce();
+    expect(commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity_type: "task",
+        workspace_id: "workspace-1",
+      }),
+    );
     act(() => result.current.commands.setWorkspaceId("workspace-2"));
-
-    await waitFor(() => {
-      expect(result.current.context.workspaceId).toBe("workspace-2");
-      expect(result.current.context.spaceId).toBe("space-2");
+    await waitFor(() =>
       expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe(
         "task-b",
-      );
-    });
-
+      ),
+    );
+    act(() => result.current.commands.reportDeletion("B current feedback"));
     await act(async () => {
-      result.current.commands.reportDeletion(
+      firstCommit.resolve({
+        kind: "committed",
+        entity: taskA,
+        operation: { operation_id: "transition-a" } as OutboxEntry,
+      });
+      expect(await starting).toBe(false);
+    });
+    expect(commit).toHaveBeenCalledOnce();
+    expect(synchronize).not.toHaveBeenCalled();
+    expect(result.current.context.status).toBe("B current feedback");
+    expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe("task-b");
+  });
+
+  it.each([
+    { returnToA: false, lateError: false },
+    { returnToA: true, lateError: false },
+    { returnToA: true, lateError: true },
+  ])(
+    "drops a late local result after switching Workspace: %j",
+    async ({ returnToA, lateError }) => {
+      let aReads = 0;
+      const firstRead = deferred<Record<string, unknown>[]>();
+      const firstReadStarted = deferred<void>();
+      const workspaceA = { id: "workspace-1", name: "工作区 A", role: "owner" };
+      const workspaceB = { id: "workspace-2", name: "工作区 B", role: "owner" };
+      const spaceA = { id: "space-1", name: "空间 A", visibility: "private" };
+      const spaceB = { id: "space-2", name: "空间 B", visibility: "private" };
+
+      Object.assign(mocks.vaultSession, {
+        database: {
+          current: {
+            ...syncTables,
+            conflicts: {
+              where: () => ({
+                equals: () => ({ count: () => Promise.resolve(0) }),
+              }),
+            },
+            entities: {
+              where: () => ({
+                equals: ([workspaceId, entityType]: [string, string]) => ({
+                  toArray: () => {
+                    if (
+                      workspaceId === "workspace-1" &&
+                      entityType === "task"
+                    ) {
+                      if (aReads++ > 0)
+                        return Promise.resolve([
+                          task("workspace-1", "space-1", "fresh-task-a"),
+                        ]);
+                      firstReadStarted.resolve();
+                      return firstRead.promise;
+                    }
+                    if (
+                      workspaceId === "workspace-2" &&
+                      entityType === "task"
+                    ) {
+                      return Promise.resolve([
+                        task("workspace-2", "space-2", "task-b"),
+                      ]);
+                    }
+                    return Promise.resolve([]);
+                  },
+                }),
+              }),
+            },
+          },
+        },
+        phase: "unlocked",
+        revision: 1,
+        unlock: vi.fn(),
+        vault: { current: { get: vi.fn() } },
+      });
+
+      mocks.request.mockImplementation((path: string) => {
+        if (path === "/api/v1/workspaces") {
+          return Promise.resolve({ workspaces: [workspaceA, workspaceB] });
+        }
+        if (path === "/api/v1/auth/devices") {
+          return Promise.resolve({
+            devices: [{ current: true, id: "device-1" }],
+          });
+        }
+        if (path === "/api/v1/workspaces/workspace-1/spaces") {
+          return Promise.resolve({ spaces: [spaceA] });
+        }
+        if (path === "/api/v1/workspaces/workspace-2/spaces") {
+          return Promise.resolve({ spaces: [spaceB] });
+        }
+        if (path.endsWith("/members")) return Promise.resolve({ members: [] });
+        throw new Error(`Unexpected request: ${path}`);
+      });
+
+      const { result } = renderHook(() => useTodayController());
+
+      await firstReadStarted.promise;
+      act(() => result.current.commands.setWorkspaceId("workspace-2"));
+
+      await waitFor(() => {
+        expect(result.current.context.workspaceId).toBe("workspace-2");
+        expect(result.current.context.spaceId).toBe("space-2");
+        expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe(
+          "task-b",
+        );
+      });
+
+      if (returnToA) {
+        act(() => result.current.commands.setWorkspaceId("workspace-1"));
+        await waitFor(() =>
+          expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe(
+            "fresh-task-a",
+          ),
+        );
+      }
+      await act(async () => {
+        result.current.commands.reportDeletion(
+          "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
+        );
+        if (lateError) firstRead.reject(new Error("late read failed"));
+        else
+          firstRead.resolve([task("workspace-1", "space-1", "stale-task-a")]);
+        await firstRead.promise.catch(() => undefined);
+      });
+
+      expect(result.current.context.workspaceId).toBe(
+        returnToA ? "workspace-1" : "workspace-2",
+      );
+      expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe(
+        returnToA ? "fresh-task-a" : "task-b",
+      );
+      expect(result.current.context.status).toBe(
         "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
       );
-      firstRead.resolve([task("workspace-1", "space-1", "stale-task-a")]);
-      await firstRead.promise;
-    });
-
-    expect(result.current.context.workspaceId).toBe("workspace-2");
-    expect(result.current.viewModel.queue[0]?.entity.entity_id).toBe("task-b");
-    expect(result.current.context.status).toBe(
-      "删除尚未完成：SYNC_DELETE_BLOCKED_BY_REFERENCE",
-    );
-  });
+    },
+  );
 });

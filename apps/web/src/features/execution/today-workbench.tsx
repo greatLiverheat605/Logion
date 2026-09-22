@@ -1547,7 +1547,7 @@ function TodayMain({
   );
 }
 
-export function TodayWorkbench({
+function TodayWorkbenchContent({
   controller,
 }: {
   controller: TodayControllerResult;
@@ -1582,7 +1582,9 @@ export function TodayWorkbench({
           </WorkbenchTooltip>
           <button
             className={styles.secondaryButton}
-            disabled={!controller.capabilities.canWrite}
+            disabled={
+              !controller.capabilities.canWrite || !controller.context.unlocked
+            }
             onClick={() => setNewTaskOpen(true)}
             type="button"
           >
@@ -1604,7 +1606,11 @@ export function TodayWorkbench({
           <WorkbenchContextBar context={controller.context.operational} />
         }
         header={header}
-        inspector={<TodayInspector controller={controller} />}
+        inspector={
+          controller.context.unlocked ? (
+            <TodayInspector controller={controller} />
+          ) : null
+        }
         inspectorLabel="任务 Inspector"
         label="今日执行工作台"
         main={
@@ -1621,38 +1627,58 @@ export function TodayWorkbench({
           />
         }
         mainLabel="NEXT ACTION"
-        master={<TodayMaster controller={controller} />}
+        master={
+          controller.context.unlocked ? (
+            <TodayMaster controller={controller} />
+          ) : null
+        }
         masterLabel="今日序列"
       />
-      <NewTaskSheet
-        controller={controller}
-        onOpenChange={setNewTaskOpen}
-        open={newTaskOpen}
-      />
-      <FinishSessionSheet
-        controller={controller}
-        elapsedSeconds={finishSeconds}
-        onOpenChange={setFinishOpen}
-        open={finishOpen}
-      />
-      <EvidenceSheet
-        controller={controller}
-        onOpenChange={setEvidenceOpen}
-        open={evidenceOpen}
-        taskId={selectedTaskId}
-      />
-      <VerificationSheet
-        controller={controller}
-        onOpenChange={setVerificationOpen}
-        open={verificationOpen}
-        verificationId={pendingVerification?.entity.entity_id ?? ""}
-      />
-      <BlockTaskSheet
-        controller={controller}
-        onOpenChange={setBlockOpen}
-        open={blockOpen}
-        taskId={selectedTaskId}
-      />
+      {controller.context.unlocked ? (
+        <>
+          <NewTaskSheet
+            controller={controller}
+            onOpenChange={setNewTaskOpen}
+            open={newTaskOpen}
+          />
+          <FinishSessionSheet
+            controller={controller}
+            elapsedSeconds={finishSeconds}
+            onOpenChange={setFinishOpen}
+            open={finishOpen}
+          />
+          <EvidenceSheet
+            controller={controller}
+            onOpenChange={setEvidenceOpen}
+            open={evidenceOpen}
+            taskId={selectedTaskId}
+          />
+          <VerificationSheet
+            controller={controller}
+            onOpenChange={setVerificationOpen}
+            open={verificationOpen}
+            verificationId={pendingVerification?.entity.entity_id ?? ""}
+          />
+          <BlockTaskSheet
+            controller={controller}
+            onOpenChange={setBlockOpen}
+            open={blockOpen}
+            taskId={selectedTaskId}
+          />
+        </>
+      ) : null}
     </main>
+  );
+}
+
+export function TodayWorkbench({
+  controller,
+}: Readonly<{ controller: TodayControllerResult }>) {
+  const { unlocked, workspaceId, spaceId } = controller.context;
+  return (
+    <TodayWorkbenchContent
+      key={unlocked ? `unlocked:${workspaceId}:${spaceId}` : "locked"}
+      controller={controller}
+    />
   );
 }

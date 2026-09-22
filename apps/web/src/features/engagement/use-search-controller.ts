@@ -5,7 +5,14 @@ import {
   OfflineSearchRepository,
   type OfflineSearchResult,
 } from "@logion/offline";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   ProductOperationalState,
@@ -20,6 +27,7 @@ import { browserApiClient, LogionApiError } from "@/lib/api/client";
 
 import {
   announceNotificationWorkspace,
+  NOTIFICATION_CATEGORIES,
   visibleNotifications as filterVisibleNotifications,
 } from "./notification-center-model";
 
@@ -68,6 +76,7 @@ export interface SearchPreferenceInput {
 type Phase = "error" | "idle" | "loading" | "ready";
 
 interface SearchIssue {
+  utility?: boolean;
   kind: Exclude<
     ProductOperationalStateKind,
     "empty" | "loading" | "pending" | "stale" | "success"
@@ -228,6 +237,7 @@ export function useSearchController(
   scope: SearchScope,
 ): SearchControllerResult {
   const { state: session } = useSession();
+  const userId = session.status === "authenticated" ? session.user.id : null;
   const {
     database,
     phase: vaultPhase,
@@ -239,6 +249,12 @@ export function useSearchController(
   const workspaceIdRef = useRef("");
   const searchRequest = useRef(0);
   const dataRequest = useRef(0);
+  const notificationRevision = useRef(0);
+  const preferenceRevision = useRef(0);
+  const contextRequest = useRef(0);
+  const accountRef = useRef<string | null>(null);
+  const scopeGeneration = useRef(0);
+  const mutations = useRef(new Set<string>());
   const lastInput = useRef<SearchInput | null>(null);
 
   const [workspaces, setWorkspaces] = useState<SearchWorkspace[]>([]);
@@ -260,85 +276,146 @@ export function useSearchController(
     "搜索不会把查询正文写入日志或第三方服务。",
   );
   const offlineUnlocked = vaultPhase === "unlocked";
+  const [stateAccount, setStateAccount] = useState(userId);
+  if (stateAccount !== userId) {
+    setStateAccount(userId);
+    setWorkspaceIdState("");
+    setDataWorkspaceId("");
+    setWorkspaces([]);
+    setNotifications([]);
+    setPreference(null);
+    setFeeds([]);
+    setSpaces([]);
+    setResults([]);
+    setSelectedResultId("");
+    setSearched(false);
+    setSearchPhase("idle");
+    setLastQuery("");
+    setIssue(null);
+    setStatus("搜索不会把查询正文写入日志或第三方服务。");
+  }
+
+  const captureScope = useCallback((selected: string) => {
+    const generation = scopeGeneration.current;
+    const account = accountRef.current;
+    return () =>
+      Boolean(account) &&
+      account === accountRef.current &&
+      generation === scopeGeneration.current &&
+      selected === workspaceIdRef.current;
+  }, []);
 
   const loadWorkspaces = useCallback(async () => {
+    if (!userId || accountRef.current !== userId) return;
+    const request = ++contextRequest.current;
+    const isCurrent = () =>
+      request === contextRequest.current && accountRef.current === userId;
     setContextPhase("loading");
     try {
       const next = await integrationCapabilityService.listWorkspaces();
+      if (!isCurrent()) return;
       setWorkspaces(next);
-      setWorkspaceIdState((current) => {
-        const resolved = next.some((item) => item.id === current)
-          ? current
-          : (next[0]?.id ?? "");
-        workspaceIdRef.current = resolved;
-        return resolved;
-      });
+      const resolved = next.some((item) => item.id === workspaceIdRef.current)
+        ? workspaceIdRef.current
+        : (next[0]?.id ?? "");
+      if (resolved !== workspaceIdRef.current) scopeGeneration.current += 1;
+      workspaceIdRef.current = resolved;
+      setWorkspaceIdState(resolved);
       setContextPhase("ready");
       setIssue(null);
     } catch (error) {
+      if (!isCurrent()) return;
       setContextPhase("error");
       setIssue(issueFrom(error));
       setStatus(errorText(error));
     }
-  }, []);
+  }, [userId]);
 
-  const loadData = useCallback(async (selected: string) => {
-    const requestId = ++dataRequest.current;
-    try {
-      const [notificationResult, preferenceResult, feedResult, spaceResult] =
-        await Promise.all([
-          browserApiClient.request<{ notifications: SearchNotification[] }>(
-            `/api/v1/workspaces/${selected}/notifications`,
-          ),
-          browserApiClient.request<SearchPreference>(
-            `/api/v1/workspaces/${selected}/notification-preferences`,
-          ),
-          integrationCapabilityService.listCalendarFeeds(selected),
-          browserApiClient.request<{ spaces: SearchSpace[] }>(
-            `/api/v1/workspaces/${selected}/spaces`,
-          ),
-        ]);
-      if (
-        requestId !== dataRequest.current ||
-        selected !== workspaceIdRef.current
-      ) {
-        return;
+  const loadData = useCallback(
+    async (selected: string) => {
+      const isCurrent = captureScope(selected);
+      if (!selected || !isCurrent()) return false;
+      const requestId = ++dataRequest.current;
+      const notificationVersion = notificationRevision.current;
+      const preferenceVersion = preferenceRevision.current;
+      try {
+        const [notificationResult, preferenceResult, feedResult, spaceResult] =
+          await Promise.all([
+            browserApiClient.request<{ notifications: SearchNotification[] }>(
+              `/api/v1/workspaces/${selected}/notifications`,
+            ),
+            browserApiClient.request<SearchPreference>(
+              `/api/v1/workspaces/${selected}/notification-preferences`,
+            ),
+            integrationCapabilityService.listCalendarFeeds(selected),
+            browserApiClient.request<{ spaces: SearchSpace[] }>(
+              `/api/v1/workspaces/${selected}/spaces`,
+            ),
+          ]);
+        if (requestId !== dataRequest.current || !isCurrent()) {
+          return false;
+        }
+        if (notificationVersion === notificationRevision.current)
+          setNotifications(
+            Array.isArray(notificationResult.notifications)
+              ? filterVisibleNotifications(
+                  notificationResult.notifications.filter(
+                    (item) => item.workspace_id === selected,
+                  ),
+                )
+              : [],
+          );
+        if (preferenceVersion === preferenceRevision.current)
+          setPreference(preferenceResult);
+        setFeeds(feedResult);
+        setSpaces(spaceResult.spaces);
+        setDataWorkspaceId(selected);
+        setIssue(null);
+        setStatus("当前工作区的通知与日历已更新。");
+        announceNotificationWorkspace(selected, accountRef.current!);
+        return true;
+      } catch (error) {
+        if (requestId !== dataRequest.current || !isCurrent()) {
+          return false;
+        }
+        // Keep already confirmed data while reporting a failed refresh.
+        setDataWorkspaceId(selected);
+        setIssue({ ...issueFrom(error), utility: true });
+        setStatus(errorText(error));
+        return false;
       }
-      setNotifications(
-        Array.isArray(notificationResult.notifications)
-          ? filterVisibleNotifications(notificationResult.notifications)
-          : [],
-      );
-      setPreference(preferenceResult);
-      setFeeds(feedResult);
-      setSpaces(spaceResult.spaces);
-      setDataWorkspaceId(selected);
-      setIssue(null);
-    } catch (error) {
-      if (
-        requestId !== dataRequest.current ||
-        selected !== workspaceIdRef.current
-      ) {
-        return;
-      }
-      setNotifications([]);
-      setPreference(null);
-      setFeeds([]);
-      setSpaces([]);
-      setDataWorkspaceId(selected);
-      setIssue(issueFrom(error));
-      setStatus(errorText(error));
-    }
-  }, []);
+    },
+    [captureScope],
+  );
 
   const loadContext = useCallback(async () => {
     await loadWorkspaces();
   }, [loadWorkspaces]);
 
+  useLayoutEffect(() => {
+    accountRef.current = userId;
+    scopeGeneration.current += 1;
+    contextRequest.current += 1;
+    dataRequest.current += 1;
+    searchRequest.current += 1;
+    workspaceIdRef.current = "";
+    lastInput.current = null;
+    let active = true;
+    if (userId)
+      queueMicrotask(() => {
+        if (active) void loadWorkspaces();
+      });
+    return () => {
+      active = false;
+      accountRef.current = null;
+      scopeGeneration.current += 1;
+      contextRequest.current += 1;
+      dataRequest.current += 1;
+      searchRequest.current += 1;
+    };
+  }, [loadWorkspaces, userId]);
+
   useEffect(() => {
-    if (session.status === "authenticated") {
-      queueMicrotask(() => void loadWorkspaces());
-    }
     const updateOnline = () => {
       searchRequest.current += 1;
       setResults([]);
@@ -354,10 +431,9 @@ export function useSearchController(
       window.removeEventListener("online", updateOnline);
       window.removeEventListener("offline", updateOnline);
     };
-  }, [loadWorkspaces, session.status]);
+  }, []);
 
   useEffect(() => {
-    workspaceIdRef.current = workspaceId;
     if (workspaceId && online) queueMicrotask(() => void loadData(workspaceId));
   }, [loadData, online, workspaceId]);
 
@@ -374,18 +450,26 @@ export function useSearchController(
 
   function setWorkspaceId(nextWorkspaceId: string) {
     if (nextWorkspaceId === workspaceIdRef.current) return;
+    if (!workspaces.some((item) => item.id === nextWorkspaceId)) return;
     workspaceIdRef.current = nextWorkspaceId;
+    scopeGeneration.current += 1;
+    contextRequest.current += 1;
     searchRequest.current += 1;
     dataRequest.current += 1;
     lastInput.current = null;
     setWorkspaceIdState(nextWorkspaceId);
     setDataWorkspaceId("");
+    setNotifications([]);
+    setPreference(null);
+    setFeeds([]);
+    setSpaces([]);
     setResults([]);
     setSelectedResultId("");
     setSearched(false);
     setSearchPhase("idle");
     setIssue(null);
-    announceNotificationWorkspace(nextWorkspaceId);
+    setStatus("正在读取当前工作区。");
+    if (userId) announceNotificationWorkspace(nextWorkspaceId, userId);
   }
 
   async function unlock(passphrase: string): Promise<boolean> {
@@ -521,11 +605,19 @@ export function useSearchController(
     const selectedWorkspace = workspaceIdRef.current;
     const visiblePreference =
       dataWorkspaceId === selectedWorkspace ? preference : null;
-    if (!selectedWorkspace || !online) return false;
+    if (!selectedWorkspace || !online || !visiblePreference) return false;
+    const isCurrent = captureScope(selectedWorkspace);
+    const mutationKey = `${scopeGeneration.current}:preferences`;
+    if (!isCurrent() || mutations.current.has(mutationKey)) return false;
+    mutations.current.add(mutationKey);
     const categories = new Set<NotificationCategory>(input.enabledCategories);
+    for (const category of visiblePreference.enabled_categories) {
+      if (!NOTIFICATION_CATEGORIES.some((visible) => visible === category))
+        categories.add(category);
+    }
     categories.add("security");
     try {
-      await browserApiClient.request(
+      const saved = await browserApiClient.request<SearchPreference>(
         `/api/v1/workspaces/${selectedWorkspace}/notification-preferences`,
         {
           body: JSON.stringify({
@@ -539,52 +631,84 @@ export function useSearchController(
           method: "PUT",
         },
       );
-      await loadData(selectedWorkspace);
-      announceNotificationWorkspace(selectedWorkspace);
+      if (!isCurrent()) return false;
+      preferenceRevision.current += 1;
+      setPreference(saved);
+      announceNotificationWorkspace(selectedWorkspace, accountRef.current!);
       setIssue(null);
       setStatus("通知偏好已保存；安全通知始终保留。");
       return true;
     } catch (error) {
-      setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
+      setIssue({ ...issueFrom(error), utility: true });
       setStatus(errorText(error));
       return false;
+    } finally {
+      mutations.current.delete(mutationKey);
     }
   }
 
   async function markRead(notification: SearchNotification): Promise<boolean> {
     const selectedWorkspace = workspaceIdRef.current;
-    if (!selectedWorkspace || !online) return false;
+    if (
+      !selectedWorkspace ||
+      !online ||
+      notification.workspace_id !== selectedWorkspace ||
+      dataWorkspaceId !== selectedWorkspace ||
+      !notifications.some((item) => item.id === notification.id)
+    )
+      return false;
+    const isCurrent = captureScope(selectedWorkspace);
+    const mutationKey = `${scopeGeneration.current}:read:${notification.id}`;
+    if (!isCurrent() || mutations.current.has(mutationKey)) return false;
+    mutations.current.add(mutationKey);
     try {
-      await browserApiClient.request(
+      const saved = await browserApiClient.request<SearchNotification>(
         `/api/v1/workspaces/${selectedWorkspace}/notifications/${notification.id}/read`,
         { body: JSON.stringify({ read: true }), csrf: true, method: "POST" },
       );
-      await loadData(selectedWorkspace);
-      announceNotificationWorkspace(selectedWorkspace);
+      if (!isCurrent()) return false;
+      // Do not discard unrelated feed/space updates in an overlapping list load.
+      notificationRevision.current += 1;
+      setNotifications((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      announceNotificationWorkspace(selectedWorkspace, accountRef.current!);
       setIssue(null);
       setStatus("通知已标为已读。");
       return true;
     } catch (error) {
-      setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
+      setIssue({ ...issueFrom(error), utility: true });
       setStatus(errorText(error));
       return false;
+    } finally {
+      mutations.current.delete(mutationKey);
     }
   }
 
   async function createFeed(name: string): Promise<string | null> {
     const selectedWorkspace = workspaceIdRef.current;
     if (!selectedWorkspace || !online || !name.trim()) return null;
+    const isCurrent = captureScope(selectedWorkspace);
+    if (!isCurrent()) return null;
     try {
       const result = await integrationCapabilityService.createCalendarFeed(
         selectedWorkspace,
         { id: crypto.randomUUID(), name: name.trim() },
       );
-      await loadData(selectedWorkspace);
-      setIssue(null);
-      setStatus("日历订阅已创建。请立即保存一次性 URL。");
+      if (!isCurrent()) return null;
+      const refreshed = await loadData(selectedWorkspace);
+      if (!isCurrent()) return null;
+      setStatus(
+        refreshed
+          ? "日历订阅已创建。请立即保存一次性 URL。"
+          : "日历订阅已创建，但列表尚未刷新。请先保存一次性 URL，再重试读取。",
+      );
       return result.token;
     } catch (error) {
-      setIssue(issueFrom(error));
+      if (!isCurrent()) return null;
+      setIssue({ ...issueFrom(error), utility: true });
       setStatus(errorText(error));
       return null;
     }
@@ -593,18 +717,31 @@ export function useSearchController(
   async function revokeFeed(feed: CalendarFeed): Promise<boolean> {
     const selectedWorkspace = workspaceIdRef.current;
     if (!selectedWorkspace || !online) return false;
+    const isCurrent = captureScope(selectedWorkspace);
+    if (!isCurrent()) return false;
     try {
       await integrationCapabilityService.revokeCalendarFeed(
         selectedWorkspace,
         feed.id,
         feed.version,
       );
-      await loadData(selectedWorkspace);
-      setIssue(null);
-      setStatus("日历订阅已撤销，原 URL 立即失效且无法恢复。");
+      if (!isCurrent()) return false;
+      setFeeds((current) =>
+        current.map((item) =>
+          item.id === feed.id ? { ...item, status: "revoked" } : item,
+        ),
+      );
+      const refreshed = await loadData(selectedWorkspace);
+      if (!isCurrent()) return false;
+      setStatus(
+        refreshed
+          ? "日历订阅已撤销，原 URL 立即失效且无法恢复。"
+          : "日历订阅已撤销，但列表尚未刷新，请重试读取。原 URL 已失效。",
+      );
       return true;
     } catch (error) {
-      setIssue(issueFrom(error));
+      if (!isCurrent()) return false;
+      setIssue({ ...issueFrom(error), utility: true });
       setStatus(errorText(error));
       return false;
     }
@@ -645,6 +782,8 @@ export function useSearchController(
   const retry = () => {
     if (contextPhase === "error") {
       void loadWorkspaces();
+    } else if (issue?.utility && workspaceIdRef.current) {
+      void loadData(workspaceIdRef.current);
     } else if (lastInput.current) {
       void search(lastInput.current);
     } else if (workspaceIdRef.current) {
@@ -727,7 +866,11 @@ export function useSearchController(
 
   return {
     capabilities: {
-      canManageUtilities: online && Boolean(workspaceId),
+      canManageUtilities:
+        Boolean(userId) &&
+        online &&
+        Boolean(workspaceId) &&
+        dataWorkspaceId === workspaceId,
       canSearch: Boolean(workspaceId),
       canUnlock: session.status === "authenticated" && !offlineUnlocked,
     },
