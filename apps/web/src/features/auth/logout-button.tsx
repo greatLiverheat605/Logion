@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { browserApiClient } from "@/lib/api/client";
+import { clearWorkbenchContexts } from "@/lib/workbench-context";
 
 import { createPublicAuthApi } from "./public-auth-api";
 import {
@@ -33,6 +34,7 @@ export function LogoutButton() {
         throw new Error("Session verification unavailable");
       }
       if (session.status === "authenticated") await authApi.logout();
+      clearWorkbenchContexts();
       window.location.assign("/auth/login");
     } catch {
       setFailed(true);

@@ -1,5 +1,9 @@
 "use client";
 import { feedback } from "@/lib/feedback";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import type { components } from "@logion/contracts";
 import {
@@ -249,29 +253,6 @@ function errorText(error: unknown) {
   return "操作未完成；已有学习数据不受影响。";
 }
 
-function contextSelectionKey() {
-  return "logion:workbench-context:templates";
-}
-
-function readContextSelection() {
-  if (typeof window === "undefined") return { spaceId: "", workspaceId: "" };
-  try {
-    const raw = window.sessionStorage.getItem(contextSelectionKey());
-    if (!raw) return { spaceId: "", workspaceId: "" };
-    const parsed = JSON.parse(raw) as {
-      spaceId?: unknown;
-      workspaceId?: unknown;
-    };
-    return {
-      spaceId: typeof parsed.spaceId === "string" ? parsed.spaceId : "",
-      workspaceId:
-        typeof parsed.workspaceId === "string" ? parsed.workspaceId : "",
-    };
-  } catch {
-    return { spaceId: "", workspaceId: "" };
-  }
-}
-
 export function templateHasRelativeDate(
   template: Pick<Template, "object_graph">,
 ) {
@@ -285,7 +266,7 @@ export function templateHasRelativeDate(
 }
 
 export function useTemplatesController(): TemplatesControllerResult {
-  const [initialSelection] = useState(readContextSelection);
+  const [initialSelection] = useState(() => readWorkbenchContext("templates"));
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState(initialSelection.workspaceId);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -417,14 +398,7 @@ export function useTemplatesController(): TemplatesControllerResult {
   }, [loadContext]);
 
   useEffect(() => {
-    try {
-      window.sessionStorage.setItem(
-        contextSelectionKey(),
-        JSON.stringify({ spaceId, workspaceId }),
-      );
-    } catch {
-      // Session storage is optional; API context remains authoritative.
-    }
+    writeWorkbenchContext("templates", { spaceId, workspaceId });
   }, [spaceId, workspaceId]);
 
   useEffect(() => {

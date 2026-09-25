@@ -28,6 +28,10 @@ import { deriveProductWorkbenchState } from "@/components/product/product-workbe
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { type ApiClient } from "@/lib/api/client";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import { eligibleCollaborationSpaces } from "./collaboration-workbench-model";
 import {
@@ -58,7 +62,6 @@ import { useSelfStudyController } from "./use-self-study-controller";
 type Workspace = components["schemas"]["WorkspaceResponse"];
 type Space = components["schemas"]["SpaceResponse"];
 type Device = components["schemas"]["DeviceResponse"];
-type ContextSelection = { spaceId: string; workspaceId: string };
 type Kind =
   | "learning_track"
   | "study_project"
@@ -101,30 +104,6 @@ function errorMessage(error: unknown) {
   return feedbackErrorText(error, "操作未完成；本地内容保留，可稍后重试。");
 }
 
-function contextSelectionKey(
-  mode: "self-study" | "research" | "collaboration",
-) {
-  return `logion:workbench-context:${mode}`;
-}
-
-function readContextSelection(
-  mode: "self-study" | "research" | "collaboration",
-): ContextSelection {
-  if (typeof window === "undefined") return { spaceId: "", workspaceId: "" };
-  try {
-    const raw = window.sessionStorage.getItem(contextSelectionKey(mode));
-    if (!raw) return { spaceId: "", workspaceId: "" };
-    const parsed = JSON.parse(raw) as Partial<ContextSelection>;
-    return {
-      spaceId: typeof parsed.spaceId === "string" ? parsed.spaceId : "",
-      workspaceId:
-        typeof parsed.workspaceId === "string" ? parsed.workspaceId : "",
-    };
-  } catch {
-    return { spaceId: "", workspaceId: "" };
-  }
-}
-
 export function SelfStudyCenter() {
   return <OfflineLearningCenter mode="self-study" />;
 }
@@ -150,7 +129,7 @@ function OfflineLearningCenter({
     unlock: unlockVault,
     vault,
   } = useVaultSession();
-  const [initialSelection] = useState(() => readContextSelection(mode));
+  const [initialSelection] = useState(() => readWorkbenchContext(mode));
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [spaces, setSpaces] = useState<Space[]>([]);
   const [workspaceId, setWorkspaceId] = useState(initialSelection.workspaceId),
@@ -250,14 +229,7 @@ function OfflineLearningCenter({
     queueMicrotask(() => void loadContext());
   }, [loadContext]);
   useEffect(() => {
-    try {
-      window.sessionStorage.setItem(
-        contextSelectionKey(mode),
-        JSON.stringify({ spaceId, workspaceId }),
-      );
-    } catch {
-      // Session storage is an optional continuity aid; context loading remains authoritative.
-    }
+    writeWorkbenchContext(mode, { spaceId, workspaceId });
   }, [mode, spaceId, workspaceId]);
   useEffect(() => {
     if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));

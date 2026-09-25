@@ -29,6 +29,10 @@ import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { LogionApiError, type ApiClient } from "@/lib/api/client";
 import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import {
   buildKnowledgeGraph,
@@ -243,9 +247,9 @@ export function ReviewCenter() {
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       setWorkspaces(workspaceResult.workspaces);
-      const requestedWorkspace = new URLSearchParams(
-        window.location.search,
-      ).get("workspace");
+      const requestedWorkspace =
+        new URLSearchParams(window.location.search).get("workspace") ??
+        readWorkbenchContext("review").workspaceId;
       setWorkspaceId((current) =>
         workspaceResult.workspaces.some((item) => item.id === current)
           ? current
@@ -277,8 +281,13 @@ export function ReviewCenter() {
         setSpaces(result.spaces);
         setSpacesWorkspaceId(selected);
         const params = new URLSearchParams(window.location.search);
+        const stored = readWorkbenchContext("review");
         const requestedSpace =
-          params.get("workspace") === selected ? params.get("space") : null;
+          params.get("workspace") === selected
+            ? params.get("space")
+            : stored.workspaceId === selected
+              ? stored.spaceId
+              : null;
         setSpaceId((current) =>
           result.spaces.some((item) => item.id === current)
             ? current
@@ -306,6 +315,12 @@ export function ReviewCenter() {
   useEffect(() => {
     if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
   }, [loadSpaces, request, workspaceId]);
+
+  useEffect(() => {
+    // Persist only a resolved context so a loading render cannot erase it.
+    if (writeContextReady)
+      writeWorkbenchContext("review", { spaceId, workspaceId });
+  }, [spaceId, workspaceId, writeContextReady]);
 
   async function bootstrap(
     db: LogionOfflineDatabase,
