@@ -130,3 +130,35 @@ it.each(["timer", "focus", "visibilitychange"])(
     expect(screen.getByRole("button", { name: "authenticated" })).toBeTruthy();
   },
 );
+
+it("does not renew early when access expiry exceeds the browser timer range", async () => {
+  vi.useFakeTimers();
+  const start = Date.parse("2026-09-24T22:00:00Z");
+  vi.setSystemTime(start);
+  const expiresAt = start + 30 * 24 * 60 * 60_000;
+  mocks.bootstrap.mockResolvedValue({
+    status: "authenticated",
+    sessionExpiresAt: new Date(expiresAt).toISOString(),
+    user: { id: "user-1" },
+  });
+  mocks.refresh.mockResolvedValue({
+    status: "authenticated",
+    sessionExpiresAt: new Date(expiresAt + 15 * 60_000).toISOString(),
+    user: { id: "user-1" },
+  });
+  await act(async () => {
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    );
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(25 * 24 * 60 * 60_000);
+  });
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5 * 24 * 60 * 60_000);
+  });
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+});

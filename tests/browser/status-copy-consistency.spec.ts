@@ -139,9 +139,8 @@ for (const width of [1440, 320]) {
     page.setDefaultTimeout(15_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/app/review");
-    await page
-      .getByRole("button", { name: "解锁本地资料", exact: true })
-      .click();
+    // The locked-state notice adds a second unlock button after context loads.
+    await page.locator("#review-unlock").click();
     const unlock = page.getByRole("dialog", { name: "解锁本地复习资料" });
     await unlock.getByLabel("本地口令").fill("m5-clock-vault-passphrase");
     await unlock.getByRole("button", { name: "解锁本地资料" }).click();
@@ -514,10 +513,8 @@ for (const width of [1440, 320]) {
     page.setDefaultTimeout(15_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/app/review");
-    const unlock = page.getByRole("button", {
-      name: "解锁本地资料",
-      exact: true,
-    });
+    // The locked-state notice adds a second unlock button after context loads.
+    const unlock = page.locator("#review-unlock");
     await expect(unlock).toBeVisible();
     await unlock.click();
     const sheet = page.getByRole("dialog", { name: "解锁本地复习资料" });

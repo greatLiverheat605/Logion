@@ -19,6 +19,7 @@ import {
   createAuthApi,
   createSessionCoordinator,
   createWebLockRefreshCoordinator,
+  MAX_TIMER_DELAY_MS,
   sessionRefreshDelay,
   type SessionCoordinator,
   type SessionState,
@@ -77,7 +78,18 @@ export function SessionProvider({
     const refreshIfDue = () => {
       if (sessionRefreshDelay(sessionExpiresAt) === 0) runRefresh(false);
     };
-    const timer = window.setTimeout(() => runRefresh(false), scheduleDelay);
+    let timer = 0;
+    const schedule = (delay: number) => {
+      timer = window.setTimeout(
+        () => {
+          const remaining = sessionRefreshDelay(sessionExpiresAt);
+          if (remaining === null || remaining === 0) runRefresh(false);
+          else schedule(remaining);
+        },
+        Math.min(delay, MAX_TIMER_DELAY_MS),
+      );
+    };
+    schedule(scheduleDelay);
     document.addEventListener("visibilitychange", refreshIfDue);
     window.addEventListener("focus", refreshIfDue);
     return () => {

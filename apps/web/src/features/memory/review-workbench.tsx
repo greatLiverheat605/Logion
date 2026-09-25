@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 
@@ -91,6 +92,8 @@ type ReviewAttempt = LocalView<QuizAttemptPayload>;
 type ReviewPattern = LocalView<ErrorPatternPayload>;
 type ReviewAudit = LocalView<AuditReviewPayload>;
 type ReviewFinding = LocalView<ReviewFindingPayload>;
+
+type SheetOpener = (event: MouseEvent<HTMLElement>) => void;
 
 type FormAction = (
   event: FormEvent<HTMLFormElement>,
@@ -231,13 +234,15 @@ function StatusLine({ children }: Readonly<{ children: ReactNode }>) {
 }
 
 function ReviewMaster({
+  canCreate,
   data,
   onNewTopic,
   onSelect,
   selectedId,
 }: Readonly<{
+  canCreate: boolean;
   data: ReviewWorkbenchProps["data"];
-  onNewTopic: () => void;
+  onNewTopic: SheetOpener;
   onSelect: (id: string) => void;
   selectedId: string | null;
 }>) {
@@ -287,6 +292,7 @@ function ReviewMaster({
       </div>
       <button
         className={styles.secondaryButton}
+        disabled={!canCreate}
         onClick={onNewTopic}
         type="button"
       >
@@ -490,15 +496,17 @@ function QueuePanel({
 
 function KnowledgePanel({
   actions,
+  canCreate,
   data,
   onNewDependency,
   onNewQuiz,
   onSelect,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
+  canCreate: boolean;
   data: ReviewWorkbenchProps["data"];
-  onNewDependency: () => void;
-  onNewQuiz: () => void;
+  onNewDependency: SheetOpener;
+  onNewQuiz: SheetOpener;
   onSelect: (id: string) => void;
 }>) {
   const [view, setView] = useState<"graph" | "list">("graph");
@@ -595,6 +603,7 @@ function KnowledgePanel({
       <section className={styles.actionRail}>
         <button
           className={styles.secondaryButton}
+          disabled={!canCreate}
           onClick={onNewQuiz}
           type="button"
         >
@@ -602,6 +611,7 @@ function KnowledgePanel({
         </button>
         <button
           className={styles.textButton}
+          disabled={!canCreate}
           onClick={onNewDependency}
           type="button"
         >
@@ -673,12 +683,14 @@ function ErrorsPanel({
 
 function ReviewsPanel({
   actions,
+  canCreate,
   data,
   onNewReview,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
+  canCreate: boolean;
   data: ReviewWorkbenchProps["data"];
-  onNewReview: () => void;
+  onNewReview: SheetOpener;
 }>) {
   return (
     <div className={styles.panelStack}>
@@ -691,6 +703,7 @@ function ReviewsPanel({
           </div>
           <button
             className={styles.secondaryButton}
+            disabled={!canCreate}
             onClick={onNewReview}
             type="button"
           >
@@ -1010,12 +1023,15 @@ function NewTopicSheet({
   actions,
   onOpenChange,
   open,
+  restoreFocusRef,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  restoreFocusRef: React.RefObject<HTMLElement | null>;
 }>) {
   const formId = useId();
+  const [pending, setPending] = useState(false);
   return (
     <WorkbenchSheet
       description="知识点保存到当前 Space 的端侧加密资料。"
@@ -1028,21 +1044,34 @@ function NewTopicSheet({
           >
             取消
           </button>
-          <button className={styles.primaryButton} form={formId} type="submit">
-            保存知识点
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : "保存知识点"}
           </button>
         </>
       }
       onOpenChange={onOpenChange}
       open={open}
+      restoreFocusRef={restoreFocusRef}
       title="新建知识点"
     >
       <form
         className={styles.sheetForm}
         id={formId}
         onSubmit={async (event) => {
-          const succeeded = await actions.createTopic(event);
-          if (succeeded === true) onOpenChange(false);
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          try {
+            const succeeded = await actions.createTopic(event);
+            if (succeeded === true) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <label htmlFor={`${formId}-title`}>名称</label>
@@ -1069,12 +1098,14 @@ function NewQuizSheet({
   actions,
   onOpenChange,
   open,
+  restoreFocusRef,
   topics,
   topicId,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  restoreFocusRef: React.RefObject<HTMLElement | null>;
   topics: ReviewTopic[];
   topicId: string | undefined;
 }>) {
@@ -1103,6 +1134,7 @@ function NewQuizSheet({
       }
       onOpenChange={onOpenChange}
       open={open}
+      restoreFocusRef={restoreFocusRef}
       title="新建主动回忆题"
     >
       <form
@@ -1168,11 +1200,13 @@ function DependencySheet({
   actions,
   onOpenChange,
   open,
+  restoreFocusRef,
   topics,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  restoreFocusRef: React.RefObject<HTMLElement | null>;
   topics: ReviewTopic[];
 }>) {
   const formId = useId();
@@ -1200,6 +1234,7 @@ function DependencySheet({
       }
       onOpenChange={onOpenChange}
       open={open}
+      restoreFocusRef={restoreFocusRef}
       title="添加先修依赖"
     >
       <form
@@ -1237,10 +1272,12 @@ function AuditReviewSheet({
   actions,
   onOpenChange,
   open,
+  restoreFocusRef,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  restoreFocusRef: React.RefObject<HTMLElement | null>;
 }>) {
   const formId = useId();
   const [pending, setPending] = useState(false);
@@ -1268,6 +1305,7 @@ function AuditReviewSheet({
       }
       onOpenChange={onOpenChange}
       open={open}
+      restoreFocusRef={restoreFocusRef}
       title="创建周期审查"
     >
       <form
@@ -1546,6 +1584,49 @@ export function ReviewWorkbench({
   const [dependencyOpen, setDependencyOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const unlockButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    // Inactive panels are hidden, so the graph anchor must select its tab.
+    const syncHash = () => {
+      if (window.location.hash === "#knowledge-graph") setTab("knowledge");
+    };
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+  // Controlled sheets have no Radix trigger, so remember the opener explicitly.
+  const sheetReturnRef = useRef<HTMLElement | null>(null);
+  function openSheet(
+    event: MouseEvent<HTMLElement>,
+    setOpen: (open: boolean) => void,
+  ) {
+    sheetReturnRef.current = event.currentTarget;
+    setOpen(true);
+  }
+  function changeSheet(next: boolean, setOpen: (open: boolean) => void) {
+    setOpen(next);
+    if (!next) window.requestAnimationFrame(revealSheetReturn);
+  }
+  function revealSheetReturn() {
+    // Keep the returning action clear of operation feedback on narrow screens.
+    const target = sheetReturnRef.current;
+    if (!target?.isConnected) return;
+    const box = target.getBoundingClientRect();
+    const covered = Array.from(
+      document.querySelectorAll("[data-sonner-toast]"),
+      (toast) => toast.getBoundingClientRect(),
+    ).some(
+      (toast) =>
+        box.left < toast.right &&
+        box.right > toast.left &&
+        box.top < toast.bottom &&
+        box.bottom > toast.top,
+    );
+    if (covered) target.scrollIntoView({ block: "center" });
+  }
+  // Writes need a resolved Space and device; the server rejects empty identifiers.
+  const canCreate =
+    context.contextPhase === "ready" &&
+    Boolean(context.workspaceId && context.spaceId && context.deviceId);
   const selectedTopic =
     data.topics.find((topic) => topic.entity.entity_id === selectedId) ?? null;
   const operationalState: ProductOperationalState | null =
@@ -1664,7 +1745,8 @@ export function ReviewWorkbench({
                 ) : context.reviewState === "empty" ? (
                   <button
                     className={styles.secondaryButton}
-                    onClick={() => setTopicOpen(true)}
+                    disabled={!canCreate}
+                    onClick={(event) => openSheet(event, setTopicOpen)}
                     type="button"
                   >
                     建立第一个知识点
@@ -1713,9 +1795,12 @@ export function ReviewWorkbench({
                 <WorkbenchTabPanel forceMount value="knowledge">
                   <KnowledgePanel
                     actions={actions}
+                    canCreate={canCreate}
                     data={data}
-                    onNewDependency={() => setDependencyOpen(true)}
-                    onNewQuiz={() => setQuizOpen(true)}
+                    onNewDependency={(event) =>
+                      openSheet(event, setDependencyOpen)
+                    }
+                    onNewQuiz={(event) => openSheet(event, setQuizOpen)}
                     onSelect={setSelectedId}
                   />
                 </WorkbenchTabPanel>
@@ -1725,6 +1810,7 @@ export function ReviewWorkbench({
                 <WorkbenchTabPanel forceMount value="reviews">
                   <ReviewsPanel
                     actions={actions}
+                    canCreate={canCreate}
                     data={{
                       ...data,
                       reviewFindings: data.reviewFindings.filter(
@@ -1732,7 +1818,7 @@ export function ReviewWorkbench({
                           finding.payload.space_id === context.spaceId,
                       ),
                     }}
-                    onNewReview={() => setReviewOpen(true)}
+                    onNewReview={(event) => openSheet(event, setReviewOpen)}
                   />
                 </WorkbenchTabPanel>
               </WorkbenchTabs>
@@ -1742,8 +1828,9 @@ export function ReviewWorkbench({
         mainLabel="复习工作面"
         master={
           <ReviewMaster
+            canCreate={canCreate}
             data={data}
-            onNewTopic={() => setTopicOpen(true)}
+            onNewTopic={(event) => openSheet(event, setTopicOpen)}
             onSelect={setSelectedId}
             selectedId={selectedId}
           />
@@ -1759,26 +1846,30 @@ export function ReviewWorkbench({
       />
       <NewTopicSheet
         actions={actions}
-        onOpenChange={setTopicOpen}
+        onOpenChange={(next) => changeSheet(next, setTopicOpen)}
         open={topicOpen}
+        restoreFocusRef={sheetReturnRef}
       />
       <NewQuizSheet
         actions={actions}
-        onOpenChange={setQuizOpen}
+        onOpenChange={(next) => changeSheet(next, setQuizOpen)}
         open={quizOpen}
+        restoreFocusRef={sheetReturnRef}
         topicId={selectedId ?? undefined}
         topics={data.topics}
       />
       <DependencySheet
         actions={actions}
-        onOpenChange={setDependencyOpen}
+        onOpenChange={(next) => changeSheet(next, setDependencyOpen)}
         open={dependencyOpen}
+        restoreFocusRef={sheetReturnRef}
         topics={data.topics}
       />
       <AuditReviewSheet
         actions={actions}
-        onOpenChange={setReviewOpen}
+        onOpenChange={(next) => changeSheet(next, setReviewOpen)}
         open={reviewOpen}
+        restoreFocusRef={sheetReturnRef}
       />
       {quiz ? (
         <AnswerSheet

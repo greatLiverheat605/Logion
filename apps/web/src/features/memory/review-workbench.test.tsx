@@ -117,6 +117,77 @@ function props(correct: boolean | null | undefined): ReviewWorkbenchProps {
   };
 }
 
+describe("Review context readiness", () => {
+  it.each(["spaceId", "deviceId", "workspaceId"] as const)(
+    "blocks creation while %s is unresolved",
+    (field) => {
+      const value = props(undefined);
+      value.context[field] = "";
+      render(<ReviewWorkbench {...value} />);
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "新建知识点",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+      fireEvent.click(screen.getByRole("tab", { name: /周期审查/ }));
+      expect(
+        (screen.getByRole("button", { name: "创建审查" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+    },
+  );
+});
+
+describe("Review deep links", () => {
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("selects the knowledge tab for the graph anchor", () => {
+    window.history.replaceState(null, "", "/app/review#knowledge-graph");
+    render(<ReviewWorkbench {...props(undefined)} />);
+    expect(
+      screen
+        .getByRole("tab", { name: /掌握与图谱/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "图谱" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("follows a later graph anchor navigation", () => {
+    render(<ReviewWorkbench {...props(undefined)} />);
+    expect(
+      screen
+        .getByRole("tab", { name: /到期复习/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    act(() => {
+      window.history.replaceState(null, "", "/app/review#knowledge-graph");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(
+      screen
+        .getByRole("tab", { name: /掌握与图谱/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+});
+
+describe("Review sheet focus return", () => {
+  it("returns focus to the cycle review trigger after closing", async () => {
+    render(<ReviewWorkbench {...props(undefined)} />);
+    fireEvent.click(screen.getByRole("tab", { name: /周期审查/ }));
+    const trigger = screen.getByRole("button", { name: "创建审查" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const sheet = await screen.findByRole("dialog", { name: "创建周期审查" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+});
+
 describe("recall answer lifecycle", () => {
   it("keeps a reopened draft when an earlier save finishes", async () => {
     const value = props(undefined);
