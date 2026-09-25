@@ -622,8 +622,12 @@ for (const theme of ["light", "dark"] as const) {
     await dialog
       .getByLabel("附件", { exact: true })
       .setInputFiles(attachmentFile);
+    const readsBeforeRejectedQueue = capabilityReads;
     await dialog.getByRole("button", { name: "加入附件队列" }).click();
     await expect(dialog.getByRole("alert")).toContainText("附件未加入队列");
+    // The rejected queue checks capability once and the sheet then re-checks it
+    // after rendering the error; both reads happen online, so settle them first.
+    await expect.poll(() => capabilityReads).toBe(readsBeforeRejectedQueue + 2);
     expect(uploads).toBe(0);
     offline = true;
     // WebKit setOffline also blocks reading local Blob bytes. Reject HTTP requests

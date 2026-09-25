@@ -39,6 +39,10 @@ import {
 } from "@/features/sync/sync-diagnostics";
 import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import {
   derivePlanningViewModel,
@@ -378,7 +382,12 @@ export function usePlanningController(): PlanningControllerResult {
       ]);
       if (requestId !== contextRequest.current) return;
       const currentDevice = deviceResult.devices.find((item) => item.current);
-      const nextWorkspace = workspaceResult.workspaces[0]?.id ?? "";
+      const storedWorkspace = readWorkbenchContext("planning").workspaceId;
+      const nextWorkspace =
+        workspaceResult.workspaces.find((item) => item.id === storedWorkspace)
+          ?.id ??
+        workspaceResult.workspaces[0]?.id ??
+        "";
       const nextDevice = currentDevice?.id ?? "";
       if (
         nextWorkspace !== workspaceIdRef.current ||
@@ -433,7 +442,14 @@ export function usePlanningController(): PlanningControllerResult {
             return;
           }
           setSpaces(result.spaces);
-          setSpaceIdState(result.spaces[0]?.id ?? "");
+          const stored = readWorkbenchContext("planning");
+          const storedSpace =
+            stored.workspaceId === selectedWorkspace ? stored.spaceId : "";
+          setSpaceIdState(
+            result.spaces.find((item) => item.id === storedSpace)?.id ??
+              result.spaces[0]?.id ??
+              "",
+          );
           setIssue(null);
           setContextPhase("ready");
         })
@@ -919,6 +935,11 @@ export function usePlanningController(): PlanningControllerResult {
   );
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
   const selectedSpace = spaces.find((item) => item.id === spaceId);
+  useEffect(() => {
+    // Persist only a resolved context so a loading render cannot erase it.
+    if (contextPhase === "ready" && workspaceId && selectedSpace)
+      writeWorkbenchContext("planning", { spaceId, workspaceId });
+  }, [contextPhase, selectedSpace, spaceId, workspaceId]);
   const canWrite = !["reviewer", "viewer"].includes(
     selectedWorkspace?.role ?? "viewer",
   );
