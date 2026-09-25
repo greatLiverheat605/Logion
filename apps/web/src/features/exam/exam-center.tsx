@@ -22,6 +22,10 @@ import { deriveProductWorkbenchState } from "@/components/product/product-workbe
 import { useSession } from "@/features/auth/session-provider";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { LogionApiError, type ApiClient } from "@/lib/api/client";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import { ExamWorkbench } from "./exam-workbench";
 import {
@@ -165,10 +169,14 @@ export function ExamCenter() {
         request<{ devices: Device[] }>("/api/v1/auth/devices"),
       ]);
       setWorkspaces(workspaceResult.workspaces);
+      const stored = readWorkbenchContext("exam").workspaceId;
       setWorkspaceId((current) =>
         workspaceResult.workspaces.some((item) => item.id === current)
           ? current
-          : (workspaceResult.workspaces[0]?.id ?? ""),
+          : (workspaceResult.workspaces.find((item) => item.id === stored)
+              ?.id ??
+            workspaceResult.workspaces[0]?.id ??
+            ""),
       );
       setDeviceId(deviceResult.devices.find((item) => item.current)?.id ?? "");
       setStatus("请先解锁本地备考资料。");
@@ -187,10 +195,15 @@ export function ExamCenter() {
           `/api/v1/workspaces/${selected}/spaces`,
         );
         setSpaces(result.spaces);
+        const stored = readWorkbenchContext("exam");
+        const storedSpace =
+          stored.workspaceId === selected ? stored.spaceId : "";
         setSpaceId((current) =>
           result.spaces.some((item) => item.id === current)
             ? current
-            : (result.spaces[0]?.id ?? ""),
+            : (result.spaces.find((item) => item.id === storedSpace)?.id ??
+              result.spaces[0]?.id ??
+              ""),
         );
         setContextPhase("ready");
       } catch (error) {
@@ -210,6 +223,16 @@ export function ExamCenter() {
   useEffect(() => {
     if (workspaceId) queueMicrotask(() => void loadSpaces(workspaceId));
   }, [loadSpaces, request, workspaceId]);
+
+  useEffect(() => {
+    // Persist only a resolved context so a loading render cannot erase it.
+    if (
+      contextPhase === "ready" &&
+      workspaceId &&
+      spaces.some((item) => item.id === spaceId)
+    )
+      writeWorkbenchContext("exam", { spaceId, workspaceId });
+  }, [contextPhase, spaceId, spaces, workspaceId]);
 
   async function bootstrap(
     db: LogionOfflineDatabase,

@@ -48,6 +48,10 @@ import type { BuiltinPersonaId } from "@/features/personas/persona-definitions";
 import type { PersonaDashboardViewState } from "@/features/personas/persona-today-overview";
 import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 
 export type TodayWorkspace = components["schemas"]["WorkspaceResponse"];
@@ -608,11 +612,16 @@ export function useTodayController(): TodayControllerResult {
       }
       const currentDevice = deviceResult.devices.find((item) => item.current);
       setWorkspaces(workspaceResult.workspaces);
+      const storedWorkspace = readWorkbenchContext("today").workspaceId;
       const nextWorkspaceId = workspaceResult.workspaces.some(
         (item) => item.id === currentWorkspaceIdRef.current,
       )
         ? currentWorkspaceIdRef.current
-        : (workspaceResult.workspaces[0]?.id ?? "");
+        : (workspaceResult.workspaces.find(
+            (item) => item.id === storedWorkspace,
+          )?.id ??
+          workspaceResult.workspaces[0]?.id ??
+          "");
       if (nextWorkspaceId !== currentWorkspaceIdRef.current) {
         spacesRequestRef.current?.abort();
         resetWorkspaceData();
@@ -684,10 +693,15 @@ export function useTodayController(): TodayControllerResult {
       setSpaces(spaceResult.spaces);
       setMembers(memberResult?.members ?? []);
       setMembersAvailable(memberResult !== null);
+      const stored = readWorkbenchContext("today");
+      const storedSpace =
+        stored.workspaceId === selectedWorkspace ? stored.spaceId : "";
       setSpaceId((current) =>
         spaceResult.spaces.some((item) => item.id === current)
           ? current
-          : (spaceResult.spaces[0]?.id ?? ""),
+          : (spaceResult.spaces.find((item) => item.id === storedSpace)?.id ??
+            spaceResult.spaces[0]?.id ??
+            ""),
       );
       setContextPhase("ready");
     } catch (error) {
@@ -1452,6 +1466,11 @@ export function useTodayController(): TodayControllerResult {
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
   const selectedSpace = spaces.find((item) => item.id === spaceId);
+  useEffect(() => {
+    // Persist only a resolved context so a loading render cannot erase it.
+    if (contextPhase === "ready" && workspaceId && selectedSpace)
+      writeWorkbenchContext("today", { spaceId, workspaceId });
+  }, [contextPhase, selectedSpace, spaceId, workspaceId]);
   const canWrite = !["reviewer", "viewer"].includes(
     selectedWorkspace?.role ?? "viewer",
   );

@@ -24,6 +24,10 @@ import { integrationCapabilityService } from "@/features/integrations/integratio
 import type { CalendarFeed } from "@/features/integrations/integration-capability-model";
 import { useVaultSession } from "@/features/offline/vault-session-provider";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import {
   announceNotificationWorkspace,
@@ -267,6 +271,11 @@ export function useSearchController(
   const [dataWorkspaceId, setDataWorkspaceId] = useState("");
   const [online, setOnline] = useState(true);
   const [contextPhase, setContextPhase] = useState<Phase>("loading");
+  useEffect(() => {
+    // Only the Workspace is kept; search text and filters are never stored.
+    if (contextPhase === "ready" && workspaceId)
+      writeWorkbenchContext("search", { workspaceId });
+  }, [contextPhase, workspaceId]);
   const [searchPhase, setSearchPhase] = useState<Phase>("idle");
   const [issue, setIssue] = useState<SearchIssue | null>(null);
   const [searched, setSearched] = useState(false);
@@ -315,9 +324,10 @@ export function useSearchController(
       const next = await integrationCapabilityService.listWorkspaces();
       if (!isCurrent()) return;
       setWorkspaces(next);
+      const stored = readWorkbenchContext("search").workspaceId;
       const resolved = next.some((item) => item.id === workspaceIdRef.current)
         ? workspaceIdRef.current
-        : (next[0]?.id ?? "");
+        : (next.find((item) => item.id === stored)?.id ?? next[0]?.id ?? "");
       if (resolved !== workspaceIdRef.current) scopeGeneration.current += 1;
       workspaceIdRef.current = resolved;
       setWorkspaceIdState(resolved);

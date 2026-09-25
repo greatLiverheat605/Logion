@@ -49,6 +49,10 @@ import {
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
 import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
+import {
   noteSelectionPayload,
   type NoteSelectionInput,
 } from "./note-selection";
@@ -483,7 +487,12 @@ export function useRecordsController(): RecordsControllerResult {
       ]);
       if (requestId !== contextRequest.current) return;
       const currentDevice = deviceResult.devices.find((item) => item.current);
-      const nextWorkspace = workspaceResult.workspaces[0]?.id ?? "";
+      const storedWorkspace = readWorkbenchContext("records").workspaceId;
+      const nextWorkspace =
+        workspaceResult.workspaces.find((item) => item.id === storedWorkspace)
+          ?.id ??
+        workspaceResult.workspaces[0]?.id ??
+        "";
       const nextDevice = currentDevice?.id ?? "";
       if (
         nextWorkspace !== workspaceIdRef.current ||
@@ -538,7 +547,14 @@ export function useRecordsController(): RecordsControllerResult {
             return;
           }
           setSpaces(result.spaces);
-          setSpaceIdState(result.spaces[0]?.id ?? "");
+          const stored = readWorkbenchContext("records");
+          const storedSpace =
+            stored.workspaceId === selectedWorkspace ? stored.spaceId : "";
+          setSpaceIdState(
+            result.spaces.find((item) => item.id === storedSpace)?.id ??
+              result.spaces[0]?.id ??
+              "",
+          );
           setIssue(null);
           setContextPhase("ready");
         })
@@ -1373,6 +1389,11 @@ export function useRecordsController(): RecordsControllerResult {
   );
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceId);
   const selectedSpace = spaces.find((item) => item.id === spaceId);
+  useEffect(() => {
+    // Persist only a resolved context so a loading render cannot erase it.
+    if (contextPhase === "ready" && workspaceId && selectedSpace)
+      writeWorkbenchContext("records", { spaceId, workspaceId });
+  }, [contextPhase, selectedSpace, spaceId, workspaceId]);
   const canWrite = !["reviewer", "viewer"].includes(
     selectedWorkspace?.role ?? "viewer",
   );

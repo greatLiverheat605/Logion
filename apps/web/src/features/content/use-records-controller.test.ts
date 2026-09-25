@@ -28,6 +28,7 @@ vi.mock("@/lib/api/client", () => ({
   LogionApiError: class extends Error {},
 }));
 afterEach(() => {
+  window.sessionStorage.clear();
   cleanup();
   vi.restoreAllMocks();
 });

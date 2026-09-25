@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 import {
@@ -19,6 +20,55 @@ import {
 } from "./workbench-audit";
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+
+async function csrfHeaders(page: Page) {
+  const csrf = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "logion_csrf",
+  )?.value;
+  if (!csrf) throw new Error("Planning context audit has no CSRF cookie.");
+  return {
+    Origin: new URL(page.url()).origin,
+    "X-CSRF-Token": csrf,
+  };
+}
+
+test("Planning restores the selected Space after a reload in the same tab", async ({
+  page,
+}) => {
+  await page.goto("/app/planning");
+  await waitForWorkbenchReady(page, "/app/planning");
+  const workspaces = (await (
+    await page.request.get("/api/v1/workspaces")
+  ).json()) as { workspaces: Array<{ id: string }> };
+  const workspaceId = workspaces.workspaces[0]?.id;
+  if (!workspaceId) throw new Error("Planning context audit has no Workspace.");
+  const spaceName = `Context restore ${Date.now()}`;
+  const created = await page.request.post(
+    `/api/v1/workspaces/${workspaceId}/spaces`,
+    {
+      data: { name: spaceName, visibility: "shared" },
+      headers: await csrfHeaders(page),
+    },
+  );
+  expect(created.status(), await created.text()).toBe(201);
+  await page.reload();
+  await waitForWorkbenchReady(page, "/app/planning");
+  const spaceSelect = page.getByRole("combobox", { name: "选择 Space" });
+  await expect(spaceSelect).toBeEnabled();
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await spaceSelect.click();
+    await page
+      .getByRole("option", { name: `${spaceName} · 共享`, exact: true })
+      .click();
+    if ((await spaceSelect.textContent())?.includes(spaceName)) break;
+  }
+  await expect(spaceSelect).toContainText(spaceName);
+  await page.reload();
+  await waitForWorkbenchReady(page, "/app/planning");
+  await expect(
+    page.getByRole("combobox", { name: "选择 Space" }),
+  ).toContainText(spaceName);
+});
 
 test("Planning completes real goal, task and offline sync workflows", async ({
   accountState,
