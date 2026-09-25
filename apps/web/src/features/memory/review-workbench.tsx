@@ -11,6 +11,10 @@ import {
 } from "react";
 
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
+import {
+  readWorkbenchContext,
+  writeWorkbenchContext,
+} from "@/lib/workbench-context";
 
 import { AppIcon } from "@/components/app-shell/app-icon";
 import {
@@ -94,6 +98,8 @@ type ReviewAudit = LocalView<AuditReviewPayload>;
 type ReviewFinding = LocalView<ReviewFindingPayload>;
 
 type SheetOpener = (event: MouseEvent<HTMLElement>) => void;
+
+const reviewTabs = new Set(["due", "knowledge", "errors", "reviews"]);
 
 type FormAction = (
   event: FormEvent<HTMLFormElement>,
@@ -1586,13 +1592,36 @@ export function ReviewWorkbench({
   const unlockButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     // Inactive panels are hidden, so the graph anchor must select its tab.
+    // It wins over the view restored from this tab's session context.
     const syncHash = () => {
       if (window.location.hash === "#knowledge-graph") setTab("knowledge");
     };
+    const restoreView = () => {
+      const { view } = readWorkbenchContext("review");
+      if (reviewTabs.has(view)) setTab(view);
+    };
+    restoreView();
     syncHash();
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
+  useEffect(() => {
+    writeWorkbenchContext("review", { view: tab });
+  }, [tab]);
+  const restoredSelection = useRef(false);
+  useEffect(() => {
+    if (restoredSelection.current || !data.topics.length) return;
+    restoredSelection.current = true;
+    const { selectedId: stored } = readWorkbenchContext("review");
+    const restoreSelection = () => {
+      if (data.topics.some((topic) => topic.entity.entity_id === stored))
+        setSelectedId(stored);
+    };
+    restoreSelection();
+  }, [data.topics]);
+  useEffect(() => {
+    if (selectedId) writeWorkbenchContext("review", { selectedId });
+  }, [selectedId]);
   // Record the clicked opener: Safari does not focus buttons on click.
   const sheetReturnRef = useRef<HTMLElement | null>(null);
   function openSheet(

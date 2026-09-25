@@ -15,7 +15,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ReviewWorkbench, type ReviewWorkbenchProps } from "./review-workbench";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.sessionStorage.clear();
+});
 
 function view<T extends JsonObject>(
   entityType: string,
@@ -138,6 +141,47 @@ describe("Review context readiness", () => {
       ).toBe(true);
     },
   );
+});
+
+describe("Review session context", () => {
+  it("restores and records the last view in this tab", async () => {
+    window.sessionStorage.setItem(
+      "logion:workbench-context:review",
+      JSON.stringify({ view: "reviews" }),
+    );
+    render(<ReviewWorkbench {...props(undefined)} />);
+    expect(
+      screen
+        .getByRole("tab", { name: /周期审查/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /错因模式/ }), {
+      button: 0,
+    });
+    await waitFor(() =>
+      expect(
+        JSON.parse(
+          window.sessionStorage.getItem("logion:workbench-context:review") ??
+            "{}",
+        ).view,
+      ).toBe("errors"),
+    );
+  });
+
+  it("lets the graph anchor win over a restored view", () => {
+    window.sessionStorage.setItem(
+      "logion:workbench-context:review",
+      JSON.stringify({ view: "reviews" }),
+    );
+    window.history.replaceState(null, "", "/app/review#knowledge-graph");
+    render(<ReviewWorkbench {...props(undefined)} />);
+    expect(
+      screen
+        .getByRole("tab", { name: /掌握与图谱/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    window.history.replaceState(null, "", "/");
+  });
 });
 
 describe("Review deep links", () => {

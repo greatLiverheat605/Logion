@@ -41,3 +41,33 @@ it("reports a failed logout and waits for an explicit retry", async () => {
   await screen.findByRole("alert");
   expect(mocks.logout).toHaveBeenCalledTimes(2);
 });
+
+it("clears this tab's workbench context only after a successful logout", async () => {
+  const key = "logion:workbench-context:review";
+  window.sessionStorage.setItem(key, JSON.stringify({ view: "reviews" }));
+  const originalLocation = window.location;
+  const assign = vi.fn();
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    value: { ...originalLocation, assign },
+  });
+  try {
+    mocks.refresh.mockResolvedValue({ status: "authenticated" });
+    mocks.logout.mockRejectedValueOnce(new Error("network unavailable"));
+    render(<LogoutButton />);
+    fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
+    await screen.findByRole("alert");
+    expect(window.sessionStorage.getItem(key)).not.toBeNull();
+
+    mocks.logout.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/auth/login"));
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+  } finally {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+    window.sessionStorage.clear();
+  }
+});

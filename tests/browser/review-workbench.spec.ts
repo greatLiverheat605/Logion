@@ -49,6 +49,32 @@ for (const width of [320, 1440]) {
   });
 }
 
+test("Review restores its tab after a reload in the same browser tab", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/app/review");
+  const cycleTab = page
+    .getByTestId("review-tabs")
+    .getByRole("tab", { name: /周期审查/ });
+  await cycleTab.click();
+  await expect(cycleTab).toHaveAttribute("aria-selected", "true");
+  await page.reload();
+  await expect(cycleTab).toHaveAttribute("aria-selected", "true");
+  const stored = await page.evaluate(() =>
+    JSON.parse(
+      sessionStorage.getItem("logion:workbench-context:review") ?? "{}",
+    ),
+  );
+  expect(Object.keys(stored).sort()).toEqual([
+    "selectedId",
+    "spaceId",
+    "view",
+    "workspaceId",
+  ]);
+  expect(stored.view).toBe("reviews");
+});
+
 test("Review exposes the due queue, answer sheet and knowledge inspector", async ({
   page,
   accountState,
