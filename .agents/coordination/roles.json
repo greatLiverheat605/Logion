@@ -113,6 +113,28 @@
         "provider-model-list",
         "runtime-attestation"
       ]
+    },
+    {
+      "id": "claude",
+      "client": "Claude Code",
+      "modelId": "claude-opus-5-5",
+      "host": "windows-primary",
+      "dispatch": "coordinator",
+      "access": "coordinator-writer",
+      "defaultScope": [
+        "coordination",
+        "bounded implementation",
+        "review",
+        "integration",
+        "release"
+      ],
+      "prohibitions": [
+        "overwrite unexplained user changes",
+        "waive failed acceptance gates",
+        "impersonate another role",
+        "commit push merge release or deploy without authorization"
+      ],
+      "evidenceSources": ["client-status", "runtime-attestation"]
     }
   ]
 }

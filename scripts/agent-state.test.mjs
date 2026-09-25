@@ -2021,3 +2021,109 @@ test("rejects duplicate Worker unrun-check names", async () => {
     await expectValidationFailure(runDir, /unrunChecks repeats/iu);
   });
 });
+
+const coordinatorEventTypes = new Set([
+  "task.created",
+  "task.assigned",
+  "task.retried",
+  "task.accepted",
+  "task.rejected",
+]);
+
+async function declareCoordinator(runDir, roleId, { rewriteEvidence }) {
+  const contextPath = join(runDir, "context.json");
+  const context = await readJson(contextPath);
+  context.authority.singleWriterRoleId = roleId;
+  context.actors = context.actors.filter((actor) => actor.roleId !== roleId);
+  context.actors.push({
+    roleId,
+    status: "ready",
+    modelEvidence: {
+      source: "client-status",
+      modelId: "claude-opus-5-5",
+      observedAt: "2026-08-03T00:00:00Z",
+    },
+  });
+  await writeJson(contextPath, context);
+  if (!rewriteEvidence) return;
+  const events = await readEvents(runDir);
+  for (const event of events) {
+    if (coordinatorEventTypes.has(event.type)) event.actorRoleId = roleId;
+  }
+  await writeEvents(runDir, events);
+  const observationsDir = join(runDir, "observations");
+  for (const name of await readdir(observationsDir)) {
+    const path = join(observationsDir, name);
+    const observation = await readJson(path);
+    observation.observerRoleId = roleId;
+    await writeJson(path, observation);
+  }
+  const graphPath = join(runDir, "graph.json");
+  const graph = await readJson(graphPath);
+  for (const node of graph.nodes) {
+    if (node.type === "check") node.data.evidenceRoleId = roleId;
+  }
+  await writeJson(graphPath, graph);
+  await refreshObservationDigests(runDir);
+}
+
+test("a Run may declare another coordinator-writer as its ledger writer", async () => {
+  await withFixture(async (runDir) => {
+    await declareCoordinator(runDir, "claude", { rewriteEvidence: true });
+    const result = await validateRun(runDir);
+    assert.equal(result.taskStates["task-review"], "accepted");
+  });
+});
+
+test("coordinator transitions must come from the Run's declared coordinator", async () => {
+  await withFixture(async (runDir) => {
+    await declareCoordinator(runDir, "claude", { rewriteEvidence: false });
+    await expectValidationFailure(runDir, /coordinator-owned transition/u);
+  });
+});
+
+test("a bounded or read-only role cannot be the ledger writer", async () => {
+  await withFixture(async (runDir) => {
+    const contextPath = join(runDir, "context.json");
+    const context = await readJson(contextPath);
+    context.authority.singleWriterRoleId = "kimi";
+    await writeJson(contextPath, context);
+    await expectValidationFailure(
+      runDir,
+      /must name a coordinator-writer role/u,
+    );
+  });
+});
+
+test("initializes a Run for a declared coordinator", async () => {
+  const root = await mkdtemp(join(tmpdir(), "logion-agent-coordinator-"));
+  try {
+    const result = await initializeRun({
+      runId: "run-coordinator-test",
+      objective: "Verify a declared coordinator",
+      baseCommit: currentCommit(),
+      branch: "claude/fixture",
+      runsRoot: root,
+      coordinator: "claude",
+    });
+    assert.equal(result.summary.runId, "run-coordinator-test");
+    const context = await readJson(
+      join(root, "run-coordinator-test", "context.json"),
+    );
+    assert.equal(context.authority.singleWriterRoleId, "claude");
+    await assert.rejects(
+      () =>
+        initializeRun({
+          runId: "run-coordinator-invalid",
+          objective: "Reject an unsafe coordinator",
+          baseCommit: currentCommit(),
+          branch: "claude/fixture",
+          runsRoot: root,
+          coordinator: "Claude Admin",
+        }),
+      /--coordinator must be a role ID/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

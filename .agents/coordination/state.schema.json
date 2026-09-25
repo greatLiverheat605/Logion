@@ -225,7 +225,7 @@
           "type": "object",
           "required": ["singleWriterRoleId", "systemOfRecord"],
           "properties": {
-            "singleWriterRoleId": { "const": "codex" },
+            "singleWriterRoleId": { "$ref": "#/$defs/roleId" },
             "systemOfRecord": { "const": "windows-local-ledger" }
           },
           "additionalProperties": false
@@ -449,14 +449,14 @@
         {
           "properties": {
             "type": { "const": "task.created" },
-            "actorRoleId": { "const": "codex" },
+            "actorRoleId": { "$ref": "#/$defs/roleId" },
             "data": { "$ref": "#/$defs/taskCreatedData" }
           }
         },
         {
           "properties": {
             "type": { "const": "task.assigned" },
-            "actorRoleId": { "const": "codex" },
+            "actorRoleId": { "$ref": "#/$defs/roleId" },
             "data": { "$ref": "#/$defs/taskAssignedData" }
           }
         },
@@ -493,21 +493,21 @@
         {
           "properties": {
             "type": { "const": "task.retried" },
-            "actorRoleId": { "const": "codex" },
+            "actorRoleId": { "$ref": "#/$defs/roleId" },
             "data": { "$ref": "#/$defs/taskRetriedData" }
           }
         },
         {
           "properties": {
             "type": { "const": "task.accepted" },
-            "actorRoleId": { "const": "codex" },
+            "actorRoleId": { "$ref": "#/$defs/roleId" },
             "data": { "$ref": "#/$defs/taskAcceptedData" }
           }
         },
         {
           "properties": {
             "type": { "const": "task.rejected" },
-            "actorRoleId": { "const": "codex" },
+            "actorRoleId": { "$ref": "#/$defs/roleId" },
             "data": { "$ref": "#/$defs/taskRejectedData" }
           }
         }
@@ -577,7 +577,7 @@
           "type": ["string", "null"],
           "minLength": 1
         },
-        "evidenceRoleId": { "const": "codex" },
+        "evidenceRoleId": { "$ref": "#/$defs/roleId" },
         "acceptanceCheckId": {
           "anyOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }]
         },
@@ -886,7 +886,7 @@
           "anyOf": [{ "$ref": "#/$defs/nonEmptyString" }, { "type": "null" }]
         },
         "observedAt": { "$ref": "#/$defs/rfc3339DateTime" },
-        "observerRoleId": { "const": "codex" }
+        "observerRoleId": { "$ref": "#/$defs/roleId" }
       },
       "allOf": [
         {

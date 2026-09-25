@@ -51,6 +51,7 @@ schemaValidator.addSchema(stateSchema);
 const schemaDefinitionValidators = new Map();
 
 const stableIdPattern = /^[a-z]+-[a-z0-9][a-z0-9-]*$/u;
+const roleIdPattern = /^[a-z][a-z0-9-]*$/u;
 const commitPattern = /^[0-9a-f]{40}$/u;
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const stateFilePattern = /^[a-z]+-[a-z0-9][a-z0-9-]*\.json$/u;
@@ -990,9 +991,15 @@ function validateRoles(rolesDocument, errors) {
     }
     roles.set(role.id, role);
   }
-  if (!roles.has("codex"))
-    errors.push("roles.json must define the codex coordinator");
+  if (![...roles.values()].some((role) => role.access === "coordinator-writer"))
+    errors.push("roles.json must define a coordinator-writer role");
   return roles;
+}
+
+// The Run declares its coordinator; history written under an earlier Run keeps
+// validating against that Run's own declaration.
+function coordinatorRoleId(context) {
+  return context?.authority?.singleWriterRoleId;
 }
 
 function validateContext(context, roles, errors) {
@@ -1030,12 +1037,15 @@ function validateContext(context, roles, errors) {
   ) {
     errors.push("context.objective is required");
   }
+  if (context.authority?.systemOfRecord !== "windows-local-ledger") {
+    errors.push("context.authority must keep the Windows local ledger");
+  }
   if (
-    context.authority?.systemOfRecord !== "windows-local-ledger" ||
-    context.authority?.singleWriterRoleId !== "codex"
+    roles.get(context.authority?.singleWriterRoleId)?.access !==
+    "coordinator-writer"
   ) {
     errors.push(
-      "context.authority must keep Codex as the Windows ledger writer",
+      "context.authority must name a coordinator-writer role as the ledger writer",
     );
   }
   assertAllowedKeys(
@@ -1891,6 +1901,7 @@ function validateCoordinatorObservation(
   tasks,
   handoffs,
   roles,
+  coordinator,
   errors,
 ) {
   const value = observation.value;
@@ -1921,8 +1932,8 @@ function validateCoordinatorObservation(
   if (label !== `observations/${value.observationId}.json`) {
     errors.push(`${label} filename does not match its observationId`);
   }
-  if (value.observerRoleId !== "codex" || !roles.has("codex")) {
-    errors.push(`${label} must be a Codex coordinator observation`);
+  if (value.observerRoleId !== coordinator || !roles.has(coordinator)) {
+    errors.push(`${label} must be a coordinator observation`);
   }
   const task = tasks.get(value.taskId);
   if (!task) {
@@ -2367,6 +2378,7 @@ async function validateRunUnchecked(runDirectory) {
   validateSchemaDefinition("context", context, "context.json", errors);
   validateSchemaDefinition("graph", graph, "graph.json", errors);
   validateContext(context, roles, errors);
+  const coordinator = coordinatorRoleId(context);
   if (!isObject(context) || !isObject(graph)) {
     throw new AgentStateValidationError(errors);
   }
@@ -2441,7 +2453,7 @@ async function validateRunUnchecked(runDirectory) {
         "task.accepted",
         "task.rejected",
       ]).has(event.type) &&
-      event.actorRoleId !== "codex"
+      event.actorRoleId !== coordinator
     ) {
       errors.push(`${event.eventId} is a coordinator-owned transition`);
     }
@@ -2578,7 +2590,14 @@ async function validateRunUnchecked(runDirectory) {
     }
   }
   for (const observation of observations.byPath.values()) {
-    validateCoordinatorObservation(observation, tasks, handoffs, roles, errors);
+    validateCoordinatorObservation(
+      observation,
+      tasks,
+      handoffs,
+      roles,
+      coordinator,
+      errors,
+    );
   }
   validateDependencyGraph(tasks, errors);
   validateWriterIsolation(tasks, errors);
@@ -2673,7 +2692,7 @@ async function validateRunUnchecked(runDirectory) {
         value.completionEventId !== task.currentCompletion?.eventId ||
         value.handoff !== task.currentCompletion?.data?.handoff ||
         value.status !== "passed" ||
-        value.observerRoleId !== "codex" ||
+        value.observerRoleId !== coordinator ||
         !basis.includes(value.acceptanceCheckId)
       ) {
         errors.push(
@@ -2714,7 +2733,7 @@ async function validateRunUnchecked(runDirectory) {
       if (
         graphCheck?.type !== "check" ||
         graphCheck.data?.status !== "passed" ||
-        graphCheck.data?.evidenceRoleId !== "codex" ||
+        graphCheck.data?.evidenceRoleId !== coordinator ||
         graphCheck.data?.acceptanceCheckId !== checkId ||
         graphCheck.data?.observed !== observation?.value?.observed ||
         (graphCheck.data?.command ?? null) !==
@@ -3393,12 +3412,16 @@ export async function initializeRun({
   runsRoot = defaultRunsRoot,
   pointerPath,
   pointerBase = repoRoot,
+  coordinator = "codex",
 }) {
   if (!stableIdPattern.test(runId ?? "") || !runId.startsWith("run-")) {
     throw new Error("--run-id must use the form run-lowercase-hyphenated-id");
   }
   if (typeof objective !== "string" || objective.trim().length === 0) {
     throw new Error("--objective is required");
+  }
+  if (!roleIdPattern.test(coordinator ?? "")) {
+    throw new Error("--coordinator must be a role ID");
   }
   assertSafeObjective(objective);
   assertSafeText(branch, "branch");
@@ -3486,15 +3509,18 @@ export async function initializeRun({
     mode: "active",
     objective: objective.trim(),
     authority: {
-      singleWriterRoleId: "codex",
+      singleWriterRoleId: coordinator,
       systemOfRecord: "windows-local-ledger",
     },
     base: { repository: "Logion", commit: baseCommit, branch },
-    actors: [{ roleId: "codex", status: "pending" }],
+    actors: [{ roleId: coordinator, status: "pending" }],
     invariants: [
       {
         id: "invariant-single-writer",
-        summary: "Windows Codex is the sole ledger writer.",
+        summary:
+          coordinator === "codex"
+            ? "Windows Codex is the sole ledger writer."
+            : "The declared coordinator is the sole ledger writer.",
       },
       {
         id: "invariant-no-secrets",
@@ -3721,6 +3747,7 @@ async function main() {
     const runsRoot = getFlag(args, "--runs-root");
     const pointerPath = getFlag(args, "--pointer-path");
     const pointerBase = getFlag(args, "--pointer-base");
+    const coordinator = getFlag(args, "--coordinator");
     const result = await initializeRun({
       runId,
       objective,
@@ -3729,12 +3756,13 @@ async function main() {
       ...(runsRoot ? { runsRoot } : {}),
       ...(pointerPath ? { pointerPath } : {}),
       ...(pointerBase ? { pointerBase } : {}),
+      ...(coordinator ? { coordinator } : {}),
     });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
   throw new Error(
-    "Usage: node scripts/agent-state.mjs <init --run-id ID --objective TEXT [--base-commit SHA --branch NAME --runs-root PATH --pointer-path PATH --pointer-base PATH] | validate [RUN_DIR]>",
+    "Usage: node scripts/agent-state.mjs <init --run-id ID --objective TEXT [--base-commit SHA --branch NAME --runs-root PATH --pointer-path PATH --pointer-base PATH --coordinator ROLE] | validate [RUN_DIR]>",
   );
 }
 
