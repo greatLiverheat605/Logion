@@ -6,6 +6,8 @@ type AuthResponse = components["schemas"]["AuthResponse"];
 export type SessionUser = components["schemas"]["UserResponse"];
 
 const REFRESH_EARLY_MS = 60_000;
+// Browsers wrap setTimeout delays above this signed 32-bit limit and fire at once.
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 export type SessionState =
   | { status: "loading" }

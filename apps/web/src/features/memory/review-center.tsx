@@ -16,7 +16,13 @@ import {
   type LogionOfflineDatabase,
   type SyncTransport,
 } from "@logion/offline";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { deriveProductWorkbenchState } from "@/components/product/product-workbench-state";
 import { useSession } from "@/features/auth/session-provider";
@@ -144,7 +150,13 @@ function transport(
   };
 }
 
+// Raised before any local write when the Space or device is not yet resolved.
+class ReviewContextPendingError extends Error {}
+
 function errorMessage(error: unknown): string {
+  if (error instanceof ReviewContextPendingError) {
+    return "Workspace、Space 或当前设备尚未就绪，本次没有保存；请稍候重试。";
+  }
   if (error instanceof LogionApiError) {
     if (error.status === 403 || error.status === 404) {
       return feedbackErrorText(error, "当前账号无权访问或修改该内容。");
@@ -181,6 +193,8 @@ export function ReviewCenter() {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
   const [spaceId, setSpaceId] = useState("");
+  const [spacesWorkspaceId, setSpacesWorkspaceId] = useState("");
+  const latestSpacesRequest = useRef("");
   const [deviceId, setDeviceId] = useState("");
   const unlocked = vaultPhase === "unlocked";
   const [status, setStatus] = useState("正在准备审查中心……");
@@ -211,6 +225,15 @@ export function ReviewCenter() {
   const [dataPhase, setDataPhase] = useState<
     "error" | "idle" | "loading" | "ready"
   >("idle");
+  // Spaces from a previously selected Workspace are still loading context.
+  const effectiveContextPhase =
+    workspaceId && spacesWorkspaceId !== workspaceId && contextPhase === "ready"
+      ? "loading"
+      : contextPhase;
+  const writeContextReady =
+    effectiveContextPhase === "ready" &&
+    Boolean(workspaceId && deviceId) &&
+    spaces.some((item) => item.id === spaceId);
 
   const loadContext = useCallback(async () => {
     setContextPhase("loading");
@@ -243,12 +266,16 @@ export function ReviewCenter() {
 
   const loadSpaces = useCallback(
     async (selected: string) => {
+      latestSpacesRequest.current = selected;
       setContextPhase("loading");
       try {
         const result = await request<{ spaces: Space[] }>(
           `/api/v1/workspaces/${selected}/spaces`,
         );
+        // A slower response for a previously selected Workspace must not win.
+        if (latestSpacesRequest.current !== selected) return;
         setSpaces(result.spaces);
+        setSpacesWorkspaceId(selected);
         const params = new URLSearchParams(window.location.search);
         const requestedSpace =
           params.get("workspace") === selected ? params.get("space") : null;
@@ -261,7 +288,9 @@ export function ReviewCenter() {
         );
         setContextPhase("ready");
       } catch (error) {
+        if (latestSpacesRequest.current !== selected) return;
         setSpaces([]);
+        setSpacesWorkspaceId("");
         setSpaceId("");
         setStatus(errorMessage(error));
         setContextPhase("error");
@@ -524,6 +553,7 @@ export function ReviewCenter() {
   ) {
     if (session.status !== "authenticated")
       throw new Error("not authenticated");
+    if (!writeContextReady) throw new ReviewContextPendingError();
     const db = database.current;
     const localVault = vault.current;
     if (db === null || localVault === null) throw new Error("vault locked");
@@ -979,7 +1009,7 @@ export function ReviewCenter() {
     ...visibleReviews,
   ];
   const reviewState = deriveProductWorkbenchState({
-    contextPhase,
+    contextPhase: effectiveContextPhase,
     dataPhase,
     hasContext: Boolean(workspaceId && spaceId),
     hasData: allVisibleRecords.length > 0,
@@ -1008,7 +1038,7 @@ export function ReviewCenter() {
     <ReviewWorkbench
       context={{
         canEditGraph,
-        contextPhase,
+        contextPhase: effectiveContextPhase,
         dataPhase,
         deviceId,
         conflicts,

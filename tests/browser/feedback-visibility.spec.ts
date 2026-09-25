@@ -145,6 +145,61 @@ async function actionNotCovered(action: Locator, toast: Locator) {
   ).toBe(false);
 }
 
+test("Review restores the cycle action above a populated list after a failed sync", async ({
+  page,
+  accountState,
+}, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/app/review");
+  await unlock(page, accountState.password);
+  await page.getByRole("button", { name: "复习工作面", exact: true }).click();
+  await page.getByRole("tab", { name: /周期审查/ }).click();
+  const create = page.getByRole("button", { name: "创建审查", exact: true });
+  for (let index = 0; index < 3; index++) {
+    await create.click();
+    const sheet = page.getByRole("dialog", { name: "创建周期审查" });
+    const day = new Date(
+      Date.UTC(
+        2060 + testInfo.repeatEachIndex * 10 + testInfo.retry,
+        0,
+        index + 1,
+      ),
+    )
+      .toISOString()
+      .slice(0, 10);
+    await sheet.getByLabel("开始日期").fill(day);
+    await sheet.getByLabel("结束日期").fill(day);
+    if (index === 2) {
+      await page.route("**/api/v1/workspaces/*/sync/**", (route) =>
+        route.fulfill({
+          status: 503,
+          json: {
+            code: "T03_SYNC_UNAVAILABLE",
+            message: "Injected failure",
+            request_id: "feedback-test",
+            retryable: true,
+          },
+        }),
+      );
+    }
+    await sheet
+      .getByRole("button", { name: "保存审查草稿", exact: true })
+      .click();
+    await expect(sheet).toHaveCount(0);
+    const toast = await visibleFeedback(
+      page,
+      index === 2 ? "T03_SYNC_UNAVAILABLE" : "审查数据已同步。",
+      index === 2 ? "error" : "success",
+    );
+    if (index === 2) {
+      await actionNotCovered(create, toast);
+      await expect(create).toBeFocused();
+    }
+    await toast.getByRole("button", { name: "关闭反馈" }).click();
+    await expect(toast).toHaveCount(0);
+  }
+});
+
 for (const width of [1440, 375, 320]) {
   for (const module of ["self-study", "exam", "review"] as const) {
     for (const failure of [true, false]) {
