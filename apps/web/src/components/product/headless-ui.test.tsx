@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   WorkbenchDialog,
   WorkbenchDropdownMenu,
+  WorkbenchSheet,
   WorkbenchSelect,
   WorkbenchTabPanel,
   WorkbenchTabs,
@@ -74,6 +75,111 @@ describe("headless UI adapters", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(document.activeElement).toBe(trigger);
   });
+
+  it("returns focus to the opener of a controlled sheet without a trigger", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <main id="main-content" tabIndex={-1}>
+          <button onClick={() => setOpen(true)} type="button">
+            打开表单
+          </button>
+          <WorkbenchSheet onOpenChange={setOpen} open={open} title="受控表单">
+            <input aria-label="名称" autoFocus />
+          </WorkbenchSheet>
+        </main>
+      );
+    }
+
+    render(<Harness />);
+    const opener = screen.getByRole("button", { name: "打开表单" });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: "受控表单" });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByLabelText("名称")),
+    );
+    fireEvent.keyDown(dialog, { code: "Escape", key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  it("returns focus when the sheet is mounted already open", async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <main id="main-content" tabIndex={-1}>
+          <button onClick={() => setOpen(true)} type="button">
+            打开表单
+          </button>
+          {open ? (
+            <WorkbenchSheet onOpenChange={setOpen} open title="按需挂载">
+              <input aria-label="名称" autoFocus />
+            </WorkbenchSheet>
+          ) : null}
+        </main>
+      );
+    }
+
+    render(<Harness />);
+    const opener = screen.getByRole("button", { name: "打开表单" });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: "按需挂载" });
+    fireEvent.keyDown(dialog, { code: "Escape", key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  it.each(["removed", "disabled"] as const)(
+    "falls back to the main landmark when the opener is %s",
+    async (change) => {
+      function Harness() {
+        const [open, setOpen] = useState(false);
+        const [state, setState] = useState<"ready" | typeof change>("ready");
+        return (
+          <main id="main-content" tabIndex={-1}>
+            {state === "removed" ? null : (
+              <button
+                disabled={state === "disabled"}
+                onClick={() => setOpen(true)}
+                type="button"
+              >
+                打开表单
+              </button>
+            )}
+            <WorkbenchSheet onOpenChange={setOpen} open={open} title="受控表单">
+              <button
+                onClick={() => {
+                  setState(change);
+                  setOpen(false);
+                }}
+                type="button"
+              >
+                保存
+              </button>
+            </WorkbenchSheet>
+          </main>
+        );
+      }
+
+      render(<Harness />);
+      const opener = screen.getByRole("button", { name: "打开表单" });
+      opener.focus();
+      fireEvent.click(opener);
+      await screen.findByRole("dialog", { name: "受控表单" });
+      fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          document.getElementById("main-content"),
+        ),
+      );
+    },
+  );
 
   it("supports Arrow, Home and End tab navigation", async () => {
     function Harness() {

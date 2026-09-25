@@ -200,6 +200,33 @@ test("Review restores the cycle action above a populated list after a failed syn
   }
 });
 
+for (const [route, opener] of [
+  ["/app/self-study", "快速收集"],
+  ["/app/exam", "exam-create"],
+] as const) {
+  test(`controlled sheet on ${route} returns focus to its opener`, async ({
+    page,
+    accountState,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(route);
+    await unlock(
+      page,
+      process.env.LOGION_E2E_VAULT_PASSPHRASE || accountState.password,
+    );
+    const button =
+      opener === "exam-create"
+        ? page.getByTestId(opener)
+        : page.getByRole("button", { name: opener, exact: true });
+    await button.click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+    await expect(button).toBeFocused();
+  });
+}
+
 for (const width of [1440, 375, 320]) {
   for (const module of ["self-study", "exam", "review"] as const) {
     for (const failure of [true, false]) {

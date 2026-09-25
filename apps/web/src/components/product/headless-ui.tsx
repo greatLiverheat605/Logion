@@ -32,6 +32,42 @@ interface DialogSurfaceProps {
   trigger?: ReactElement;
 }
 
+function focusedElement(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  const active = document.activeElement;
+  return active instanceof HTMLElement && active !== document.body
+    ? active
+    : null;
+}
+
+function overlapsFeedback(target: HTMLElement): boolean {
+  const box = target.getBoundingClientRect();
+  return Array.from(document.querySelectorAll("[data-sonner-toast]"), (toast) =>
+    toast.getBoundingClientRect(),
+  ).some(
+    (toast) =>
+      box.left < toast.right &&
+      box.right > toast.left &&
+      box.top < toast.bottom &&
+      box.bottom > toast.top,
+  );
+}
+
+// Return focus to a usable opener, else to the page landmark rather than body.
+function returnFocusAfterDialog(target: HTMLElement | null) {
+  const usable =
+    target?.isConnected && !target.matches(":disabled") ? target : null;
+  if (usable) {
+    usable.focus();
+    if (overlapsFeedback(usable)) usable.scrollIntoView?.({ block: "center" });
+    return;
+  }
+  const main = document.getElementById("main-content");
+  if (!main) return;
+  if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+  main.focus({ preventScroll: true });
+}
+
 function DialogSurface({
   children,
   description,
@@ -44,6 +80,19 @@ function DialogSurface({
   trigger,
 }: DialogSurfaceProps & { sheet: boolean }) {
   const descriptionProps = description ? {} : { "aria-describedby": undefined };
+  // Controlled surfaces have no Radix trigger; remember the opener before
+  // dialog content (including autoFocus fields) takes focus. Surfaces that
+  // mount already open record it on their first render.
+  const [opener, setOpener] = useState<{
+    element: HTMLElement | null;
+    open: boolean;
+  }>(() => ({ element: open ? focusedElement() : null, open: Boolean(open) }));
+  if (Boolean(open) !== opener.open) {
+    setOpener({
+      element: open ? focusedElement() : opener.element,
+      open: Boolean(open),
+    });
+  }
 
   return (
     <Dialog.Root onOpenChange={onOpenChange} open={open}>
@@ -57,9 +106,10 @@ function DialogSurface({
             sheet && "headless-sheet",
           )}
           onCloseAutoFocus={(event) => {
-            if (!restoreFocusRef?.current) return;
+            const target = restoreFocusRef?.current ?? opener.element;
+            if (trigger && !restoreFocusRef?.current) return;
             event.preventDefault();
-            restoreFocusRef.current.focus();
+            returnFocusAfterDialog(target);
           }}
         >
           <header className="headless-surface-header">

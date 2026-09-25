@@ -1593,7 +1593,7 @@ export function ReviewWorkbench({
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
-  // Controlled sheets have no Radix trigger, so remember the opener explicitly.
+  // Record the clicked opener: Safari does not focus buttons on click.
   const sheetReturnRef = useRef<HTMLElement | null>(null);
   function openSheet(
     event: MouseEvent<HTMLElement>,
@@ -1601,27 +1601,6 @@ export function ReviewWorkbench({
   ) {
     sheetReturnRef.current = event.currentTarget;
     setOpen(true);
-  }
-  function changeSheet(next: boolean, setOpen: (open: boolean) => void) {
-    setOpen(next);
-    if (!next) window.requestAnimationFrame(revealSheetReturn);
-  }
-  function revealSheetReturn() {
-    // Keep the returning action clear of operation feedback on narrow screens.
-    const target = sheetReturnRef.current;
-    if (!target?.isConnected) return;
-    const box = target.getBoundingClientRect();
-    const covered = Array.from(
-      document.querySelectorAll("[data-sonner-toast]"),
-      (toast) => toast.getBoundingClientRect(),
-    ).some(
-      (toast) =>
-        box.left < toast.right &&
-        box.right > toast.left &&
-        box.top < toast.bottom &&
-        box.bottom > toast.top,
-    );
-    if (covered) target.scrollIntoView({ block: "center" });
   }
   // Writes need a resolved Space and device; the server rejects empty identifiers.
   const canCreate =
@@ -1846,13 +1825,13 @@ export function ReviewWorkbench({
       />
       <NewTopicSheet
         actions={actions}
-        onOpenChange={(next) => changeSheet(next, setTopicOpen)}
+        onOpenChange={setTopicOpen}
         open={topicOpen}
         restoreFocusRef={sheetReturnRef}
       />
       <NewQuizSheet
         actions={actions}
-        onOpenChange={(next) => changeSheet(next, setQuizOpen)}
+        onOpenChange={setQuizOpen}
         open={quizOpen}
         restoreFocusRef={sheetReturnRef}
         topicId={selectedId ?? undefined}
@@ -1860,14 +1839,14 @@ export function ReviewWorkbench({
       />
       <DependencySheet
         actions={actions}
-        onOpenChange={(next) => changeSheet(next, setDependencyOpen)}
+        onOpenChange={setDependencyOpen}
         open={dependencyOpen}
         restoreFocusRef={sheetReturnRef}
         topics={data.topics}
       />
       <AuditReviewSheet
         actions={actions}
-        onOpenChange={(next) => changeSheet(next, setReviewOpen)}
+        onOpenChange={setReviewOpen}
         open={reviewOpen}
         restoreFocusRef={sheetReturnRef}
       />

@@ -457,6 +457,16 @@ test("Browser defects: task feedback, template pull, locked states and mobile sh
   await dialog.getByRole("button", { name: "确认删除" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(installedGoal).toHaveCount(0);
+  // Templates counts server goals; wait until the queued deletion is applied.
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(goalsResponse.url());
+      const body = (await response.json()) as {
+        goals: Array<{ goal_id: string }>;
+      };
+      return body.goals.some((goal) => goal.goal_id === installedGoalId);
+    })
+    .toBe(false);
   await page.locator('a[href="/app/templates"]').first().click();
   await expect(goalCount).toHaveText(String(initialGoalCount));
   await page.locator('a[href="/app/planning"]').first().click();
