@@ -8,13 +8,15 @@
 - `tasks.jsonl`：只追加的任务生命周期事件；
 - `graph.json`：需求、决策、任务、文件、提交、检查和交接之间的关系；
 - `handoffs/*.json`：Worker 自己报告的执行命令、检查结果、风险和工作树状态；
-- `observations/*.json`：Codex 协调者独立执行或观察的验收证据，绑定完成事件和 handoff 摘要。
+- `observations/*.json`：协调者独立执行或观察的验收证据，绑定完成事件和 handoff 摘要。
 
 首版不引入 Neo4j、向量数据库或额外服务。JSON/JSONL 足以在当前两台 2 核 2 GB 服务器之外完成开发协作，也不会占用线上资源。
 
 ## 2. 权威边界
 
-Windows Codex 是协调状态的唯一写入者。Mac 上的 Kimi 与 DeepSeek、Windows 上的 ZCode 只读取自包含任务包并返回交接证据。
+每个 Run 在 `context.authority.singleWriterRoleId` 中声明唯一协调者，它是该 Run 协调状态的唯一写入者。协调者必须是 `roles.json` 中 `access` 为 `coordinator-writer` 的席位（目前为 Windows 上的 Codex 与 Claude Code）。Mac 上的 Kimi 与 DeepSeek、Windows 上的 ZCode 只读取自包含任务包并返回交接证据。
+
+协调者移交不改写历史：旧 Run 保持原协调者并停止追加事件，新协调者用 `init --coordinator <roleId>` 创建新 Run，并在新 Run 中引用旧 Run 的最终状态。任何席位都不得以其他席位的身份写入事件或 observation。
 
 权威顺序如下：
 
@@ -153,7 +155,7 @@ RFC 3339，禁止省略时区、只写日期或依赖运行时自动修正非法
 
 ## 6. 完成与验收
 
-`task.completed` 只表示 Worker 已交接，不表示 Codex 已接受。完成事件必须引用一个 handoff receipt，receipt 至少记录：
+`task.completed` 只表示 Worker 已交接，不表示协调者已接受。完成事件必须引用一个 handoff receipt，receipt 至少记录：
 
 - 结果、基线、工作分支与 changed files；
 - 实际执行的命令；
@@ -162,12 +164,12 @@ RFC 3339，禁止省略时区、只写日期或依赖运行时自动修正非法
 - 风险、工作树状态和建议下一步。
 
 只有协调者独立审查后才追加 `task.accepted`。`basis` 必须与任务声明的
-`acceptanceChecks` 完全一致；每个逻辑验收项必须由一份独立 Codex observation 覆盖。
+`acceptanceChecks` 完全一致；每个逻辑验收项必须由一份独立的协调者 observation 覆盖。
 observation 必须绑定最终 `task.completed`、最终 handoff 路径及其原始字节 SHA-256，并且
 观察时间必须位于完成与验收事件之间。`task.accepted.observationDigests` 再绑定 observation
 自身的原始字节 SHA-256；图中的 check 节点只做索引，必须与 observation 一致。
 
-Worker receipt 的 `passed` 只是交接声明，不能提升为 Codex 验收结果。写了测试但没运行时，
+Worker receipt 的 `passed` 只是交接声明，不能提升为协调者验收结果。写了测试但没运行时，
 不得把它放进 Worker receipt 的 `checks`；只能写进 `unrunChecks`，每项使用
 `{ name, reason }`。只有 coordinator observation 支持 `not_run`，并且必须填写原因；
 无论哪一方都不能把未运行工作记作 `passed`。
@@ -190,6 +192,8 @@ pnpm agent:state:init -- `
   --run-id run-next-version `
   --objective "Implement the approved next-version scope"
 ```
+
+协调者默认为 `codex`；由其他 `coordinator-writer` 席位协调时追加 `--coordinator <roleId>`（例如 `--coordinator claude`）。
 
 初始化器默认读取当前 Git commit 和分支，在 runs root 中使用独占锁、事务 intent 与文件
 摘要 manifest。它先在 staging 目录持久化并完整校验空事件流与 Run 节点，再发布 Run，最后
@@ -214,7 +218,7 @@ pnpm agent:state:validate -- .agents/coordination/runs/run-next-version
 - JSON Schema 的必填字段、额外字段禁令、稳定 ID、角色和精确模型证明；
 - 基线一致性、事件状态迁移、依赖无环和预期最终状态；
 - 并发写路径、分支和 worktree 的单写入者约束；
-- completed task 的 Worker handoff 与独立 Codex observation；
+- completed task 的 Worker handoff 与独立协调者 observation；
 - 图节点、边、文件、检查和 receipt 引用；
 - handoff 摘要、observation 摘要、验收 basis、观察时间窗与图索引的一致性；
 - current pointer 的 schema、敏感字段、真实目录、`runId` 和目标 context 绑定；
@@ -253,5 +257,5 @@ pnpm agent:state:check
 - Orca 与账本不一致：以 Orca 当前实时生命周期和 Git 事实为准，再更新本地账本。
 - Worker 丢失上下文：重新发送完整 task packet，不发送聊天全文。
 - 基线不可达、路径冲突或模型证明缺失：席位不得标为 ready，任务不得派发。
-- 环境检查未执行：Worker 写入 `unrunChecks{name,reason}`；Codex observation 写入
+- 环境检查未执行：Worker 写入 `unrunChecks{name,reason}`；协调者 observation 写入
   `not_run` 与原因，不能勾选通过。
