@@ -178,6 +178,7 @@ def test_push_handlers_are_registered_by_entity_family() -> None:
             ("topic", "create"),
             ("topic", "delete"),
             ("topic_dependency", "create"),
+            ("source_link", "create"),
             ("mastery", "create"),
             ("mastery", "update"),
             ("quiz_item", "create"),

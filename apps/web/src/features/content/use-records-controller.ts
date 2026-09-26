@@ -53,6 +53,13 @@ import {
   writeWorkbenchContext,
 } from "@/lib/workbench-context";
 import {
+  excerptRange,
+  locateSource as locateSourceText,
+  sha256Hex,
+  verifiedExcerpt,
+  type SourceLinkPayload,
+} from "@/features/memory/source-links";
+import {
   noteSelectionPayload,
   type NoteSelectionInput,
 } from "./note-selection";
@@ -113,6 +120,37 @@ export interface RecordsDerivedViewModel {
   resourceCount: number;
   resources: RecordsLocalView<RecordsResourcePayload>[];
   selectedNote: RecordsLocalView<RecordsNotePayload> | null;
+}
+
+/** A topic or recall item created from a note selection (ADR-0033). */
+export interface RecordsDerivedItem {
+  linkId: string;
+  noteId: string;
+  targetId: string;
+  targetKind: "topic" | "quiz_item";
+  title: string;
+  topicId: string;
+}
+
+interface RecordsSourceLink extends RecordsDerivedItem {
+  link: SourceLinkPayload;
+  targetText: string;
+}
+
+export interface RecordsSourceFocus {
+  linkId: string;
+  noteId: string;
+}
+
+function sourceFocusFromUrl(): RecordsSourceFocus | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const noteId = params.get("note") ?? "";
+  const linkId = params.get("source") ?? "";
+  const id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+  return id.test(noteId)
+    ? { noteId, linkId: id.test(linkId) ? linkId : "" }
+    : null;
 }
 
 export interface RecordsFilteredView {
@@ -382,8 +420,15 @@ export interface RecordsControllerResult {
     canSync: boolean;
     canUnlock: boolean;
     canWrite: boolean;
+    sourceLinksEnabled: boolean;
   };
   commands: {
+    clearSourceFocus: () => void;
+    locateSource: (
+      noteId: string,
+      linkId: string,
+      body: string,
+    ) => Promise<{ start: number; end: number } | null>;
     selectionTopics: () => Promise<Array<{ id: string; title: string }>>;
     createFromSelection: (
       noteId: string,
@@ -416,6 +461,7 @@ export interface RecordsControllerResult {
     online: boolean;
     operational: WorkbenchOperationalContext;
     operationalState: ProductOperationalState | null;
+    sourceFocus: RecordsSourceFocus | null;
     spaceId: string;
     spaces: RecordsSpace[];
     status: string;
@@ -423,7 +469,10 @@ export interface RecordsControllerResult {
     workspaceId: string;
     workspaces: RecordsWorkspace[];
   };
-  viewModel: RecordsDerivedViewModel & { conflictCount: number };
+  viewModel: RecordsDerivedViewModel & {
+    conflictCount: number;
+    derivedItems: RecordsDerivedItem[];
+  };
 }
 
 export function useRecordsController(): RecordsControllerResult {
@@ -458,7 +507,12 @@ export function useRecordsController(): RecordsControllerResult {
   const [workspaceId, setWorkspaceIdState] = useState("");
   const [spaceId, setSpaceIdState] = useState("");
   const [deviceId, setDeviceId] = useState("");
+  const [sourceFocus, setSourceFocus] = useState<RecordsSourceFocus | null>(
+    null,
+  );
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>("");
+  const [sourceLinksEnabled, setSourceLinksEnabled] = useState(false);
+  const [sourceLinks, setSourceLinks] = useState<RecordsSourceLink[]>([]);
   const [status, setStatus] = useState("正在准备记录与资料库……");
   const [notes, setNotes] = useState<RecordsLocalView<RecordsNotePayload>[]>(
     [],
@@ -487,7 +541,15 @@ export function useRecordsController(): RecordsControllerResult {
       ]);
       if (requestId !== contextRequest.current) return;
       const currentDevice = deviceResult.devices.find((item) => item.current);
-      const storedWorkspace = readWorkbenchContext("records").workspaceId;
+      // A source link from Review names its Workspace, Space and note in the URL.
+      const focus = sourceFocusFromUrl();
+      if (focus) {
+        setSourceFocus(focus);
+        setSelectedNoteId(focus.noteId);
+      }
+      const storedWorkspace =
+        new URLSearchParams(window.location.search).get("workspace") ??
+        readWorkbenchContext("records").workspaceId;
       const nextWorkspace =
         workspaceResult.workspaces.find((item) => item.id === storedWorkspace)
           ?.id ??
@@ -547,9 +609,14 @@ export function useRecordsController(): RecordsControllerResult {
             return;
           }
           setSpaces(result.spaces);
+          const params = new URLSearchParams(window.location.search);
           const stored = readWorkbenchContext("records");
           const storedSpace =
-            stored.workspaceId === selectedWorkspace ? stored.spaceId : "";
+            params.get("workspace") === selectedWorkspace
+              ? params.get("space")
+              : stored.workspaceId === selectedWorkspace
+                ? stored.spaceId
+                : "";
           setSpaceIdState(
             result.spaces.find((item) => item.id === storedSpace)?.id ??
               result.spaces[0]?.id ??
@@ -844,7 +911,7 @@ export function useRecordsController(): RecordsControllerResult {
 
   async function commit(
     isCurrent: () => boolean,
-    entityType: "note" | "resource" | "topic" | "quiz_item",
+    entityType: "note" | "resource" | "topic" | "quiz_item" | "source_link",
     entityId: string,
     payload: JsonObject,
     existing?: LocalEntity,
@@ -958,14 +1025,51 @@ export function useRecordsController(): RecordsControllerResult {
       ) {
         throw new Error("当前空间已切换，请重新选择内容。");
       }
-      await commit(
+      const targetId = crypto.randomUUID();
+      const created = await commit(
         isCurrent,
         input.kind,
-        crypto.randomUUID(),
+        targetId,
         payload,
         undefined,
         dependencies,
       );
+      if (!isCurrent()) return false;
+      let linkSaved = true;
+      if (sourceLinksEnabled && db) {
+        // The link is a navigation aid: a failure keeps the created item.
+        try {
+          const excerpt = input.excerpt.trim();
+          const range = excerptRange(note.payload.markdown_body, excerpt);
+          const noteOperation = await db.outbox
+            .where("[workspace_id+entity_type+entity_id]")
+            .equals([selectedWorkspace, "note", noteId])
+            .last();
+          await commit(
+            isCurrent,
+            "source_link",
+            crypto.randomUUID(),
+            {
+              space_id: spaceId,
+              source_kind: "note",
+              source_id: noteId,
+              target_kind: input.kind,
+              target_id: targetId,
+              excerpt_sha256: await sha256Hex(excerpt),
+              excerpt_start: range?.start ?? null,
+              excerpt_end: range?.end ?? null,
+              source_version: note.entity.server_version,
+            },
+            undefined,
+            [
+              created.operation.operation_id,
+              ...(noteOperation ? [noteOperation.operation_id] : []),
+            ],
+          );
+        } catch {
+          linkSaved = false;
+        }
+      }
       if (!isCurrent()) return false;
       markChanged();
       if (generation === attachmentContext.current) {
@@ -974,9 +1078,10 @@ export function useRecordsController(): RecordsControllerResult {
           if (!isCurrent()) return false;
           const objectName = input.kind === "topic" ? "知识点" : "题目";
           setStatus(
-            synced
+            (synced
               ? `${objectName}已创建并同步，可前往复习页查看。`
-              : `${objectName}已加密保存在本机；服务器同步暂未完成，可前往复习页查看。`,
+              : `${objectName}已加密保存在本机；服务器同步暂未完成，可前往复习页查看。`) +
+              (linkSaved ? "" : "来源链接未保存，原文摘录仍在说明中。"),
           );
         }
       }
@@ -1394,6 +1499,128 @@ export function useRecordsController(): RecordsControllerResult {
     if (contextPhase === "ready" && workspaceId && selectedSpace)
       writeWorkbenchContext("records", { spaceId, workspaceId });
   }, [contextPhase, selectedSpace, spaceId, workspaceId]);
+  useEffect(() => {
+    // Offline keeps the last known server capability; the server still enforces it.
+    if (!online || !workspaceId || !selectedSpace) return;
+    let active = true;
+    void browserApiClient
+      .request<{
+        source_links_enabled?: unknown;
+      }>(
+        `/api/v1/workspaces/${workspaceId}/spaces/${selectedSpace.id}/source-links/capabilities`,
+      )
+      .then(
+        (result) => {
+          if (active)
+            setSourceLinksEnabled(result.source_links_enabled === true);
+        },
+        () => {
+          if (active) setSourceLinksEnabled(false);
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [online, selectedSpace, workspaceId]);
+  useEffect(() => {
+    const db = database.current;
+    const localVault = vault.current;
+    if (
+      !sourceLinksEnabled ||
+      !unlocked ||
+      !db ||
+      !localVault ||
+      !workspaceId
+    ) {
+      queueMicrotask(() => setSourceLinks([]));
+      return;
+    }
+    let active = true;
+    const selectedWorkspace = workspaceId;
+    void (async () => {
+      const rows = await db.entities
+        .where("[workspace_id+entity_type]")
+        .equals([selectedWorkspace, "source_link"])
+        .filter((row) => row.deleted_at === null)
+        .toArray();
+      const links = await Promise.all(
+        rows.map((row) => decrypt<SourceLinkPayload>(localVault, row)),
+      );
+      const items: RecordsSourceLink[] = [];
+      for (const link of links) {
+        const target = await db.entities.get([
+          selectedWorkspace,
+          link.payload.target_kind,
+          link.payload.target_id,
+        ]);
+        if (!target || target.deleted_at !== null) continue;
+        const view = await decrypt<{
+          description?: string;
+          explanation?: string;
+          prompt?: string;
+          title?: string;
+          topic_id?: string;
+        }>(localVault, target);
+        items.push({
+          link: link.payload,
+          linkId: link.entity.entity_id,
+          noteId: link.payload.source_id,
+          targetId: link.payload.target_id,
+          targetKind: link.payload.target_kind,
+          targetText:
+            (link.payload.target_kind === "topic"
+              ? view.payload.description
+              : view.payload.explanation) ?? "",
+          title:
+            (link.payload.target_kind === "topic"
+              ? view.payload.title
+              : view.payload.prompt) ?? "",
+          topicId:
+            link.payload.target_kind === "topic"
+              ? link.payload.target_id
+              : (view.payload.topic_id ?? ""),
+        });
+      }
+      if (active && selectedWorkspace === workspaceIdRef.current)
+        setSourceLinks(items);
+    })().catch(() => {
+      if (active) setSourceLinks([]);
+    });
+    return () => {
+      active = false;
+    };
+  }, [database, notes, sourceLinksEnabled, unlocked, vault, workspaceId]);
+  const derivedItems = useMemo(
+    () =>
+      sourceLinks
+        .filter(
+          (item) => item.noteId === viewModel.selectedNote?.entity.entity_id,
+        )
+        .map(({ linkId, noteId, targetId, targetKind, title, topicId }) => ({
+          linkId,
+          noteId,
+          targetId,
+          targetKind,
+          title,
+          topicId,
+        })),
+    [sourceLinks, viewModel.selectedNote],
+  );
+  async function locateSource(
+    noteId: string,
+    linkId: string,
+    body: string,
+  ): Promise<{ start: number; end: number } | null> {
+    const item = sourceLinks.find(
+      (candidate) => candidate.linkId === linkId && candidate.noteId === noteId,
+    );
+    if (!item) return null;
+    return locateSourceText(
+      body,
+      await verifiedExcerpt(item.targetText, item.link.excerpt_sha256),
+      { start: item.link.excerpt_start, end: item.link.excerpt_end },
+    );
+  }
   const canWrite = !["reviewer", "viewer"].includes(
     selectedWorkspace?.role ?? "viewer",
   );
@@ -1513,8 +1740,11 @@ export function useRecordsController(): RecordsControllerResult {
       canUnlock:
         contextPhase === "ready" && Boolean(workspaceId && spaceId && deviceId),
       canWrite,
+      sourceLinksEnabled,
     },
     commands: {
+      clearSourceFocus: () => setSourceFocus(null),
+      locateSource,
       selectionTopics,
       createFromSelection,
       createNote,
@@ -1534,6 +1764,7 @@ export function useRecordsController(): RecordsControllerResult {
       online,
       operational,
       operationalState,
+      sourceFocus,
       spaceId,
       spaces,
       status,
@@ -1541,6 +1772,6 @@ export function useRecordsController(): RecordsControllerResult {
       workspaceId,
       workspaces,
     },
-    viewModel: { ...viewModel, conflictCount },
+    viewModel: { ...viewModel, conflictCount, derivedItems },
   };
 }

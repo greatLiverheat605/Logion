@@ -3,6 +3,7 @@
 import {
   cleanup,
   fireEvent,
+  within,
   render,
   screen,
   waitFor,
@@ -65,6 +66,8 @@ function controllerFixture() {
   );
   const second = note("note-2", "一致性模型", "# Consistency");
   const commands = {
+    clearSourceFocus: vi.fn(),
+    locateSource: vi.fn(async () => null),
     selectionTopics: vi.fn(async () => [{ id: "topic-1", title: "共识" }]),
     createFromSelection: vi.fn(async () => true),
     createNote: vi.fn(async () => "note-3"),
@@ -86,6 +89,7 @@ function controllerFixture() {
       canSync: true,
       canUnlock: false,
       canWrite: true,
+      sourceLinksEnabled: false,
     },
     commands,
     context: {
@@ -98,6 +102,7 @@ function controllerFixture() {
         workspace: { id: "workspace-1", name: "Logion" },
       },
       operationalState: null,
+      sourceFocus: null,
       spaceId: "space-1",
       spaces: [
         { id: "space-1", name: "学习笔记" },
@@ -113,6 +118,7 @@ function controllerFixture() {
       attachmentCount: 0,
       attachments: [],
       conflictCount: 0,
+      derivedItems: [],
       indexedPageCount: 0,
       noteCharacterCount:
         first.payload.markdown_body.length +
@@ -372,5 +378,38 @@ describe("Records workbench", () => {
     expect(screen.getByLabelText("附件").getAttribute("accept")).toBe(
       "image/png,image/jpeg,text/plain",
     );
+  });
+
+  it("lists objects created from the selected note when source links are on", () => {
+    const { controller } = controllerFixture();
+    controller.capabilities.sourceLinksEnabled = true;
+    controller.viewModel.derivedItems = [
+      {
+        linkId: "link-1",
+        noteId: "note-1",
+        targetId: "01900000-0000-7000-8000-000000000009",
+        targetKind: "topic",
+        title: "共识",
+        topicId: "01900000-0000-7000-8000-000000000009",
+      },
+    ];
+    render(<RecordsWorkbench controller={controller} />);
+    const inspector = screen.getByTestId("records-inspector");
+    const link = within(inspector).getByRole("link", { name: "共识" });
+    fireEvent.click(link);
+    expect(
+      JSON.parse(
+        window.sessionStorage.getItem("logion:workbench-context:review") ??
+          "{}",
+      ),
+    ).toMatchObject({ selectedId: "01900000-0000-7000-8000-000000000009" });
+  });
+
+  it("hides the created-from section while source links are off", () => {
+    const { controller } = controllerFixture();
+    render(<RecordsWorkbench controller={controller} />);
+    expect(
+      within(screen.getByTestId("records-inspector")).queryByText("由此创建"),
+    ).toBeNull();
   });
 });

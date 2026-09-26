@@ -26,6 +26,7 @@ from logion_api.identity.service import AuthContext
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
+    KnowledgeSourceLink,
     MasteryRecord,
     QuizAttempt,
     QuizItem,
@@ -66,6 +67,7 @@ SHARED_MODELS = (
     VerificationRecord,
     Topic,
     TopicDependency,
+    KnowledgeSourceLink,
     QuizItem,
     Rubric,
     ReviewRequest,

@@ -39,6 +39,12 @@ import {
   buildSevenDayReviewLoad,
 } from "./review-workbench-model";
 import { ReviewWorkbench } from "./review-workbench";
+import {
+  buildSourceLinkViews,
+  type SourceLinkPayload,
+  type SourceLinkView,
+  type SourceNoteSnapshot,
+} from "./source-links";
 import { useReviewController } from "./use-review-controller";
 
 export type Workspace = components["schemas"]["WorkspaceResponse"];
@@ -182,6 +188,14 @@ async function decrypt<T extends JsonObject>(
   return { entity, payload: payload as T };
 }
 
+// Only locally created recall items keep their explanation; pulled ones do not.
+function quizExplanation(
+  item: LocalView<QuizItemPayload> | undefined,
+): string | null {
+  const value = item?.payload.explanation;
+  return typeof value === "string" ? value : null;
+}
+
 export function ReviewCenter() {
   const { request } = useReviewController();
   const { state: session } = useSession();
@@ -222,6 +236,8 @@ export function ReviewCenter() {
   const [reviewFindings, setReviewFindings] = useState<
     LocalView<ReviewFindingPayload>[]
   >([]);
+  const [sources, setSources] = useState<SourceLinkView[]>([]);
+  const [sourceLinksEnabled, setSourceLinksEnabled] = useState(false);
   const [conflicts, setConflicts] = useState(0);
   const [contextPhase, setContextPhase] = useState<
     "error" | "loading" | "ready"
@@ -322,6 +338,23 @@ export function ReviewCenter() {
       writeWorkbenchContext("review", { spaceId, workspaceId });
   }, [spaceId, workspaceId, writeContextReady]);
 
+  useEffect(() => {
+    // A failed request (offline) keeps the last known server capability.
+    if (!writeContextReady) return;
+    let active = true;
+    void request<{ source_links_enabled?: unknown }>(
+      `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/source-links/capabilities`,
+    ).then(
+      (result) => {
+        if (active) setSourceLinksEnabled(result.source_links_enabled === true);
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [request, spaceId, workspaceId, writeContextReady]);
+
   async function bootstrap(
     db: LogionOfflineDatabase,
     localVault: OfflineVault,
@@ -399,6 +432,8 @@ export function ReviewCenter() {
       "error_pattern",
       "audit_review",
       "review_finding",
+      "source_link",
+      "note",
     ] as const;
     const [rows, conflictCount] = await Promise.all([
       Promise.all(
@@ -423,6 +458,10 @@ export function ReviewCenter() {
     const errorPatternRows = rows[6] ?? [];
     const auditReviewRows = rows[7] ?? [];
     const reviewFindingRows = rows[8] ?? [];
+    const sourceLinkRows = (rows[9] ?? []).filter(
+      (item) => item.deleted_at === null,
+    );
+    const noteRows = rows[10] ?? [];
     const [
       nextTopics,
       nextDependencies,
@@ -481,6 +520,55 @@ export function ReviewCenter() {
     setErrorPatterns(nextErrorPatterns);
     setAuditReviews(nextAuditReviews);
     setReviewFindings(nextReviewFindings);
+    // Source links (ADR-0033): decrypt only the notes that links point to.
+    const linkViews = await Promise.all(
+      sourceLinkRows.map((item) =>
+        decrypt<SourceLinkPayload>(localVault, item),
+      ),
+    );
+    const linkedNotes = new Set(
+      linkViews.map((item) => item.payload.source_id),
+    );
+    const noteSnapshots = new Map<string, SourceNoteSnapshot>();
+    for (const row of noteRows) {
+      if (!linkedNotes.has(row.entity_id)) continue;
+      if (row.deleted_at !== null) {
+        noteSnapshots.set(row.entity_id, {
+          body: null,
+          deleted: true,
+          title: null,
+          version: row.server_version,
+        });
+        continue;
+      }
+      const note = await decrypt<{ markdown_body: string; title: string }>(
+        localVault,
+        row,
+      ).catch(() => null);
+      if (note)
+        noteSnapshots.set(row.entity_id, {
+          body: note.payload.markdown_body,
+          deleted: false,
+          title: note.payload.title,
+          version: row.server_version,
+        });
+    }
+    setSources(
+      await buildSourceLinkViews({
+        links: linkViews.map((item) => ({
+          id: item.entity.entity_id,
+          payload: item.payload,
+        })),
+        notes: noteSnapshots,
+        targetText: (kind, id) =>
+          kind === "topic"
+            ? (nextTopics.find((item) => item.entity.entity_id === id)?.payload
+                .description ?? null)
+            : quizExplanation(
+                nextQuizItems.find((item) => item.entity.entity_id === id),
+              ),
+      }),
+    );
     setConflicts(conflictCount);
     setDataPhase("ready");
   }
@@ -1079,6 +1167,8 @@ export function ReviewCenter() {
         reviewFindings,
         reviews: visibleReviews,
         schedules: visibleSchedules,
+        sourceLinksEnabled,
+        sources: sources.filter((item) => item.spaceId === spaceId),
         topics: visibleTopics,
         confirmedMastery,
         dueReviews,

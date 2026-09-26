@@ -243,3 +243,31 @@ class AuditReviewResponse(StrictModel):
 
 class AuditReviewListResponse(StrictModel):
     reviews: list[AuditReviewResponse]
+
+
+class SourceLinkCreateRequest(StrictModel):
+    id: UUID
+    source_kind: Literal["note"]
+    source_id: UUID
+    target_kind: Literal["topic", "quiz_item"]
+    target_id: UUID
+    excerpt_sha256: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    excerpt_start: int | None = Field(default=None, ge=0, le=10_000_000)
+    excerpt_end: int | None = Field(default=None, ge=1, le=10_000_000)
+    source_version: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "SourceLinkCreateRequest":
+        if (self.excerpt_start is None) != (self.excerpt_end is None):
+            raise ValueError("excerpt offsets must be given together")
+        if (
+            self.excerpt_start is not None
+            and self.excerpt_end is not None
+            and self.excerpt_end <= self.excerpt_start
+        ):
+            raise ValueError("excerpt range must not be empty")
+        return self
+
+
+class SourceLinkCapabilities(StrictModel):
+    source_links_enabled: bool

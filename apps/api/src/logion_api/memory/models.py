@@ -468,3 +468,55 @@ class ReviewFinding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class KnowledgeSourceLink(Base):
+    """Navigation link from a note excerpt to a topic or recall item (ADR-0033).
+
+    Stores identifiers, a SHA-256 of the excerpt and optional offsets only; the
+    excerpt text itself stays inside the target's own content.
+    """
+
+    __tablename__ = "knowledge_source_links"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_source_link_space_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("source_kind IN ('note')", name="ck_source_link_source_kind"),
+        CheckConstraint("target_kind IN ('topic', 'quiz_item')", name="ck_source_link_target_kind"),
+        CheckConstraint(
+            "excerpt_start IS NULL OR (excerpt_start >= 0 AND excerpt_end > excerpt_start)",
+            name="ck_source_link_excerpt_range",
+        ),
+        Index("ix_source_links_workspace_source", "workspace_id", "source_id"),
+        Index("ix_source_links_workspace_target", "workspace_id", "target_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    space_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False
+    )
+    source_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    target_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    excerpt_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    excerpt_start: Mapped[int | None] = mapped_column(Integer)
+    excerpt_end: Mapped[int | None] = mapped_column(Integer)
+    source_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    updated_by: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
