@@ -16,3 +16,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0032：目标阶段生命周期（Accepted；原地修订当前计划版本，默认关闭）](0032-goal-phase-lifecycle.md)
 - [ADR-0033：知识来源链接（Accepted；只存 ID、偏移与摘要哈希，默认关闭）](0033-knowledge-source-links.md)
 - [ADR-0034：加密表单草稿（Accepted；四个长文本表单，存为 Vault 记录，不同步）](0034-encrypted-form-drafts.md)
+- [ADR-0035：离线兜底页（Accepted；只缓存公共页面及其样式，不缓存脚本与用户数据）](0035-offline-fallback-page.md)
