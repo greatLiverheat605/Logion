@@ -163,8 +163,8 @@ importers:
         specifier: 2.0.0
         version: 2.0.0
       uuid:
-        specifier: 13.0.1
-        version: 13.0.1
+        specifier: 14.0.2
+        version: 14.0.2
       yjs:
         specifier: 13.6.31
         version: 13.6.31
@@ -3027,8 +3027,8 @@ packages:
       '@types/react':
         optional: true
 
-  uuid@13.0.1:
-    resolution: {integrity: sha512-9ezox2roIft6ExBVTVqibSd5dc5/47Sw/uY6b4SjQUT2TzQ0tltNquWA46y4xPQmdZYqvnio22SgWd41M86+jw==}
+  uuid@14.0.2:
+    resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
     hasBin: true
 
   vite@8.1.5:
@@ -6343,7 +6343,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  uuid@13.0.1: {}
+  uuid@14.0.2: {}
 
   vite@8.1.5(@types/node@26.1.1):
     dependencies:
