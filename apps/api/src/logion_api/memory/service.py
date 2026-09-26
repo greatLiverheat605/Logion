@@ -13,6 +13,7 @@ from logion_api.identity.service import AuthContext
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
+    KnowledgeSourceLink,
     MasteryRecord,
     QuizAttempt,
     QuizItem,
@@ -31,6 +32,8 @@ from logion_api.memory.schemas import (
     QuizItemCreateRequest,
     ReviewFindingCreateRequest,
     ReviewFindingResolveRequest,
+    SourceLinkCapabilities,
+    SourceLinkCreateRequest,
     TopicCreateRequest,
     TopicDependencyCreateRequest,
 )
@@ -1316,3 +1319,94 @@ class MemoryService:
             )
         )
         return mastery
+
+    async def source_link_capabilities(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        request_id: str,
+    ) -> SourceLinkCapabilities:
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=False
+        )
+        return SourceLinkCapabilities(source_links_enabled=self._settings.source_links_enabled)
+
+    async def create_source_link(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: SourceLinkCreateRequest,
+        request_id: str,
+    ) -> KnowledgeSourceLink:
+        """Link a note excerpt to a topic or recall item in the same Space (ADR-0033)."""
+        from logion_api.content.models import Note
+
+        if not self._settings.source_links_enabled:
+            raise APIError(
+                code="FEATURE_DISABLED",
+                message="Source links are not enabled on this server.",
+                status_code=403,
+            )
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=True
+        )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
+        if await db.get(KnowledgeSourceLink, payload.id) is not None:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
+            )
+        source = await db.get(Note, payload.source_id)
+        target: Topic | QuizItem | None = (
+            await db.get(Topic, payload.target_id)
+            if payload.target_kind == "topic"
+            else await db.get(QuizItem, payload.target_id)
+        )
+        if (
+            source is None
+            or source.workspace_id != workspace_id
+            or source.space_id != space_id
+            or source.deleted_at is not None
+            or target is None
+            or target.workspace_id != workspace_id
+            or target.space_id != space_id
+            or target.deleted_at is not None
+        ):
+            raise APIError(
+                code="SOURCE_LINK_INVALID",
+                message="Source and target must exist in the same Space.",
+                status_code=422,
+            )
+        link = KnowledgeSourceLink(
+            id=payload.id,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            source_kind=payload.source_kind,
+            source_id=payload.source_id,
+            target_kind=payload.target_kind,
+            target_id=payload.target_id,
+            excerpt_sha256=payload.excerpt_sha256,
+            excerpt_start=payload.excerpt_start,
+            excerpt_end=payload.excerpt_end,
+            source_version=payload.source_version,
+            created_by=context.user.id,
+            updated_by=context.user.id,
+        )
+        db.add(link)
+        await db.flush()
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.source_link_created",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="knowledge_source_link",
+                target_id=link.id,
+                metadata={"space_id": str(space_id), "target_kind": payload.target_kind},
+            )
+        )
+        return link

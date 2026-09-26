@@ -35,6 +35,7 @@ const PROTECTED_ENTITY_TYPES = new Set([
   "task",
   "topic",
   "topic_dependency",
+  "source_link",
   "verification",
 ]);
 

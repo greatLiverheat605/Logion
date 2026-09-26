@@ -46,6 +46,7 @@ from logion_api.memory.schemas import (
     ReviewFindingResolveRequest,
     ReviewFindingResponse,
     ReviewScheduleResponse,
+    SourceLinkCapabilities,
     TopicCreateRequest,
     TopicDependencyCreateRequest,
     TopicDependencyResponse,
@@ -197,6 +198,25 @@ def audit_review_response(view: AuditReviewView) -> AuditReviewResponse:
         completed_at=item.completed_at,
         version=item.version,
         findings=[finding_response(finding) for finding in view.findings],
+    )
+
+
+@router.get(
+    "/source-links/capabilities",
+    response_model=SourceLinkCapabilities,
+    operation_id="source_link_capabilities",
+    responses=ERRORS,
+)
+async def source_link_capabilities(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    memory: MemoryServiceDependency,
+) -> SourceLinkCapabilities:
+    return await memory.source_link_capabilities(
+        db, context, workspace_id, space_id, request_id(request)
     )
 
 

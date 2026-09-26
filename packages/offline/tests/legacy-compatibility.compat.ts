@@ -589,3 +589,77 @@ it("retains a new deletion refused by the legacy server", async () => {
     await vault.get(local.payload.encrypted_payload_ref as string, workspace),
   ).toMatchObject({ markdown_body: "unsent draft" });
 });
+
+it("real legacy client pulls source links and their tombstones", async () => {
+  // ADR-0033: an added entity type must not break the fixed legacy client.
+  await seed();
+  await db.outbox.clear();
+  const link = "01900000-0000-7000-8000-000000000006";
+  const payload = {
+    space_id: user,
+    source_kind: "note",
+    source_id: note,
+    target_kind: "topic",
+    target_id: "01900000-0000-7000-8000-000000000007",
+    excerpt_sha256: "a".repeat(64),
+    excerpt_start: null,
+    excerpt_end: null,
+    source_version: 1,
+    created_at: now,
+  };
+  const changes = [
+    {
+      sequence: 8,
+      operation_id: crypto.randomUUID(),
+      entity_type: "source_link",
+      entity_id: link,
+      operation_type: "create",
+      server_version: 1,
+      occurred_at: now,
+      tombstone: false,
+      deleted_at: null,
+      payload,
+      payload_hash: await legacy.hashPayload(payload),
+    },
+    {
+      sequence: 9,
+      operation_id: crypto.randomUUID(),
+      entity_type: "source_link",
+      entity_id: link,
+      operation_type: "delete",
+      server_version: 2,
+      occurred_at: now,
+      tombstone: true,
+      deleted_at: now,
+      payload: {},
+      payload_hash: await legacy.hashPayload({}),
+    },
+  ];
+  const result = await new legacy.SyncClient(
+    db,
+    {
+      async push(request) {
+        await Promise.resolve();
+        return pushReply(request, []);
+      },
+      async pull(request) {
+        await Promise.resolve();
+        const response = {
+          ...emptyPull(request),
+          next_cursor: 9,
+          changes,
+        };
+        expect(oldContracts.validateSyncV1Message(response).ok).toBe(true);
+        return response;
+      },
+    },
+    vault,
+  ).synchronize(workspace, device);
+  expect(result.control).toBeNull();
+  expect(await db.syncState.get(workspace)).toMatchObject({ cursor: 9 });
+  expect(await db.entities.get([workspace, "source_link", link])).toMatchObject(
+    { deleted_at: now, server_version: 2 },
+  );
+  const local = await db.entities.get([workspace, "note", note]);
+  expect(local?.deleted_at).toBeNull();
+});

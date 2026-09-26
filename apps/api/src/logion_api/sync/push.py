@@ -53,6 +53,7 @@ from logion_api.identity.service import AuthContext
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
+    KnowledgeSourceLink,
     MasteryRecord,
     QuizAttempt,
     QuizItem,
@@ -70,6 +71,7 @@ from logion_api.memory.schemas import (
     QuizItemCreateRequest,
     ReviewFindingCreateRequest,
     ReviewFindingResolveRequest,
+    SourceLinkCreateRequest,
     TopicCreateRequest,
     TopicDependencyCreateRequest,
 )
@@ -232,6 +234,7 @@ class SyncPushService:
         register("evidence", ("verification",), "update", self._update_verification)
         register("memory", ("topic",), "create", self._create_topic)
         register("memory", ("topic_dependency",), "create", self._create_topic_dependency)
+        register("memory", ("source_link",), "create", self._create_source_link)
         register("memory", ("mastery",), "create", self._confirm_mastery)
         register("memory", ("mastery",), "update", self._confirm_mastery)
         register("memory", ("quiz_item",), "create", self._create_quiz_item)
@@ -1695,6 +1698,46 @@ class SyncPushService:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         except APIError as exc:
             return await self._api_error_result(db, request, operation, exc)
+
+    async def _create_source_link(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if operation.base_version != 0 or not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            payload = SourceLinkCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                link = await self._memory.create_source_link(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    link.version,
+                    source_link_payload(link),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
@@ -2722,6 +2765,13 @@ class SyncPushService:
                 if dependency is not None and dependency.workspace_id == request.workspace_id
                 else None
             )
+        if operation.entity_type == "source_link":
+            link = await db.get(KnowledgeSourceLink, operation.entity_id)
+            return (
+                link.version
+                if link is not None and link.workspace_id == request.workspace_id
+                else None
+            )
         if operation.entity_type == "mastery":
             mastery = await db.get(MasteryRecord, operation.entity_id)
             return (
@@ -2893,6 +2943,7 @@ class SyncPushService:
             "verification": VerificationRecord,
             "topic": Topic,
             "topic_dependency": TopicDependency,
+            "source_link": KnowledgeSourceLink,
             "mastery": MasteryRecord,
             "review_schedule": ReviewSchedule,
             "quiz_item": QuizItem,
@@ -2953,6 +3004,7 @@ class SyncPushService:
             | VerificationRecord
             | Topic
             | TopicDependency
+            | KnowledgeSourceLink
             | MasteryRecord
             | ReviewSchedule
             | QuizItem
@@ -2999,6 +3051,8 @@ class SyncPushService:
             remote = await db.get(Topic, operation.entity_id)
         elif operation.entity_type == "topic_dependency":
             remote = await db.get(TopicDependency, operation.entity_id)
+        elif operation.entity_type == "source_link":
+            remote = await db.get(KnowledgeSourceLink, operation.entity_id)
         elif operation.entity_type == "mastery":
             remote = await db.get(MasteryRecord, operation.entity_id)
         elif operation.entity_type == "review_schedule":
@@ -3092,6 +3146,8 @@ class SyncPushService:
             payload = topic_payload(remote)
         elif isinstance(remote, TopicDependency):
             payload = topic_dependency_payload(remote)
+        elif isinstance(remote, KnowledgeSourceLink):
+            payload = source_link_payload(remote)
         elif isinstance(remote, MasteryRecord):
             payload = mastery_payload(remote)
         elif isinstance(remote, ReviewSchedule):
@@ -3335,6 +3391,22 @@ def topic_dependency_payload(dependency: TopicDependency) -> dict[str, object]:
         "space_id": str(dependency.space_id),
         "prerequisite_topic_id": str(dependency.prerequisite_topic_id),
         "dependent_topic_id": str(dependency.dependent_topic_id),
+    }
+
+
+def source_link_payload(link: KnowledgeSourceLink) -> dict[str, object]:
+    # Identifiers, offsets and a digest only: the excerpt text stays in the note.
+    return {
+        "space_id": str(link.space_id),
+        "source_kind": link.source_kind,
+        "source_id": str(link.source_id),
+        "target_kind": link.target_kind,
+        "target_id": str(link.target_id),
+        "excerpt_sha256": link.excerpt_sha256,
+        "excerpt_start": link.excerpt_start,
+        "excerpt_end": link.excerpt_end,
+        "source_version": link.source_version,
+        "created_at": link.created_at.isoformat(),
     }
 
 

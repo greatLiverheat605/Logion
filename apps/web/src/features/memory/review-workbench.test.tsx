@@ -400,3 +400,52 @@ describe("mastery suggestion reason", () => {
     },
   );
 });
+
+describe("Review source links", () => {
+  const sources = [
+    {
+      id: "link-topic",
+      noteId: "note-1",
+      noteTitle: "Raft 精读",
+      spaceId: "space-1",
+      state: "valid" as const,
+      targetId: "topic-1",
+      targetKind: "topic" as const,
+    },
+    {
+      id: "link-quiz",
+      noteId: "note-2",
+      noteTitle: null,
+      spaceId: "space-1",
+      state: "deleted" as const,
+      targetId: "quiz-1",
+      targetKind: "quiz_item" as const,
+    },
+  ];
+
+  it("lists the sources of the topic and its recall items", () => {
+    const value = props(undefined);
+    value.data.sourceLinksEnabled = true;
+    value.data.sources = sources;
+    render(<ReviewWorkbench {...value} />);
+    const inspector = screen.getByTestId("review-inspector");
+    expect(within(inspector).getByText("来源有效")).toBeTruthy();
+    expect(within(inspector).getByText("知识点来自《Raft 精读》")).toBeTruthy();
+    expect(within(inspector).getByText("来源已删除")).toBeTruthy();
+    const links = within(inspector).getAllByRole("link", { name: "打开原文" });
+    // A deleted source has nothing to open.
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe(
+      "/app/records?workspace=workspace-1&space=space-1&note=note-1&source=link-topic",
+    );
+  });
+
+  it("hides the section while the server capability is off", () => {
+    const value = props(undefined);
+    value.data.sources = sources;
+    render(<ReviewWorkbench {...value} />);
+    expect(
+      within(screen.getByTestId("review-inspector")).queryByText("来源有效"),
+    ).toBeNull();
+  });
+});

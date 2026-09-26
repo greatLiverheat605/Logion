@@ -30,7 +30,7 @@ def test_manifest_captures_current_compatibility_and_verifies() -> None:
     manifest = candidate_manifest.build_manifest(ROOT, COMMIT, REPOSITORY, images(), GENERATED_AT)
 
     assert manifest["compatibility"] == {
-        "migration_head": "0041_plan_phase_archived_at",
+        "migration_head": "0042_knowledge_source_links",
         "sync_protocol": "sync-v1",
         "offline_schema": 4,
     }

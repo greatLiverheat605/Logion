@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
+import Link from "next/link";
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
 import {
   readWorkbenchContext,
@@ -40,6 +41,11 @@ import {
 import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 
 import { KnowledgeGraphView } from "./knowledge-graph-view";
+import {
+  recordsSourceHref,
+  SOURCE_LINK_STATE_LABEL,
+  type SourceLinkView,
+} from "./source-links";
 import type {
   AuditReviewPayload,
   DependencyPayload,
@@ -138,6 +144,8 @@ export interface ReviewWorkbenchProps {
     reviewFindings: ReviewFinding[];
     reviews: ReviewAudit[];
     schedules: ReviewSchedule[];
+    sourceLinksEnabled?: boolean;
+    sources?: SourceLinkView[];
     topics: ReviewTopic[];
   };
   actions: {
@@ -876,6 +884,12 @@ function ReviewInspector({
     (item) => item.payload.topic_id === topicId,
   );
   const firstQuiz = quizzes[0];
+  const quizIds = new Set(quizzes.map((item) => item.entity.entity_id));
+  const sources = (data.sources ?? []).filter(
+    (item) =>
+      (item.targetKind === "topic" && item.targetId === topicId) ||
+      (item.targetKind === "quiz_item" && quizIds.has(item.targetId)),
+  );
   return (
     <div className={styles.inspector} data-testid="review-inspector">
       <header className={styles.inspectorHeader}>
@@ -953,6 +967,49 @@ function ReviewInspector({
           </div>
         </MetaList>
       </InspectorSection>
+      {data.sourceLinksEnabled ? (
+        <InspectorSection title="来源">
+          {sources.length ? (
+            <ul className={styles.sourceList}>
+              {sources.map((source) => (
+                <li key={source.id} data-state={source.state}>
+                  <ProductTag
+                    tone={
+                      source.state === "valid"
+                        ? "good"
+                        : source.state === "modified"
+                          ? "warn"
+                          : "bad"
+                    }
+                  >
+                    {SOURCE_LINK_STATE_LABEL[source.state]}
+                  </ProductTag>
+                  <span>
+                    {source.targetKind === "topic" ? "知识点" : "回忆题"}来自
+                    {source.noteTitle ? `《${source.noteTitle}》` : "笔记"}
+                  </span>
+                  {source.state === "valid" || source.state === "modified" ? (
+                    <Link
+                      href={recordsSourceHref({
+                        linkId: source.id,
+                        noteId: source.noteId,
+                        spaceId: source.spaceId,
+                        workspaceId: context.workspaceId,
+                      })}
+                    >
+                      打开原文
+                    </Link>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.muted}>
+              这个知识点不是从笔记选段创建的，暂无来源。
+            </p>
+          )}
+        </InspectorSection>
+      ) : null}
       <InspectorSection title="继续">
         {firstQuiz ? (
           <button

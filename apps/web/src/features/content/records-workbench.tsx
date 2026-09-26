@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
+import { writeWorkbenchContext } from "@/lib/workbench-context";
 
 import {
   type FormEvent,
@@ -427,6 +428,46 @@ function NoteEditor({
   const [selectionOpen, setSelectionOpen] = useState(false);
   const selectionButton = useRef<HTMLButtonElement>(null);
   const preview = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLTextAreaElement>(null);
+  const [sourceNotice, setSourceNotice] = useState("");
+  const focus = controller.context.sourceFocus;
+  const noteId = note.entity.entity_id;
+  const focusReady =
+    focus !== null &&
+    focus.noteId === noteId &&
+    controller.viewModel.derivedItems.some(
+      (item) => item.linkId === focus.linkId,
+    );
+  const locate = useRef(controller.commands.locateSource);
+  const clearFocus = useRef(controller.commands.clearSourceFocus);
+  useEffect(() => {
+    locate.current = controller.commands.locateSource;
+    clearFocus.current = controller.commands.clearSourceFocus;
+  });
+  useEffect(() => {
+    // Jump from a Review source link: excerpt text first, then the captured
+    // range, otherwise the top of the note. Only IDs travel in the URL.
+    if (!focusReady || !focus) return;
+    let active = true;
+    const body_ = note.payload.markdown_body;
+    void locate.current(noteId, focus.linkId, body_).then((range) => {
+      if (!active) return;
+      clearFocus.current();
+      setMode("edit");
+      requestAnimationFrame(() => {
+        const field = body.current;
+        if (!field) return;
+        field.focus();
+        field.setSelectionRange(range?.start ?? 0, range?.end ?? 0);
+        setSourceNotice(
+          range ? "已定位到来源选段。" : "未找到原选段，已打开笔记开头。",
+        );
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [focus, focusReady, note.payload.markdown_body, noteId]);
   function selectPreview() {
     const selected = window.getSelection();
     if (
@@ -528,6 +569,7 @@ function NoteEditor({
             <textarea
               className={styles.editorBody}
               id="records-note-body"
+              ref={body}
               maxLength={500000}
               onChange={(event) => {
                 setMarkdownBody(event.target.value);
@@ -576,6 +618,11 @@ function NoteEditor({
             selectionButton.current?.focus();
           }}
         />
+      ) : null}
+      {sourceNotice ? (
+        <p className={styles.offlineNote} role="status">
+          {sourceNotice}
+        </p>
       ) : null}
       {!controller.context.online && changed ? (
         <p className={styles.offlineNote} role="status">
@@ -669,6 +716,38 @@ function Inspector({
             </div>
           </div>
         </InspectorSection>
+        {controller.capabilities.sourceLinksEnabled ? (
+          <InspectorSection title="由此创建">
+            {controller.viewModel.derivedItems.length ? (
+              <ul className={styles.derivedList}>
+                {controller.viewModel.derivedItems.map((item) => (
+                  <li key={item.linkId}>
+                    <ProductTag tone="info">
+                      {item.targetKind === "topic" ? "知识点" : "回忆题"}
+                    </ProductTag>
+                    <Link
+                      href={`/app/review?workspace=${encodeURIComponent(controller.context.workspaceId)}&space=${encodeURIComponent(controller.context.spaceId)}`}
+                      onClick={() => {
+                        if (item.topicId)
+                          writeWorkbenchContext("review", {
+                            selectedId: item.topicId,
+                            spaceId: controller.context.spaceId,
+                            workspaceId: controller.context.workspaceId,
+                          });
+                      }}
+                    >
+                      {item.title || "未命名"}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.inspectorHint}>
+                在正文中选择内容并点“选段用于复习”，创建的知识点和回忆题会列在这里。
+              </p>
+            )}
+          </InspectorSection>
+        ) : null}
         <InspectorSection title="对象操作">
           <div className={styles.inspectorActions}>
             <button

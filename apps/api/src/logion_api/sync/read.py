@@ -13,6 +13,7 @@ from logion_api.execution.models import StudySession, Task
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
+    KnowledgeSourceLink,
     MasteryRecord,
     QuizAttempt,
     QuizItem,
@@ -55,6 +56,7 @@ from logion_api.sync.push import (
     score_record_payload,
     self_study_payload,
     session_payload,
+    source_link_payload,
     syllabus_node_payload,
     task_payload,
     topic_dependency_payload,
@@ -177,6 +179,13 @@ class SyncReadService:
             user_id,
             {row.entity_id for row in page if row.entity_type == "topic_dependency"},
         )
+        visible_source_links = await self._visible_memory_ids(
+            db,
+            KnowledgeSourceLink,
+            state.workspace_id,
+            user_id,
+            {row.entity_id for row in page if row.entity_type == "source_link"},
+        )
         visible_mastery = await self._visible_personal_memory_ids(
             db,
             MasteryRecord,
@@ -296,7 +305,12 @@ class SyncReadService:
         visible_tombstones: set[tuple[str, UUID]] = set()
         tombstone_model: Any
         private_tombstone_types = {
-            "inbox_item", "exam", "exam_subject", "syllabus_node", "mock_exam", "score_record"
+            "inbox_item",
+            "exam",
+            "exam_subject",
+            "syllabus_node",
+            "mock_exam",
+            "score_record",
         }
         for tombstone_type, tombstone_model in (
             ("learning_goal", LearningGoal),
@@ -306,6 +320,7 @@ class SyncReadService:
             ("study_session", StudySession),
             ("inbox_item", InboxItem),
             ("topic", Topic),
+            ("source_link", KnowledgeSourceLink),
             ("exam", Exam),
             ("exam_subject", Subject),
             ("syllabus_node", SyllabusNode),
@@ -370,6 +385,7 @@ class SyncReadService:
             or (row.entity_type == "verification" and row.entity_id in visible_verifications)
             or (row.entity_type == "topic" and row.entity_id in visible_topics)
             or (row.entity_type == "topic_dependency" and row.entity_id in visible_dependencies)
+            or (row.entity_type == "source_link" and row.entity_id in visible_source_links)
             or (row.entity_type == "mastery" and row.entity_id in visible_mastery)
             or (row.entity_type == "review_schedule" and row.entity_id in visible_schedules)
             or (row.entity_type == "quiz_item" and row.entity_id in visible_quiz_items)
@@ -431,6 +447,7 @@ class SyncReadService:
             ),
             *(await self._memory_records(db, Topic, state.workspace_id, user_id)),
             *(await self._memory_records(db, TopicDependency, state.workspace_id, user_id)),
+            *(await self._memory_records(db, KnowledgeSourceLink, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, MasteryRecord, state.workspace_id, user_id)),
             *(await self._personal_memory_records(db, ReviewSchedule, state.workspace_id, user_id)),
             *(await self._memory_records(db, QuizItem, state.workspace_id, user_id)),
@@ -973,6 +990,7 @@ class SyncReadService:
         db: AsyncSession,
         model: type[Topic]
         | type[TopicDependency]
+        | type[KnowledgeSourceLink]
         | type[QuizItem]
         | type[Rubric]
         | type[ReviewRequest]
@@ -1110,7 +1128,7 @@ class SyncReadService:
     async def _memory_records(
         self,
         db: AsyncSession,
-        model: type[Topic] | type[TopicDependency] | type[QuizItem],
+        model: type[Topic] | type[TopicDependency] | type[KnowledgeSourceLink] | type[QuizItem],
         workspace_id: UUID,
         user_id: UUID,
     ) -> list[EntityRecord]:
@@ -1125,7 +1143,7 @@ class SyncReadService:
             .order_by(model.id)
         )
         items = cast(
-            list[Topic | TopicDependency | QuizItem],
+            list[Topic | TopicDependency | KnowledgeSourceLink | QuizItem],
             list((await db.scalars(statement)).all()),
         )
         records: list[EntityRecord] = []
@@ -1136,6 +1154,9 @@ class SyncReadService:
             elif isinstance(item, TopicDependency):
                 entity_type = "topic_dependency"
                 payload = topic_dependency_payload(item)
+            elif isinstance(item, KnowledgeSourceLink):
+                entity_type = "source_link"
+                payload = source_link_payload(item)
             else:
                 entity_type = "quiz_item"
                 payload = quiz_item_payload(item)

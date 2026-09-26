@@ -14,6 +14,7 @@ from logion_api.identity.service import AuthContext
 from logion_api.knowledge_space.models import KnowledgeCitation
 from logion_api.memory.models import (
     ErrorPattern,
+    KnowledgeSourceLink,
     MasteryRecord,
     QuizAttempt,
     QuizItem,
@@ -130,6 +131,22 @@ async def deletion_scope(
             destination.extend((child_type, child) for child in children)
     if entity_type == "note":
         notes = [root]
+    if entity_type == "topic":
+        # Source links are navigation aids (ADR-0033): they follow their target.
+        deleted.extend(
+            ("source_link", link)
+            for link in await db.scalars(
+                select(KnowledgeSourceLink)
+                .where(
+                    KnowledgeSourceLink.workspace_id == workspace_id,
+                    KnowledgeSourceLink.target_kind == "topic",
+                    KnowledgeSourceLink.target_id == root.id,
+                    KnowledgeSourceLink.deleted_at.is_(None),
+                )
+                .order_by(KnowledgeSourceLink.id)
+                .with_for_update()
+            )
+        )
     if entity_type == "exam":
         for kind, child_model, parent_field, parent_ids in (
             ("exam_subject", Subject, Subject.exam_id, [root.id]),

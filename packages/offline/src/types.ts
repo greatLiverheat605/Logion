@@ -78,6 +78,7 @@ export interface ProtectedMutationInput extends LocalMutationInput {
     | "task"
     | "topic"
     | "topic_dependency"
+    | "source_link"
     | "verification";
 }
 
