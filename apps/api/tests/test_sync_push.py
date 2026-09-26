@@ -153,7 +153,11 @@ def test_push_handlers_are_registered_by_entity_family() -> None:
 
     expected_operations = {
         "workspace": {("space", "create")},
-        "planning": {("learning_goal", "create"), ("learning_goal", "delete")},
+        "planning": {
+            ("learning_goal", "create"),
+            ("learning_goal", "delete"),
+            ("learning_goal", "update"),
+        },
         "execution": {
             ("task", "create"),
             ("task", "update"),

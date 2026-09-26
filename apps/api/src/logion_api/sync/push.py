@@ -75,7 +75,7 @@ from logion_api.memory.schemas import (
 )
 from logion_api.memory.service import MemoryService
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
-from logion_api.planning.schemas import GoalPlanCreateRequest
+from logion_api.planning.schemas import GoalPhaseRevisionRequest, GoalPlanCreateRequest
 from logion_api.planning.service import PlanningService
 from logion_api.research.models import (
     ExperimentRun,
@@ -208,6 +208,7 @@ class SyncPushService:
         register("workspace", ("space",), "create", self._create_space)
         register("planning", ("learning_goal",), "create", self._create_goal)
         register("planning", ("learning_goal",), "delete", self._delete_goal)
+        register("planning", ("learning_goal",), "update", self._update_goal)
         register("execution", ("task",), "delete", self._delete_task)
         register("content", ("note",), "delete", self._delete_note)
         register("self_study", ("inbox_item",), "delete", self._delete_entity)
@@ -743,6 +744,57 @@ class SyncPushService:
             server_version=durable.server_version,
             sequence=durable.sequence,
         )
+
+    async def _update_goal(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            if expected is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            # Clients send their full goal payload; only phases are revisable.
+            payload = GoalPhaseRevisionRequest.model_validate(
+                {"phases": raw.get("phases"), "expected_version": expected}
+            )
+            async with db.begin_nested():
+                aggregate = await self._planning.revise_phases(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    operation.entity_id,
+                    payload,
+                    request_id=request_id,
+                )
+                return await self._append_entity(
+                    db,
+                    request.workspace_id,
+                    identity,
+                    aggregate.goal.version,
+                    goal_payload(
+                        aggregate.goal, aggregate.plan, aggregate.plan_version, aggregate.phases
+                    ),
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
 
     async def _create_task(
         self,
@@ -2609,6 +2661,15 @@ class SyncPushService:
         )
         if predecessor is None:
             return operation.base_version if operation.base_version > 0 else None
+        if operation.entity_type == "learning_goal":
+            goal = await db.get(LearningGoal, operation.entity_id)
+            return (
+                goal.version
+                if goal is not None
+                and goal.workspace_id == request.workspace_id
+                and goal.deleted_at is None
+                else None
+            )
         if operation.entity_type == "task":
             task = await db.get(Task, operation.entity_id)
             if task is None or task.workspace_id != request.workspace_id:
@@ -3162,6 +3223,7 @@ def goal_payload(
                 "position": phase.position,
                 "estimated_minutes": phase.estimated_minutes,
                 "acceptance_criteria": phase.acceptance_criteria,
+                "archived_at": phase.archived_at.isoformat() if phase.archived_at else None,
             }
             for phase in phases
         ],

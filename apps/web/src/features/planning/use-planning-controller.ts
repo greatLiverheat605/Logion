@@ -39,6 +39,7 @@ import {
 } from "@/features/sync/sync-diagnostics";
 import { usePersona } from "@/features/personas/persona-context";
 import { browserApiClient, LogionApiError } from "@/lib/api/client";
+import { mutationTimestamp } from "@/lib/offline/mutation-timestamp";
 import {
   readWorkbenchContext,
   writeWorkbenchContext,
@@ -64,6 +65,16 @@ interface PlanningPhasePayload extends JsonObject {
   estimated_minutes: number;
   id: string;
   position: number;
+  title: string;
+}
+
+export interface PlanningPhaseRevision {
+  acceptance_criteria: string[];
+  archived: boolean;
+  description: string;
+  estimated_minutes: number;
+  id: string;
+  removed: boolean;
   title: string;
 }
 
@@ -296,15 +307,30 @@ function taskRecord(
   };
 }
 
+// Revisions add archived and removed markers to stored phases; older payloads lack them.
+export function phaseArchivedAt(phase: object | undefined): string | null {
+  const value = (phase as Record<string, unknown> | undefined)?.archived_at;
+  return typeof value === "string" ? value : null;
+}
+
+export function phaseRemoved(phase: object): boolean {
+  return (phase as Record<string, unknown>).removed === true;
+}
+
 export interface PlanningControllerResult {
   capabilities: {
     canCreate: boolean;
     canSync: boolean;
     canUnlock: boolean;
     canWrite: boolean;
+    phaseRevisionEnabled: boolean;
   };
   commands: {
     createGoal: (input: PlanningCreateGoalInput) => Promise<string | null>;
+    revisePhases: (
+      goalId: string,
+      phases: PlanningPhaseRevision[],
+    ) => Promise<boolean>;
     loadContext: () => Promise<void>;
     selectGoal: (goalId: string | null) => void;
     reportDeletion: (message: string) => void;
@@ -360,6 +386,7 @@ export function usePlanningController(): PlanningControllerResult {
   const [deviceId, setDeviceId] = useState("");
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>("");
   const [goals, setGoals] = useState<PlanningGoalRecord[]>([]);
+  const [phaseRevisionEnabled, setPhaseRevisionEnabled] = useState(false);
   const [tasks, setTasks] = useState<PlanningTaskRecord[]>([]);
   const [conflictCount, setConflictCount] = useState(0);
   const [syncFacts, setSyncFacts] = useState<WorkspaceSyncFacts | null>(null);
@@ -896,6 +923,99 @@ export function usePlanningController(): PlanningControllerResult {
     }
   }
 
+  async function revisePhases(
+    goalId: string,
+    phases: PlanningPhaseRevision[],
+  ): Promise<boolean> {
+    const isCurrent = operationIsCurrent();
+    const db = database.current;
+    const localVault = vault.current;
+    const selectedWorkspace = workspaceIdRef.current;
+    const selectedDevice = deviceIdRef.current;
+    const goal = goals.find((item) => item.id === goalId);
+    if (
+      session.status !== "authenticated" ||
+      !unlocked ||
+      !phaseRevisionEnabled ||
+      db === null ||
+      localVault === null ||
+      !selectedWorkspace ||
+      !selectedDevice ||
+      goal === undefined
+    ) {
+      if (isCurrent()) setStatus("当前无法修订阶段，请确认已解锁并选择目标。");
+      return false;
+    }
+    setCommandPhase("pending");
+    try {
+      const entity = (
+        await db.entities
+          .where("[workspace_id+entity_type]")
+          .equals([selectedWorkspace, "learning_goal"])
+          .toArray()
+      ).find((item) => item.entity_id === goalId && item.deleted_at === null);
+      if (entity === undefined || !isCurrent()) {
+        if (isCurrent()) setCommandPhase("idle");
+        return false;
+      }
+      // Chain after an unsynced create or revision of the same goal.
+      const pending = await db.outbox
+        .where("[workspace_id+entity_type+entity_id]")
+        .equals([selectedWorkspace, "learning_goal", goalId])
+        .last();
+      const previous = new Map(
+        goal.payload.phases.map((item) => [item.id, item]),
+      );
+      const now = new Date().toISOString();
+      await new ProtectedOfflineRepository(db, localVault).commitMutation({
+        base_version: entity.server_version,
+        client_occurred_at: now,
+        created_at: entity.created_at,
+        created_by: entity.created_by,
+        deleted_at: null,
+        device_id: selectedDevice,
+        entity_id: goalId,
+        entity_type: "learning_goal",
+        local_revision: entity.local_revision + 1,
+        operation_id: crypto.randomUUID(),
+        operation_type: "update",
+        payload: {
+          ...goal.payload,
+          phases: phases.map((item, position) => ({
+            ...item,
+            position,
+            archived_at: item.archived
+              ? (phaseArchivedAt(previous.get(item.id)) ?? now)
+              : null,
+          })),
+        },
+        protocol_version: "sync-v1",
+        updated_at: mutationTimestamp(entity, now),
+        updated_by: session.user.id,
+        workspace_id: selectedWorkspace,
+        dependencies: pending ? [pending.operation_id] : [],
+      });
+      if (!isCurrent()) return false;
+      const synchronized = await synchronizeCore(false);
+      if (!isCurrent()) return false;
+      setIssue(null);
+      setCommandPhase("success");
+      setStatus(
+        synchronized
+          ? "阶段修订已保存并同步。"
+          : "阶段修订已安全保存在本地，将在网络恢复后同步。",
+      );
+      return true;
+    } catch (error) {
+      if (!isCurrent()) return false;
+      setIssue(issueFrom(error));
+      setStatus(userMessage(error));
+      setCommandPhase("idle");
+      await refresh(db, localVault, selectedWorkspace).catch(() => undefined);
+      return false;
+    }
+  }
+
   function setWorkspaceId(nextWorkspaceId: string) {
     unlockRequest.current += 1;
     syncContext.current += 1;
@@ -940,6 +1060,29 @@ export function usePlanningController(): PlanningControllerResult {
     if (contextPhase === "ready" && workspaceId && selectedSpace)
       writeWorkbenchContext("planning", { spaceId, workspaceId });
   }, [contextPhase, selectedSpace, spaceId, workspaceId]);
+  useEffect(() => {
+    // Offline keeps the last known server capability; the server still enforces it.
+    if (!online || !workspaceId || !selectedSpace) return;
+    let active = true;
+    void browserApiClient
+      .request<{
+        phase_revision_enabled?: unknown;
+      }>(
+        `/api/v1/workspaces/${workspaceId}/spaces/${selectedSpace.id}/goals/capabilities`,
+      )
+      .then(
+        (result) => {
+          if (active)
+            setPhaseRevisionEnabled(result.phase_revision_enabled === true);
+        },
+        () => {
+          if (active) setPhaseRevisionEnabled(false);
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [online, selectedSpace, workspaceId]);
   const canWrite = !["reviewer", "viewer"].includes(
     selectedWorkspace?.role ?? "viewer",
   );
@@ -1048,9 +1191,11 @@ export function usePlanningController(): PlanningControllerResult {
       canSync: unlocked && Boolean(workspaceId && deviceId),
       canUnlock: Boolean(workspaceId && deviceId),
       canWrite,
+      phaseRevisionEnabled,
     },
     commands: {
       createGoal,
+      revisePhases,
       recoverSnapshot,
       loadContext,
       selectGoal: setSelectedGoalId,

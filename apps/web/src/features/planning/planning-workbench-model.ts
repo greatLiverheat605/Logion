@@ -1,9 +1,11 @@
 export interface PlanningPhaseInput {
   acceptance_criteria: readonly string[];
+  archived_at?: string | null;
   description: string;
   estimated_minutes: number;
   id: string;
   position: number;
+  removed?: boolean;
   title: string;
 }
 
@@ -45,6 +47,7 @@ export interface PlanningTaskRecord {
 }
 
 export interface PlanningDerivedViewModel {
+  archivedPhases: PlanningPhaseSequenceItem[];
   missingAcceptanceCriteria: number;
   phaseSequence: PlanningPhaseSequenceItem[];
   plannedMinutes: number;
@@ -56,13 +59,20 @@ export interface PlanningDerivedViewModel {
   visibleGoals: PlanningGoalRecord[];
 }
 
+export function isArchivedPhase(phase: PlanningPhaseInput): boolean {
+  return typeof phase.archived_at === "string";
+}
+
 export function buildPlanningPhaseSequence(
   phases: readonly PlanningPhaseInput[],
 ): PlanningPhaseSequenceItem[] {
-  const ordered = [...phases].sort(
-    (left, right) =>
-      left.position - right.position || left.title.localeCompare(right.title),
-  );
+  // Removed phases are pending local deletions; archived ones leave the route.
+  const ordered = phases
+    .filter((phase) => phase.removed !== true && !isArchivedPhase(phase))
+    .sort(
+      (left, right) =>
+        left.position - right.position || left.title.localeCompare(right.title),
+    );
   return ordered.map((phase, index) => ({
     ...phase,
     priorPhaseTitle: ordered[index - 1]?.title ?? null,
@@ -91,6 +101,10 @@ export function derivePlanningViewModel({
   const phaseSequence = buildPlanningPhaseSequence(
     selectedGoal?.payload.phases ?? [],
   );
+  const archivedPhases = (selectedGoal?.payload.phases ?? [])
+    .filter((phase) => phase.removed !== true && isArchivedPhase(phase))
+    .sort((left, right) => left.position - right.position)
+    .map((phase) => ({ ...phase, priorPhaseTitle: null }));
   const visibleTasks = tasks
     .filter(
       (task) =>
@@ -99,7 +113,7 @@ export function derivePlanningViewModel({
     )
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const tasksByPhase = Object.fromEntries(
-    phaseSequence.map((phase) => [
+    [...phaseSequence, ...archivedPhases].map((phase) => [
       phase.id,
       visibleTasks.filter((task) => task.payload.phase_id === phase.id),
     ]),
@@ -120,6 +134,7 @@ export function derivePlanningViewModel({
     : [];
 
   return {
+    archivedPhases,
     missingAcceptanceCriteria,
     phaseSequence,
     plannedMinutes: phaseSequence.reduce(

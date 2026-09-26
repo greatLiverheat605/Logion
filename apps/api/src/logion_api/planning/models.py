@@ -144,4 +144,5 @@ class PlanPhase(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     estimated_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     acceptance_criteria: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
