@@ -123,3 +123,8 @@ export function useSession(): SessionContextValue {
   }
   return value;
 }
+
+/** For optional features such as form drafts: null outside the provider. */
+export function useOptionalSession(): SessionContextValue | null {
+  return useContext(SessionContext);
+}

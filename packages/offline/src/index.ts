@@ -17,6 +17,17 @@ export {
 } from "./resilience";
 export { OfflineVault } from "./vault";
 export {
+  clearFormDrafts,
+  FORM_DRAFT_KINDS,
+  FORM_DRAFT_TTL_MS,
+  FormDraftStore,
+  formDraftId,
+  isFormDraftId,
+  type FormDraft,
+  type FormDraftKind,
+  type FormDraftScope,
+} from "./form-drafts";
+export {
   noteDocumentStateId,
   YjsNoteRepository,
   type YjsNoteCommitInput,

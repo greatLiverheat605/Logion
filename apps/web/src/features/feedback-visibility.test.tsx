@@ -24,11 +24,13 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/features/auth/session-provider", () => ({
+  useOptionalSession: () => null,
   useSession: () => ({
     state: { status: "authenticated", user: { id: "user-1" } },
   }),
 }));
 vi.mock("@/features/offline/vault-session-provider", () => ({
+  useOptionalVaultSession: () => null,
   useVaultSession: () => mocks.vaultSession,
 }));
 vi.mock("@logion/offline", async (importOriginal) => {

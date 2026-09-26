@@ -236,3 +236,8 @@ export function useVaultSession(): VaultSessionContextValue {
   }
   return value;
 }
+
+/** For optional features such as form drafts: null outside the provider. */
+export function useOptionalVaultSession(): VaultSessionContextValue | null {
+  return useContext(VaultSessionContext);
+}

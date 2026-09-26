@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { clearFormDraftsForUser } from "@/features/offline/form-draft-cleanup";
 import { browserApiClient } from "@/lib/api/client";
 import { clearWorkbenchContexts } from "@/lib/workbench-context";
 
@@ -33,7 +34,10 @@ export function LogoutButton() {
       ) {
         throw new Error("Session verification unavailable");
       }
-      if (session.status === "authenticated") await authApi.logout();
+      if (session.status === "authenticated") {
+        await clearFormDraftsForUser(session.user.id);
+        await authApi.logout();
+      }
       clearWorkbenchContexts();
       window.location.assign("/auth/login");
     } catch {
