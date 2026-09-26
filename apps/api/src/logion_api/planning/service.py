@@ -10,7 +10,11 @@ from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.service import AuthContext
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
-from logion_api.planning.schemas import GoalPlanCreateRequest
+from logion_api.planning.schemas import (
+    GoalPhaseRevisionRequest,
+    GoalPlanCreateRequest,
+    PlanningCapabilities,
+)
 from logion_api.workspaces.models import Space
 from logion_api.workspaces.permissions import Permission
 from logion_api.workspaces.service import WorkspaceService
@@ -333,5 +337,177 @@ class PlanningService:
                 target_id=plan.id,
                 metadata={"version_number": version.version_number, "phase_count": len(phases)},
             )
+        )
+        return GoalPlanAggregate(goal, plan, version, phases)
+
+    async def capabilities(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        *,
+        request_id: str,
+    ) -> PlanningCapabilities:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        return PlanningCapabilities(
+            phase_revision_enabled=self._settings.planning_phase_revision_enabled
+        )
+
+    async def revise_phases(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        goal_id: UUID,
+        payload: GoalPhaseRevisionRequest,
+        *,
+        request_id: str,
+    ) -> GoalPlanAggregate:
+        """Append, edit, reorder, archive or remove phases of the current plan version."""
+        from logion_api.execution.models import Task
+
+        if not self._settings.planning_phase_revision_enabled:
+            raise APIError(
+                code="FEATURE_DISABLED",
+                message="Phase revision is not enabled on this server.",
+                status_code=403,
+            )
+        await self._resolve_writable_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        goal = await db.scalar(
+            select(LearningGoal)
+            .where(
+                LearningGoal.id == goal_id,
+                LearningGoal.workspace_id == workspace_id,
+                LearningGoal.space_id == space_id,
+                LearningGoal.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if goal is None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if goal.version != payload.expected_version:
+            raise self.conflict("The goal changed before the phase revision.")
+        plan = await db.scalar(
+            select(LearningPlan).where(LearningPlan.goal_id == goal.id).with_for_update()
+        )
+        version = (
+            await db.scalar(
+                select(PlanVersion)
+                .where(PlanVersion.plan_id == plan.id)
+                .order_by(PlanVersion.version_number.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            if plan is not None
+            else None
+        )
+        if plan is None or version is None:
+            raise self.conflict("The learning plan is incomplete.")
+        current = {
+            phase.id: phase
+            for phase in (
+                await db.scalars(
+                    select(PlanPhase)
+                    .where(PlanPhase.plan_version_id == version.id)
+                    .with_for_update()
+                )
+            ).all()
+        }
+        requested = {phase.id for phase in payload.phases}
+        if not set(current) <= requested:
+            raise APIError(
+                code="PLANNING_PHASE_MISSING",
+                message="Every existing phase must be kept, archived or removed explicitly.",
+                status_code=422,
+            )
+        new_ids = [phase.id for phase in payload.phases if phase.id not in current]
+        if any(phase.removed for phase in payload.phases if phase.id not in current):
+            raise APIError(
+                code="PLANNING_PHASE_INVALID",
+                message="A new phase cannot be removed.",
+                status_code=422,
+            )
+        if new_ids and await db.scalar(
+            select(PlanPhase.id).where(PlanPhase.id.in_(new_ids)).limit(1)
+        ):
+            raise self.conflict("A supplied phase identifier already exists.")
+        removed_ids = [phase.id for phase in payload.phases if phase.removed]
+        if removed_ids:
+            referenced = await db.scalar(
+                select(func.count(Task.id)).where(Task.phase_id.in_(removed_ids))
+            )
+            if referenced:
+                raise APIError(
+                    code="PLANNING_PHASE_REFERENCED",
+                    message="A phase referenced by tasks can only be archived.",
+                    status_code=409,
+                )
+        # Positions are unique per version; move kept rows out of the way first.
+        for phase in current.values():
+            phase.position += 1000
+        await db.flush()
+        for identifier in removed_ids:
+            await db.delete(current[identifier])
+        await db.flush()
+        now = utc_now()
+        kept = [phase for phase in payload.phases if not phase.removed]
+        counts = {"added": 0, "updated": 0, "archived": 0, "removed": len(removed_ids)}
+        for position, item in enumerate(kept):
+            row = current.get(item.id)
+            if row is None:
+                row = PlanPhase(
+                    id=item.id,
+                    workspace_id=workspace_id,
+                    plan_version_id=version.id,
+                    position=position,
+                )
+                db.add(row)
+                counts["added"] += 1
+            else:
+                counts["updated"] += 1
+            row.title = item.title
+            row.description = item.description
+            row.position = position
+            row.estimated_minutes = item.estimated_minutes
+            row.acceptance_criteria = item.acceptance_criteria
+            if item.archived and row.archived_at is None:
+                row.archived_at = now
+            elif not item.archived:
+                row.archived_at = None
+            if item.archived:
+                counts["archived"] += 1
+        await db.flush()
+        goal.version += 1
+        goal.updated_at = now
+        goal.updated_by = context.user.id
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="planning.phase_revised",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="learning_goal",
+                target_id=goal.id,
+                metadata={"space_id": str(space_id), **counts},
+            )
+        )
+        await db.flush()
+        phases = list(
+            (
+                await db.scalars(
+                    select(PlanPhase)
+                    .where(PlanPhase.plan_version_id == version.id)
+                    .order_by(PlanPhase.position)
+                )
+            ).all()
         )
         return GoalPlanAggregate(goal, plan, version, phases)

@@ -70,6 +70,77 @@ test("Planning restores the selected Space after a reload in the same tab", asyn
   ).toContainText(spaceName);
 });
 
+test("Planning revises the route of an existing goal", async ({
+  accountState,
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const marker = `Route-${Date.now()}`;
+  await page.goto("/app/planning");
+  await waitForWorkbenchReady(page, "/app/planning");
+  const unlockTrigger = page.getByRole("button", {
+    exact: true,
+    name: "解锁本地资料",
+  });
+  if (await unlockTrigger.isVisible()) {
+    await unlockTrigger.click();
+    const unlockSheet = page.getByRole("dialog", { name: "解锁本地资料" });
+    await unlockSheet
+      .getByLabel("本地口令")
+      .fill(
+        process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() ||
+          accountState.password,
+      );
+    await unlockSheet.getByRole("button", { name: "解锁本地资料" }).click();
+    await expect(unlockSheet).toHaveCount(0);
+  }
+  await page.getByRole("button", { name: "新建目标" }).click();
+  const goalSheet = page.getByRole("dialog", { name: "新建目标" });
+  await goalSheet.getByLabel("目标名称").fill(`${marker} 目标`);
+  await goalSheet.getByLabel("可验收成果").fill("路线修订验收");
+  await goalSheet.getByLabel("阶段名称").fill(`${marker} 第一阶段`);
+  await goalSheet.getByLabel("预计分钟").fill("60");
+  await goalSheet.getByLabel("验收标准").fill("第一阶段完成");
+  await goalSheet.getByRole("button", { name: "保存目标" }).click();
+  await expect(goalSheet).toHaveCount(0);
+  await expect(
+    page.getByText("目标与首个阶段已保存并同步。").first(),
+  ).toBeVisible();
+
+  const stages = page.getByTestId("planning-stages");
+  const edit = stages.getByRole("button", { name: "编辑路线", exact: true });
+  await expect(edit).toBeEnabled();
+  await edit.click();
+  const routeSheet = page.getByRole("dialog", { name: "编辑路线" });
+  await routeSheet.getByRole("button", { name: "追加阶段" }).click();
+  await routeSheet.getByLabel("阶段名称").last().fill(`${marker} 前置阶段`);
+  await routeSheet.getByLabel("验收标准（每行一条）").last().fill("前置完成");
+  // Reorder with the keyboard, not by dragging.
+  await routeSheet
+    .getByRole("button", { name: `上移 ${marker} 前置阶段` })
+    .focus();
+  await page.keyboard.press("Enter");
+  await routeSheet.getByRole("button", { name: "保存路线" }).click();
+  await expect(routeSheet).toHaveCount(0);
+  await expect(page.getByText("阶段修订已保存并同步。").first()).toBeVisible();
+  // Count route phases only; each phase also lists its acceptance criteria.
+  const routePhases = page
+    .getByTestId("planning-dependencies")
+    .locator(":scope > li");
+  await expect(routePhases).toHaveCount(2);
+  await expect(routePhases.first()).toContainText(`${marker} 前置阶段`);
+
+  await edit.click();
+  await routeSheet
+    .getByRole("button", { name: `归档 ${marker} 第一阶段` })
+    .click();
+  await routeSheet.getByRole("button", { name: "保存路线" }).click();
+  await expect(routeSheet).toHaveCount(0);
+  await expect(routePhases).toHaveCount(1);
+  await expect(stages.getByText("已归档阶段（1）")).toBeVisible();
+  await expect(edit).toBeFocused();
+});
+
 test("Planning completes real goal, task and offline sync workflows", async ({
   accountState,
   page,

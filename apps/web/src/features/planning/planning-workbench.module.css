@@ -774,3 +774,57 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.archivedPhases {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0 0.8rem 0.8rem;
+  list-style: none;
+}
+
+.archivedPhases li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.routeEditor {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.routeEditorItem {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.routeEditorItem[data-state="archived"] {
+  background: var(--bg-muted);
+}
+
+.routeEditorItem[data-state="removed"] {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+.routeEditorItem small {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.routeEditorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}

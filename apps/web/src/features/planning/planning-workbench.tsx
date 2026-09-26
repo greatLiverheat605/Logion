@@ -24,8 +24,14 @@ import {
 } from "@/components/product/workbench";
 
 import styles from "./planning-workbench.module.css";
-import type { PlanningGoalRecord } from "./planning-workbench-model";
-import type { PlanningControllerResult } from "./use-planning-controller";
+import {
+  isArchivedPhase,
+  type PlanningGoalRecord,
+} from "./planning-workbench-model";
+import type {
+  PlanningControllerResult,
+  PlanningPhaseRevision,
+} from "./use-planning-controller";
 
 const TASK_STATUS: Readonly<Record<string, string>> = {
   backlog: "待规划",
@@ -214,23 +220,26 @@ function PhaseRoute({
           <h2>阶段与路线顺序</h2>
           <p>position 仅表示路线顺序，不代表强依赖。</p>
         </div>
-        <WorkbenchTooltip content="当前 sync-v1 合同不支持在既有目标上追加阶段">
-          <span>
-            <button
-              aria-label="新建阶段，当前能力不可用"
-              className={styles.sectionAction}
-              disabled
-              type="button"
-            >
-              <AppIcon name="plus" size={14} />
-              新建阶段
-            </button>
-            <p>
-              当前版本手动创建每目标限 1
-              个阶段；模板可包含多个阶段，新增阶段暂未开放。
-            </p>
-          </span>
-        </WorkbenchTooltip>
+        {controller.capabilities.phaseRevisionEnabled ? (
+          <RouteEditorSheet controller={controller} />
+        ) : (
+          <WorkbenchTooltip content="服务端尚未开启阶段编辑">
+            <span>
+              <button
+                aria-label="编辑路线，服务端尚未开启"
+                className={styles.sectionAction}
+                disabled
+                type="button"
+              >
+                <AppIcon name="plus" size={14} />
+                编辑路线
+              </button>
+              <p>
+                服务端开启阶段编辑后，可追加、修改、重排和归档阶段；模板仍可包含多个阶段。
+              </p>
+            </span>
+          </WorkbenchTooltip>
+        )}
       </header>
       <ol className={styles.phaseRoute} data-testid="planning-dependencies">
         {controller.viewModel.phaseSequence.map((phase, index) => {
@@ -287,7 +296,309 @@ function PhaseRoute({
           );
         })}
       </ol>
+      {controller.viewModel.archivedPhases.length ? (
+        <details className={styles.secondaryFields}>
+          <summary>
+            已归档阶段（{controller.viewModel.archivedPhases.length}）
+          </summary>
+          <ul className={styles.archivedPhases}>
+            {controller.viewModel.archivedPhases.map((phase) => (
+              <li key={phase.id}>
+                <strong>{phase.title}</strong>
+                <small>
+                  {(controller.viewModel.tasksByPhase[phase.id] ?? []).length}{" "}
+                  个任务 · 已归档
+                </small>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </section>
+  );
+}
+
+type RouteDraftPhase = PlanningPhaseRevision & {
+  criteriaText: string;
+  isNew: boolean;
+};
+
+function RouteEditorSheet({
+  controller,
+}: Readonly<{ controller: PlanningControllerResult }>) {
+  const goal = controller.viewModel.selectedGoal;
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<RouteDraftPhase[]>([]);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const canEdit =
+    controller.capabilities.canWrite &&
+    controller.context.unlocked &&
+    goal !== undefined;
+  const taskCount = (phaseId: string) =>
+    controller.viewModel.tasks.filter(
+      (task) => task.payload.phase_id === phaseId,
+    ).length;
+
+  function start(next: boolean) {
+    setOpen(next);
+    if (!next || !goal) return;
+    setError("");
+    setDraft(
+      [...goal.payload.phases]
+        .filter((phase) => phase.removed !== true)
+        .sort((left, right) => left.position - right.position)
+        .map((phase) => ({
+          acceptance_criteria: [...phase.acceptance_criteria],
+          archived: isArchivedPhase(phase),
+          criteriaText: phase.acceptance_criteria.join("\n"),
+          description: phase.description,
+          estimated_minutes: phase.estimated_minutes,
+          id: phase.id,
+          isNew: false,
+          removed: false,
+          title: phase.title,
+        })),
+    );
+  }
+
+  function update(index: number, patch: Partial<RouteDraftPhase>) {
+    setDraft((items) =>
+      items.map((item, position) =>
+        position === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
+  function move(index: number, offset: -1 | 1) {
+    setDraft((items) => {
+      const target = index + offset;
+      if (target < 0 || target >= items.length) return items;
+      const next = [...items];
+      const [moved] = next.splice(index, 1);
+      if (moved) next.splice(target, 0, moved);
+      return next;
+    });
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!goal || pending) return;
+    const phases = draft
+      .filter((item) => !(item.isNew && item.removed))
+      .map((item) => ({
+        acceptance_criteria: [
+          ...new Set(
+            item.criteriaText
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean),
+          ),
+        ],
+        archived: item.archived,
+        description: item.description.trim(),
+        estimated_minutes: Math.max(0, Math.round(item.estimated_minutes)),
+        id: item.id,
+        removed: item.removed,
+        title: item.title.trim(),
+      }));
+    const active = phases.filter((item) => !item.archived && !item.removed);
+    if (!active.length) {
+      setError("至少保留一个未归档的阶段。");
+      return;
+    }
+    if (
+      phases.some(
+        (item) =>
+          !item.removed &&
+          (!item.title || item.acceptance_criteria.length === 0),
+      )
+    ) {
+      setError("每个阶段都需要名称和至少一条验收标准。");
+      return;
+    }
+    setError("");
+    setPending(true);
+    const saved = await controller.commands.revisePhases(goal.id, phases);
+    setPending(false);
+    if (saved) setOpen(false);
+    else setError("阶段修订未保存，请查看页面状态后重试。");
+  }
+
+  const formId = useId();
+  return (
+    <WorkbenchSheet
+      description="修订当前目标的阶段；有任务引用的阶段只能归档。保存后加密写入本地并同步。"
+      footer={
+        <>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setOpen(false)}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存" : "保存路线"}
+          </button>
+        </>
+      }
+      onOpenChange={start}
+      open={open}
+      title="编辑路线"
+      trigger={
+        <button
+          className={styles.sectionAction}
+          disabled={!canEdit}
+          type="button"
+        >
+          <AppIcon name="plus" size={14} />
+          编辑路线
+        </button>
+      }
+    >
+      <form className={styles.sheetForm} id={formId} onSubmit={save}>
+        <ol className={styles.routeEditor}>
+          {draft.map((item, index) => {
+            const references = item.isNew ? 0 : taskCount(item.id);
+            const label = item.title || `阶段 ${index + 1}`;
+            return (
+              <li
+                className={styles.routeEditorItem}
+                data-state={
+                  item.removed
+                    ? "removed"
+                    : item.archived
+                      ? "archived"
+                      : "active"
+                }
+                key={item.id}
+              >
+                <label>
+                  <span>阶段名称</span>
+                  <input
+                    disabled={item.removed}
+                    maxLength={160}
+                    onChange={(event) =>
+                      update(index, { title: event.target.value })
+                    }
+                    value={item.title}
+                  />
+                </label>
+                <div className={styles.fieldGrid}>
+                  <label>
+                    <span>预计分钟</span>
+                    <input
+                      disabled={item.removed}
+                      max={1000000}
+                      min={0}
+                      onChange={(event) =>
+                        update(index, {
+                          estimated_minutes: Number(event.target.value),
+                        })
+                      }
+                      type="number"
+                      value={item.estimated_minutes}
+                    />
+                  </label>
+                  <label>
+                    <span>验收标准（每行一条）</span>
+                    <textarea
+                      disabled={item.removed}
+                      onChange={(event) =>
+                        update(index, { criteriaText: event.target.value })
+                      }
+                      rows={2}
+                      value={item.criteriaText}
+                    />
+                  </label>
+                </div>
+                <div className={styles.routeEditorActions}>
+                  <button
+                    aria-label={`上移 ${label}`}
+                    className={styles.secondaryButton}
+                    disabled={index === 0}
+                    onClick={() => move(index, -1)}
+                    type="button"
+                  >
+                    上移
+                  </button>
+                  <button
+                    aria-label={`下移 ${label}`}
+                    className={styles.secondaryButton}
+                    disabled={index === draft.length - 1}
+                    onClick={() => move(index, 1)}
+                    type="button"
+                  >
+                    下移
+                  </button>
+                  <button
+                    aria-label={`${item.archived ? "恢复" : "归档"} ${label}`}
+                    aria-pressed={item.archived}
+                    className={styles.secondaryButton}
+                    disabled={item.removed}
+                    onClick={() => update(index, { archived: !item.archived })}
+                    type="button"
+                  >
+                    {item.archived ? "恢复" : "归档"}
+                  </button>
+                  <button
+                    aria-label={`${item.removed ? "撤销删除" : "删除"} ${label}`}
+                    className={styles.secondaryButton}
+                    disabled={references > 0}
+                    onClick={() => update(index, { removed: !item.removed })}
+                    title={
+                      references > 0
+                        ? `有 ${references} 个任务引用，只能归档`
+                        : undefined
+                    }
+                    type="button"
+                  >
+                    {item.removed ? "撤销删除" : "删除"}
+                  </button>
+                </div>
+                {references > 0 ? (
+                  <small>有 {references} 个任务引用，只能归档。</small>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+        <button
+          className={styles.secondaryButton}
+          disabled={draft.length >= 100}
+          onClick={() =>
+            setDraft((items) => [
+              ...items,
+              {
+                acceptance_criteria: [],
+                archived: false,
+                criteriaText: "",
+                description: "",
+                estimated_minutes: 60,
+                id: crypto.randomUUID(),
+                isNew: true,
+                removed: false,
+                title: "",
+              },
+            ])
+          }
+          type="button"
+        >
+          追加阶段
+        </button>
+        {error ? (
+          <p className="form-message form-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </form>
+    </WorkbenchSheet>
   );
 }
 
@@ -437,7 +748,7 @@ function PlanningInspector({
       </InspectorSection>
       <InspectorSection title="合同边界">
         <p className={styles.inspectorProse}>
-          当前版本只回显阶段顺序；追加阶段、强依赖与发布操作需要服务端读写合同支持后才会开放。
+          阶段编辑开启后可追加、修改、重排和归档阶段；强依赖与发布操作需要服务端读写合同支持后才会开放。
         </p>
       </InspectorSection>
       <EntityDeleteAction

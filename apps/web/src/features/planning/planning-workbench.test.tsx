@@ -1,10 +1,22 @@
+/** @vitest-environment jsdom */
+
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ProductOperationalState } from "@/components/product/product-workbench-state";
 
 import { PlanningWorkbench } from "./planning-workbench";
 import type { PlanningControllerResult } from "./use-planning-controller";
+
+afterEach(cleanup);
 
 function controller(
   operationalState: ProductOperationalState | null = null,
@@ -37,9 +49,11 @@ function controller(
       canSync: true,
       canUnlock: true,
       canWrite: true,
+      phaseRevisionEnabled: true,
     },
     commands: {
       createGoal: vi.fn(),
+      revisePhases: vi.fn(),
       loadContext: vi.fn(),
       selectGoal: vi.fn(),
       reportDeletion: vi.fn(),
@@ -91,6 +105,7 @@ function controller(
       ],
     },
     viewModel: {
+      archivedPhases: [],
       conflictCount: 0,
       missingAcceptanceCriteria: 0,
       phaseSequence: [
@@ -159,13 +174,40 @@ describe("Planning workbench", () => {
     expect(html).not.toContain('id="planning-new-goal"');
   });
 
-  it("keeps unsupported phase mutation visible and disabled", () => {
-    const html = renderToStaticMarkup(
-      <PlanningWorkbench controller={controller()} />,
-    );
+  it("keeps route editing visible and disabled until the server enables it", () => {
+    const value = controller();
+    value.capabilities.phaseRevisionEnabled = false;
+    const html = renderToStaticMarkup(<PlanningWorkbench controller={value} />);
 
-    expect(html).toContain("新建阶段，当前能力不可用");
+    expect(html).toContain("编辑路线，服务端尚未开启");
     expect(html).toContain("disabled");
-    expect(html).toContain("追加阶段、强依赖与发布操作需要服务端读写合同支持");
+    expect(html).toContain("强依赖与发布操作需要服务端读写合同支持");
+  });
+
+  it("opens the route editor and revises phases in the chosen order", async () => {
+    const value = controller();
+    value.commands.revisePhases = vi.fn(async () => true);
+    render(<PlanningWorkbench controller={value} />);
+    fireEvent.click(screen.getByRole("button", { name: "编辑路线" }));
+    const sheet = await screen.findByRole("dialog", { name: "编辑路线" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "追加阶段" }));
+    const names = within(sheet).getAllByLabelText("阶段名称");
+    fireEvent.change(names[names.length - 1]!, {
+      target: { value: "新增阶段" },
+    });
+    const criteria = within(sheet).getAllByLabelText("验收标准（每行一条）");
+    fireEvent.change(criteria[criteria.length - 1]!, {
+      target: { value: "完成检查" },
+    });
+    fireEvent.click(
+      within(sheet).getByRole("button", { name: "上移 新增阶段" }),
+    );
+    fireEvent.click(within(sheet).getByRole("button", { name: "保存路线" }));
+    await waitFor(() => expect(value.commands.revisePhases).toHaveBeenCalled());
+    const [, phases] = vi.mocked(value.commands.revisePhases).mock.calls[0]!;
+    expect(phases.map((phase) => phase.title).at(-2)).toBe("新增阶段");
+    expect(phases.every((phase) => phase.acceptance_criteria.length > 0)).toBe(
+      true,
+    );
   });
 });

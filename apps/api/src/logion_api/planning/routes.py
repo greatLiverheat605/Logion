@@ -20,6 +20,7 @@ from logion_api.planning.schemas import (
     GoalPlanListResponse,
     GoalPlanResponse,
     PhaseResponse,
+    PlanningCapabilities,
     PlanPublishRequest,
 )
 from logion_api.planning.service import GoalPlanAggregate
@@ -157,6 +158,25 @@ async def list_goal_plans(
         request_id=request_id(request),
     )
     return GoalPlanListResponse(goals=[response(aggregate) for aggregate in aggregates])
+
+
+@router.get(
+    "/capabilities",
+    response_model=PlanningCapabilities,
+    operation_id="planning_capabilities",
+    responses=ERRORS,
+)
+async def planning_capabilities(
+    workspace_id: UUID,
+    space_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    planning: PlanningServiceDependency,
+) -> PlanningCapabilities:
+    return await planning.capabilities(
+        db, context, workspace_id, space_id, request_id=request_id(request)
+    )
 
 
 @router.post(

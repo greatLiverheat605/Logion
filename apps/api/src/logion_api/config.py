@@ -137,6 +137,7 @@ class Settings(BaseSettings):
     account_deletion_grace_days: int = Field(default=14, ge=1, le=30)
     exam_write_limit_per_hour: int = Field(default=300, ge=1, le=10000)
     memory_write_limit_per_hour: int = Field(default=600, ge=1, le=10000)
+    planning_phase_revision_enabled: bool = False
     workbench_custom_api_enabled: bool = False
     workbench_delete_api_enabled: bool = False
     workbench_read_limit_per_hour: int = Field(default=600, ge=1, le=10000)

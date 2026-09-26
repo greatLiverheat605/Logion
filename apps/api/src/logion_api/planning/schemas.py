@@ -94,3 +94,43 @@ class PlanPublishRequest(StrictModel):
     expected_goal_version: int = Field(ge=1)
     expected_plan_version: int = Field(ge=1)
     change_summary: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] = ""
+
+
+class PhaseRevision(StrictModel):
+    """One phase in the desired order; list position defines the phase position."""
+
+    id: UUID
+    title: Title
+    description: Description = ""
+    estimated_minutes: int = Field(ge=0, le=1_000_000)
+    acceptance_criteria: list[Criterion] = Field(min_length=1, max_length=50)
+    archived: bool = False
+    removed: bool = False
+    # Mirrors of the goal payload the client stores locally; list order and
+    # `archived` are authoritative, so these values are accepted and ignored.
+    position: int | None = Field(default=None, ge=0, le=999)
+    archived_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def unique_criteria(self) -> "PhaseRevision":
+        if len(self.acceptance_criteria) != len(set(self.acceptance_criteria)):
+            raise ValueError("acceptance criteria must be unique")
+        return self
+
+
+class GoalPhaseRevisionRequest(StrictModel):
+    expected_version: int = Field(ge=1)
+    phases: list[PhaseRevision] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_phases(self) -> "GoalPhaseRevisionRequest":
+        identifiers = [phase.id for phase in self.phases]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("phase identifiers must be unique")
+        if not any(not phase.archived and not phase.removed for phase in self.phases):
+            raise ValueError("at least one active phase must remain")
+        return self
+
+
+class PlanningCapabilities(StrictModel):
+    phase_revision_enabled: bool
