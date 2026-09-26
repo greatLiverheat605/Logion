@@ -4,7 +4,18 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { LogoutButton } from "./logout-button";
 
-const mocks = vi.hoisted(() => ({ refresh: vi.fn(), logout: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  clearDrafts: vi.fn(),
+  refresh: vi.fn(),
+  logout: vi.fn(),
+}));
+const authenticated = {
+  status: "authenticated",
+  user: { id: "01900000-0000-7000-8000-000000000001" },
+};
+vi.mock("@/features/offline/form-draft-cleanup", () => ({
+  clearFormDraftsForUser: mocks.clearDrafts,
+}));
 vi.mock("./session", () => ({
   createAuthApi: vi.fn(),
   createWebLockRefreshCoordinator: vi.fn(),
@@ -31,12 +42,17 @@ it("does not claim logout when session verification fails", async () => {
 });
 
 it("reports a failed logout and waits for an explicit retry", async () => {
-  mocks.refresh.mockResolvedValue({ status: "authenticated" });
+  mocks.refresh.mockResolvedValue(authenticated);
   mocks.logout.mockRejectedValue(new Error("network unavailable"));
   render(<LogoutButton />);
   fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
   await screen.findByRole("alert");
   expect(mocks.logout).toHaveBeenCalledTimes(1);
+  // Sealed form drafts are removed before the server session ends (ADR-0034).
+  expect(mocks.clearDrafts).toHaveBeenCalledWith(authenticated.user.id);
+  expect(mocks.clearDrafts.mock.invocationCallOrder[0]).toBeLessThan(
+    mocks.logout.mock.invocationCallOrder[0]!,
+  );
   fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
   await screen.findByRole("alert");
   expect(mocks.logout).toHaveBeenCalledTimes(2);
@@ -52,7 +68,7 @@ it("clears this tab's workbench context only after a successful logout", async (
     value: { ...originalLocation, assign },
   });
   try {
-    mocks.refresh.mockResolvedValue({ status: "authenticated" });
+    mocks.refresh.mockResolvedValue(authenticated);
     mocks.logout.mockRejectedValueOnce(new Error("network unavailable"));
     render(<LogoutButton />);
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));

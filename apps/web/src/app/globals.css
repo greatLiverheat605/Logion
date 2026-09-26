@@ -681,6 +681,27 @@ h1 {
   color: var(--text-primary);
 }
 
+.form-draft-prompt {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.form-draft-prompt p {
+  margin: 0;
+}
+
+.form-draft-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .auth-links {
   display: flex;
   flex-wrap: wrap;

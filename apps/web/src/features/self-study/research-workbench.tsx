@@ -2,6 +2,12 @@
 
 import type { components } from "@logion/contracts";
 import type { JsonObject, LocalEntity } from "@logion/offline";
+import { FormDraftPrompt } from "@/features/offline/form-draft-prompt";
+import {
+  applyFormDraft,
+  formDraftValues,
+  useFormDraft,
+} from "@/features/offline/use-form-draft";
 import {
   useMemo,
   useRef,
@@ -794,6 +800,7 @@ function UnlockSheet({
 
 function ResearchSheet({
   actions,
+  context,
   data,
   kind,
   onOpenChange,
@@ -803,6 +810,7 @@ function ResearchSheet({
   selectedClaimId,
 }: {
   actions: ResearchWorkbenchActions;
+  context: ResearchWorkbenchContext;
   data: ResearchWorkbenchData;
   kind: ResearchEntityType;
   onOpenChange: (open: boolean) => void;
@@ -825,9 +833,20 @@ function ResearchSheet({
       : kind === "metric_record"
         ? "指标是已完成运行的仅追加证据。"
         : undefined;
+  const drafted = kind === "research_claim";
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft({
+    kind: "research_claim",
+    open: open && drafted,
+    spaceId: context.spaceId,
+    workspaceId: context.workspaceId,
+  });
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     const ok = await actions.submitResearch(event, kind);
-    if (ok) onOpenChange(false);
+    if (ok) {
+      if (drafted) await draft.submitted();
+      onOpenChange(false);
+    }
   };
   const formId = `research-${kind}`;
   return (
@@ -840,8 +859,20 @@ function ResearchSheet({
       <form
         className={styles.sheetForm}
         id={formId}
+        onInput={(event) => {
+          if (drafted)
+            draft.record(formDraftValues(event.currentTarget, ["statement"]));
+        }}
         onSubmit={(event) => void submit(event)}
+        ref={formRef}
       >
+        {drafted ? (
+          <FormDraftPrompt
+            draft={draft.pending}
+            onDiscard={() => void draft.discard()}
+            onRestore={() => applyFormDraft(formRef.current, draft.restore())}
+          />
+        ) : null}
         {kind === "research_question" ? (
           <>
             <label htmlFor={`${formId}-question`}>研究问题</label>
@@ -1312,6 +1343,7 @@ export function ResearchWorkbench({
       {sheet && sheet !== "unlock" ? (
         <ResearchSheet
           actions={actions}
+          context={context}
           data={data}
           kind={sheet}
           onOpenChange={(open) => setSheet(open ? sheet : null)}

@@ -1,6 +1,12 @@
 "use client";
 import { AppConfirmModal } from "@/components/app-shell/app-confirm-modal";
 import { EntityDeleteAction } from "@/features/sync/entity-delete-action";
+import { FormDraftPrompt } from "@/features/offline/form-draft-prompt";
+import {
+  applyFormDraft,
+  formDraftValues,
+  useFormDraft,
+} from "@/features/offline/use-form-draft";
 
 import Link from "next/link";
 import { LockedDataNotice } from "@/components/product/locked-data-notice";
@@ -889,6 +895,13 @@ function NewGoalSheet({
 }>) {
   const formId = useId();
   const [pending, setPending] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft({
+    kind: "goal_create",
+    open,
+    spaceId: controller.context.spaceId,
+    workspaceId: controller.context.workspaceId,
+  });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -907,6 +920,7 @@ function NewGoalSheet({
     });
     setPending(false);
     if (!goalId) return;
+    await draft.submitted();
     form.reset();
     onOpenChange(false);
   }
@@ -951,7 +965,22 @@ function NewGoalSheet({
         </button>
       }
     >
-      <form className={styles.sheetForm} id={formId} onSubmit={submit}>
+      <form
+        className={styles.sheetForm}
+        id={formId}
+        onInput={(event) =>
+          draft.record(
+            formDraftValues(event.currentTarget, ["description", "criterion"]),
+          )
+        }
+        onSubmit={submit}
+        ref={formRef}
+      >
+        <FormDraftPrompt
+          draft={draft.pending}
+          onDiscard={() => void draft.discard()}
+          onRestore={() => applyFormDraft(formRef.current, draft.restore())}
+        />
         <label htmlFor={`${formId}-title`}>目标名称</label>
         <input
           autoFocus

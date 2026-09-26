@@ -15,3 +15,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0031：核心实体软删除与 tombstone 同步（Accepted；活跃引用阻止删除）](0031-entity-deletion.md)
 - [ADR-0032：目标阶段生命周期（Accepted；原地修订当前计划版本，默认关闭）](0032-goal-phase-lifecycle.md)
 - [ADR-0033：知识来源链接（Accepted；只存 ID、偏移与摘要哈希，默认关闭）](0033-knowledge-source-links.md)
+- [ADR-0034：加密表单草稿（Accepted；四个长文本表单，存为 Vault 记录，不同步）](0034-encrypted-form-drafts.md)

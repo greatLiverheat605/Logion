@@ -40,6 +40,12 @@ import {
 } from "@/components/product/product-workbench-state";
 import { ProductEmptyState, ProductTag } from "@/components/product/product-ui";
 
+import { FormDraftPrompt } from "@/features/offline/form-draft-prompt";
+import {
+  applyFormDraft,
+  formDraftValues,
+  useFormDraft,
+} from "@/features/offline/use-form-draft";
 import { KnowledgeGraphView } from "./knowledge-graph-view";
 import {
   recordsSourceHref,
@@ -1159,6 +1165,7 @@ function NewTopicSheet({
 
 function NewQuizSheet({
   actions,
+  context,
   onOpenChange,
   open,
   restoreFocusRef,
@@ -1166,6 +1173,7 @@ function NewQuizSheet({
   topicId,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
+  context: ReviewWorkbenchProps["context"];
   onOpenChange: (open: boolean) => void;
   open: boolean;
   restoreFocusRef: React.RefObject<HTMLElement | null>;
@@ -1173,6 +1181,13 @@ function NewQuizSheet({
   topicId: string | undefined;
 }>) {
   const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft({
+    kind: "quiz_item_explanation",
+    open,
+    spaceId: context.spaceId,
+    workspaceId: context.workspaceId,
+  });
   return (
     <WorkbenchSheet
       description="答案仅在作答提交后向本人披露，不会出现在列表响应中。"
@@ -1203,11 +1218,23 @@ function NewQuizSheet({
       <form
         className={styles.sheetForm}
         id={formId}
+        onInput={(event) =>
+          draft.record(formDraftValues(event.currentTarget, ["explanation"]))
+        }
         onSubmit={async (event) => {
           const succeeded = await actions.createQuizItem(event);
-          if (succeeded === true) onOpenChange(false);
+          if (succeeded === true) {
+            await draft.submitted();
+            onOpenChange(false);
+          }
         }}
+        ref={formRef}
       >
+        <FormDraftPrompt
+          draft={draft.pending}
+          onDiscard={() => void draft.discard()}
+          onRestore={() => applyFormDraft(formRef.current, draft.restore())}
+        />
         <label htmlFor={`${formId}-topic`}>关联知识点</label>
         <select
           defaultValue={topicId ?? topics[0]?.entity.entity_id ?? ""}
@@ -1333,17 +1360,26 @@ function DependencySheet({
 
 function AuditReviewSheet({
   actions,
+  context,
   onOpenChange,
   open,
   restoreFocusRef,
 }: Readonly<{
   actions: ReviewWorkbenchProps["actions"];
+  context: ReviewWorkbenchProps["context"];
   onOpenChange: (open: boolean) => void;
   open: boolean;
   restoreFocusRef: React.RefObject<HTMLElement | null>;
 }>) {
   const formId = useId();
   const [pending, setPending] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft({
+    kind: "audit_review_summary",
+    open,
+    spaceId: context.spaceId,
+    workspaceId: context.workspaceId,
+  });
   return (
     <WorkbenchSheet
       description="创建草稿后，再添加发现并明确完成审查。"
@@ -1380,12 +1416,24 @@ function AuditReviewSheet({
           setPending(true);
           try {
             const succeeded = await actions.createAuditReview(event);
-            if (succeeded === true) onOpenChange(false);
+            if (succeeded === true) {
+              await draft.submitted();
+              onOpenChange(false);
+            }
           } finally {
             setPending(false);
           }
         }}
+        onInput={(event) =>
+          draft.record(formDraftValues(event.currentTarget, ["summary"]))
+        }
+        ref={formRef}
       >
+        <FormDraftPrompt
+          draft={draft.pending}
+          onDiscard={() => void draft.discard()}
+          onRestore={() => applyFormDraft(formRef.current, draft.restore())}
+        />
         <label htmlFor={`${formId}-cadence`}>周期</label>
         <select defaultValue="weekly" id={`${formId}-cadence`} name="cadence">
           <option value="daily">每日</option>
@@ -1917,6 +1965,7 @@ export function ReviewWorkbench({
       />
       <NewQuizSheet
         actions={actions}
+        context={context}
         onOpenChange={setQuizOpen}
         open={quizOpen}
         restoreFocusRef={sheetReturnRef}
@@ -1932,6 +1981,7 @@ export function ReviewWorkbench({
       />
       <AuditReviewSheet
         actions={actions}
+        context={context}
         onOpenChange={setReviewOpen}
         open={reviewOpen}
         restoreFocusRef={sheetReturnRef}
