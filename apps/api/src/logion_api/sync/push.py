@@ -2822,7 +2822,9 @@ class SyncPushService:
             resource = await db.get(Resource, operation.entity_id)
             return (
                 resource.version
-                if resource is not None and resource.workspace_id == request.workspace_id
+                if resource is not None
+                and resource.workspace_id == request.workspace_id
+                and resource.research_owner_id is None
                 else None
             )
         if operation.entity_type == "evidence":
@@ -3070,6 +3072,8 @@ class SyncPushService:
         if model is None:
             return None
         remote = await db.get(model, entity_id)
+        if isinstance(remote, Resource) and remote.research_owner_id is not None:
+            return None
         if remote is None or remote.workspace_id != workspace_id:
             return None
         return cast(int, remote.version)
@@ -3201,6 +3205,8 @@ class SyncPushService:
         elif operation.entity_type == "report_snapshot":
             remote = await db.get(ReportSnapshot, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+        if isinstance(remote, Resource) and remote.research_owner_id is not None:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         remote_deleted_at = getattr(remote, "deleted_at", None)
         if remote_deleted_at is not None:

@@ -55,6 +55,17 @@ class ResearchClaim(PersonalResearch, Base):
     __tablename__ = "research_claims"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["resource_id", "workspace_id", "space_id", "user_id"],
+            [
+                "resources.id",
+                "resources.workspace_id",
+                "resources.space_id",
+                "resources.research_owner_id",
+            ],
+            name="fk_research_claim_resource_scope",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
             ["paper_id", "workspace_id", "space_id", "user_id"],
             [
                 "paper_records.id",
@@ -74,6 +85,7 @@ class ResearchClaim(PersonalResearch, Base):
         ),
     )
     paper_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    resource_id: Mapped[UUID | None] = mapped_column(Uuid)
     statement: Mapped[str] = mapped_column(Text, nullable=False)
     stance: Mapped[str] = mapped_column(String(16), nullable=False)
 

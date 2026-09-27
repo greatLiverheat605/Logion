@@ -1970,6 +1970,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Resources */
+        get: operations["research_library_list"];
+        put?: never;
+        /** Create Resource */
+        post: operations["research_library_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resource */
+        get: operations["research_library_get"];
+        /** Update Resource */
+        put: operations["research_library_update"];
+        post?: never;
+        /** Delete Resource */
+        delete: operations["research_library_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/mock-exams": {
         parameters: {
             query?: never;
@@ -3669,6 +3706,15 @@ export interface components {
              */
             type: "public-key";
         };
+        /** Author */
+        Author: {
+            /** Family */
+            family?: string | null;
+            /** Given */
+            given?: string | null;
+            /** Literal */
+            literal?: string | null;
+        };
         /** BooleanFieldDefinition */
         BooleanFieldDefinition: {
             /** Id */
@@ -3777,6 +3823,24 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** CSL */
+        CSL: {
+            /** Abstract */
+            abstract?: string | null;
+            /** Author */
+            author?: components["schemas"]["Author"][];
+            /** Container-Title */
+            "container-title"?: string | null;
+            /** Issue */
+            issue?: string | null;
+            issued?: components["schemas"]["Issued"] | null;
+            /** Language */
+            language?: string | null;
+            /** Page */
+            page?: string | null;
+            /** Volume */
+            volume?: string | null;
         };
         /** CalendarFeedCreate */
         CalendarFeedCreate: {
@@ -4728,6 +4792,20 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** FileLocator */
+        FileLocator: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "zotero_webdav" | "logion_webdav" | "url";
+            /** Path */
+            path: string;
+            /** Sha256 */
+            sha256?: string | null;
+            /** Size */
+            size?: number | null;
+        };
         /** @enum {string} */
         FixedWorkbenchId: "fixed.learning" | "fixed.research" | "fixed.exam" | "fixed.mentor";
         /** GoalPlanCreateRequest */
@@ -5062,6 +5140,11 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** Issued */
+        Issued: {
+            /** Date-Parts */
+            "date-parts": number[][];
+        };
         JsonScalar: string | components["schemas"]["SafeInteger"] | components["schemas"]["StrictFiniteFloat"] | boolean | null;
         /** KnowledgeCitationCreateRequest */
         KnowledgeCitationCreateRequest: {
@@ -5339,6 +5422,164 @@ export interface components {
          * @enum {string}
          */
         KnowledgeTargetType: "topic" | "quiz_item" | "research_claim" | "note";
+        /** LibraryCreate */
+        LibraryCreate: {
+            /** Arxiv Id */
+            arxiv_id?: string | null;
+            /** Citation Key */
+            citation_key?: string | null;
+            csl?: components["schemas"]["CSL"];
+            /** Doi */
+            doi?: string | null;
+            file_locator?: components["schemas"]["FileLocator"] | null;
+            /** Pmid */
+            pmid?: string | null;
+            /** Read At */
+            read_at?: string | null;
+            /**
+             * Reading Status
+             * @default unread
+             * @enum {string}
+             */
+            reading_status: "unread" | "skimmed" | "reading" | "close_read" | "archived";
+            /**
+             * Resource Type
+             * @default paper
+             * @enum {string}
+             */
+            resource_type: "link" | "pdf_index" | "paper" | "book" | "preprint" | "web";
+            /** Source Url */
+            source_url?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Title */
+            title: string;
+            /** Zotero Item Key */
+            zotero_item_key?: string | null;
+            /** Zotero Library Id */
+            zotero_library_id?: string | null;
+            /** Zotero Version */
+            zotero_version?: number | null;
+        };
+        /** LibraryDelete */
+        LibraryDelete: {
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** LibraryPage */
+        LibraryPage: {
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Resources */
+            resources: components["schemas"]["LibraryResource"][];
+        };
+        /** LibraryResource */
+        LibraryResource: {
+            /** Arxiv Id */
+            arxiv_id?: string | null;
+            /** Citation Key */
+            citation_key?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            csl?: components["schemas"]["CSL"];
+            /** Doi */
+            doi?: string | null;
+            file_locator?: components["schemas"]["FileLocator"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Pmid */
+            pmid?: string | null;
+            /** Read At */
+            read_at?: string | null;
+            /**
+             * Reading Status
+             * @default unread
+             * @enum {string}
+             */
+            reading_status: "unread" | "skimmed" | "reading" | "close_read" | "archived";
+            /**
+             * Resource Type
+             * @default paper
+             * @enum {string}
+             */
+            resource_type: "link" | "pdf_index" | "paper" | "book" | "preprint" | "web";
+            /** Source Url */
+            source_url?: string | null;
+            /**
+             * Space Id
+             * Format: uuid
+             */
+            space_id: string;
+            /** Tags */
+            tags?: string[];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Zotero Item Key */
+            zotero_item_key?: string | null;
+            /** Zotero Library Id */
+            zotero_library_id?: string | null;
+            /** Zotero Version */
+            zotero_version?: number | null;
+        };
+        /** LibraryUpdate */
+        LibraryUpdate: {
+            /** Arxiv Id */
+            arxiv_id?: string | null;
+            /** Citation Key */
+            citation_key?: string | null;
+            csl?: components["schemas"]["CSL"];
+            /** Doi */
+            doi?: string | null;
+            /** Expected Version */
+            expected_version: number;
+            file_locator?: components["schemas"]["FileLocator"] | null;
+            /** Pmid */
+            pmid?: string | null;
+            /** Read At */
+            read_at?: string | null;
+            /**
+             * Reading Status
+             * @default unread
+             * @enum {string}
+             */
+            reading_status: "unread" | "skimmed" | "reading" | "close_read" | "archived";
+            /**
+             * Resource Type
+             * @default paper
+             * @enum {string}
+             */
+            resource_type: "link" | "pdf_index" | "paper" | "book" | "preprint" | "web";
+            /** Source Url */
+            source_url?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Title */
+            title: string;
+            /** Zotero Item Key */
+            zotero_item_key?: string | null;
+            /** Zotero Library Id */
+            zotero_library_id?: string | null;
+            /** Zotero Version */
+            zotero_version?: number | null;
+        };
         /** LocalWorkerCheckpointRequest */
         LocalWorkerCheckpointRequest: {
             /** Input Sha256 */
@@ -21055,6 +21296,415 @@ export interface operations {
                 headers: {
                     /** @description Knowledge responses are private and must not be stored. */
                     "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_library_list: {
+        parameters: {
+            query?: {
+                status?: ("unread" | "skimmed" | "reading" | "close_read" | "archived") | null;
+                tag?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryPage"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_library_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResource"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_library_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResource"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_library_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResource"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_library_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryDelete"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {

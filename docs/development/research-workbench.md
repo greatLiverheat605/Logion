@@ -49,3 +49,35 @@ Playwright 的 `workbench-chromium` 项目从同一构建启动两个隔离 Web 
 
 原型的主色和几何尺寸保持不变；浅色辅助文字与选中导航文字使用同色系的
 较深文本令牌，以满足小字号在半透明底色上的 WCAG AA 对比度。
+
+## 个人文献库（ADR-0039）
+
+接口前缀为 `/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources`。
+关闭研究开关时，包括未认证请求在内的所有新文献库接口均返回 404。
+开启时复用会话认证、Space 权限、写入 CSRF、可信 Origin 和限流，响应禁止缓存。
+
+| 方法   | 路径             | 行为                                                                     |
+| ------ | ---------------- | ------------------------------------------------------------------------ |
+| GET    | 前缀             | 当前用户列表；可选 `status`、完整 `tag`、UUID `cursor`、1–100 的 `limit` |
+| GET    | `/{resource_id}` | 当前用户的文献详情                                                       |
+| POST   | 前缀             | 手动创建，返回 201                                                       |
+| PUT    | `/{resource_id}` | 全量编辑，携带 `expected_version`                                        |
+| DELETE | `/{resource_id}` | 携带 `expected_version` 软删除，返回 204                                 |
+
+列表响应为 `resources` 和可空 `next_cursor`。字段包含标题、类型、CSL 子集、
+三个标识符、引用键、标签、Zotero 映射、文件定位及阅读状态。
+DOI 去前缀并小写；arXiv 去网址、版本和 PDF 后缀；PMID 规范化为正整数文本。
+同 Space 同用户重复返回 `LIBRARY_DUPLICATE`（409）及本人 `existing_id`；
+其他人的 ID 始终返回 404。版本冲突为 `RESOURCE_VERSION_CONFLICT`。
+设为 `close_read` 且没有 `read_at` 时，服务端填写当前时间。
+
+文献列表可筛选状态、标签并继续分页。检查器支持详情、编辑、确认删除和进入阅读。
+手动表单支持标题、作者、年份、期刊、标识符、引用键、网址、标签与摘要；
+编辑保留未展示的 CSL、文件与 Zotero 元数据。保存失败保留输入，冲突时可显式放弃
+当前输入并重新载入。切换空间重新建立当前列表和表单，缓存键含工作区及空间。
+
+迁移 `0044_research_resources` 以新 UUID 映射旧论文并回填 claims；旧表保留。
+开关关闭时旧论文新建、导入在同一事务补映射；开启时旧论文创建或含论文的导入返回
+`RESEARCH_PAPERS_READ_ONLY`（409）。旧资料同步、搜索、导出、任务证据与知识引用
+不包含私人文献。库变更审计不存标题、正文、工作区或文献 ID。
+账户最终注销会清除本人在他人共享 Space 中的私人文献；私人映射不占用旧资料配额。

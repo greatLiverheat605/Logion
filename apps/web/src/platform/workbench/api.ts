@@ -17,6 +17,12 @@ export function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
     if (error.code === "USER_SETTING_VERSION_CONFLICT")
       return "设置已在其他页面更新，请重新载入后再操作。";
+    if (error.code === "RESOURCE_VERSION_CONFLICT")
+      return "文献已在其他页面更新。当前输入已保留，请载入最新版本后再编辑。";
+    if (error.code === "LIBRARY_DUPLICATE")
+      return "这篇文献已在当前空间的个人文献库中，可以查看已有条目。";
+    if (error.status === 422)
+      return "请检查标识符、网址和日期的格式，再试一次。";
     if (error.status === 401) return "登录已过期，请重新登录。";
     if (error.status === 403)
       return "当前操作未获授权，请检查登录状态和访问权限。";

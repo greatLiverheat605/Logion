@@ -207,7 +207,9 @@ async def test_import_expiry_and_flushed_failure_preserve_transaction(
                 old_ids = before["ids"][kind]
                 new_ids = state["ids"][kind]
                 assert old_ids <= new_ids
-                assert len(new_ids - old_ids) == count
+                # Each legacy paper now has an additional private resource mapping.
+                expected = count + (expected_counts["paper"] if kind == "resource" else 0)
+                assert len(new_ids - old_ids) == expected
                 assert (new_ids - old_ids).isdisjoint(source_ids)
             assert len(state["ids"]["committed"]) == 1
             for name in ("sync_changes", "sync_operations", "notifications", "email_outbox"):

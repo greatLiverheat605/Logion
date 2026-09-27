@@ -187,6 +187,7 @@ class EngagementService:
                             Resource.workspace_id == workspace_id,
                             Resource.space_id.in_(space_ids),
                             Resource.deleted_at.is_(None),
+                            Resource.research_owner_id.is_(None),
                             or_(
                                 Resource.title.ilike(pattern, escape="\\"),
                                 Resource.pdf_filename.ilike(pattern, escape="\\"),
