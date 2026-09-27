@@ -1,11 +1,12 @@
 # ADR-0044: Weekly Plan and Review
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 planning page
 - Related: ADR-0032 (goal phase lifecycle)
 - Approval: in the 2026-09-27 kickoff the owner accepted the recommended weekly review. Under it, unfinished items are triaged one by one and never roll over automatically.
 - Absorbs: v0.2.4 item E2 (editing a goal's basic fields), which was not shipped separately.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Decision
 

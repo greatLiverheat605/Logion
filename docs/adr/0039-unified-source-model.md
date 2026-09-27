@@ -1,10 +1,11 @@
 # ADR-0039: Unified Source Model
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 literature library
 - Amends: ADR-0011 (personal research evidence), ADR-0029 (adaptive knowledge space)
 - Approval: part of the v0.3 plan, approved by the owner on 2026-09-27.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Context
 

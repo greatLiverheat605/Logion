@@ -1,11 +1,12 @@
 # ADR-0038: Online-First Client
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 web client; the server-side sync-v1 endpoints stay until v0.3.1
 - Supersedes: ADR-0003 (offline-first sync protocol) for the client, ADR-0026 (durable sync conflict resolution) for the new client, ADR-0034 (encrypted form drafts)
 - Related: ADR-0002 (browser authentication and session boundary), ADR-0037 (service worker retirement)
 - Approval: in the 2026-09-27 kickoff the owner chose online-only use, and approved the v0.3 plan the same day.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Context
 

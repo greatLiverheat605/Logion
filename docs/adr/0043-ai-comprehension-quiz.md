@@ -1,10 +1,11 @@
 # ADR-0043: AI Comprehension Quiz and Mastery Boundary
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 per-paper quizzes
 - Keeps: ADR-0008 (private assessment), the invariant that AI suggestions never become mastery conclusions, ADR-0016 (draft isolation)
 - Approval: in the 2026-09-27 kickoff the owner decided that AI writes and grades a quiz for each paper, and that mastery follows the owner's own judgment.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Decision
 

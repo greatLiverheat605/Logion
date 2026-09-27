@@ -1,6 +1,6 @@
 # ADR-0045: Application Shell, Visual System and Three-Pane Reader
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 web client structure
 - Supersedes: the interface part of ADR-0030 (workbench v1); its domain projections and permission boundaries stay
@@ -8,6 +8,7 @@
   - a macOS-style interface;
   - a reader with three panes whose content each user chooses;
   - tools hidden until called up by command, with one command that shows all toolbars.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Decision
 

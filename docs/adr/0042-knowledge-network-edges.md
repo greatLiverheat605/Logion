@@ -1,6 +1,6 @@
 # ADR-0042: Knowledge Network Edges
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 knowledge network of research questions, topics, sources, claims and ideas
 - Related: ADR-0029 (knowledge citations), ADR-0036 (topic dependencies), ADR-0041 (privacy classes)
@@ -8,6 +8,7 @@
   - the network is organized by research question and concept;
   - AI proposes the links;
   - unconfirmed links show as dashed lines and confirmed ones as solid.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Context
 

@@ -1,10 +1,11 @@
 # ADR-0040: Zotero and WebDAV Integration
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 literature import and PDF access
 - Related: ADR-0013 (AI provider credential boundary), ADR-0039 (unified source model)
 - Approval: the owner chose Zotero plus Jianguoyun WebDAV storage on 2026-09-27, with read-only sync (D5) and local PDFs written to WebDAV (D2).
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Context
 
