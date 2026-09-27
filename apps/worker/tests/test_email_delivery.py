@@ -58,10 +58,24 @@ def test_email_templates_keep_tokens_in_url_fragments() -> None:
         {"recipient": "person@example.com", "token": "recovery-456"},
         "https://logion.example",
     )
+    invitation = render_email(
+        "workspace_invitation",
+        {
+            "recipient": "person@example.com",
+            "token": "invitation-789",
+            "workspace_name": "研究小组 <script>alert(1)</script>",
+            "role": "viewer",
+        },
+        "https://logion.example",
+    )
 
-    assert "https://logion.example/auth/verify#token-123" in verification.text_body
-    assert "https://logion.example/auth/recover#recovery-456" in recovery.text_body
-    assert "?token=" not in verification.text_body + recovery.text_body
+    assert "https://logion.example/auth/verify#token=token-123" in verification.text_body
+    assert "https://logion.example/auth/recover#token=recovery-456" in recovery.text_body
+    assert "https://logion.example/invitations/accept#token=invitation-789" in invitation.text_body
+    assert "https://logion.example/auth/register" in invitation.text_body
+    assert "<script>" not in invitation.html_body
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in invitation.html_body
+    assert "?token=" not in verification.text_body + recovery.text_body + invitation.text_body
 
 
 @pytest.mark.parametrize(
@@ -80,7 +94,7 @@ def test_action_email_exposes_copyable_link_outside_the_button(purpose: str, pat
         purpose, {"recipient": "person@example.com", "token": token}, "https://logion.example"
     )
     VisibleText().feed(message.html_body)
-    link = f"https://logion.example/auth/{path}#{token}"
+    link = f"https://logion.example/auth/{path}#token={token}"
     assert link in visible_text
     assert f'href="{link}"' in message.html_body
     assert link in message.text_body
@@ -98,6 +112,17 @@ def test_email_templates_reject_unknown_or_header_injected_payloads() -> None:
         render_email(
             "email_verification",
             {"recipient": "person@example.com\nBcc: attacker@example.com", "token": "token"},
+            "https://logion.example",
+        )
+    with pytest.raises(EmailDeliveryFailure, match="EMAIL_PAYLOAD_INVALID"):
+        render_email(
+            "workspace_invitation",
+            {
+                "recipient": "person@example.com",
+                "token": "token",
+                "workspace_name": "Workspace",
+                "role": "owner",
+            },
             "https://logion.example",
         )
 

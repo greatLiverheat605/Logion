@@ -20,7 +20,8 @@ from logion_api.config import Settings
 from logion_api.db import session_factory, utc_now
 from logion_api.errors import APIError
 from logion_api.identity.email_verification import EmailDeliveryCipher
-from logion_api.identity.models import EmailOutbox, IdentityActionToken
+from logion_api.identity.models import EmailOutbox, IdentityActionToken, User
+from logion_api.workspaces.models import Workspace, WorkspaceInvitation
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -291,6 +292,26 @@ class EmailDeliveryService:
         row: EmailOutbox,
         now: datetime,
     ) -> bool:
+        if row.purpose == "workspace_invitation":
+            if row.action_token_id is not None or row.workspace_invitation_id is None:
+                return False
+            invitation = await db.get(WorkspaceInvitation, row.workspace_invitation_id)
+            if invitation is None:
+                return False
+            inviter = await db.get(User, invitation.invited_by)
+            workspace = await db.get(Workspace, invitation.workspace_id)
+            return bool(
+                invitation.invited_by == row.user_id
+                and inviter is not None
+                and inviter.status == "active"
+                and invitation.status == "pending"
+                and invitation.expires_at > now
+                and workspace is not None
+                and workspace.status == "active"
+                and workspace.deleted_at is None
+            )
+        if row.workspace_invitation_id is not None:
+            return False
         if row.action_token_id is None:
             return row.purpose == "security_notification"
         action = await db.get(IdentityActionToken, row.action_token_id)
@@ -395,7 +416,7 @@ def render_email(purpose: str, payload: dict[str, str], base_url: str) -> EmailM
             recipient=recipient,
             subject="确认您的 Logion 邮箱",
             lead="请确认邮箱并设置 Logion 登录密码。",
-            link=f"{base_url}/auth/verify#{quote(token, safe='-_~')}",
+            link=f"{base_url}/auth/verify#token={quote(token, safe='-_~')}",
             action_label="确认邮箱",
             expiry="链接将在 24 小时后失效，并且只能使用一次。",
         )
@@ -405,9 +426,48 @@ def render_email(purpose: str, payload: dict[str, str], base_url: str) -> EmailM
             recipient=recipient,
             subject="重置您的 Logion 密码",
             lead="我们收到了 Logion 密码重置请求。",
-            link=f"{base_url}/auth/recover#{quote(token, safe='-_~')}",
+            link=f"{base_url}/auth/recover#token={quote(token, safe='-_~')}",
             action_label="重置密码",
             expiry="链接将在 30 分钟后失效，并且只能使用一次。",
+        )
+    if purpose == "workspace_invitation":
+        token = _required_token(payload)
+        workspace_name = _required_text(payload, "workspace_name", max_length=120)
+        role = payload.get("role", "")
+        role_label = {
+            "admin": "管理员",
+            "editor": "编辑者",
+            "contributor": "贡献者",
+            "reviewer": "审阅者",
+            "viewer": "只读成员",
+        }.get(role)
+        if role_label is None:
+            raise EmailDeliveryFailure("EMAIL_PAYLOAD_INVALID", retryable=False)
+        accept_link = f"{base_url}/invitations/accept#token={quote(token, safe='-_~')}"
+        register_link = f"{base_url}/auth/register"
+        lead = f"您已被邀请以“{role_label}”身份加入 Logion 工作区“{workspace_name}”。"
+        escaped_accept_link = html.escape(accept_link, quote=True)
+        escaped_register_link = html.escape(register_link, quote=True)
+        return EmailMessage(
+            recipient=recipient,
+            subject="Logion 工作区邀请",
+            text_body=(
+                f"{lead}\n\n"
+                f"尚未注册：{register_link}\n"
+                "完成邮箱验证并登录后，请返回本邮件。\n\n"
+                f"接受邀请：{accept_link}\n\n"
+                "邀请到期或被撤销后链接将失效，并且只能由本邮箱对应的账户使用。"
+            ),
+            html_body=(
+                '<!doctype html><html lang="zh-CN"><body>'
+                "<h1>Logion 工作区邀请</h1>"
+                f"<p>{html.escape(lead)}</p>"
+                f'<p>尚未注册？请先<a href="{escaped_register_link}">注册 Logion</a>，'
+                "完成邮箱验证并登录后再返回本邮件。</p>"
+                f'<p><a href="{escaped_accept_link}">接受邀请</a></p>'
+                "<p>邀请到期或被撤销后链接将失效，并且只能由本邮箱对应的账户使用。</p>"
+                "</body></html>"
+            ),
         )
     if purpose == "security_notification":
         event = payload.get("event")
@@ -472,6 +532,13 @@ def _required_token(payload: dict[str, str]) -> str:
     if not token or len(token) > 512 or "\n" in token or "\r" in token:
         raise EmailDeliveryFailure("EMAIL_PAYLOAD_INVALID", retryable=False)
     return token
+
+
+def _required_text(payload: dict[str, str], field: str, *, max_length: int) -> str:
+    value = payload.get(field, "").strip()
+    if not value or len(value) > max_length or "\n" in value or "\r" in value:
+        raise EmailDeliveryFailure("EMAIL_PAYLOAD_INVALID", retryable=False)
+    return value
 
 
 def retry_delay(attempt: int) -> timedelta:
