@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     healthcheck_dependencies: bool = False
+    research_v3_enabled: bool = False
     worker_health_state_path: str = Field(
         default="/tmp/logion-worker-health.json",  # noqa: S108 - dedicated container tmpfs
         min_length=1,

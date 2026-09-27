@@ -35,7 +35,22 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
+  // Separate runtime flag instances prove both branches against the same build.
+  webServer: [true, false].map((enabled) => ({
+    command: `pnpm --filter @logion/web start --hostname 127.0.0.1 --port ${enabled ? 3080 : 3081}`,
+    url: `http://127.0.0.1:${enabled ? 3080 : 3081}/health`,
+    env: {
+      LOGION_RESEARCH_V3_ENABLED: String(enabled),
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
+    reuseExistingServer: false,
+  })),
   projects: [
+    {
+      name: "workbench-chromium",
+      testMatch: /research-foundation\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:3080" },
+    },
     {
       name: "public-chromium",
       testMatch: publicTests,

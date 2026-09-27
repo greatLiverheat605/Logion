@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { isWorkbenchPath } from "./platform/workbench/routes";
 
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
@@ -33,7 +34,13 @@ export function proxy(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", csp);
-  const response = NextResponse.next({ request: { headers } });
+  const workbench = isWorkbenchPath(request.nextUrl.pathname);
+  headers.set("x-logion-workbench", workbench ? "1" : "0");
+  const response =
+    workbench && process.env.LOGION_RESEARCH_V3_ENABLED !== "true"
+      ? new NextResponse("Not Found", { status: 404 })
+      : NextResponse.next({ request: { headers } });
+  if (workbench) response.headers.set("Cache-Control", "no-store");
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("Referrer-Policy", "no-referrer");
   response.headers.set("X-Content-Type-Options", "nosniff");

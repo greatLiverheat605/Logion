@@ -24,6 +24,7 @@ export const viewport: Viewport = {
 };
 
 const themeBootstrap = `(()=>{try{const k="app-shell-theme";const s=localStorage.getItem(k);const t=s==="light"||s==="dark"?s:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch{document.documentElement.dataset.theme="light"}})()`;
+const workbenchThemeBootstrap = `document.documentElement.dataset.theme=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"`;
 
 export default async function RootLayout({
   children,
@@ -31,11 +32,14 @@ export default async function RootLayout({
   // Dynamic HTML lets Next attach the per-request CSP nonce to hydration scripts.
   const requestHeaders = await headers();
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
+  const workbench = requestHeaders.get("x-logion-workbench") === "1";
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <script
-          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+          dangerouslySetInnerHTML={{
+            __html: workbench ? workbenchThemeBootstrap : themeBootstrap,
+          }}
           nonce={nonce}
           suppressHydrationWarning
         />
