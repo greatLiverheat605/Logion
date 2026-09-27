@@ -16,5 +16,6 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0032：目标阶段生命周期（Accepted；原地修订当前计划版本，默认关闭）](0032-goal-phase-lifecycle.md)
 - [ADR-0033：知识来源链接（Accepted；只存 ID、偏移与摘要哈希，默认关闭）](0033-knowledge-source-links.md)
 - [ADR-0034：加密表单草稿（Accepted；四个长文本表单，存为 Vault 记录，不同步）](0034-encrypted-form-drafts.md)
-- [ADR-0035：离线兜底页（Accepted；只缓存公共页面及其样式，不缓存脚本与用户数据）](0035-offline-fallback-page.md)
+- [ADR-0035：离线兜底页（Service Worker 部分已被 ADR-0037 替代）](0035-offline-fallback-page.md)
 - [ADR-0036：修正知识点、先修关系与回忆题（Accepted；停用保留作答历史，无开关）](0036-memory-corrections.md)
+- [ADR-0037：停用 Service Worker（Accepted；自注销并清除 Logion 缓存，不动本机资料）](0037-service-worker-retirement.md)
