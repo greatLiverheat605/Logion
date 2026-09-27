@@ -28,7 +28,16 @@ from logion_api.workspaces.models import Space
 from logion_api.workspaces.permissions import Permission
 from logion_api.workspaces.service import WorkspaceService
 
-DeleteEntityType = Literal["learning_goal", "task", "note", "inbox_item", "exam", "topic"]
+DeleteEntityType = Literal[
+    "learning_goal",
+    "task",
+    "note",
+    "inbox_item",
+    "exam",
+    "topic",
+    "quiz_item",
+    "topic_dependency",
+]
 DELETE_MODELS: dict[str, Any] = {
     "learning_goal": LearningGoal,
     "task": Task,
@@ -36,6 +45,8 @@ DELETE_MODELS: dict[str, Any] = {
     "inbox_item": InboxItem,
     "exam": Exam,
     "topic": Topic,
+    "quiz_item": QuizItem,
+    "topic_dependency": TopicDependency,
 }
 
 
@@ -131,7 +142,7 @@ async def deletion_scope(
             destination.extend((child_type, child) for child in children)
     if entity_type == "note":
         notes = [root]
-    if entity_type == "topic":
+    if entity_type in ("topic", "quiz_item"):
         # Source links are navigation aids (ADR-0033): they follow their target.
         deleted.extend(
             ("source_link", link)
@@ -139,7 +150,7 @@ async def deletion_scope(
                 select(KnowledgeSourceLink)
                 .where(
                     KnowledgeSourceLink.workspace_id == workspace_id,
-                    KnowledgeSourceLink.target_kind == "topic",
+                    KnowledgeSourceLink.target_kind == entity_type,
                     KnowledgeSourceLink.target_id == root.id,
                     KnowledgeSourceLink.deleted_at.is_(None),
                 )
@@ -258,7 +269,7 @@ async def deletion_scope(
     impact_kinds: tuple[str, ...] = ("learning_goal", "task", "note", "resource", "study_session")
     if entity_type == "exam":
         impact_kinds = ("exam", "exam_subject", "syllabus_node", "mock_exam", "score_record")
-    elif entity_type in ("inbox_item", "topic"):
+    elif entity_type in ("inbox_item", "topic", "quiz_item", "topic_dependency"):
         impact_kinds = (entity_type,)
     impact = {
         f"deleted_{kind}": sum(

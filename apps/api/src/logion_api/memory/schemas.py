@@ -115,6 +115,23 @@ class QuizItemCreateRequest(StrictModel):
     evaluation_mode: Literal["exact_match", "self_assessed"]
 
 
+class QuizItemUpdateRequest(StrictModel):
+    """ADR-0036: topic_id is fixed; an absent answer or explanation stays unchanged.
+
+    Pulled recall items never carry the answer key, so a device may not know it.
+    """
+
+    id: UUID
+    topic_id: UUID
+    prompt: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+    answer_key: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+        | None
+    ) = None
+    explanation: LongText | None = None
+    evaluation_mode: Literal["exact_match", "self_assessed"]
+
+
 class QuizItemResponse(StrictModel):
     id: UUID
     topic_id: UUID

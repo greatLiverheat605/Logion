@@ -529,6 +529,7 @@ export class SyncClient {
               "note",
               "resource",
               "topic",
+              "quiz_item",
             ].includes(change.entity_type);
             await this.database.conflicts.put({
               conflict_id: conflictId,
@@ -556,7 +557,12 @@ export class SyncClient {
                 existing.deleted_at === null &&
                 ["note", "resource"].includes(change.entity_type)
                   ? ["keep_local", "keep_remote", "merge", "dismiss"]
-                  : ["keep_remote", "dismiss"],
+                  : // ADR-0036: short fields, no merge; a local correction may win.
+                    !change.tombstone &&
+                      existing.deleted_at === null &&
+                      ["topic", "quiz_item"].includes(change.entity_type)
+                    ? ["keep_local", "keep_remote", "dismiss"]
+                    : ["keep_remote", "dismiss"],
               source_operation_id: source?.operation_id ?? null,
               source_device_id: source?.device_id ?? null,
               resolution_operation_id: null,

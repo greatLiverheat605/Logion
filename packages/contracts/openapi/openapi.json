@@ -38937,7 +38937,9 @@
                 "note",
                 "inbox_item",
                 "exam",
-                "topic"
+                "topic",
+                "quiz_item",
+                "topic_dependency"
               ],
               "title": "Entity Type",
               "type": "string"

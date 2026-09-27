@@ -177,6 +177,14 @@ export interface ReviewWorkbenchProps {
     ) => void | Promise<boolean | void>;
     synchronize: () => void | Promise<void>;
     unlock: FormAction;
+    updateQuizItem: (
+      event: FormEvent<HTMLFormElement>,
+      quiz: ReviewQuiz,
+    ) => boolean | void | Promise<boolean | void>;
+    updateTopic: (
+      event: FormEvent<HTMLFormElement>,
+      topic: ReviewTopic,
+    ) => boolean | void | Promise<boolean | void>;
     setSpaceId: (value: string) => void;
     setWorkspaceId: (value: string) => void;
   };
@@ -853,16 +861,21 @@ function ReviewsPanel({
 }
 
 function ReviewInspector({
+  actions,
   context,
   data,
   onQuiz,
   selectedTopic,
 }: Readonly<{
+  actions: ReviewWorkbenchProps["actions"];
   context: ReviewWorkbenchProps["context"];
   data: ReviewWorkbenchProps["data"];
   onQuiz: (quiz: ReviewQuiz) => void;
   selectedTopic: ReviewTopic | null;
 }>) {
+  const [editTopic, setEditTopic] = useState(false);
+  const [editQuiz, setEditQuiz] = useState<ReviewQuiz | null>(null);
+  const editReturnRef = useRef<HTMLElement | null>(null);
   if (!selectedTopic) {
     return (
       <div className={styles.inspector} data-testid="review-inspector">
@@ -889,6 +902,25 @@ function ReviewInspector({
   const patterns = data.errorPatterns.filter(
     (item) => item.payload.topic_id === topicId,
   );
+  const titleOf = (id: string) =>
+    data.topics.find((topic) => topic.entity.entity_id === id)?.payload.title ??
+    "已删除的知识点";
+  const edges = data.dependencies
+    .filter(
+      (edge) =>
+        edge.payload.dependent_topic_id === topicId ||
+        edge.payload.prerequisite_topic_id === topicId,
+    )
+    .map((edge) => ({
+      entity: edge.entity,
+      label:
+        edge.payload.dependent_topic_id === topicId
+          ? `先修：${titleOf(edge.payload.prerequisite_topic_id)}`
+          : `后续：${titleOf(edge.payload.dependent_topic_id)}`,
+    }));
+  const attemptedQuizIds = new Set(
+    data.quizAttempts.map((attempt) => attempt.payload.quiz_item_id),
+  );
   const firstQuiz = quizzes[0];
   const quizIds = new Set(quizzes.map((item) => item.entity.entity_id));
   const sources = (data.sources ?? []).filter(
@@ -902,6 +934,17 @@ function ReviewInspector({
         <p className={styles.eyebrow}>KNOWLEDGE INSPECTOR</p>
         <h2>{selectedTopic.payload.title}</h2>
         <p>{selectedTopic.payload.description || "暂无说明"}</p>
+        <button
+          className={styles.secondaryButton}
+          disabled={!context.canEditGraph || !context.unlocked}
+          onClick={(event) => {
+            editReturnRef.current = event.currentTarget;
+            setEditTopic(true);
+          }}
+          type="button"
+        >
+          编辑知识点
+        </button>
       </header>
       <InspectorSection title="删除知识点">
         <EntityDeleteAction
@@ -1016,6 +1059,77 @@ function ReviewInspector({
           )}
         </InspectorSection>
       ) : null}
+      <InspectorSection title="回忆题">
+        {quizzes.length ? (
+          <ul className={styles.correctionList}>
+            {quizzes.map((quiz) => (
+              <li key={quiz.entity.entity_id}>
+                <span>{quiz.payload.prompt}</span>
+                <button
+                  className={styles.secondaryButton}
+                  disabled={!context.canEditGraph || !context.unlocked}
+                  onClick={(event) => {
+                    editReturnRef.current = event.currentTarget;
+                    setEditQuiz(quiz);
+                  }}
+                  type="button"
+                >
+                  编辑
+                </button>
+                <EntityDeleteAction
+                  entityType="quiz_item"
+                  entityId={quiz.entity.entity_id}
+                  workspaceId={context.workspaceId}
+                  disabled={!context.canEditGraph || !context.unlocked}
+                  onDeleted={() => undefined}
+                  onStatus={() => undefined}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.muted}>这个知识点还没有回忆题。</p>
+        )}
+      </InspectorSection>
+      <InspectorSection title="先修关系">
+        {edges.length ? (
+          <ul className={styles.correctionList}>
+            {edges.map((edge) => (
+              <li key={edge.entity.entity_id}>
+                <span>{edge.label}</span>
+                <EntityDeleteAction
+                  entityType="topic_dependency"
+                  entityId={edge.entity.entity_id}
+                  workspaceId={context.workspaceId}
+                  disabled={!context.canEditGraph || !context.unlocked}
+                  onDeleted={() => undefined}
+                  onStatus={() => undefined}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.muted}>没有先修关系。</p>
+        )}
+      </InspectorSection>
+      <EditTopicSheet
+        actions={actions}
+        onOpenChange={setEditTopic}
+        open={editTopic}
+        restoreFocusRef={editReturnRef}
+        topic={selectedTopic}
+      />
+      {editQuiz ? (
+        <EditQuizSheet
+          actions={actions}
+          attempted={attemptedQuizIds.has(editQuiz.entity.entity_id)}
+          onOpenChange={(open) => {
+            if (!open) setEditQuiz(null);
+          }}
+          quiz={editQuiz}
+          restoreFocusRef={editReturnRef}
+        />
+      ) : null}
       <InspectorSection title="继续">
         {firstQuiz ? (
           <button
@@ -1083,6 +1197,197 @@ function UnlockSheet({
           required
           type="password"
         />
+      </form>
+    </WorkbenchSheet>
+  );
+}
+
+function EditTopicSheet({
+  actions,
+  onOpenChange,
+  open,
+  restoreFocusRef,
+  topic,
+}: Readonly<{
+  actions: ReviewWorkbenchProps["actions"];
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  restoreFocusRef: React.RefObject<HTMLElement | null>;
+  topic: ReviewTopic;
+}>) {
+  const formId = useId();
+  const [pending, setPending] = useState(false);
+  return (
+    <WorkbenchSheet
+      description="修改保存到本机加密资料后同步；由笔记选段创建的来源状态可能随之变为“已修改”。"
+      footer={
+        <>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => onOpenChange(false)}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : "保存修改"}
+          </button>
+        </>
+      }
+      onOpenChange={onOpenChange}
+      open={open}
+      restoreFocusRef={restoreFocusRef}
+      title="编辑知识点"
+    >
+      <form
+        className={styles.sheetForm}
+        id={formId}
+        key={`${topic.entity.entity_id}:${topic.entity.local_revision}`}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          try {
+            const succeeded = await actions.updateTopic(event, topic);
+            if (succeeded === true) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        <label htmlFor={`${formId}-title`}>名称</label>
+        <input
+          autoFocus
+          defaultValue={topic.payload.title}
+          id={`${formId}-title`}
+          maxLength={160}
+          name="title"
+          required
+        />
+        <label htmlFor={`${formId}-description`}>说明</label>
+        <textarea
+          defaultValue={topic.payload.description}
+          id={`${formId}-description`}
+          maxLength={10000}
+          name="description"
+          rows={4}
+        />
+      </form>
+    </WorkbenchSheet>
+  );
+}
+
+function EditQuizSheet({
+  actions,
+  attempted,
+  onOpenChange,
+  quiz,
+  restoreFocusRef,
+}: Readonly<{
+  actions: ReviewWorkbenchProps["actions"];
+  attempted: boolean;
+  onOpenChange: (open: boolean) => void;
+  quiz: ReviewQuiz;
+  restoreFocusRef: React.RefObject<HTMLElement | null>;
+}>) {
+  const formId = useId();
+  const [pending, setPending] = useState(false);
+  const localAnswer =
+    typeof quiz.payload.answer_key === "string" ? quiz.payload.answer_key : "";
+  const localExplanation =
+    typeof quiz.payload.explanation === "string"
+      ? quiz.payload.explanation
+      : "";
+  return (
+    <WorkbenchSheet
+      description="参考答案仍只在作答后向本人披露；留空的答案和解析保持原值。"
+      footer={
+        <>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => onOpenChange(false)}
+            type="button"
+          >
+            取消
+          </button>
+          <button
+            className={styles.primaryButton}
+            disabled={pending}
+            form={formId}
+            type="submit"
+          >
+            {pending ? "正在保存…" : "保存修改"}
+          </button>
+        </>
+      }
+      onOpenChange={onOpenChange}
+      open
+      restoreFocusRef={restoreFocusRef}
+      title="编辑回忆题"
+    >
+      <form
+        className={styles.sheetForm}
+        id={formId}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (pending) return;
+          setPending(true);
+          try {
+            const succeeded = await actions.updateQuizItem(event, quiz);
+            if (succeeded === true) onOpenChange(false);
+          } finally {
+            setPending(false);
+          }
+        }}
+      >
+        <label htmlFor={`${formId}-prompt`}>题目</label>
+        <textarea
+          autoFocus
+          defaultValue={quiz.payload.prompt}
+          id={`${formId}-prompt`}
+          maxLength={10000}
+          name="prompt"
+          required
+          rows={3}
+        />
+        <label htmlFor={`${formId}-answer`}>参考答案</label>
+        <textarea
+          defaultValue={localAnswer}
+          id={`${formId}-answer`}
+          maxLength={10000}
+          name="answer_key"
+          placeholder={
+            localAnswer ? undefined : "本机没有保存原答案；留空保持不变"
+          }
+          rows={2}
+        />
+        <label htmlFor={`${formId}-explanation`}>解析（可选）</label>
+        <textarea
+          defaultValue={localExplanation}
+          id={`${formId}-explanation`}
+          maxLength={20000}
+          name="explanation"
+          placeholder={localExplanation ? undefined : "留空保持不变"}
+          rows={2}
+        />
+        <label htmlFor={`${formId}-mode`}>判定方式</label>
+        <select
+          defaultValue={quiz.payload.evaluation_mode}
+          disabled={attempted}
+          id={`${formId}-mode`}
+          name="evaluation_mode"
+        >
+          <option value="exact_match">服务端精确匹配</option>
+          <option value="self_assessed">本人明确判断</option>
+        </select>
+        {attempted ? (
+          <p className={styles.muted}>已有作答记录，判定方式不可修改。</p>
+        ) : null}
       </form>
     </WorkbenchSheet>
   );
@@ -1829,6 +2134,7 @@ export function ReviewWorkbench({
         initialPane="master"
         inspector={
           <ReviewInspector
+            actions={actions}
             context={context}
             data={data}
             onQuiz={(next) => {

@@ -1590,4 +1590,119 @@ describe("recoverable push/pull cycle", () => {
       await database.entities.get([ids.workspace, "space", ids.entity]),
     ).toMatchObject({ sync_status: "conflict", payload: { name: "Local" } });
   });
+
+  it.each(["topic", "quiz_item"] as const)(
+    "offers keep_local for a pulled %s content conflict (ADR-0036)",
+    async (entityType) => {
+      database = await openOfflineDatabase({
+        databaseName: `logion-memory-conflict-${crypto.randomUUID()}`,
+        indexedDB,
+        IDBKeyRange,
+      });
+      const vault = new OfflineVault(database);
+      await vault.initialize(ids.user, "correct horse battery staple");
+      await database.syncState.put({
+        workspace_id: ids.workspace,
+        device_id: ids.device,
+        schema_version: 4,
+        sync_epoch: ids.epoch,
+        cursor: 0,
+        bootstrap_state: "ready",
+        last_sync_at: null,
+        outbox_isolated_at: null,
+        isolation_reason_code: null,
+      });
+      const repository = new ProtectedOfflineRepository(database, vault);
+      const created = { space_id: ids.user, title: "Synced original" };
+      await repository.commitMutation({
+        operation_id: crypto.randomUUID(),
+        protocol_version: "sync-v1",
+        workspace_id: ids.workspace,
+        device_id: ids.device,
+        entity_type: entityType,
+        entity_id: ids.entity,
+        operation_type: "create",
+        base_version: 0,
+        local_revision: 1,
+        client_occurred_at: "2026-09-26T00:00:00Z",
+        created_at: "2026-09-26T00:00:00Z",
+        updated_at: "2026-09-26T00:00:00Z",
+        deleted_at: null,
+        created_by: ids.user,
+        updated_by: ids.user,
+        payload: created,
+      });
+      // Treat the original as acknowledged by the server at version 1.
+      await database.outbox.clear();
+      await database.entities.update([ids.workspace, entityType, ids.entity], {
+        server_version: 1,
+        sync_status: "clean",
+      });
+      const local = { space_id: ids.user, title: "Local correction" };
+      await repository.commitMutation({
+        operation_id: ids.operation,
+        protocol_version: "sync-v1",
+        workspace_id: ids.workspace,
+        device_id: ids.device,
+        entity_type: entityType,
+        entity_id: ids.entity,
+        operation_type: "update",
+        base_version: 1,
+        local_revision: 2,
+        client_occurred_at: "2026-09-27T00:00:00Z",
+        created_at: "2026-09-26T00:00:00Z",
+        updated_at: "2026-09-27T00:00:00Z",
+        deleted_at: null,
+        created_by: ids.user,
+        updated_by: ids.user,
+        payload: local,
+      });
+      await database.outbox.update(ids.operation, { outbox_state: "blocked" });
+      const remote = { space_id: ids.user, title: "Remote correction" };
+      await new SyncClient(
+        database,
+        {
+          async push() {
+            await Promise.resolve();
+            throw new Error("blocked operations must not be pushed");
+          },
+          async pull(request) {
+            await Promise.resolve();
+            return {
+              message_type: "pull_response",
+              protocol_version: "sync-v1",
+              workspace_id: request.workspace_id,
+              device_id: request.device_id,
+              sync_epoch: request.sync_epoch,
+              from_cursor: 0,
+              next_cursor: 1,
+              has_more: false,
+              changes: [
+                {
+                  sequence: 1,
+                  operation_id: crypto.randomUUID(),
+                  entity_type: entityType,
+                  entity_id: ids.entity,
+                  operation_type: "update",
+                  server_version: 2,
+                  occurred_at: "2026-09-27T00:00:01Z",
+                  tombstone: false,
+                  deleted_at: null,
+                  payload: remote,
+                  payload_hash: await hashPayload(remote),
+                },
+              ],
+            };
+          },
+        },
+        vault,
+      ).synchronize(ids.workspace, ids.device);
+      const [conflict] = await database.conflicts.toArray();
+      expect(conflict).toMatchObject({
+        entity_type: entityType,
+        conflict_kind: "content",
+        resolution_options: ["keep_local", "keep_remote", "dismiss"],
+      });
+    },
+  );
 });

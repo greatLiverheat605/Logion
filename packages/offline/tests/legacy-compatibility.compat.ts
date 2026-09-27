@@ -663,3 +663,50 @@ it("real legacy client pulls source links and their tombstones", async () => {
   const local = await db.entities.get([workspace, "note", note]);
   expect(local?.deleted_at).toBeNull();
 });
+
+it.each(["quiz_item", "topic_dependency"])(
+  "real legacy client applies a %s tombstone from ADR-0036",
+  async (entityType) => {
+    await seed();
+    await db.outbox.clear();
+    const entityId = "01900000-0000-7000-8000-000000000008";
+    const change = {
+      sequence: 8,
+      operation_id: crypto.randomUUID(),
+      entity_type: entityType,
+      entity_id: entityId,
+      operation_type: "delete",
+      server_version: 2,
+      occurred_at: now,
+      tombstone: true,
+      deleted_at: now,
+      payload: {},
+      payload_hash: await legacy.hashPayload({}),
+    };
+    const result = await new legacy.SyncClient(
+      db,
+      {
+        async push(request) {
+          await Promise.resolve();
+          return pushReply(request, []);
+        },
+        async pull(request) {
+          await Promise.resolve();
+          const response = {
+            ...emptyPull(request),
+            next_cursor: 8,
+            changes: [change],
+          };
+          expect(oldContracts.validateSyncV1Message(response).ok).toBe(true);
+          return response;
+        },
+      },
+      vault,
+    ).synchronize(workspace, device);
+    expect(result.control).toBeNull();
+    expect(await db.syncState.get(workspace)).toMatchObject({ cursor: 8 });
+    expect(
+      await db.entities.get([workspace, entityType, entityId]),
+    ).toMatchObject({ deleted_at: now, server_version: 2 });
+  },
+);

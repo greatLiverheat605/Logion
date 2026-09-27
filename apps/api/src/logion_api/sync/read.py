@@ -320,6 +320,8 @@ class SyncReadService:
             ("study_session", StudySession),
             ("inbox_item", InboxItem),
             ("topic", Topic),
+            ("quiz_item", QuizItem),
+            ("topic_dependency", TopicDependency),
             ("source_link", KnowledgeSourceLink),
             ("exam", Exam),
             ("exam_subject", Subject),

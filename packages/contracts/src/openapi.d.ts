@@ -24068,7 +24068,7 @@ export interface operations {
             header?: never;
             path: {
                 workspace_id: string;
-                entity_type: "learning_goal" | "task" | "note" | "inbox_item" | "exam" | "topic";
+                entity_type: "learning_goal" | "task" | "note" | "inbox_item" | "exam" | "topic" | "quiz_item" | "topic_dependency";
                 entity_id: string;
             };
             cookie?: never;

@@ -30,6 +30,7 @@ from logion_api.memory.schemas import (
     MasteryLevel,
     QuizAttemptCreateRequest,
     QuizItemCreateRequest,
+    QuizItemUpdateRequest,
     ReviewFindingCreateRequest,
     ReviewFindingResolveRequest,
     SourceLinkCapabilities,
@@ -1410,3 +1411,129 @@ class MemoryService:
             )
         )
         return link
+
+    async def update_topic(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: TopicCreateRequest,
+        expected_version: int,
+        request_id: str,
+    ) -> Topic:
+        """ADR-0036: correct a topic's title or description."""
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=True
+        )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
+        topic = await db.scalar(
+            select(Topic)
+            .where(Topic.id == payload.id, Topic.workspace_id == workspace_id)
+            .with_for_update()
+        )
+        if topic is None or topic.space_id != space_id or topic.deleted_at is not None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if topic.version != expected_version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The topic changed.",
+                status_code=409,
+            )
+        changed = [
+            field
+            for field in ("title", "description")
+            if getattr(topic, field) != getattr(payload, field)
+        ]
+        topic.title = payload.title
+        topic.description = payload.description
+        topic.version += 1
+        topic.updated_at = utc_now()
+        topic.updated_by = context.user.id
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.topic_updated",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="topic",
+                target_id=topic.id,
+                metadata={"fields": changed},
+            )
+        )
+        return topic
+
+    async def update_quiz_item(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        space_id: UUID,
+        payload: QuizItemUpdateRequest,
+        expected_version: int,
+        request_id: str,
+    ) -> QuizItem:
+        """ADR-0036: correct a recall item; the judging mode locks after an attempt."""
+        await self._resolve_space(
+            db, context, workspace_id, space_id, request_id, shared_write=True
+        )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
+        item = await db.scalar(
+            select(QuizItem)
+            .where(QuizItem.id == payload.id, QuizItem.workspace_id == workspace_id)
+            .with_for_update()
+        )
+        if item is None or item.space_id != space_id or item.deleted_at is not None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if item.version != expected_version:
+            raise APIError(
+                code="RESOURCE_VERSION_CONFLICT",
+                message="The recall item changed.",
+                status_code=409,
+            )
+        if payload.topic_id != item.topic_id:
+            raise APIError(
+                code="QUIZ_ITEM_TOPIC_IMMUTABLE",
+                message="A recall item cannot move to another topic.",
+                status_code=422,
+            )
+        if payload.evaluation_mode != item.evaluation_mode and await db.scalar(
+            select(QuizAttempt.id).where(QuizAttempt.quiz_item_id == item.id).limit(1)
+        ):
+            raise APIError(
+                code="QUIZ_ITEM_MODE_LOCKED",
+                message="The judging mode is fixed once the item has attempts.",
+                status_code=422,
+            )
+        updates: dict[str, str] = {
+            "prompt": payload.prompt,
+            "evaluation_mode": payload.evaluation_mode,
+        }
+        if payload.answer_key is not None:
+            updates["answer_key"] = payload.answer_key
+        if payload.explanation is not None:
+            updates["explanation"] = payload.explanation
+        changed = sorted(field for field, value in updates.items() if getattr(item, field) != value)
+        for field, value in updates.items():
+            setattr(item, field, value)
+        item.version += 1
+        item.updated_at = utc_now()
+        item.updated_by = context.user.id
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="memory.quiz_item_updated",
+                result="success",
+                actor_id=context.user.id,
+                workspace_id=workspace_id,
+                target_type="quiz_item",
+                target_id=item.id,
+                metadata={"fields": changed},
+            )
+        )
+        return item
