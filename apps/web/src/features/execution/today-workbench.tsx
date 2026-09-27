@@ -1371,6 +1371,7 @@ function TodayMain({
     primary = (
       <button
         className={styles.primaryButton}
+        disabled={!controller.capabilities.canCreate}
         onClick={onNewTask}
         type="button"
       >
@@ -1582,9 +1583,7 @@ function TodayWorkbenchContent({
           </WorkbenchTooltip>
           <button
             className={styles.secondaryButton}
-            disabled={
-              !controller.capabilities.canWrite || !controller.context.unlocked
-            }
+            disabled={!controller.capabilities.canCreate}
             onClick={() => setNewTaskOpen(true)}
             type="button"
           >

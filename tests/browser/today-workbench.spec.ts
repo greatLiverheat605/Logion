@@ -58,6 +58,54 @@ test("Today can unlock while the Space list is still loading", async ({
   }
 });
 
+test("Today keeps task creation closed until the Space resolves, so the Sheet survives", async ({
+  accountState,
+  page,
+}) => {
+  // Resolving the Space remounts the workbench; a Sheet opened earlier was lost.
+  let releaseSpaces!: () => void;
+  let spaceRequested!: () => void;
+  const held = new Promise<void>((resolve) => {
+    releaseSpaces = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    spaceRequested = resolve;
+  });
+  await page.route("**/api/v1/workspaces/*/spaces", async (route) => {
+    spaceRequested();
+    await held;
+    await route.continue();
+  });
+  const create = page.getByRole("button", { name: "新建任务", exact: true });
+  try {
+    await page.goto("/app/today");
+    await requested;
+    await page
+      .getByLabel("本地资料口令")
+      .fill(
+        process.env.LOGION_E2E_VAULT_PASSPHRASE?.trim() ||
+          accountState.password,
+      );
+    await page.getByRole("button", { name: "解锁", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "本地资料已解锁" }),
+    ).toBeVisible();
+    await expect(create).toBeDisabled();
+  } finally {
+    releaseSpaces();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  await expect(create).toBeEnabled();
+  await create.click();
+  const sheet = page.getByRole("dialog", { name: "新建今日任务" });
+  await expect(sheet).toBeVisible();
+  // Every context request has settled; no remount may close the Sheet now.
+  await page.waitForLoadState("networkidle");
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+});
+
 test("Today completes a real execution loop and four-breakpoint audit", async ({
   accountState,
   page,

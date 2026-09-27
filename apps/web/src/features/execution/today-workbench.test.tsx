@@ -112,7 +112,12 @@ function controllerFixture() {
     unlock: vi.fn(async () => true),
   };
   const controller: TodayControllerResult = {
-    capabilities: { canSync: true, canUnlock: true, canWrite: true },
+    capabilities: {
+      canCreate: true,
+      canSync: true,
+      canUnlock: true,
+      canWrite: true,
+    },
     commands,
     context: {
       operational: {
@@ -259,6 +264,17 @@ describe("Today workbench", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "开始专注" }));
     expect(commands.startSession).toHaveBeenCalledWith("task-1");
+  });
+
+  it("keeps task creation closed until the Workspace and Space resolve", () => {
+    // Resolving the context remounts the workbench, which would drop an open Sheet.
+    const { controller } = controllerFixture();
+    controller.capabilities.canCreate = false;
+    render(<TodayWorkbench controller={controller} />);
+    const create = screen.getByRole("button", { name: "新建任务" });
+    expect(create.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(create);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("creates a task from the secondary Sheet without losing known context", async () => {

@@ -429,6 +429,8 @@ async function decrypted<T extends JsonObject>(
 
 export interface TodayControllerResult {
   capabilities: {
+    /** Writes need a resolved context: its arrival remounts the workbench. */
+    canCreate: boolean;
     canSync: boolean;
     canUnlock: boolean;
     canWrite: boolean;
@@ -1625,6 +1627,11 @@ export function useTodayController(): TodayControllerResult {
 
   return {
     capabilities: {
+      canCreate:
+        canWrite &&
+        unlocked &&
+        contextPhase === "ready" &&
+        Boolean(workspaceId && selectedSpace && deviceId),
       canSync: unlocked && Boolean(deviceId),
       canUnlock:
         session.status === "authenticated" && Boolean(workspaceId && deviceId),
