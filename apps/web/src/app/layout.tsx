@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { RuntimeStyleNonce } from "@/components/runtime-style-nonce";
 import { FeedbackProvider } from "@/components/feedback/feedback-provider";
-import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
+import { ServiceWorkerRetirement } from "@/components/service-worker-retirement";
 
 import "./globals.css";
 import "./public-flow.css";
@@ -47,7 +47,7 @@ export default async function RootLayout({
         </a>
         {children}
         <FeedbackProvider />
-        <ServiceWorkerRegistration />
+        <ServiceWorkerRetirement />
       </body>
     </html>
   );

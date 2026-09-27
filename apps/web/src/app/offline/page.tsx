@@ -11,8 +11,8 @@ import {
 
 import styles from "@/features/public-flows/public-flow-workbench.module.css";
 
-// ADR-0035: served by the Service Worker from cache when a navigation fails.
-// Offline no script loads, so every control must work as plain HTML.
+// ADR-0035 page. Since ADR-0037 no service worker serves it offline, so it is
+// only reached online. Every control still works as plain HTML.
 export default function OfflinePage() {
   const [online, setOnline] = useState(false);
 

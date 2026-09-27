@@ -35,9 +35,9 @@
     {
       "id": "file-service-worker",
       "type": "file",
-      "label": "Service worker registration component",
+      "label": "Service worker retirement component",
       "data": {
-        "path": "apps/web/src/components/service-worker-registration.tsx"
+        "path": "apps/web/src/components/service-worker-retirement.tsx"
       }
     },
     {
@@ -64,7 +64,7 @@
         "acceptanceCheckId": "criterion-ui-fixture",
         "observationPath": "observations/observation-ui-fixture.json",
         "completionEventId": "event-ui-completed",
-        "handoffSha256": "89638a1c4ac9da9f05ecc71081337f8ac21728fe1db97bf5d98545ad00863f87"
+        "handoffSha256": "4ffb0d895ee0a0d5263d3a7deed297e15563a6d44baefceaea3f012a12d9af5d"
       }
     },
     {

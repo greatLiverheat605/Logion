@@ -5,7 +5,7 @@
   "outcome": "succeeded",
   "baseCommit": "ebf93ee192598430393f93e9313665c36446f84e",
   "workingBranch": "codex/fixture-kimi-ui",
-  "changedFiles": ["apps/web/src/components/service-worker-registration.tsx"],
+  "changedFiles": ["apps/web/src/components/service-worker-retirement.tsx"],
   "commandsActuallyRun": ["git diff --check"],
   "checks": [
     {

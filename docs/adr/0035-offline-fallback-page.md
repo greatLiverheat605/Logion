@@ -1,6 +1,6 @@
 # ADR-0035: Offline Fallback Page
 
-- Status: Accepted
+- Status: Superseded by [ADR-0037](0037-service-worker-retirement.md) for the service worker (2026-09-27); the page content rules still apply
 - Date: 2026-09-26
 - Scope: N3-C option A, the public page shown when a navigation fails offline
 - Related: ADR-0002 (browser authentication and session boundary), ADR-0034 (encrypted form drafts)
