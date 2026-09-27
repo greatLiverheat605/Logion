@@ -189,6 +189,7 @@ class KnowledgeService:
                 Resource.workspace_id == workspace_id,
                 Resource.space_id == space_id,
                 Resource.deleted_at.is_(None),
+                Resource.research_owner_id.is_(None),
             )
             .with_for_update()
         )

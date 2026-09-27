@@ -1,4 +1,4 @@
-import { Placeholder } from "@/platform/workbench/placeholder";
+import { Library } from "@/platform/workbench/library";
 export default function Page() {
-  return <Placeholder title="文献库" />;
+  return <Library />;
 }

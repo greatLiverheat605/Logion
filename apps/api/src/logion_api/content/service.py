@@ -83,6 +83,7 @@ class ContentService:
                     Resource.workspace_id == workspace_id,
                     Resource.space_id == space_id,
                     Resource.deleted_at.is_(None),
+                    Resource.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -266,7 +267,12 @@ class ContentService:
         await self._authorize(db, context, workspace_id, space_id, request_id)
         await self._validate_task(db, workspace_id, space_id, payload.task_id)
         await self._quota(db, workspace_id, space_id)
-        if await db.get(Resource, resource_id) is not None:
+        existing = await db.get(Resource, resource_id)
+        if existing is not None and existing.research_owner_id is not None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if existing is not None:
             raise APIError(
                 code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
             )
@@ -324,6 +330,7 @@ class ContentService:
                 Resource.workspace_id == workspace_id,
                 Resource.space_id == space_id,
                 Resource.deleted_at.is_(None),
+                Resource.research_owner_id.is_(None),
             )
             .with_for_update()
         )
