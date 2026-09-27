@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ExceptionHandler
 
 from logion_api import __version__
+from logion_api.ai_gateway.research_routes import router as research_ai_router
 from logion_api.ai_gateway.routes import model_router as ai_model_router
 from logion_api.ai_gateway.routes import router as ai_router
 from logion_api.ai_gateway.routing_routes import router as ai_routing_router
@@ -43,6 +44,7 @@ from logion_api.planning.routes import router as planning_router
 from logion_api.portability.routes import account_router as account_deletion_router
 from logion_api.portability.routes import import_router as portability_import_router
 from logion_api.portability.routes import router as portability_router
+from logion_api.research.ideas import router as research_ideas_router
 from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
 from logion_api.sync.routes import router as sync_router
@@ -113,11 +115,13 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(self_study_router)
     application.include_router(research_router)
     application.include_router(research_library_router)
+    application.include_router(research_ideas_router)
     application.include_router(collaboration_router)
     application.include_router(ai_router)
     application.include_router(ai_model_router)
     application.include_router(ai_routing_router)
     application.include_router(ai_run_router)
+    application.include_router(research_ai_router)
     application.include_router(growth_router)
     application.include_router(public_share_router)
     application.include_router(engagement_router)

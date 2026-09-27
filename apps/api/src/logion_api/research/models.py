@@ -51,6 +51,23 @@ class PaperRecord(PersonalResearch, Base):
     source_url: Mapped[str | None] = mapped_column(String(2000))
 
 
+class ResearchIdea(PersonalResearch, Base):
+    __tablename__ = "research_ideas"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_research_idea_space_scope",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("status IN ('active','archived')", name="ck_research_idea_status"),
+        Index("ix_research_idea_owner", "workspace_id", "space_id", "user_id", "id"),
+    )
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+
+
 class ResearchClaim(PersonalResearch, Base):
     __tablename__ = "research_claims"
     __table_args__ = (

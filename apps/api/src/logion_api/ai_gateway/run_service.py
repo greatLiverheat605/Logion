@@ -15,6 +15,8 @@ from logion_api.ai_gateway.models import (
     AIRunCandidate,
     AIUsageMonthly,
 )
+from logion_api.ai_gateway.research_context import check_private_entities, privacy_audit
+from logion_api.ai_gateway.research_skills import skill_hash
 from logion_api.ai_gateway.routing_schemas import AIRouteResolveRequest
 from logion_api.ai_gateway.routing_service import AIRoutingService
 from logion_api.ai_gateway.run_crypto import AIRunInputCipher
@@ -64,15 +66,30 @@ class AIRunService:
         workspace_id: UUID,
         payload: AIRunCreate,
         request_id: str,
+        *,
+        context_entity_types: tuple[str, ...] = (),
+        research_prompt: str | None = None,
     ) -> AIRun:
         await self.authorize(db, context, workspace_id, request_id)
+        try:
+            check_private_entities([payload.target_type, *context_entity_types])
+        except APIError:
+            db.add(
+                privacy_audit(
+                    context.user.id,
+                    payload.task_type,
+                    [payload.target_type, *context_entity_types],
+                    request_id,
+                )
+            )
+            raise
         if len(json.dumps(payload.input_fields, ensure_ascii=False).encode()) > 262_144:
             raise APIError(
                 code="AI_RUN_INPUT_TOO_LARGE",
                 message="The selected AI input is too large.",
                 status_code=422,
             )
-        request_hash = self._request_hash(payload)
+        request_hash = self._request_hash(payload, context_entity_types, research_prompt)
         existing = await db.scalar(
             select(AIRun).where(
                 AIRun.workspace_id == workspace_id,
@@ -99,9 +116,12 @@ class AIRunService:
         estimated_input = max(
             1,
             math.ceil(
-                sum(
-                    len(name.encode()) + len(value.encode())
-                    for name, value in payload.input_fields.items()
+                (
+                    (len(research_prompt.encode()) if research_prompt else 0)
+                    + sum(
+                        len(name.encode()) + len(value.encode())
+                        for name, value in payload.input_fields.items()
+                    )
                 )
                 / 3
             ),
@@ -186,6 +206,7 @@ class AIRunService:
             target_id=payload.target_id,
             target_version=payload.target_version,
             selected_fields=sorted(payload.input_fields),
+            context_entity_types=list(context_entity_types),
             expected_output_fields=payload.expected_output_fields,
             input_ciphertext=encrypted.ciphertext,
             input_nonce=encrypted.nonce,
@@ -193,8 +214,10 @@ class AIRunService:
             input_data_key_nonce=encrypted.data_key_nonce,
             input_encryption_key_id=encrypted.encryption_key_id,
             retain_input=payload.retain_input,
-            prompt_version=PROMPT_VERSION,
-            prompt_hash=PROMPT_HASH,
+            prompt_version=f"research-v1/{payload.task_type}"
+            if research_prompt
+            else PROMPT_VERSION,
+            prompt_hash=skill_hash(research_prompt) if research_prompt else PROMPT_HASH,
             idempotency_key=payload.idempotency_key,
             request_hash=request_hash,
             status="queued",
@@ -442,8 +465,17 @@ class AIRunService:
         return run
 
     @staticmethod
-    def _request_hash(payload: AIRunCreate) -> str:
+    def _request_hash(
+        payload: AIRunCreate,
+        context_entity_types: tuple[str, ...] = (),
+        research_prompt: str | None = None,
+    ) -> str:
         data = payload.model_dump(mode="json", exclude={"send_confirmed"})
+        # Empty provenance preserves the idempotency hash of existing v0.2 requests.
+        if context_entity_types:
+            data["context_entity_types"] = list(context_entity_types)
+        if research_prompt is not None:
+            data["research_prompt_hash"] = skill_hash(research_prompt)
         return hashlib.sha256(
             json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()

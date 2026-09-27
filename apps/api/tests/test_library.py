@@ -15,7 +15,7 @@ from logion_api.main import app
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest, DataExportJob
 from logion_api.portability.service import PortabilityService
-from logion_api.research.models import ResearchClaim
+from logion_api.research.models import ResearchClaim, ResearchIdea
 from logion_api.workspaces.models import WorkspaceMembership
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -367,6 +367,14 @@ async def test_library_is_private_in_shared_spaces_and_legacy_projections(
         assert (await owner.get(path)).status_code == 404
         assert (await owner.post(base, json=payload)).status_code == 201
         assert (await other.get(f"{base}/{peer.json()['id']}")).status_code == 200
+        idea_ids = []
+        for client in (owner, other):
+            idea = await client.post(
+                f"{scope}/research/ideas",
+                json={"title": "Synthetic private idea", "body": "Account deletion fixture"},
+            )
+            assert idea.status_code == 201, idea.text
+            idea_ids.append(UUID(idea.json()["id"]))
         deletion = await other.post(
             "/api/v1/account-deletion", json={"confirmation": "DELETE MY ACCOUNT"}
         )
@@ -379,6 +387,8 @@ async def test_library_is_private_in_shared_spaces_and_legacy_projections(
         assert await AccountDeletionService(settings).execute_next()
         async with session_factory() as db:
             assert await db.get(Resource, UUID(peer.json()["id"])) is None
+            assert await db.get(ResearchIdea, idea_ids[1]) is None
+            assert await db.get(ResearchIdea, idea_ids[0]) is not None
             assert (
                 await db.scalar(select(Resource).where(Resource.research_owner_id == owner_id))
                 is not None

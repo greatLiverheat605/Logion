@@ -21,6 +21,12 @@ from logion_api.ai_gateway.models import (
     AIRunCandidate,
     AIUsageMonthly,
 )
+from logion_api.ai_gateway.research_context import (
+    TASK_CONTEXT_ALLOWLIST,
+    check_private_entities,
+    privacy_audit,
+)
+from logion_api.ai_gateway.research_skills import load_research_skill, skill_hash
 from logion_api.ai_gateway.run_crypto import AIRunInputCipher
 from logion_api.config import Settings
 from logion_api.db import session_factory, utc_now
@@ -91,6 +97,44 @@ class AIExecutionService:
                 await self._record_attempt(run_id)
                 credential = ""
                 try:
+                    entity_types = [run.target_type, *(run.context_entity_types or [])]
+                    try:
+                        check_private_entities(entity_types)
+                    except APIError:
+                        async with session_factory() as audit_db:
+                            audit_db.add(
+                                privacy_audit(
+                                    run.requested_by,
+                                    run.task_type,
+                                    entity_types,
+                                    "worker:privacy-check",
+                                )
+                            )
+                            await audit_db.commit()
+                        raise
+                    system_prompt = None
+                    if run.context_entity_types:
+                        if not self._settings.research_v3_enabled:
+                            raise APIError(
+                                code="RESEARCH_FEATURE_DISABLED",
+                                message="Research is disabled.",
+                                status_code=404,
+                            )
+                        if not set(entity_types).issubset(
+                            TASK_CONTEXT_ALLOWLIST.get(run.task_type, frozenset())
+                        ):
+                            raise APIError(
+                                code="AI_CONTEXT_TYPE_BLOCKED",
+                                message="Context entity type is not allowed.",
+                                status_code=422,
+                            )
+                        system_prompt = await asyncio.to_thread(load_research_skill, run.task_type)
+                        if skill_hash(system_prompt) != run.prompt_hash:
+                            raise APIError(
+                                code="AI_PROMPT_VERSION_CHANGED",
+                                message="The research prompt changed. Create a new run.",
+                                status_code=409,
+                            )
                     credential = self._provider_cipher.decrypt(provider)
                     result = await self._adapter_factory().generate(
                         base_url=provider.base_url,
@@ -101,6 +145,7 @@ class AIExecutionService:
                         max_output_tokens=run.requested_output_tokens,
                         timeout_seconds=provider.timeout_seconds,
                         cancelled=lambda: self._is_cancelled(run_id),
+                        **({"system_prompt": system_prompt} if system_prompt is not None else {}),
                     )
                 except APIError as exc:
                     final_error = exc.code
