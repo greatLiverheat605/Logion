@@ -784,6 +784,58 @@ docker image prune
 
 `docker image prune` 不得增加 `-a` 或 `--volumes`。不得删除 `logion_postgres_data`、`logion_redis_data`、`logion_attachments_data` 或 `logion_backup_data`。
 
+### 10.1 版本保留
+
+本手册假设这台 ECS 只运行 Logion；同机还有其他服务时不要使用本节命令。
+
+每次发布满足上面的清理条件后，把服务器收敛到"当前版 + 上一版"。最迟在下一次发布执行第 6 节之前完成。
+`docker image prune` 只删除悬空镜像；Compose 按 digest 引用的旧候选、镜像源副本、镜像归档和演练资源都不会被它清掉，需要按本节处理。
+
+保留：
+
+- 当前运行容器使用的镜像，以及第 6 节记录的上一版四个应用镜像（第 11 节回滚用）；
+- 当前源码目录，以及尚未满足上面清理条件的上一版目录；
+- 升级目录中的 manifest、发布记录、校验和、git bundle 和加密备份副本；
+- 四个业务数据卷。
+
+清理：
+
+- 保留集以外的全部镜像；
+- 升级目录中的镜像归档，这些镜像已加载并核对 digest，归档只是重复拷贝；
+- 恢复演练、容量测试和发布前备份任务留下的已停止容器及其专用卷；
+- 更早的 `/opt/logion.*` 源码目录。删除前确认其中 `secrets/backup.key` 的指纹与当前一致，且 `.env` 没有当前缺少的密钥项；否则停止，先把旧密钥单独托管；
+- 系统日志设上限，并清理软件包缓存。
+
+判断保留集时一律用 Image ID，不要用标签：按 digest 引用的镜像在 `docker images` 中显示为 `<none>`，按标签筛选会误删正在运行的镜像。
+
+```bash
+set -euo pipefail
+KEEP="$( { docker ps -q | xargs docker inspect -f '{{.Image}}'; cat <上一版四个 Image ID 的记录>; } | sort -u)"
+printf '%s\n' "${KEEP}"
+```
+
+人工核对 `KEEP` 恰好是运行中的服务镜像加上一版四个应用镜像后执行：
+
+```bash
+docker ps -a --filter status=exited --format '{{.Names}}' \
+  | grep -E '^(logion-m6-restore-|logion-learning-final-backup-|logion-m6-final-backup-|m6ecap-)' \
+  | xargs -r docker rm
+docker volume ls -q --filter label=logion.m6.restore | xargs -r docker volume rm
+docker volume ls -q --filter label=logion.m6.capacity | xargs -r docker volume rm
+for v in $(docker volume ls -q --filter label=com.docker.volume.anonymous); do
+  docker volume rm "$v" >/dev/null 2>&1 || true  # 仍被容器使用的匿名卷会被拒绝
+done
+docker images -q --no-trunc | sort -u | grep -vxF "${KEEP}" | xargs -r docker rmi -f
+find /root/logion-* -type f \( -name '*-oci.tar' -o -name '*-oci.tar.gz' \
+  -o -name 'candidate-images-*.tar.gz' -o -path '*/images/*.tar' \) -print -delete
+install -d /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=200M\n' > /etc/systemd/journald.conf.d/logion-retention.conf
+systemctl restart systemd-journald
+apt-get clean
+```
+
+完成后重做 8.1 的服务检查，并把清理前后的 `df -h /`、`docker system df` 与删除清单保存在仅 root 可读的目录，写入第 12 节发布记录。清理后磁盘使用率应明显低于 75% 告警线；如果仍然接近告警线，先排查原因，不要删除业务数据卷。
+
 ## 11. 回滚与前向修复
 
 应用替换失败且数据库 schema 仍兼容时，可以把四个应用镜像摘要恢复到上一候选，再重新创建应用容器。不要回滚 PostgreSQL 数据卷。
