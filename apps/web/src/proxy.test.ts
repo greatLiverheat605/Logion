@@ -8,6 +8,33 @@ afterEach(() => {
 });
 
 describe("proxy CSP", () => {
+  it("gates every new route with a real 404 and keeps legacy routes available", () => {
+    vi.stubEnv("LOGION_RESEARCH_V3_ENABLED", "false");
+    for (const path of [
+      "/today",
+      "/library",
+      "/read/example",
+      "/questions",
+      "/graph",
+      "/review",
+      "/plan",
+      "/settings",
+    ]) {
+      const response = proxy(new NextRequest(`http://localhost:3000${path}`));
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Content-Security-Policy")).toContain(
+        "default-src 'self'",
+      );
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+    }
+    expect(
+      proxy(new NextRequest("http://localhost:3000/app/today")).status,
+    ).toBe(200);
+    vi.stubEnv("LOGION_RESEARCH_V3_ENABLED", "true");
+    expect(proxy(new NextRequest("http://localhost:3000/today")).status).toBe(
+      200,
+    );
+  });
   it("allows Next development tooling without weakening production CSP", () => {
     vi.stubEnv("NODE_ENV", "development");
     const development = proxy(
