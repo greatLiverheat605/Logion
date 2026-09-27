@@ -20,7 +20,9 @@ type EntityType =
   | "task"
   | "inbox_item"
   | "exam"
-  | "topic";
+  | "topic"
+  | "quiz_item"
+  | "topic_dependency";
 type Preview = components["schemas"]["DeletionPreview"];
 const names = {
   learning_goal: "学习目标",
@@ -29,7 +31,12 @@ const names = {
   inbox_item: "收件箱条目",
   exam: "考试",
   topic: "知识点",
+  quiz_item: "回忆题",
+  topic_dependency: "先修关系",
 };
+// ADR-0036: a recall item is retired, keeping its answering history.
+const verbs: Partial<Record<EntityType, string>> = { quiz_item: "停用" };
+const verbOf = (entityType: EntityType) => verbs[entityType] ?? "删除";
 const impactNames: Record<string, string> = {
   deleted_exam: "考试",
   deleted_exam_subject: "考试科目",
@@ -37,6 +44,8 @@ const impactNames: Record<string, string> = {
   deleted_mock_exam: "模拟考试",
   deleted_score_record: "成绩记录",
   deleted_topic: "知识点",
+  deleted_quiz_item: "回忆题",
+  deleted_topic_dependency: "先修关系",
   deleted_inbox_item: "收件箱条目",
   deleted_learning_goal: "学习目标",
   deleted_task: "任务",
@@ -68,7 +77,8 @@ export function EntityDeleteAction(props: Props) {
         type="button"
         onClick={() => setOpen(true)}
       >
-        删除{names[props.entityType]}
+        {verbOf(props.entityType)}
+        {names[props.entityType]}
       </button>
       {open ? (
         <DeleteDialog
@@ -160,8 +170,9 @@ function DeleteDialog({
         payload: {},
       });
       queued = true;
-      feedback.success("删除已在本地排队，等待服务器确认。");
-      props.onStatus("删除已在本地排队，等待服务器确认。");
+      const verb = verbOf(props.entityType);
+      feedback.success(`${verb}已在本地排队，等待服务器确认。`);
+      props.onStatus(`${verb}已在本地排队，等待服务器确认。`);
       onClose();
       props.onDeleted();
       vaultSession.markChanged();
@@ -194,8 +205,8 @@ function DeleteDialog({
             : `删除尚未完成，请在同步中心处理。${remaining?.last_error_code ?? "等待同步"}`;
         throw new Error("deletion not acknowledged");
       }
-      feedback.success("删除已同步。");
-      props.onStatus("删除已同步。");
+      feedback.success(`${verbOf(props.entityType)}已同步。`);
+      props.onStatus(`${verbOf(props.entityType)}已同步。`);
     } catch (failure) {
       const message = feedbackErrorText(failure, failureText);
       if (!queued) setError(message);
@@ -218,8 +229,8 @@ function DeleteDialog({
     Object.values(preview?.blockers ?? {}).some((count) => count > 0);
   return (
     <AppModal
-      eyebrow={`删除${names[props.entityType]}`}
-      title="确认删除"
+      eyebrow={`${verbOf(props.entityType)}${names[props.entityType]}`}
+      title={`确认${verbOf(props.entityType)}`}
       onClose={() => {
         if (!busy) onClose();
       }}
@@ -237,7 +248,11 @@ function DeleteDialog({
                   ? "将软删除考试及其科目、大纲、模拟考试和成绩记录。请先确认影响范围。"
                   : props.entityType === "topic"
                     ? "将软删除知识点。有学习记录、依赖关系或知识引用的知识点会拒绝删除，保护关联历史。"
-                    : "将软删除笔记。附件文件不在本次清除范围内。"}
+                    : props.entityType === "quiz_item"
+                      ? "将停用回忆题：它不再出现在到期队列和新的作答中；作答历史、错因和掌握记录保留，来源链接一并停用。"
+                      : props.entityType === "topic_dependency"
+                        ? "将删除这条先修关系，两个知识点本身及其学习记录不受影响。"
+                        : "将软删除笔记。附件文件不在本次清除范围内。"}
         </p>
         {preview ? (
           <ul>
@@ -293,7 +308,7 @@ function DeleteDialog({
             type="button"
             onClick={() => void confirm()}
           >
-            {busy ? "正在提交…" : "确认删除"}
+            {busy ? "正在提交…" : `确认${verbOf(props.entityType)}`}
           </button>
         </div>
       </div>

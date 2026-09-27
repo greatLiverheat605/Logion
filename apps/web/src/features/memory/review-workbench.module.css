@@ -877,3 +877,25 @@
   gap: 0.4rem;
   overflow-wrap: anywhere;
 }
+
+.correctionList {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.correctionList li {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-wrap: anywhere;
+}
+
+.correctionList li > span {
+  flex: 1 1 10rem;
+  min-width: 0;
+}

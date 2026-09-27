@@ -69,6 +69,7 @@ from logion_api.memory.schemas import (
     MasteryConfirmRequest,
     QuizAttemptCreateRequest,
     QuizItemCreateRequest,
+    QuizItemUpdateRequest,
     ReviewFindingCreateRequest,
     ReviewFindingResolveRequest,
     SourceLinkCreateRequest,
@@ -216,6 +217,9 @@ class SyncPushService:
         register("self_study", ("inbox_item",), "delete", self._delete_entity)
         register("exams", ("exam",), "delete", self._delete_entity)
         register("memory", ("topic",), "delete", self._delete_entity)
+        register("memory", ("quiz_item", "topic_dependency"), "delete", self._delete_entity)
+        register("memory", ("topic",), "update", self._update_topic)
+        register("memory", ("quiz_item",), "update", self._update_quiz_item)
         register("execution", ("task",), "create", self._create_task)
         register("execution", ("task",), "update", self._transition_task)
         register("execution", ("study_session",), "create", self._start_session)
@@ -1657,6 +1661,90 @@ class SyncPushService:
         except SyncLedgerError as exc:
             return self._rejected(operation.operation_id, exc.code)
 
+    async def _update_topic(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            if expected is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            payload = TopicCreateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                topic = await self._memory.update_topic(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    expected,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, topic.version, topic_payload(topic)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
+    async def _update_quiz_item(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        request: PushRequest,
+        operation: object,
+        identity: SyncOperationIdentity,
+        *,
+        request_id: str,
+    ) -> OperationResult:
+        from logion_api.sync.schemas import SyncOperation
+
+        assert isinstance(operation, SyncOperation)
+        raw = dict(operation.payload)
+        space_id = raw.pop("space_id", None)
+        if not isinstance(space_id, str):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        try:
+            expected = await self._causal_base_version(db, request, operation)
+            if expected is None:
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+            payload = QuizItemUpdateRequest.model_validate({**raw, "id": operation.entity_id})
+            async with db.begin_nested():
+                item = await self._memory.update_quiz_item(
+                    db,
+                    context,
+                    request.workspace_id,
+                    UUID(space_id),
+                    payload,
+                    expected,
+                    request_id,
+                )
+                return await self._append_entity(
+                    db, request.workspace_id, identity, item.version, quiz_item_payload(item)
+                )
+        except (TypeError, ValueError):
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
+        except APIError as exc:
+            return await self._api_error_result(db, request, operation, exc)
+        except SyncLedgerError as exc:
+            return self._rejected(operation.operation_id, exc.code)
+
     async def _create_topic_dependency(
         self,
         db: AsyncSession,
@@ -2758,6 +2846,13 @@ class SyncPushService:
                 if topic is not None and topic.workspace_id == request.workspace_id
                 else None
             )
+        if operation.entity_type == "quiz_item":
+            quiz_item = await db.get(QuizItem, operation.entity_id)
+            return (
+                quiz_item.version
+                if quiz_item is not None and quiz_item.workspace_id == request.workspace_id
+                else None
+            )
         if operation.entity_type == "topic_dependency":
             dependency = await db.get(TopicDependency, operation.entity_id)
             return (
@@ -3196,12 +3291,15 @@ class SyncPushService:
         )
         conflict_kind: Literal["content", "status", "delete_update"] = (
             "content"
-            if operation.entity_type in {"note", "resource", "evidence", "topic"}
+            if operation.entity_type in {"note", "resource", "evidence", "topic", "quiz_item"}
             else "status"
         )
         resolution_options: list[Literal["keep_local", "keep_remote", "merge", "dismiss"]] = (
             ["keep_local", "keep_remote", "merge", "dismiss"]
             if operation.entity_type in {"note", "resource"}
+            # ADR-0036: short fields, no merge, but a local correction must survive.
+            else ["keep_local", "keep_remote", "dismiss"]
+            if operation.entity_type in {"topic", "quiz_item"}
             else ["keep_remote", "dismiss"]
         )
         if operation.operation_type == "delete" or remote_deleted_at is not None:

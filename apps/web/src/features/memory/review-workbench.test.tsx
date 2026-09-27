@@ -114,6 +114,8 @@ function props(correct: boolean | null | undefined): ReviewWorkbenchProps {
       submitQuizAttempt: vi.fn(),
       synchronize: vi.fn(),
       unlock: vi.fn(),
+      updateQuizItem: vi.fn(async () => true),
+      updateTopic: vi.fn(async () => true),
       setSpaceId: vi.fn(),
       setWorkspaceId: vi.fn(),
     },
@@ -447,5 +449,78 @@ describe("Review source links", () => {
     expect(
       within(screen.getByTestId("review-inspector")).queryByText("来源有效"),
     ).toBeNull();
+  });
+});
+
+describe("Review corrections (ADR-0036)", () => {
+  it("edits a topic through its own sheet", async () => {
+    const value = props(undefined);
+    render(<ReviewWorkbench {...value} />);
+    const inspector = screen.getByTestId("review-inspector");
+    fireEvent.click(
+      within(inspector).getByRole("button", { name: "编辑知识点" }),
+    );
+    const sheet = await screen.findByRole("dialog", { name: "编辑知识点" });
+    const title = within(sheet).getByLabelText("名称") as HTMLInputElement;
+    expect(title.value).toBe("测试知识点");
+    fireEvent.change(title, { target: { value: "修正后的知识点" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "保存修改" }));
+    await waitFor(() =>
+      expect(value.actions.updateTopic).toHaveBeenCalledTimes(1),
+    );
+    expect(vi.mocked(value.actions.updateTopic).mock.calls[0]?.[1]).toBe(
+      value.data.topics[0],
+    );
+  });
+
+  it("locks the judging mode once the recall item has attempts", async () => {
+    const value = props(true);
+    render(<ReviewWorkbench {...value} />);
+    const inspector = screen.getByTestId("review-inspector");
+    expect(
+      within(inspector).getByRole("button", { name: "停用回忆题" }),
+    ).toBeTruthy();
+    fireEvent.click(within(inspector).getByRole("button", { name: "编辑" }));
+    const sheet = await screen.findByRole("dialog", { name: "编辑回忆题" });
+    expect(
+      (within(sheet).getByLabelText("判定方式") as HTMLSelectElement).disabled,
+    ).toBe(true);
+    expect(
+      within(sheet).getByText("已有作答记录，判定方式不可修改。"),
+    ).toBeTruthy();
+    // Pulled items carry no answer: the field stays empty and keeps the original.
+    expect(
+      (within(sheet).getByLabelText("参考答案") as HTMLTextAreaElement)
+        .placeholder,
+    ).toBe("本机没有保存原答案；留空保持不变");
+  });
+
+  it("lists prerequisites with a delete action", () => {
+    const value = props(undefined);
+    value.data.topics.push({
+      ...value.data.topics[0]!,
+      entity: { ...value.data.topics[0]!.entity, entity_id: "topic-0" },
+      payload: { ...value.data.topics[0]!.payload, title: "前置知识" },
+    });
+    value.data.dependencies = [
+      {
+        entity: {
+          ...value.data.topics[0]!.entity,
+          entity_id: "edge-1",
+          entity_type: "topic_dependency",
+        },
+        payload: {
+          space_id: "space-1",
+          prerequisite_topic_id: "topic-0",
+          dependent_topic_id: "topic-1",
+        },
+      },
+    ];
+    render(<ReviewWorkbench {...value} />);
+    const inspector = screen.getByTestId("review-inspector");
+    expect(within(inspector).getByText("先修：前置知识")).toBeTruthy();
+    expect(
+      within(inspector).getByRole("button", { name: "删除先修关系" }),
+    ).toBeTruthy();
   });
 });

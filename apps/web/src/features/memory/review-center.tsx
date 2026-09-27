@@ -730,6 +730,71 @@ export function ReviewCenter() {
     }
   }
 
+  // ADR-0036: corrections reuse the create payload and the entity's server version.
+  async function updateTopic(
+    event: FormEvent<HTMLFormElement>,
+    topic: LocalView<TopicPayload>,
+  ): Promise<boolean> {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      await commit(
+        "topic",
+        topic.entity.entity_id,
+        {
+          space_id: topic.payload.space_id,
+          title: String(data.get("title") ?? "").trim(),
+          description: String(data.get("description") ?? "").trim(),
+        },
+        topic.entity,
+        await pendingEntityOperations("topic", [topic.entity.entity_id]),
+      );
+      setStatus("知识点修改已保存到本地；正在尝试同步。");
+      await synchronize();
+      return true;
+    } catch (error) {
+      setStatus(feedback.error(errorMessage(error)));
+      await refresh();
+      return false;
+    }
+  }
+
+  async function updateQuizItem(
+    event: FormEvent<HTMLFormElement>,
+    quiz: LocalView<QuizItemPayload>,
+  ): Promise<boolean> {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const answer = String(data.get("answer_key") ?? "").trim();
+    const explanation = String(data.get("explanation") ?? "").trim();
+    // Pulled items carry no answer or explanation: an empty field keeps them.
+    const payload: JsonObject = {
+      ...quiz.payload,
+      prompt: String(data.get("prompt") ?? "").trim(),
+      evaluation_mode: String(
+        data.get("evaluation_mode") ?? quiz.payload.evaluation_mode,
+      ),
+    };
+    if (answer) payload.answer_key = answer;
+    if (explanation) payload.explanation = explanation;
+    try {
+      await commit(
+        "quiz_item",
+        quiz.entity.entity_id,
+        payload,
+        quiz.entity,
+        await pendingEntityOperations("quiz_item", [quiz.entity.entity_id]),
+      );
+      setStatus("题目修改已加密保存到本地；正在尝试同步。");
+      await synchronize();
+      return true;
+    } catch (error) {
+      setStatus(feedback.error(errorMessage(error)));
+      await refresh();
+      return false;
+    }
+  }
+
   async function createDependency(
     event: FormEvent<HTMLFormElement>,
   ): Promise<boolean> {
@@ -1053,14 +1118,18 @@ export function ReviewCenter() {
     }
   }
 
+  // Deleted topics, prerequisites and retired recall items stay hidden (ADR-0036).
   const visibleTopics = topics.filter(
-    (item) => item.payload.space_id === spaceId,
+    (item) =>
+      item.entity.deleted_at === null && item.payload.space_id === spaceId,
   );
   const visibleDependencies = dependencies.filter(
-    (item) => item.payload.space_id === spaceId,
+    (item) =>
+      item.entity.deleted_at === null && item.payload.space_id === spaceId,
   );
   const visibleQuizItems = quizItems.filter(
-    (item) => item.payload.space_id === spaceId,
+    (item) =>
+      item.entity.deleted_at === null && item.payload.space_id === spaceId,
   );
   const visibleAttempts = quizAttempts.filter(
     (item) => item.payload.space_id === spaceId,
@@ -1189,6 +1258,8 @@ export function ReviewCenter() {
         submitQuizAttempt,
         synchronize,
         unlock,
+        updateQuizItem,
+        updateTopic,
         setSpaceId,
         setWorkspaceId,
       }}
