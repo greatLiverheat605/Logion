@@ -38,7 +38,7 @@
     "ci:fast": "pnpm guard:context && pnpm agent:state:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm contracts:check"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.12.1",
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
     "ajv": "8.20.0",
     "openapi-typescript": "7.13.0",
