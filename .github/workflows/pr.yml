@@ -36,6 +36,8 @@ jobs:
           enable-cache: true
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --group dev --frozen
+      - name: Python lock matches pyproject
+        run: uv lock --check
       - name: JavaScript dependency audit
         run: pnpm audit --audit-level high
       - name: Python dependency audit
