@@ -1,6 +1,6 @@
 # ADR-0047: Agent Inbox, Personal Access Tokens and MCP Bridge
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3.1
 - Related: ADR-0029 (local worker protocol), ADR-0041 (privacy classes)
@@ -9,6 +9,7 @@
   - their writes go to an inbox and reach the library only after the owner reviews them;
   - agents cannot delete;
   - MCP comes first.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Decision
 

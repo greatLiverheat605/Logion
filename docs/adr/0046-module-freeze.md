@@ -1,10 +1,11 @@
 # ADR-0046: Freezing Exam, Self-Study, Template and Shared Review Modules
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3
 - Freezes: ADR-0009 (exam context), ADR-0010 (self-study loop), ADR-0012 (shared review loop), ADR-0017 (templates and shares)
 - Approval: in the 2026-09-27 kickoff the owner said these modules had never been used and chose to freeze them (D4).
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Decision
 

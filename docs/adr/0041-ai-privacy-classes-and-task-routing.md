@@ -1,6 +1,6 @@
 # ADR-0041: AI Privacy Classes and Task Routing
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 - Scope: v0.3 AI-assisted reading, quizzes, link suggestions and weekly review
 - Amends: ADR-0015 (AI routing and budget policy)
@@ -9,6 +9,7 @@
   - unpublished ideas and hypotheses are never sent to any cloud model or agent;
   - research questions may be sent;
   - translation uses an economical model, while close reading and quizzes use a stronger one.
+- Accepted: the owner reviewed and accepted this record on 2026-09-27 (PR #269).
 
 ## Context
 
