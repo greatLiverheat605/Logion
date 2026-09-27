@@ -48,6 +48,7 @@ class OpenAICompatibleGenerationAdapter:
         max_output_tokens: int,
         timeout_seconds: int,
         cancelled: CancelCheck,
+        system_prompt: str | None = None,
     ) -> GeneratedDraft:
         if await cancelled():
             raise self._cancelled()
@@ -88,6 +89,7 @@ class OpenAICompatibleGenerationAdapter:
                         "Return one JSON object containing exactly the requested "
                         "output field names. "
                         "Every value must be a string. Do not call tools or modify external data."
+                        + (f"\n\n{system_prompt}" if system_prompt else "")
                     ),
                 },
                 {

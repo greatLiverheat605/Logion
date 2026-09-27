@@ -44,7 +44,7 @@ from logion_api.portability.models import (
     DataExportJob,
     DataImportPreview,
 )
-from logion_api.research.models import PaperRecord, ResearchQuestion
+from logion_api.research.models import PaperRecord, ResearchIdea, ResearchQuestion
 from logion_api.self_study.models import InboxItem, LearningTrack
 from logion_api.workspaces.models import (
     Space,
@@ -339,6 +339,7 @@ class AccountDeletionService:
             Exam,
             PaperRecord,
             ResearchQuestion,
+            ResearchIdea,
             LearningTrack,
             InboxItem,
             MasteryRecord,

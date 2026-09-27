@@ -260,6 +260,9 @@ class AIRun(Base):
     __tablename__ = "ai_runs"
     __table_args__ = (
         CheckConstraint(
+            "jsonb_typeof(context_entity_types) = 'array'", name="ck_ai_run_context_types"
+        ),
+        CheckConstraint(
             "status IN ('queued','running','succeeded','failed','cancelled')",
             name="ck_ai_run_status",
         ),
@@ -293,6 +296,9 @@ class AIRun(Base):
     target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     target_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
     selected_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    context_entity_types: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     expected_output_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     input_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
     input_nonce: Mapped[bytes | None] = mapped_column(LargeBinary(12))

@@ -81,3 +81,57 @@ DOI 去前缀并小写；arXiv 去网址、版本和 PDF 后缀；PMID 规范化
 `RESEARCH_PAPERS_READ_ONLY`（409）。旧资料同步、搜索、导出、任务证据与知识引用
 不包含私人文献。库变更审计不存标题、正文、工作区或文献 ID。
 账户最终注销会清除本人在他人共享 Space 中的私人文献；私人映射不占用旧资料配额。
+
+## 私人想法与 AI 出站边界（ADR-0041）
+
+`/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/ideas` 提供 GET 列表和
+POST 创建；`/{idea_id}` 提供 GET 详情、PUT 全量编辑、DELETE 软删除。
+字段为 `title`、`body`、`status`（`active` 或 `archived`），编辑／删除携带
+`expected_version`。列表使用 `cursor`、`limit`，返回 `ideas`、`next_cursor`。
+所有操作受研究开关和本人／Space 权限约束，关闭返回 404；写入沿用 CSRF、Origin、
+限流和会员锁。账户最终注销会删除想法；旧同步、导出和 agent 注册表没有想法入口。
+界面在后续知识阶段提供，R1 仅实现 API。
+
+研究 AI 入口为 POST
+`/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/ai/runs`。
+提交 `id`、`idempotency_key`、`task_type`、`target`、可选 `context_entities`、
+`expected_output_fields`、`requested_output_tokens`、`retain_input` 和
+`send_confirmed: true`。目标和上下文均为 `{entity_type, id, version}`。
+服务端校验空间、本人及版本后取源内容，客户端不能向该入口传任意正文。
+创建后通过既有 `/api/v1/workspaces/{workspace_id}/ai/runs` 和 `/ai/drafts`
+查看、取消任务和审查草稿；近期认证、预算预留、会话与草稿验收约束保持生效。
+
+`ai_gateway/research_context.py` 集中维护七类实体白名单及每个任务的映射。
+R1 可读 `resource`、`source_excerpt`、`note`、`research_question`、`topic`、
+`research_claim`；`source_text` 预留在批准的白名单中，但 R1 尚无加载器，返回
+`AI_CONTEXT_UNAVAILABLE`。想法完全没有加载器。构建前和 Worker 发送前分别检查；
+遇到 `idea`／`ideas`／`research_idea`／`research_ideas` 返回
+`AI_PRIVATE_CONTENT_BLOCKED`。旧 AI 入口同样拒绝以想法为目标的请求。
+审计只记录任务类型和实体类型，不含正文、实体 ID 或工作区 ID。
+
+迁移 `0045_research_privacy` 新建 `research_ideas`，并为 `ai_runs` 添加默认空数组的
+`context_entity_types`，让出站复核使用持久化的来源类型。旧请求幂等哈希不变。
+关闭研究开关后，排队中的研究任务也停止出站并释放预算；旧 AI 任务继续原行为。
+存在想法或研究任务来源记录时，schema downgrade 明确拒绝，防止静默丢失。
+
+## AI 任务预设与提示词
+
+GET `/api/v1/workspaces/{workspace_id}/research/ai/presets` 返回档位映射；
+POST 同一路径接收 `economical_model_ids`、`quality_model_ids` 及可选的
+`max_input_tokens`、`max_output_tokens`，在现有 `ai_task_routes` 创建七条路由。
+需 AI 配置权限和近期认证；模型必须属于当前工作区。已有路由或无效模型会使整组
+创建回滚。之后通过既有路由编辑接口按版本调整，预设不会覆盖已有配置。
+
+| 任务                          | 档位   | 服务端 SKILL         |
+| ----------------------------- | ------ | -------------------- |
+| `translate`                   | 经济   | `explain-translate`  |
+| `explain`                     | 高质量 | `explain-translate`  |
+| `close_reading`               | 高质量 | `close-reading`      |
+| `quiz_generate`、`quiz_grade` | 高质量 | `comprehension-quiz` |
+| `link_suggest`                | 高质量 | `literature-links`   |
+| `weekly_comment`              | 经济   | `weekly-review`      |
+
+五份 `packages/skills/*/SKILL.md` 由服务端读取，并随 API／Worker 镜像打包。
+每次运行保存任务及提示词摘要；升级后若提示词已变，旧任务返回
+`AI_PROMPT_VERSION_CHANGED`，需要重新创建。模型输出仅为待人工审查的草稿。
+Provider 配置与可选模型比较见[研究 AI 配置](../operations/research-ai.md)。

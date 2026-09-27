@@ -17,6 +17,7 @@ COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 RUN uv sync --frozen --no-dev --package logion-api --no-install-workspace
 
 COPY apps/api apps/api
+COPY packages/skills packages/skills
 RUN uv sync --frozen --no-dev --package logion-api
 
 RUN addgroup -S -g 10001 logion \

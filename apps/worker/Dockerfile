@@ -18,6 +18,7 @@ RUN uv sync --frozen --no-dev --package logion-worker --no-install-workspace
 
 COPY apps/api apps/api
 COPY apps/worker apps/worker
+COPY packages/skills packages/skills
 RUN uv sync --frozen --no-dev --package logion-worker
 
 RUN addgroup -S -g 10001 logion \
