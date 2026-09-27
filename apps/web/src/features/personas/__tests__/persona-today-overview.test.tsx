@@ -56,7 +56,7 @@ describe("PersonaTodayOverview", () => {
     fireEvent.click(screen.getByRole("button", { name: "切换画像" }));
     fireEvent.click(
       screen.getByRole("button", {
-        name: "导 团队协作：工作区管理、审计、成员协作 预设",
+        name: /^导\s*团队协作：工作区管理、审计、成员协作\s*预设$/,
       }),
     );
 

@@ -261,7 +261,7 @@ describe("IntegrationHub", () => {
     render(<IntegrationHub service={service} />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: /导入预览 .*待确认/ }),
+      await screen.findByRole("button", { name: /^导入预览\s*\d+ 个待确认/ }),
     );
     fireEvent.change(await screen.findByLabelText("内容（最大 1 MiB）"), {
       target: { value: "# Imported note" },
@@ -318,7 +318,7 @@ describe("IntegrationHub", () => {
     render(<IntegrationHub service={service} />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: /导出任务 .*条记录/ }),
+      await screen.findByRole("button", { name: /^导出任务\s*\d+ 条记录/ }),
     );
     fireEvent.change(await screen.findByLabelText("输入 EXPORT 确认创建"), {
       target: { value: "EXPORT" },
