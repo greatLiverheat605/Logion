@@ -4,7 +4,7 @@
   "taskId": "task-ui",
   "completionEventId": "event-ui-completed",
   "handoff": "handoffs/task-ui.json",
-  "handoffSha256": "89638a1c4ac9da9f05ecc71081337f8ac21728fe1db97bf5d98545ad00863f87",
+  "handoffSha256": "4ffb0d895ee0a0d5263d3a7deed297e15563a6d44baefceaea3f012a12d9af5d",
   "acceptanceCheckId": "criterion-ui-fixture",
   "name": "Coordinator fixture validation",
   "status": "passed",
