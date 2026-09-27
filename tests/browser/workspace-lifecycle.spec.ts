@@ -61,6 +61,9 @@ test("ownership transfer and account deletion preserve live permission boundarie
     await invite.getByRole("button", { name: "发送邀请", exact: true }).click();
     const issued = await issuedPromise;
     expect(issued.status()).toBe(201);
+    await expect(
+      page.getByText("邀请邮件已进入发送队列", { exact: false }),
+    ).toBeVisible();
     const token = (await issued.json()).token as string;
     expect(typeof token === "string" && token.length >= 32).toBe(true);
     const acceptingPage = await recipient.newPage();

@@ -1,14 +1,17 @@
 /** @vitest-environment jsdom */
 import {
+  act,
   cleanup,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { InvitationLink, invitationLoginHref } from "./invitation-link";
 import { AcceptInvitationForm } from "./accept-invitation-form";
+import { useWorkspacesController } from "./use-workspaces-controller";
 import { LogionApiError } from "@/lib/api/client";
 const request = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/client", async () => ({
@@ -21,6 +24,41 @@ afterEach(() => {
   request.mockReset();
 });
 const token = "a".repeat(40);
+it("reports invitation queue admission and retains the manual invitation link", async () => {
+  request.mockImplementation((path: string) => {
+    if (path === "/api/v1/workspaces") {
+      return Promise.resolve({
+        workspaces: [{ id: "workspace-1", name: "测试工作区", role: "owner" }],
+      });
+    }
+    if (path.endsWith("/spaces")) return Promise.resolve({ spaces: [] });
+    if (path.endsWith("/members")) return Promise.resolve({ members: [] });
+    if (path.endsWith("/invitations")) {
+      return Promise.resolve({ id: "invitation-1", status: "pending", token });
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  const { result } = renderHook(() => useWorkspacesController());
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  await act(async () => {
+    expect(
+      await result.current.commands.invite({
+        email: "person@example.com",
+        role: "viewer",
+      }),
+    ).toBe(true);
+  });
+  expect(result.current.context.status).toContain("邀请邮件已进入发送队列");
+  expect(result.current.invitations[0]?.token).toBe(token);
+  expect(request).toHaveBeenCalledWith(
+    "/api/v1/workspaces/workspace-1/invitations",
+    expect.objectContaining({
+      method: "POST",
+      csrf: true,
+      body: JSON.stringify({ email: "person@example.com", role: "viewer" }),
+    }),
+  );
+});
 it("copies a full same-origin fragment URL and offers manual recovery on failure", async () => {
   const writeText = vi
     .fn()

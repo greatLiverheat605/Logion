@@ -217,7 +217,9 @@ export function useWorkspacesController(): WorkspaceWorkbenchController {
         },
       );
       setInvitations((current) => [result, ...current]);
-      setStatus("邀请已创建；出于安全原因，Token 只在本次响应中可见。");
+      setStatus(
+        "邀请邮件已进入发送队列；未收到时请检查垃圾邮件，也可复制邀请链接。",
+      );
       return true;
     } catch (error) {
       setStatus(errorText(error));
