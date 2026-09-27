@@ -191,6 +191,14 @@ LOGION_WEBAUTHN_RP_ID=<DOMAIN>
 LOGION_WEBAUTHN_ORIGINS=["https://<DOMAIN>"]
 ```
 
+`compose.yaml` 会把 `.env` 中的限流、配额、有效期、附件大小和日志级别传给容器；未设置时使用应用默认值。以下变量**不会**由默认 compose 传入，只在 `.env` 中设置不会生效：
+
+- 附件扫描与隔离目录：需要按[附件扫描手册](./attachment-scanner.md)增加覆盖配置；
+- 知识空间与本地 Worker 相关开关、游标密钥：属于敏感能力，开启前需单独批准并准备密钥注入；
+- `LOGION_API_HOST`、`LOGION_API_PORT`：容器内固定为 `0.0.0.0:8000`。
+
+仓库测试 `tests/test_compose_env_passthrough.py` 要求 `.env.example` 中的每个变量要么被 compose 传入，要么在排除清单中写明理由。
+
 同时必须配置非开发值的：
 
 - `LOGION_SECRET_KEY`；
