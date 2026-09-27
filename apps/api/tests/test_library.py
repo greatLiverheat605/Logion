@@ -1,7 +1,7 @@
 import io
 import json
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,7 +12,8 @@ from logion_api.db import session_factory
 from logion_api.identity.models import AuditEvent
 from logion_api.library.schemas import LibraryCreate
 from logion_api.main import app
-from logion_api.portability.models import DataExportJob
+from logion_api.portability.deletion_service import AccountDeletionService
+from logion_api.portability.models import AccountDeletionRequest, DataExportJob
 from logion_api.portability.service import PortabilityService
 from logion_api.research.models import ResearchClaim
 from logion_api.workspaces.models import WorkspaceMembership
@@ -147,6 +148,50 @@ async def test_library_is_private_in_shared_spaces_and_legacy_projections(
         )
         assert readonly.status_code == 409
         assert readonly.json()["code"] == "RESEARCH_PAPERS_READ_ONLY"
+        import_space = await owner.post(
+            f"/api/v1/workspaces/{workspace}/spaces",
+            json={"name": "Synthetic private import", "visibility": "private"},
+        )
+        assert import_space.status_code == 201, import_space.text
+        imports = f"/api/v1/workspaces/{workspace}/data-imports"
+        preview_id = uuid4()
+        preview = await owner.post(
+            f"{imports}/preview",
+            json={
+                "id": str(preview_id),
+                "source_format": "logion_json",
+                "source_filename": "synthetic.json",
+                "content": json.dumps(
+                    {
+                        "schema_version": "logion-export-v1",
+                        "objects": {
+                            "paper_records": [
+                                {"title": "Synthetic imported paper", "citation_key": "imported"}
+                            ]
+                        },
+                    }
+                ),
+            },
+        )
+        assert preview.status_code == 201, preview.text
+        import_body = {
+            "target_space_id": import_space.json()["id"],
+            "expected_version": 1,
+            "confirmation": "IMPORT",
+        }
+        denied_import = await owner.post(f"{imports}/{preview_id}/commit", json=import_body)
+        assert denied_import.status_code == 409, denied_import.text
+        assert denied_import.json()["code"] == "RESEARCH_PAPERS_READ_ONLY"
+        monkeypatch.setattr(settings, "research_v3_enabled", False)
+        imported = await owner.post(f"{imports}/{preview_id}/commit", json=import_body)
+        assert imported.status_code == 200, imported.text
+        monkeypatch.setattr(settings, "research_v3_enabled", True)
+        import_list = await owner.get(
+            f"/api/v1/workspaces/{workspace}/spaces/{import_space.json()['id']}/library/resources"
+        )
+        assert [row["title"] for row in import_list.json()["resources"]] == [
+            "Synthetic imported paper"
+        ]
         assert (await anonymous.get(base)).status_code == 401
         payload = {
             "title": "Synthetic private library title",
@@ -322,3 +367,19 @@ async def test_library_is_private_in_shared_spaces_and_legacy_projections(
         assert (await owner.get(path)).status_code == 404
         assert (await owner.post(base, json=payload)).status_code == 201
         assert (await other.get(f"{base}/{peer.json()['id']}")).status_code == 200
+        deletion = await other.post(
+            "/api/v1/account-deletion", json={"confirmation": "DELETE MY ACCOUNT"}
+        )
+        assert deletion.status_code == 202, deletion.text
+        async with session_factory() as db:
+            request = await db.get(AccountDeletionRequest, UUID(deletion.json()["id"]))
+            assert request is not None
+            request.delete_after = datetime.now(UTC) - timedelta(seconds=1)
+            await db.commit()
+        assert await AccountDeletionService(settings).execute_next()
+        async with session_factory() as db:
+            assert await db.get(Resource, UUID(peer.json()["id"])) is None
+            assert (
+                await db.scalar(select(Resource).where(Resource.research_owner_id == owner_id))
+                is not None
+            )

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logion_api.ai_gateway.models import AIOutputDraft, AIRun, AIRunCandidate
 from logion_api.config import Settings
 from logion_api.content.attachment_storage import FilesystemAttachmentStorage
-from logion_api.content.models import Attachment
+from logion_api.content.models import Attachment, Resource
 from logion_api.db import session_factory, utc_now
 from logion_api.engagement.models import CalendarFeed, Notification, NotificationPreference
 from logion_api.errors import APIError
@@ -334,6 +334,7 @@ class AccountDeletionService:
         await db.execute(
             delete(Space).where(Space.owner_user_id == user.id, Space.visibility == "private")
         )
+        await db.execute(delete(Resource).where(Resource.research_owner_id == user.id))
         for personal_model in (
             Exam,
             PaperRecord,
