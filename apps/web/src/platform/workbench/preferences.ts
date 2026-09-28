@@ -11,6 +11,7 @@ export const CONTENTS = {
   excerpts: "摘录",
   chat: "AI 对话",
   translate: "翻译对照",
+  graphlocal: "知识网局部",
 } as const;
 export type PaneContent = keyof typeof CONTENTS;
 export type PaneIndex = 0 | 1 | 2;
@@ -53,9 +54,9 @@ export const PRESETS = [
   {
     id: "quiz",
     label: "自测",
-    contents: ["info", "pdf", "quiz"],
-    widths: [20, 40, 40],
-    visible: [false, true, true],
+    contents: ["pdf", "quiz", "graphlocal"],
+    widths: [40, 35, 25],
+    visible: [true, true, true],
   },
   {
     id: "focus",
@@ -76,6 +77,12 @@ export function presetLayout(id: string): Layout {
       collapsed: !preset.visible[i],
     })) as Layout["panes"],
   };
+}
+export function initialMobilePane(layout: Layout): PaneIndex {
+  const quiz = layout.panes.findIndex(
+    (pane) => pane.content === "quiz" && !pane.collapsed,
+  );
+  return layout.preset === "quiz" && quiz >= 0 ? (quiz as PaneIndex) : 1;
 }
 export function togglePane(layout: Layout, index: number): Layout {
   if (index !== 0 && index !== 1 && index !== 2) return layout;

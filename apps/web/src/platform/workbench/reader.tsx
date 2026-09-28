@@ -22,6 +22,7 @@ import { ReadingAiResult } from "./reading-ai";
 import { useCloseReadingNote } from "./close-reading-note";
 import { useReadingQuiz } from "./reading-quiz";
 import { ReadingProgress } from "./reading-progress";
+import { NetworkScope } from "./network";
 
 type Resource = components["schemas"]["LibraryResource"];
 type Outline = { title: string; page: number | null; depth: number };
@@ -422,6 +423,16 @@ function ReaderScope({
   function contents(kind: PaneContent) {
     if (kind === "note") return note;
     if (kind === "quiz") return quiz;
+    if (kind === "graphlocal")
+      return (
+        <NetworkScope
+          scope={`/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}`}
+          workspaceId={context.workspace_id}
+          focusType="resource"
+          focusId={id}
+          compact
+        />
+      );
     if (kind === "excerpts") return <ReadingExcerpts path={path} jump={jump} />;
     if (["chat", "translate", "translation"].includes(kind))
       return (
