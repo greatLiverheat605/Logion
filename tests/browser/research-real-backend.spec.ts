@@ -322,7 +322,7 @@ test("selection commands preserve source citations and use the real AI draft pip
   await page.reload();
   expect((await ready).status()).toBe(200);
   if (page.viewportSize()!.width < 768)
-    await page.getByRole("radio", { name: "中 · 文献正文" }).click();
+    await page.getByRole("radio", { name: "中 · PDF 原文" }).click();
   await selectFirstPassage(page);
   await expect(
     page.getByRole("toolbar", { name: "选中文字操作" }),

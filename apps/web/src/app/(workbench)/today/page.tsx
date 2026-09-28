@@ -1,4 +1,4 @@
-import { Placeholder } from "@/platform/workbench/placeholder";
+import { ReadingToday } from "@/platform/workbench/reading-today";
 export default function Page() {
-  return <Placeholder title="今日" />;
+  return <ReadingToday />;
 }

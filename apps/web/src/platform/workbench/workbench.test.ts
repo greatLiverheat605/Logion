@@ -101,6 +101,22 @@ describe("workbench command contract", () => {
   });
 });
 it("retains at least one pane and validates persisted layout", () => {
+  const legacy = {
+    ...presetLayout("reading"),
+    panes: [
+      { content: "info", width: 22, collapsed: false },
+      { content: "document", width: 50, collapsed: false },
+      { content: "translation", width: 28, collapsed: false },
+    ],
+  };
+  expect(parsePreference("workbench.layouts", JSON.stringify(legacy))).toEqual(
+    legacy,
+  );
+  expect(presetLayout("reading").panes.map((pane) => pane.content)).toEqual([
+    "outline",
+    "pdf",
+    "note",
+  ]);
   const focus = presetLayout("focus");
   expect(togglePane(focus, 1)).toBe(focus);
   expect(togglePane(focus, 0).panes[0].collapsed).toBe(false);

@@ -25,6 +25,8 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      READING_TRANSITION_INVALID:
+        "请先开始阅读，再标记精读完成。已归档文献不会恢复同步。",
       NOTE_DOCUMENT_UPDATE_INVALID:
         "笔记更新无效或超过大小上限，当前输入仍在页面中。",
       NOTE_DOCUMENT_TOO_LARGE: "笔记超过允许的大小，请缩短内容。",
