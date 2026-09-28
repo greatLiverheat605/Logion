@@ -1,5 +1,15 @@
+import { useSyncExternalStore } from "react";
 import { PRESETS } from "./preferences";
 import { WORKBENCH_ROUTES } from "./routes";
+
+const subscribeToPlatform = () => () => {};
+export function useModifierKey() {
+  return useSyncExternalStore(
+    subscribeToPlatform,
+    () => (/Mac|iPhone|iPad|iPod/.test(navigator.platform) ? "⌘" : "Ctrl"),
+    () => "Ctrl",
+  );
+}
 
 export interface Shortcut {
   code: string;
@@ -57,30 +67,33 @@ export function isEditing(target: EventTarget | null): boolean {
     )
   );
 }
-export function createCommands(actions: {
-  navigate: (path: string) => void;
-  theme: (value: "light" | "dark" | "system") => void;
-  preset: (id: string) => void;
-  pane: (index: number) => void;
-  palette: () => void;
-  toolbars: () => void;
-  help: () => void;
-}): Command[] {
+export function createCommands(
+  actions: {
+    navigate: (path: string) => void;
+    theme: (value: "light" | "dark" | "system") => void;
+    preset: (id: string) => void;
+    pane: (index: number) => void;
+    palette: () => void;
+    toolbars: () => void;
+    help: () => void;
+  },
+  { toolbarsVisible = false, modifier = "Ctrl" } = {},
+): Command[] {
   const commands: Command[] = [
     {
       id: "palette",
       label: "打开指令面板",
       group: "工具",
       shortcut: { mod: true, code: "KeyK" },
-      hint: "⌘/Ctrl K",
+      hint: `${modifier}+K`,
       action: actions.palette,
     },
     {
       id: "toolbars",
-      label: "显示或隐藏全部工具栏",
+      label: toolbarsVisible ? "隐藏全部工具栏" : "显示全部工具栏",
       group: "工具",
       shortcut: { mod: true, code: "Backslash" },
-      hint: "⌘/Ctrl \\",
+      hint: `${modifier}+\\`,
       action: actions.toolbars,
     },
     {

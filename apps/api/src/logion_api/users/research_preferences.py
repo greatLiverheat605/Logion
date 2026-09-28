@@ -8,7 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError,
 from logion_api.errors import APIError
 
 RESEARCH_SETTING_KEYS = frozenset(
-    {"workbench.context", "workbench.layouts", "appearance.theme", "reader.selection_menu"}
+    {
+        "workbench.context",
+        "workbench.layouts",
+        "appearance.theme",
+        "reader.selection_menu",
+        "reader.hint_dismissed",
+    }
 )
 
 
@@ -52,7 +58,7 @@ def validate_research_preference(key: str, value: str) -> ResearchContext | None
             LayoutPreference.model_validate_json(value)
         elif key == "appearance.theme":
             TypeAdapter(Literal["light", "dark", "system"]).validate_json(value, strict=True)
-        elif key == "reader.selection_menu":
+        elif key in {"reader.selection_menu", "reader.hint_dismissed"}:
             TypeAdapter(bool).validate_json(value, strict=True)
     except ValidationError as exc:
         raise APIError(

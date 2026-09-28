@@ -173,6 +173,19 @@ jobs:
       - run: uv run --group dev pytest -m integration apps/api/tests apps/worker/tests
       - name: Validate observed API responses with the legacy client contract
         run: pnpm test:sync-compat --responses reports/sync-legacy
+      - name: Build Web for real research API browser test
+        env:
+          LOGION_PUBLIC_API_URL: http://127.0.0.1:8000
+        run: pnpm --filter @logion/web build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Real research API and Web (R1-F2)
+        run: pnpm exec playwright test --config playwright.research.config.ts
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pr-research-real-${{ github.event.pull_request.number || github.sha }}
+          path: reports/research-real
+          retention-days: 30
 
   browser:
     runs-on: ubuntu-latest

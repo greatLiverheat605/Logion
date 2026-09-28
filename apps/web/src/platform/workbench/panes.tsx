@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { Button, Menu, Segmented } from "./components";
+import { useModifierKey } from "./commands";
 import {
   CONTENTS,
   PRESETS,
@@ -15,6 +16,7 @@ import { useWorkbench } from "./provider";
 
 export function ThreePanes({ info }: { info?: ReactNode }) {
   const { preferences, save, pending } = useWorkbench();
+  const modifier = useModifierKey();
   const stored = preferences["workbench.layouts"];
   const [draft, setDraft] = useState<Layout | null>(null);
   const layout = draft ?? stored;
@@ -54,25 +56,46 @@ export function ThreePanes({ info }: { info?: ReactNode }) {
   }
   return (
     <section className="wb-reader" aria-label="三栏阅读布局">
-      <div className="wb-reader-tools">
-        <Segmented
-          label="预设布局"
-          value={layout.preset}
-          options={PRESETS}
-          onChange={(id) => {
-            if (!pending) void commit(presetLayout(id));
-          }}
-        />
-        <Menu
-          label="显示栏目"
-          items={layout.panes.map((pane, index) => ({
-            label: `${["左", "中", "右"][index]}栏 · ${CONTENTS[pane.content]}`,
-            checked: !pane.collapsed,
-            disabled: pending,
-            action: () => void commit(togglePane(layout, index)),
-          }))}
-        />
-      </div>
+      {!preferences["reader.hint_dismissed"] && !layout.toolbars && (
+        <aside className="wb-reader-hint" aria-label="阅读工具提示">
+          <div>
+            <strong>工具已隐藏</strong>
+            <p>
+              <kbd>{modifier}+K</kbd> 打开指令面板；<kbd>{modifier}+\</kbd>{" "}
+              显示全部工具栏，Esc 收起。
+            </p>
+            <p>Alt+Shift+1–4 切换阅读预设。聚焦或移到栏顶可更换栏目内容。</p>
+          </div>
+          <Button
+            disabled={pending}
+            onClick={() => void save("reader.hint_dismissed", true)}
+          >
+            知道了
+          </Button>
+        </aside>
+      )}
+      {layout.toolbars && (
+        <div className="wb-reader-tools">
+          <Segmented
+            label="预设布局"
+            value={layout.preset}
+            options={PRESETS}
+            onChange={(id) => {
+              if (!pending)
+                void commit({ ...presetLayout(id), toolbars: layout.toolbars });
+            }}
+          />
+          <Menu
+            label="显示栏目"
+            items={layout.panes.map((pane, index) => ({
+              label: `${["左", "中", "右"][index]}栏 · ${CONTENTS[pane.content]}`,
+              checked: !pane.collapsed,
+              disabled: pending,
+              action: () => void commit(togglePane(layout, index)),
+            }))}
+          />
+        </div>
+      )}
       <div className="wb-mobile-panes">
         <Segmented
           label="当前栏目"

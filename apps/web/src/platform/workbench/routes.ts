@@ -1,8 +1,8 @@
 export const WORKBENCH_ROUTES = [
-  { path: "/today", label: "今天", icon: "sun" },
+  { path: "/today", label: "今日", icon: "sun" },
   { path: "/library", label: "文献库", icon: "book" },
-  { path: "/questions", label: "问题", icon: "question" },
-  { path: "/graph", label: "知识图谱", icon: "graph" },
+  { path: "/questions", label: "研究问题", icon: "question" },
+  { path: "/graph", label: "知识网", icon: "graph" },
   { path: "/review", label: "复习", icon: "review" },
   { path: "/plan", label: "计划", icon: "plan" },
   { path: "/settings", label: "设置", icon: "settings" },

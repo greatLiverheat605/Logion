@@ -101,7 +101,7 @@ async function geometry(page: Page) {
     if (document.documentElement.scrollWidth > innerWidth)
       issues.push("document overflow");
     for (const element of document.querySelectorAll<HTMLElement>(
-      ".wb-titlebar, .wb-page, .wb-pane-header, .wb-pane-content, .wb-reader-tools, .wb-inspector, .wb-library-row, .wb-library-form",
+      ".wb-titlebar, .wb-page, .wb-pane-header, .wb-pane-content, .wb-reader-tools, .wb-reader-hint, .wb-mobile-panes, .wb-inspector, .wb-library-row, .wb-library-form",
     )) {
       if (
         element.getBoundingClientRect().width &&
@@ -122,6 +122,15 @@ async function geometry(page: Page) {
       )
         issues.push("header overlaps content");
     }
+    const hint = document.querySelector(".wb-reader-hint");
+    const panes = document.querySelector(".wb-panes");
+    if (
+      hint &&
+      panes &&
+      hint.getBoundingClientRect().bottom >
+        panes.getBoundingClientRect().top + 1
+    )
+      issues.push("hint overlaps panes");
     return issues;
   });
   expect(problems).toEqual([]);
@@ -386,10 +395,11 @@ for (const theme of ["light", "dark"] as const) {
         ],
       ]);
       await installApi(context, settings);
+      const { initial } = await installLibrary(context);
       await page.setViewportSize({ width, height: 960 });
       await page.goto("/today");
       await expect(
-        page.getByRole("heading", { name: "今天", exact: true }).first(),
+        page.getByRole("heading", { name: "今日", exact: true }).first(),
       ).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await geometry(page);
@@ -409,19 +419,86 @@ for (const theme of ["light", "dark"] as const) {
         path: testInfo.outputPath(`commands-${width}-${theme}.png`),
       });
       await page.keyboard.press("Escape");
-      await page.goto("/read/example");
+      await page.goto(`/read/${initial.id}`);
       await expect(
         page.getByRole("region", { name: "三栏阅读布局" }),
       ).toBeVisible();
+      if (width >= 768) {
+        await expect(
+          page.getByRole("heading", { name: initial.title }),
+        ).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: "打开指令面板" }),
+        ).toContainText(
+          (await page.evaluate(() => navigator.platform)).startsWith("Mac")
+            ? "⌘+K"
+            : "Ctrl+K",
+        );
+      }
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "显示栏目" })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByRole("complementary", { name: "阅读工具提示" }),
+      ).toBeVisible();
+      if (width < 768)
+        await expect(
+          page.getByRole("radiogroup", { name: "当前栏目" }),
+        ).toBeVisible();
       await geometry(page);
       await page.screenshot({
-        path: testInfo.outputPath(`panes-${width}-${theme}.png`),
+        path: testInfo.outputPath(`reader-default-${width}-${theme}.png`),
       });
       const audit = await new AxeBuilder({ page })
         .include(".wb-root")
         .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
         .analyze();
       expect(audit.violations).toEqual([]);
+      await page.keyboard.press("Control+Backslash");
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "显示栏目" }),
+      ).toBeVisible();
+      await geometry(page);
+      await page.screenshot({
+        path: testInfo.outputPath(`reader-tools-${width}-${theme}.png`),
+      });
+      await page.keyboard.press("Control+Backslash");
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toHaveCount(0);
+      await command(page, "显示全部工具栏");
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toBeVisible();
+      await command(page, "隐藏全部工具栏");
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toHaveCount(0);
+      await command(page, "显示全部工具栏");
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toBeVisible();
+      await page.keyboard.press("Control+k");
+      await expect(
+        page.getByRole("dialog", { name: "指令面板" }),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "指令面板" })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(
+        page.getByRole("radiogroup", { name: "预设布局" }),
+      ).toHaveCount(0);
       expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
       expect(
         await page.evaluate(() =>
@@ -467,6 +544,22 @@ test("keyboard commands, persistent context and layouts survive a fresh browser 
   await expect
     .poll(() => JSON.parse(settings.get("workbench.layouts")!.value).preset)
     .toBe("focus");
+  await command(page, "精读布局");
+  await expect
+    .poll(() => JSON.parse(settings.get("workbench.layouts")!.value).preset)
+    .toBe("reading");
+  await expect(page.getByRole("radiogroup", { name: "预设布局" })).toHaveCount(
+    0,
+  );
+  await page.keyboard.press("Alt+Shift+4");
+  await expect
+    .poll(() => JSON.parse(settings.get("workbench.layouts")!.value).preset)
+    .toBe("focus");
+  await page.getByRole("button", { name: "知道了" }).click();
+  await expect(
+    page.getByRole("complementary", { name: "阅读工具提示" }),
+  ).toHaveCount(0);
+  expect(settings.get("reader.hint_dismissed")?.value).toBe("true");
   const fresh = await browser.newContext();
   try {
     await installApi(fresh, settings);
@@ -476,6 +569,9 @@ test("keyboard commands, persistent context and layouts survive a fresh browser 
       spaceIds[1],
     );
     await expect(other.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(
+      other.getByRole("complementary", { name: "阅读工具提示" }),
+    ).toHaveCount(0);
     await expect(
       other.getByRole("region", { name: "左栏", exact: true }),
     ).toHaveCount(0);

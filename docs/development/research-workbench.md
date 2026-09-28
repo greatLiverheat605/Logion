@@ -12,6 +12,22 @@
 Playwright 的 `workbench-chromium` 项目从同一构建启动两个隔离 Web 实例，
 分别以开关开启和关闭运行，覆盖真实路由状态、键盘和响应式布局。
 
+`playwright.research.config.ts` 另启真实 API（8000 开、8001 关）与 Web（3090），
+仅匹配 `research-real-backend.spec.ts`，不拦截任何请求。先用
+`LOGION_PUBLIC_API_URL=http://127.0.0.1:8000 pnpm --filter @logion/web build`
+构建（Next 的代理目标在构建时确定），在已迁移的合成测试数据库与 Redis 环境中运行
+`pnpm exec playwright test --config playwright.research.config.ts`。
+PR 的 integration 门执行此用例并上传 `pr-research-real-*` 报告；研究开关仅注入
+该配置启动的服务进程，其他测试环境不变。用例零重试、无固定等待，验证真实登录、
+文献创建／重复／刷新、跨上下文偏好与版本冲突、在线存储边界和关旗 404。
+真实会话与合成密码不进入 trace 或 video。
+
+关闭开关保留 v0.3 的隐私过滤，不能据此回退到未修补的 v0.2.x。
+一旦存在 `research_owner_id` 非空资源（关旗时旧论文写入也会产生），旧应用会在
+共享 Space 暴露私人文献，且可能拒绝新资源类型。R5 前须由所有者选择
+[ADR-0039 的 A／B 回滚策略](../adr/0039-unified-source-model.md#rollback)；
+Claude 建议 A，本轮仅修正文档。
+
 ## 偏好合同
 
 复用 `GET /api/v1/users/me/settings` 和 `PUT /api/v1/users/me/settings`；
@@ -23,13 +39,14 @@ Playwright 的 `workbench-chromium` 项目从同一构建启动两个隔离 Web 
 | `workbench.context`     | `workspace_id` 和 `space_id` 两个 UUID |
 | `workbench.layouts`     | `preset`、三个 `panes`、`toolbars`     |
 | `reader.selection_menu` | 布尔值                                 |
+| `reader.hint_dismissed` | 布尔值，关闭首次阅读提示后为 `true`    |
 
 每栏包含 `content`、10–80 的相对 `width` 和 `collapsed`；至少一栏保持可见。
 内容标识为 `info / document / translation / quiz`，仅文献信息已实现，
 其他是后续阅读功能占位。预设为 `reading / translation / quiz / focus`，
 手动调整标记为 `custom`。
 
-新键关闭时，按键读取和写入返回 404，批量读取不暴露这四个键。
+新键关闭时，按键读取和写入返回 404，批量读取不暴露这些研究偏好键。
 旧设置键合同不变。开启时校验 JSON 结构和当前 Space 访问权限；
 保存上下文不能授予权限，领域 API 必须继续独立检查权限。
 版本冲突返回 `USER_SETTING_VERSION_CONFLICT`，无效值返回
@@ -46,6 +63,11 @@ Playwright 的 `workbench-chromium` 项目从同一构建启动两个隔离 Web 
 标签页快捷键。三栏标题固定 32px；鼠标悬停、键盘焦点或显示工具栏时出现选择器，
 触摸设备始终显示。小于 768px 时一次展示一栏，通过栏目分段控件切换。
 分隔条既支持拖动，也支持方向键以 2 个相对单位调整。
+
+阅读预设条与“显示栏目”默认隐藏；⌘/Ctrl+反斜杠和指令面板共用同一显隐状态，
+Esc 先关闭弹层，再收起工具栏。隐藏时仍支持预设快捷键与指令。
+首次提示位于正文前的正常布局流，关闭后通过 `reader.hint_dismissed` 按版本保存；
+手机始终保留栏目切换。非 Mac 快捷键提示使用 Ctrl。
 
 原型的主色和几何尺寸保持不变；浅色辅助文字与选中导航文字使用同色系的
 较深文本令牌，以满足小字号在半透明底色上的 WCAG AA 对比度。

@@ -588,6 +588,22 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--wb-sep);
 }
+.wb-reader-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wb-sep);
+  background: var(--wb-chrome);
+  flex-shrink: 0;
+}
+.wb-reader-hint p {
+  margin: 4px 0 0;
+  color: var(--wb-muted);
+  overflow-wrap: anywhere;
+}
 .wb-panes {
   display: flex;
   flex: 1;

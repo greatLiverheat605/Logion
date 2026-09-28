@@ -44,3 +44,6 @@
 ## Rollback
 
 `LOGION_RESEARCH_V3_ENABLED` off restores the legacy client at `/app/*`.
+This is a feature rollback within v0.3, not permission to run an unpatched v0.2.x
+application on migrated private resources. Follow the conditions and pending
+R5 policy decision in [ADR-0039](0039-unified-source-model.md#rollback).
