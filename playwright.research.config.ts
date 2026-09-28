@@ -7,6 +7,10 @@ const researchRedis = new URL(
   process.env.LOGION_REDIS_URL ?? "redis://127.0.0.1:6379/0",
 );
 researchRedis.pathname = "/15";
+const integrationKeyring = JSON.stringify({
+  active: "test",
+  keys: { test: randomBytes(32).toString("base64url") },
+});
 
 // Only this suite starts real research-enabled services. The regular browser
 // configuration and integration tests keep their existing environments.
@@ -51,10 +55,7 @@ export default defineConfig({
           researchRedis.toString(),
         LOGION_ZOTERO_ORIGIN: "http://127.0.0.1:8192",
         LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
-        LOGION_INTEGRATION_KEYRING: JSON.stringify({
-          active: "test",
-          keys: { test: randomBytes(32).toString("base64url") },
-        }),
+        LOGION_INTEGRATION_KEYRING: integrationKeyring,
         LOGION_RESEARCH_V3_ENABLED: String(enabled),
         LOGION_ALLOWED_ORIGINS: JSON.stringify([origin]),
         LOGION_WEBAUTHN_RP_ID: "127.0.0.1",
@@ -62,6 +63,22 @@ export default defineConfig({
       },
       reuseExistingServer: false,
     })),
+    {
+      command: "uv run --package logion-worker python -u -m logion_worker.main",
+      wait: { stdout: /worker_started/ },
+      env: {
+        LOGION_ENV: "test",
+        LOGION_RESEARCH_V3_ENABLED: "true",
+        LOGION_ZOTERO_ORIGIN: "http://127.0.0.1:8192",
+        LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
+        LOGION_INTEGRATION_KEYRING: integrationKeyring,
+        LOGION_REDIS_URL:
+          process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
+          researchRedis.toString(),
+        LOGION_WORKER_HEALTH_STATE_PATH:
+          "reports/research-real/worker-health.json",
+      },
+    },
     {
       command:
         "pnpm --filter @logion/web start --hostname 127.0.0.1 --port 3090",

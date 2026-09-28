@@ -25,6 +25,7 @@ from logion_api.identity.models import User
 from logion_api.integrations.keyring import decrypt, encrypt
 from logion_api.integrations.models import IntegrationCredential
 from logion_api.integrations.network import Provider, integration_error, request_integration
+from logion_api.integrations.zotero_sync import observe_backoff
 from logion_api.library.routes import require_enabled
 
 
@@ -219,6 +220,8 @@ async def test_connection(
     )
     if row is None:
         raise integration_error("INTEGRATION_NOT_CONFIGURED", 409)
+    if provider == "zotero" and row.retry_after and row.retry_after > utc_now():
+        raise integration_error("ZOTERO_RATE_LIMITED", 429)
     try:
         secret = json.loads(decrypt(settings.integration_keyring, row.envelope, aad=row.aad))
         if provider == "zotero":
@@ -229,6 +232,7 @@ async def test_connection(
                 "/keys/current",
                 headers={"Zotero-API-Key": secret["credential"], "Zotero-API-Version": "3"},
             )
+            observe_backoff(row, response)
         else:
             basic = base64.b64encode(
                 f"{secret['username']}:{secret['credential']}".encode()

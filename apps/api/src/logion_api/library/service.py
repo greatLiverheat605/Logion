@@ -192,6 +192,12 @@ class LibraryService:
         request_id: str,
     ) -> Resource:
         await self.authorize(db, context, workspace_id, space_id, request_id, write=True)
+        if any(tag.startswith("collection:") for tag in payload.tags):
+            raise APIError(
+                code="ZOTERO_COLLECTION_READ_ONLY",
+                message="Zotero collections are read-only.",
+                status_code=422,
+            )
         await self.duplicate(db, context, workspace_id, space_id, payload)
         count = await db.scalar(
             select(func.count()).select_from(
@@ -235,6 +241,23 @@ class LibraryService:
             db, context, workspace_id, space_id, resource_id, request_id, write=True
         )
         self.check_version(item, payload.expected_version)
+        if sorted(tag for tag in item.tags if tag.startswith("collection:")) != sorted(
+            tag for tag in payload.tags if tag.startswith("collection:")
+        ):
+            raise APIError(
+                code="ZOTERO_COLLECTION_READ_ONLY",
+                message="Zotero collections are read-only.",
+                status_code=422,
+            )
+        if item.zotero_item_key and any(
+            getattr(payload, field) != getattr(item, field)
+            for field in ("zotero_library_id", "zotero_item_key", "zotero_version")
+        ):
+            raise APIError(
+                code="ZOTERO_IDENTITY_READ_ONLY",
+                message="Zotero identity is read-only.",
+                status_code=422,
+            )
         await self.duplicate(db, context, workspace_id, space_id, payload, item.id)
         self.apply(item, payload)
         item.version += 1

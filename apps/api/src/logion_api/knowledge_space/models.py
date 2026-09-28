@@ -25,6 +25,19 @@ from logion_api.db import Base, utc_now
 class SourceExcerpt(Base):
     __tablename__ = "source_excerpts"
     __table_args__ = (
+        CheckConstraint(
+            "(origin = 'logion' AND zotero_annotation_key IS NULL "
+            "AND zotero_annotation_version IS NULL) OR "
+            "(origin = 'zotero' AND zotero_annotation_key IS NOT NULL "
+            "AND zotero_annotation_version IS NOT NULL AND zotero_annotation_version >= 0)",
+            name="ck_excerpt_origin",
+        ),
+        UniqueConstraint(
+            "resource_id",
+            "zotero_annotation_key",
+            "zotero_annotation_version",
+            name="uq_excerpt_zotero_edition",
+        ),
         ForeignKeyConstraint(
             ["resource_id", "workspace_id", "space_id"],
             ["resources.id", "resources.workspace_id", "resources.space_id"],
@@ -113,6 +126,11 @@ class SourceExcerpt(Base):
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     resource_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     resource_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="logion", server_default="logion"
+    )
+    zotero_annotation_key: Mapped[str | None] = mapped_column(String(80))
+    zotero_annotation_version: Mapped[int | None] = mapped_column(BigInteger)
     source_version_key: Mapped[str] = mapped_column(Text, nullable=False)
     source_file_sha256: Mapped[str | None] = mapped_column(String(64))
     source_version_sha256: Mapped[str] = mapped_column(String(64), nullable=False)

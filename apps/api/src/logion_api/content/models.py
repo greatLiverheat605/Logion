@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -99,6 +100,10 @@ class Resource(Base):
         CheckConstraint(
             "zotero_version IS NULL OR zotero_version >= 0", name="ck_resources_zotero_version"
         ),
+        CheckConstraint(
+            "jsonb_typeof(zotero_collection_keys) = 'array'",
+            name="ck_resources_zotero_collections",
+        ),
         UniqueConstraint(
             "id",
             "workspace_id",
@@ -156,6 +161,12 @@ class Resource(Base):
     zotero_library_id: Mapped[str | None] = mapped_column(String(80))
     zotero_item_key: Mapped[str | None] = mapped_column(String(80))
     zotero_version: Mapped[int | None] = mapped_column(BigInteger)
+    zotero_sync_stopped: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    zotero_collection_keys: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     file_locator: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True))
     reading_status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="unread", server_default="unread"

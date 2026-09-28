@@ -12,10 +12,11 @@ from httpx import ASGITransport, AsyncClient
 from logion_api.config import Settings, get_settings
 from logion_api.content.attachment_dependencies import get_attachment_scanner
 from logion_api.content.attachment_scanner import AttachmentScanResult
-from logion_api.content.models import Attachment
+from logion_api.content.models import Attachment, Resource
 from logion_api.db import session_factory
 from logion_api.identity.models import AuthSession, EmailOutbox, PasswordCredential, User
 from logion_api.integrations.models import IntegrationCredential
+from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
 from logion_api.main import app
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest
@@ -302,6 +303,56 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         row.delete_after = datetime.now(UTC) - timedelta(seconds=1)
         # Synthetic opaque envelope: cleanup must not require a working keyring.
         integration_id = uuid4()
+        resource_id, excerpt_id, citation_id = uuid4(), uuid4(), uuid4()
+        db.add(
+            Resource(
+                id=resource_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                research_owner_id=user_id,
+                resource_type="paper",
+                title="Synthetic private paper",
+                page_index=[],
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        await db.flush()
+        db.add(
+            SourceExcerpt(
+                id=excerpt_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                resource_id=resource_id,
+                resource_version=1,
+                source_version_key="synthetic",
+                source_version_sha256="0" * 64,
+                excerpt_text="Synthetic annotation",
+                excerpt_sha256=hashlib.sha256(b"Synthetic annotation").hexdigest(),
+                page_start=1,
+                page_end=1,
+                origin="zotero",
+                zotero_annotation_key="N0000001",
+                zotero_annotation_version=1,
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        await db.flush()
+        db.add(
+            KnowledgeCitation(
+                id=citation_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                source_excerpt_id=excerpt_id,
+                note_id=note_id,
+                relationship_kind="source",
+                created_by=user_id,
+                acceptance_operation_id=uuid4(),
+                accepted_by=user_id,
+                accepted_at=datetime.now(UTC),
+            )
+        )
         db.add(
             IntegrationCredential(
                 id=integration_id,
@@ -325,6 +376,9 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert request is not None and request.status == "completed"
         assert await db.get(Attachment, attachment_id) is None
         assert await db.get(IntegrationCredential, integration_id) is None
+        assert await db.get(Resource, resource_id) is None
+        assert await db.get(SourceExcerpt, excerpt_id) is None
+        assert await db.get(KnowledgeCitation, citation_id) is None
         assert not path_exists(attachment_path)
         assert await db.get(PasswordCredential, user_id) is None
         assert not list(
