@@ -192,7 +192,15 @@ test("selection commands preserve source citations and use the real AI draft pip
   await page.getByRole("button", { name: "发送原文并起草缺失章节" }).click();
   await expect(page.getByRole("heading", { name: "待确认草稿" })).toBeVisible();
   expect(await editor.inputValue()).not.toContain("Synthetic explanation");
+  // The note draft loads independently of PDF extraction. Finish the reloaded
+  // source upload before this scenario deliberately takes the browser offline.
+  const reloadedText = page.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/${resource.id}/text`) &&
+      r.request().method() === "POST",
+  );
   await page.reload();
+  expect((await reloadedText).status()).toBe(200);
   await expect(page.getByRole("heading", { name: "待确认草稿" })).toBeVisible();
   await page.getByRole("button", { name: "接受并写入笔记" }).click();
   await expect(editor).toHaveValue(/Synthetic explanation/);

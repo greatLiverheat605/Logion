@@ -81,11 +81,34 @@ if __name__ == "__main__":
         raise SystemExit("Synthetic runtime requires LOGION_ENV=test")
     if sys.argv[1] == "api":
         from logion_api.main import app
+        from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+        class ProductionConnectionPolicy:
+            """Match Nginx's close policy for HTTP upstreams, retaining WebSockets."""
+
+            def __init__(self, wrapped: ASGIApp) -> None:
+                self.wrapped = wrapped
+
+            async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+                async def response(message: Message) -> None:
+                    if message["type"] == "http.response.start":
+                        message = {
+                            **message,
+                            "headers": [*message.get("headers", []), (b"connection", b"close")],
+                        }
+                    await send(message)
+
+                await self.wrapped(scope, receive, response)
 
         app.dependency_overrides[get_ai_discovery_adapter] = lambda: (
             OpenAICompatibleDiscoveryAdapter(resolver=resolve, transport_factory=transport)
         )
-        uvicorn.run(app, host="127.0.0.1", port=int(sys.argv[2]), access_log=False)
+        uvicorn.run(
+            ProductionConnectionPolicy(app),
+            host="127.0.0.1",
+            port=int(sys.argv[2]),
+            access_log=False,
+        )
     elif sys.argv[1] == "worker":
         import logion_worker.main as worker_main
 

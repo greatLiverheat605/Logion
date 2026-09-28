@@ -114,9 +114,27 @@ class ResearchQuestion(PersonalResearch, Base):
         UniqueConstraint(
             "id", "workspace_id", "space_id", "user_id", name="uq_research_question_scope"
         ),
+        ForeignKeyConstraint(
+            ["parent_id", "workspace_id", "space_id", "user_id"],
+            [
+                "research_questions.id",
+                "research_questions.workspace_id",
+                "research_questions.space_id",
+                "research_questions.user_id",
+            ],
+            name="fk_question_parent_scope",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("status IN ('active','answered','parked')", name="ck_question_status"),
+        CheckConstraint("parent_id IS NULL OR parent_id <> id", name="ck_question_not_self"),
+        Index("ix_question_parent", "workspace_id", "space_id", "user_id", "parent_id"),
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active"
+    )
+    parent_id: Mapped[UUID | None] = mapped_column(Uuid)
 
 
 class ExperimentRun(PersonalResearch, Base):

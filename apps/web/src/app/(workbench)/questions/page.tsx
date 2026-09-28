@@ -1,4 +1,4 @@
-import { Placeholder } from "@/platform/workbench/placeholder";
+import { Questions } from "@/platform/workbench/questions";
 export default function Page() {
-  return <Placeholder title="研究问题" />;
+  return <Questions />;
 }

@@ -53,6 +53,7 @@ from logion_api.reading.quiz import router as research_quiz_router
 from logion_api.reading.review import router as research_review_router
 from logion_api.reading.routes import router as research_reading_router
 from logion_api.research.ideas import router as research_ideas_router
+from logion_api.research.questions import router as research_questions_router
 from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
 from logion_api.sync.routes import router as sync_router
@@ -132,6 +133,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(research_integrations_router)
     application.include_router(research_sync_router)
     application.include_router(research_ideas_router)
+    application.include_router(research_questions_router)
     application.include_router(collaboration_router)
     application.include_router(ai_router)
     application.include_router(ai_model_router)
