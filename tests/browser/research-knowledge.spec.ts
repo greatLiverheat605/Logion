@@ -414,4 +414,152 @@ test.describe.serial("private research questions", () => {
     expect(performance.now() - start).toBeLessThan(2000);
     await page.unroute("**/research/knowledge/graph*");
   });
+
+  test("weekly plan creates explicit goals and preserves owner completion", async () => {
+    await page.goto("/plan");
+    await page.getByRole("button", { name: "新建目标", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    let dialog = page.getByRole("dialog");
+    await dialog.getByLabel("目标名称").fill("理解环挤出实验");
+    await dialog.getByLabel("期望成果").fill("形成一份可检验的证据总结");
+    await dialog.getByLabel("首个阶段").fill("阅读与自测");
+    await dialog.getByLabel("阶段验收标准").fill("解释关键假设和实验边界");
+    await dialog.getByRole("button", { name: "保存目标" }).click();
+    await expect(dialog).toHaveCount(0);
+    for (const title of [
+      "顺延阅读任务",
+      "降级阅读任务",
+      "放弃阅读任务",
+      "整理本周问题",
+    ]) {
+      await page
+        .getByRole("button", { name: "添加阅读计划", exact: true })
+        .click();
+      dialog = page.getByRole("dialog");
+      await dialog.getByLabel("阅读任务", { exact: true }).fill(title);
+      await dialog
+        .getByRole("combobox", { name: "关联目标", exact: true })
+        .selectOption({ label: "理解环挤出实验" });
+      if (title !== "整理本周问题") {
+        await dialog
+          .getByRole("combobox", { name: "文献（可选）", exact: true })
+          .selectOption({ label: "环挤出实验" });
+      }
+      await dialog.getByRole("button", { name: "保存阅读计划" }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+    const item = page
+      .locator(".wb-weekly-task-list > li")
+      .filter({ hasText: "整理本周问题" });
+    await item.getByRole("button", { name: "本人确认完成" }).click();
+    await expect(item).toContainText("已完成");
+    await page.getByRole("button", { name: "开始周回顾" }).click();
+    await expect(page.getByRole("region", { name: "周回顾" })).toContainText(
+      "未完成项 · 3",
+    );
+    await expect(
+      page.getByRole("button", { name: "确认周回顾并生成下周计划" }),
+    ).toBeDisabled();
+  });
+
+  test("weekly AI receives statistics, stays a draft, and survives reload", async () => {
+    await page.getByLabel("允许发送统计数字").check();
+    await page.getByRole("button", { name: "请求 AI 点评草稿" }).click();
+    const draft = page.getByRole("region", { name: "AI 周回顾草稿" }).first();
+    await expect(draft).toContainText("本周阅读节奏清晰");
+    await expect(
+      page.getByRole("heading", { name: "已接受的 AI 点评" }),
+    ).toHaveCount(0);
+    await page.reload();
+    await expect(draft).toContainText("本周阅读节奏清晰");
+    await draft.getByRole("button", { name: "接受点评" }).click();
+    await expect(
+      page.getByRole("heading", { name: "已接受的 AI 点评" }),
+    ).toBeVisible();
+    for (const [title, action] of [
+      ["顺延阅读任务", "carry"],
+      ["降级阅读任务", "downgrade"],
+      ["放弃阅读任务", "drop"],
+    ]) {
+      const item = page.getByRole("group", { name: title, exact: true });
+      await item
+        .getByRole("combobox", { name: "处理方式", exact: true })
+        .selectOption(action);
+      await item
+        .getByLabel("原因（可选，仅自己可见）")
+        .fill("私人调整原因，不发送给 AI。");
+    }
+    await expect(
+      page.getByRole("button", { name: "确认周回顾并生成下周计划" }),
+    ).toBeEnabled();
+  });
+
+  test("weekly plan and review support four widths, themes and keyboard", async ({}, testInfo) => {
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        expect(
+          await page
+            .locator(".wb-weekly-tasks,.wb-weekly-review,.wb-weekly-triage")
+            .evaluateAll((elements) =>
+              elements
+                .filter(
+                  (el) => el.clientWidth && el.scrollWidth > el.clientWidth + 1,
+                )
+                .map((el) => el.className),
+            ),
+        ).toEqual([]);
+        await page.locator(".wb-main").evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        await page.screenshot({
+          path: testInfo.outputPath(`weekly-${width}-${theme}.png`),
+          fullPage: true,
+        });
+        await page
+          .getByRole("heading", { name: "周回顾", exact: true })
+          .scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: testInfo.outputPath(`weekly-review-${width}-${theme}.png`),
+          fullPage: true,
+        });
+      }
+    }
+  });
+
+  test("owner review confirmation creates next-week tasks once", async () => {
+    const confirm = page.getByRole("button", {
+      name: "确认周回顾并生成下周计划",
+    });
+    await confirm.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("status")).toContainText("本周回顾已确认");
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("本周回顾已确认");
+    await expect(
+      page.getByRole("button", { name: "添加阅读计划", exact: true }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "查看下周计划" }).click();
+    const tasks = page.locator(".wb-weekly-task-list > li");
+    await expect(tasks).toHaveCount(2);
+    await expect(tasks.filter({ hasText: "降级阅读任务" })).toContainText(
+      "略读",
+    );
+    await expect(tasks.filter({ hasText: "顺延阅读任务" })).toContainText(
+      "精读",
+    );
+    await page.reload();
+    await page.getByRole("button", { name: "查看下周计划" }).click();
+    await expect(tasks).toHaveCount(2);
+  });
 });

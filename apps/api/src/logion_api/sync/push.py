@@ -962,7 +962,11 @@ class SyncPushService:
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         task = await db.get(Task, payload.task_id)
-        if task is None or task.workspace_id != request.workspace_id:
+        if (
+            task is None
+            or task.workspace_id != request.workspace_id
+            or task.research_owner_id is not None
+        ):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         # Offline callers must enqueue the planned -> in_progress task transition
         # first; otherwise the implicit task mutation would have no ledger entry.
@@ -1176,6 +1180,7 @@ class SyncPushService:
             task is None
             or task.workspace_id != request.workspace_id
             or task.space_id != parsed_space_id
+            or task.research_owner_id is not None
         ):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         # The client must enqueue the task transition first so that every
@@ -2806,7 +2811,11 @@ class SyncPushService:
             )
         if operation.entity_type == "task":
             task = await db.get(Task, operation.entity_id)
-            if task is None or task.workspace_id != request.workspace_id:
+            if (
+                task is None
+                or task.workspace_id != request.workspace_id
+                or task.research_owner_id is not None
+            ):
                 return None
             return task.version
         if operation.entity_type == "study_session":
@@ -3088,7 +3097,7 @@ class SyncPushService:
             return None
         remote = await db.get(model, entity_id)
         if (
-            isinstance(remote, (Resource, Note)) and remote.research_owner_id is not None
+            isinstance(remote, (Resource, Note, Task)) and remote.research_owner_id is not None
         ) or await is_private_memory_record(db, remote):
             return None
         if remote is None or remote.workspace_id != workspace_id:
@@ -3224,7 +3233,7 @@ class SyncPushService:
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         if (
-            isinstance(remote, (Resource, Note)) and remote.research_owner_id is not None
+            isinstance(remote, (Resource, Note, Task)) and remote.research_owner_id is not None
         ) or await is_private_memory_record(db, remote):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         remote_deleted_at = getattr(remote, "deleted_at", None)

@@ -112,7 +112,9 @@ class ExecutionService:
         count = int(
             await db.scalar(
                 select(func.count(Task.id)).where(
-                    Task.goal_id == goal_id, Task.deleted_at.is_(None)
+                    Task.goal_id == goal_id,
+                    Task.deleted_at.is_(None),
+                    Task.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -182,6 +184,7 @@ class ExecutionService:
                 Task.workspace_id == workspace_id,
                 Task.space_id == space_id,
                 Task.deleted_at.is_(None),
+                Task.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -235,6 +238,7 @@ class ExecutionService:
                 Task.workspace_id == workspace_id,
                 Task.space_id == space_id,
                 Task.deleted_at.is_(None),
+                Task.research_owner_id.is_(None),
             )
             .with_for_update()
         )

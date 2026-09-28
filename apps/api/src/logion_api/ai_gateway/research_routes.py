@@ -204,6 +204,10 @@ async def create_research_run(
             task_type=payload.task_type,
             entities=entities,
         )
+        if payload.task_type == "weekly_comment" and payload.expected_output_fields != ["comment"]:
+            raise APIError(
+                code="AI_DRAFT_SCHEMA_INVALID", message="Expected a comment field.", status_code=422
+            )
         if payload.task_type == "link_suggest" and (
             payload.expected_output_fields != ["links"] or len(entities) < 2
         ):

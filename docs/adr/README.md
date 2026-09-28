@@ -33,3 +33,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0049：研究问题树（Accepted；拆分与合并保留原问题及引用，父子关系按本人和空间隔离）](0049-research-question-hierarchy.md)
 - [ADR-0050：私人连线与 AI 建议边界（Accepted；类型外键、本人决策、拒绝永久去重）](0050-private-typed-link-suggestions.md)
 - [ADR-0051：有界原生知识网画布（Accepted；SVG 与文字列表、二跳聚焦、200/400 上限）](0051-bounded-native-knowledge-canvas.md)
+- [ADR-0052：私人周计划与数字周回顾（Accepted；未完成项逐一处理，AI 仅接收统计）](0052-private-weekly-reading-review.md)

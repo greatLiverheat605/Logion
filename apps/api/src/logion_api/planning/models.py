@@ -146,3 +146,52 @@ class PlanPhase(Base):
     acceptance_criteria: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class WeeklyReview(Base):
+    __tablename__ = "weekly_reviews"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "workspace_id"],
+            ["spaces.id", "spaces.workspace_id"],
+            name="fk_weekly_review_space",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["ai_comment_run_id", "workspace_id"],
+            ["ai_runs.id", "ai_runs.workspace_id"],
+            name="fk_weekly_review_run",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("user_id", "space_id", "week_start", name="uq_weekly_review_owner_week"),
+        CheckConstraint("extract(isodow from week_start)=1", name="ck_weekly_review_monday"),
+        CheckConstraint(
+            "jsonb_typeof(stats)='object' AND jsonb_typeof(task_snapshot)='array' "
+            "AND jsonb_typeof(triage)='array'",
+            name="ck_weekly_review_json",
+        ),
+        CheckConstraint("version>=1", name="ck_weekly_review_version"),
+        Index("ix_weekly_review_owner", "workspace_id", "space_id", "user_id", "week_start"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
+    workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    week_start: Mapped[date] = mapped_column(Date, nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    stats: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    task_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    triage: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default=list)
+    ai_comment_run_id: Mapped[UUID | None] = mapped_column(Uuid)
+    ai_comment: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

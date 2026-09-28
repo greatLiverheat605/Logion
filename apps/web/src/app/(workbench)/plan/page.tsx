@@ -1,4 +1,4 @@
-import { Placeholder } from "@/platform/workbench/placeholder";
+import { WeeklyPlan } from "@/platform/workbench/weekly-plan";
 export default function Page() {
-  return <Placeholder title="计划" />;
+  return <WeeklyPlan />;
 }

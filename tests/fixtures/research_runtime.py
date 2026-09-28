@@ -74,6 +74,14 @@ def synthetic_provider(request: httpx.Request) -> httpx.Response:
                 ]
             )
         }
+    elif content["requested_output_fields"] == ["comment"]:
+        from logion_api.planning.weekly_schemas import WeeklyStats
+
+        assert set(content["data"]) == {"statistics"}
+        stats = json.loads(content["data"]["statistics"])
+        WeeklyStats.model_validate(stats)
+        assert all(type(value) is int for value in stats.values())
+        output = {"comment": "本周阅读节奏清晰，请逐项安排未完成任务。"}
     elif content["requested_output_fields"] == ["grade"]:
         assert "quiz_attempt" in json.dumps(content)
         output = {

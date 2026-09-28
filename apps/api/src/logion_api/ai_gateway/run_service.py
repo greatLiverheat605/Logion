@@ -83,6 +83,18 @@ class AIRunService:
                 )
             )
             raise
+        if (payload.task_type == "weekly_comment" or payload.target_type == "weekly_review") and (
+            research_prompt is None
+            or payload.task_type != "weekly_comment"
+            or payload.target_type != "weekly_review"
+            or context_entity_types != ("weekly_review",)
+            or payload.expected_output_fields != ["comment"]
+        ):
+            raise APIError(
+                code="AI_CONTEXT_TYPE_BLOCKED",
+                message="Use the weekly research route.",
+                status_code=422,
+            )
         if len(json.dumps(payload.input_fields, ensure_ascii=False).encode()) > 262_144:
             raise APIError(
                 code="AI_RUN_INPUT_TOO_LARGE",

@@ -85,6 +85,7 @@ class EvidenceService:
                 Task.workspace_id == workspace_id,
                 Task.space_id == space_id,
                 Task.deleted_at.is_(None),
+                Task.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -206,7 +207,11 @@ class EvidenceService:
             )
         task = await db.scalar(
             select(Task)
-            .where(Task.id == candidate.task_id, Task.workspace_id == workspace_id)
+            .where(
+                Task.id == candidate.task_id,
+                Task.workspace_id == workspace_id,
+                Task.research_owner_id.is_(None),
+            )
             .with_for_update()
         )
         verification = await db.scalar(
@@ -276,6 +281,7 @@ class EvidenceService:
                 Task.workspace_id == workspace_id,
                 Task.space_id == space_id,
                 Task.deleted_at.is_(None),
+                Task.research_owner_id.is_(None),
             )
             .with_for_update()
         )

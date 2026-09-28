@@ -121,6 +121,7 @@ class EngagementService:
                             Task.workspace_id == workspace_id,
                             Task.space_id.in_(space_ids),
                             Task.deleted_at.is_(None),
+                            Task.research_owner_id.is_(None),
                             or_(
                                 Task.title.ilike(pattern, escape="\\"),
                                 Task.description.ilike(pattern, escape="\\"),
@@ -480,6 +481,7 @@ class EngagementService:
                             Task.space_id.in_(spaces),
                             Task.due_at.is_not(None),
                             Task.deleted_at.is_(None),
+                            Task.research_owner_id.is_(None),
                             Task.status.not_in(("done", "cancelled")),
                         )
                     )

@@ -27,6 +27,14 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      WEEKLY_SNAPSHOT_STALE:
+        "本周计划已变化，请刷新统计与任务快照，再逐项确认。",
+      WEEKLY_TRIAGE_REQUIRED: "请为每个未完成项选择顺延、降级或放弃。",
+      WEEKLY_REVIEW_CLOSED: "这周已确认，不能再修改；请查看下一周。",
+      WEEKLY_TASK_LIMIT: "每周最多安排 200 项阅读任务。",
+      WEEKLY_DOWNGRADE_INVALID: "只有精读任务可以降级为略读。",
+      READING_CLOSE_READ_REQUIRED: "请先在文献中标记精读完成，再确认这项任务。",
+      READING_TASK_COMPLETED: "请先将已完成任务重新安排，再编辑。",
       KNOWLEDGE_EDGE_EXISTS: "这条关系已存在或已被拒绝，不会重复建立。",
       KNOWLEDGE_EDGE_TERMINAL: "这条连线已处理，请刷新知识网。",
       READING_TRANSITION_INVALID:
