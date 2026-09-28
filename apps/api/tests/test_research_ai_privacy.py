@@ -344,6 +344,9 @@ async def test_private_ideas_context_routes_and_outbound_defense(
             response = await owner.post(run_url, json=run_body())
             assert response.status_code == 202, response.text
             run_id = UUID(response.json()["id"])
+            result_url = f"/api/v1/workspaces/{workspace}/research/ai/runs/{run_id}"
+            assert (await owner.get(result_url)).status_code == 200
+            assert (await peer.get(result_url)).status_code == 404
             async with session_factory() as db:
                 run = await db.get(AIRun, run_id)
                 assert run is not None
@@ -364,6 +367,7 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                 await db.commit()
             if mode == "disabled":
                 monkeypatch.setattr(settings, "research_v3_enabled", False)
+                assert (await owner.get(result_url)).status_code == 404
             await execution.execute_run(run_id)
             async with session_factory() as db:
                 final = await db.get(AIRun, run_id)

@@ -15,9 +15,19 @@ export function createWorkbenchQueryClient() {
 }
 export function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
+    if (error.code.startsWith("AI_") && error.code.includes("BUDGET"))
+      return "AI 预算不足，请在设置中调整额度。";
+    if (error.code.startsWith("AI_") && /BLOCKED|DENIED/.test(error.code))
+      return "AI 请求被隐私或出站安全规则拦截。";
+    if (
+      error.code.startsWith("AI_") &&
+      /ROUTE|MODEL|PROVIDER|UNAVAILABLE/.test(error.code)
+    )
+      return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
       SOURCE_FILE_CHANGED: "附件已更新，请重新打开原文。",
       SOURCE_TEXT_NOT_FOUND: "全文尚未就绪，请打开原文后再试。",
+      SOURCE_SELECTION_INVALID: "请选择有效的原文片段，最多 20,000 字符。",
       PDF_TOO_LARGE: "PDF 超过允许的大小，请选择更小的文件。",
       PDF_INVALID: "文件不是有效的 PDF。",
       PDF_ZIP_INVALID: "附件压缩包不符合安全要求，请检查 Zotero 附件。",

@@ -52,6 +52,9 @@ class Topic(Base):
     space_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False
     )
+    research_owner_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT")
+    )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)

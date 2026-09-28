@@ -48,7 +48,7 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     ...[true, false].map((enabled) => ({
-      command: `uv run --package logion-api uvicorn logion_api.main:app --host 127.0.0.1 --port ${enabled ? 8000 : 8001} --no-access-log`,
+      command: `uv run --package logion-api python tests/fixtures/research_runtime.py api ${enabled ? 8000 : 8001}`,
       url: `http://127.0.0.1:${enabled ? 8000 : 8001}/health/live`,
       env: {
         LOGION_ENV: "test",
@@ -68,7 +68,8 @@ export default defineConfig({
       reuseExistingServer: false,
     })),
     {
-      command: "uv run --package logion-worker python -u -m logion_worker.main",
+      command:
+        "uv run --package logion-worker python -u tests/fixtures/research_runtime.py worker",
       wait: { stdout: /worker_started/ },
       env: {
         LOGION_ENV: "test",

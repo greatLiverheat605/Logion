@@ -2845,7 +2845,9 @@ class SyncPushService:
             topic = await db.get(Topic, operation.entity_id)
             return (
                 topic.version
-                if topic is not None and topic.workspace_id == request.workspace_id
+                if topic is not None
+                and topic.workspace_id == request.workspace_id
+                and topic.research_owner_id is None
                 else None
             )
         if operation.entity_type == "quiz_item":
@@ -3072,7 +3074,7 @@ class SyncPushService:
         if model is None:
             return None
         remote = await db.get(model, entity_id)
-        if isinstance(remote, Resource) and remote.research_owner_id is not None:
+        if isinstance(remote, (Resource, Topic)) and remote.research_owner_id is not None:
             return None
         if remote is None or remote.workspace_id != workspace_id:
             return None
@@ -3206,7 +3208,7 @@ class SyncPushService:
             remote = await db.get(ReportSnapshot, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
-        if isinstance(remote, Resource) and remote.research_owner_id is not None:
+        if isinstance(remote, (Resource, Topic)) and remote.research_owner_id is not None:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         remote_deleted_at = getattr(remote, "deleted_at", None)
         if remote_deleted_at is not None:

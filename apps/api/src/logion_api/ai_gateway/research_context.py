@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from logion_api.identity.models import AuditEvent
 from logion_api.knowledge_space.models import SourceExcerpt
 from logion_api.library.text_models import SourceText
 from logion_api.memory.models import Topic
+from logion_api.reading.selections import selected_text
 from logion_api.research.models import ResearchClaim, ResearchQuestion
 
 RESEARCH_TASK_TIERS = MappingProxyType(
@@ -45,6 +46,17 @@ AI_CONTEXT_ENTITY_TYPES = frozenset(
 TASK_CONTEXT_ALLOWLIST = MappingProxyType(
     {task: AI_CONTEXT_ENTITY_TYPES for task in RESEARCH_TASK_TIERS}
 )
+CONTEXT_MODELS = MappingProxyType(
+    {
+        "resource": Resource,
+        "source_text": SourceText,
+        "note": Note,
+        "source_excerpt": SourceExcerpt,
+        "research_question": ResearchQuestion,
+        "topic": Topic,
+        "research_claim": ResearchClaim,
+    }
+)
 
 
 class ContextEntity(BaseModel):
@@ -52,6 +64,19 @@ class ContextEntity(BaseModel):
     entity_type: ObjectType
     id: UUID
     version: int = Field(ge=1)
+    char_start: int | None = Field(default=None, ge=0)
+    char_end: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def selection_shape(self) -> "ContextEntity":
+        if (self.char_start is not None or self.char_end is not None) and (
+            self.entity_type != "source_text"
+            or self.char_start is None
+            or self.char_end is None
+            or self.char_end <= self.char_start
+        ):
+            raise ValueError("Only source_text accepts a complete character range")
+        return self
 
 
 def check_private_entities(entity_types: Iterable[str]) -> None:
@@ -104,15 +129,7 @@ async def build_research_context(
         )
     fields: dict[str, str] = {}
     for index, ref in enumerate(entities):
-        model: Any = {
-            "resource": Resource,
-            "source_text": SourceText,
-            "note": Note,
-            "source_excerpt": SourceExcerpt,
-            "research_question": ResearchQuestion,
-            "topic": Topic,
-            "research_claim": ResearchClaim,
-        }.get(ref.entity_type)
+        model: Any = CONTEXT_MODELS.get(ref.entity_type)
         if model is None:
             raise APIError(
                 code="AI_CONTEXT_UNAVAILABLE",
@@ -127,9 +144,9 @@ async def build_research_context(
         )
         if model in (ResearchQuestion, ResearchClaim):
             query = query.where(model.user_id == user_id)
-        elif model is Resource:
+        elif model in (Resource, Topic):
             query = query.where(
-                (Resource.research_owner_id.is_(None)) | (Resource.research_owner_id == user_id)
+                (model.research_owner_id.is_(None)) | (model.research_owner_id == user_id)
             )
         elif model is SourceText:
             query = query.join(Resource, Resource.id == SourceText.resource_id).where(
@@ -169,8 +186,16 @@ async def build_research_context(
             "topic": ("title", "description"),
             "research_claim": ("statement", "stance"),
         }[ref.entity_type]
+        data = {key: getattr(item, key) for key in names}
+        if ref.char_start is not None and ref.char_end is not None:
+            data = {
+                "text": selected_text(item, ref.char_start, ref.char_end),
+                "char_start": ref.char_start,
+                "char_end": ref.char_end,
+                "normalization_version": item.normalization_version,
+            }
         value = json.dumps(
-            {"entity_type": ref.entity_type, "data": {key: getattr(item, key) for key in names}},
+            {"entity_type": ref.entity_type, "data": data},
             ensure_ascii=False,
             sort_keys=True,
         )

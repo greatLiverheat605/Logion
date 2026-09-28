@@ -341,8 +341,8 @@ class SyncReadService:
                     .join(Space, Space.id == tombstone_model.space_id)
                     .where(
                         tombstone_model.workspace_id == state.workspace_id,
-                        Resource.research_owner_id.is_(None)
-                        if tombstone_type == "resource"
+                        tombstone_model.research_owner_id.is_(None)
+                        if tombstone_type in {"resource", "topic"}
                         else true(),
                         (tombstone_model.user_id == user_id)
                         if tombstone_type in private_tombstone_types
@@ -1019,6 +1019,8 @@ class SyncReadService:
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
         )
+        if model is Topic:
+            statement = statement.where(Topic.research_owner_id.is_(None))
         return set((await db.scalars(statement)).all())
 
     async def _visible_personal_memory_ids(
@@ -1149,6 +1151,8 @@ class SyncReadService:
             )
             .order_by(model.id)
         )
+        if model is Topic:
+            statement = statement.where(Topic.research_owner_id.is_(None))
         items = cast(
             list[Topic | TopicDependency | KnowledgeSourceLink | QuizItem],
             list((await db.scalars(statement)).all()),

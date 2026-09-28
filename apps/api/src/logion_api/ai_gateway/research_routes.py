@@ -1,12 +1,15 @@
 import asyncio
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from sqlalchemy import select
 
 from logion_api.ai_gateway.dependencies import AIRoutingServiceDependency, AIRunServiceDependency
+from logion_api.ai_gateway.models import AIOutputDraft, AIRun
 from logion_api.ai_gateway.research_context import (
+    CONTEXT_MODELS,
     RESEARCH_TASK_TIERS,
     ContextEntity,
     build_research_context,
@@ -16,8 +19,13 @@ from logion_api.ai_gateway.research_skills import load_research_skill
 from logion_api.ai_gateway.routing_routes import boundary as routing_boundary
 from logion_api.ai_gateway.routing_routes import route_response
 from logion_api.ai_gateway.routing_schemas import AITaskRouteCreate, AITaskRouteList
-from logion_api.ai_gateway.run_routes import run_response, run_write_boundary
-from logion_api.ai_gateway.run_schemas import AIRunCreate, AIRunResponse, FieldName
+from logion_api.ai_gateway.run_routes import draft_response, run_response, run_write_boundary
+from logion_api.ai_gateway.run_schemas import (
+    AIOutputDraftResponse,
+    AIRunCreate,
+    AIRunResponse,
+    FieldName,
+)
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -52,6 +60,15 @@ class ResearchRunCreate(BaseModel):
     requested_output_tokens: int = Field(ge=1, le=100000)
     retain_input: bool = False
     send_confirmed: Literal[True]
+    question: str | None = Field(default=None, min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def question_task(self) -> "ResearchRunCreate":
+        if self.question is not None and (
+            self.task_type != "explain" or not self.question.strip() or "\x00" in self.question
+        ):
+            raise ValueError("A reading question is only valid for an explanation")
+        return self
 
     @field_validator("expected_output_fields")
     @classmethod
@@ -93,6 +110,61 @@ router = APIRouter(
 )
 
 
+class ResearchRunResult(BaseModel):
+    run: AIRunResponse
+    draft: AIOutputDraftResponse | None
+
+
+@router.get(
+    "/research/ai/runs/{run_id}",
+    response_model=ResearchRunResult,
+    operation_id="research_ai_run_result",
+)
+async def research_run_result(
+    workspace_id: UUID,
+    run_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    runs: AIRunServiceDependency,
+    workspaces: WorkspaceServiceDependency,
+) -> ResearchRunResult:
+    await runs.authorize(db, context, workspace_id, request_id(request))
+    run = await db.scalar(
+        select(AIRun).where(
+            AIRun.id == run_id,
+            AIRun.workspace_id == workspace_id,
+            AIRun.requested_by == context.user.id,
+            AIRun.task_type.in_(RESEARCH_TASK_TIERS),
+        )
+    )
+    if run is None:
+        raise APIError(code="RESOURCE_NOT_FOUND", message="AI run not found.", status_code=404)
+    model: Any = CONTEXT_MODELS.get(run.target_type)
+    space_id = (
+        await db.scalar(
+            select(model.space_id).where(
+                model.id == run.target_id,
+                model.workspace_id == workspace_id,
+                model.deleted_at.is_(None),
+            )
+        )
+        if model is not None
+        else None
+    )
+    if space_id is None:
+        raise APIError(code="RESOURCE_NOT_FOUND", message="AI source not found.", status_code=404)
+    await workspaces.resolve_space(
+        db, context, workspace_id, space_id, request_id=request_id(request)
+    )
+    draft = await db.scalar(
+        select(AIOutputDraft).where(
+            AIOutputDraft.run_id == run.id, AIOutputDraft.workspace_id == workspace_id
+        )
+    )
+    return ResearchRunResult(run=run_response(run), draft=draft_response(draft) if draft else None)
+
+
 @router.post(
     "/spaces/{space_id}/research/ai/runs",
     response_model=AIRunResponse,
@@ -131,6 +203,10 @@ async def create_research_run(
             entities=entities,
         )
         prompt = await asyncio.to_thread(load_research_skill, payload.task_type)
+        if payload.question is not None:
+            # Explicit owner instruction, never a client-supplied replacement for
+            # stored source context. Entity authorization/egress checks still apply.
+            fields["reader_question"] = payload.question
         # The run contract is reused; clients cannot submit arbitrary source text to this endpoint.
         run = await runs.create(
             db,

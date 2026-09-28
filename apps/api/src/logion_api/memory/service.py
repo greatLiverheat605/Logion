@@ -133,6 +133,7 @@ class MemoryService:
                     Topic.workspace_id == workspace_id,
                     Topic.space_id == space_id,
                     Topic.deleted_at.is_(None),
+                    Topic.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -190,6 +191,7 @@ class MemoryService:
                         Topic.workspace_id == workspace_id,
                         Topic.space_id == space_id,
                         Topic.deleted_at.is_(None),
+                        Topic.research_owner_id.is_(None),
                     )
                     .order_by(Topic.updated_at.desc(), Topic.id)
                 )
@@ -250,6 +252,7 @@ class MemoryService:
                         Topic.space_id == space_id,
                         Topic.id.in_([payload.prerequisite_topic_id, payload.dependent_topic_id]),
                         Topic.deleted_at.is_(None),
+                        Topic.research_owner_id.is_(None),
                     )
                 )
             ).all()
@@ -346,6 +349,7 @@ class MemoryService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
             )
         )
         if topic is None:
@@ -1105,6 +1109,7 @@ class MemoryService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -1243,6 +1248,7 @@ class MemoryService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
             )
         )
         if topic is None:
@@ -1375,6 +1381,7 @@ class MemoryService:
             or target.workspace_id != workspace_id
             or target.space_id != space_id
             or target.deleted_at is not None
+            or (isinstance(target, Topic) and target.research_owner_id is not None)
         ):
             raise APIError(
                 code="SOURCE_LINK_INVALID",
@@ -1429,7 +1436,11 @@ class MemoryService:
         await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
         topic = await db.scalar(
             select(Topic)
-            .where(Topic.id == payload.id, Topic.workspace_id == workspace_id)
+            .where(
+                Topic.id == payload.id,
+                Topic.workspace_id == workspace_id,
+                Topic.research_owner_id.is_(None),
+            )
             .with_for_update()
         )
         if topic is None or topic.space_id != space_id or topic.deleted_at is not None:

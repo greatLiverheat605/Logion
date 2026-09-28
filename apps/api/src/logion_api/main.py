@@ -48,6 +48,7 @@ from logion_api.planning.routes import router as planning_router
 from logion_api.portability.routes import account_router as account_deletion_router
 from logion_api.portability.routes import import_router as portability_import_router
 from logion_api.portability.routes import router as portability_router
+from logion_api.reading.routes import router as research_reading_router
 from logion_api.research.ideas import router as research_ideas_router
 from logion_api.research.routes import router as research_router
 from logion_api.self_study.routes import router as self_study_router
@@ -121,6 +122,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(research_library_router)
     application.include_router(research_pdf_router)
     application.include_router(research_text_router)
+    application.include_router(research_reading_router)
     application.include_router(research_integrations_router)
     application.include_router(research_sync_router)
     application.include_router(research_ideas_router)

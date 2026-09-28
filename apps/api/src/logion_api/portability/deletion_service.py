@@ -42,6 +42,7 @@ from logion_api.memory.models import (
     MasteryRecord,
     QuizAttempt,
     ReviewSchedule,
+    Topic,
 )
 from logion_api.portability.models import (
     AccountDeletionRequest,
@@ -356,6 +357,7 @@ class AccountDeletionService:
         await db.execute(
             delete(Space).where(Space.owner_user_id == user.id, Space.visibility == "private")
         )
+        await db.execute(delete(Topic).where(Topic.research_owner_id == user.id))
         await db.execute(delete(Resource).where(Resource.research_owner_id == user.id))
         await db.execute(
             delete(IntegrationCredential).where(IntegrationCredential.user_id == user.id)
