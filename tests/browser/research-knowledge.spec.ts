@@ -167,4 +167,251 @@ test.describe.serial("private research questions", () => {
       ).toBe(0);
     });
   }
+
+  async function generate() {
+    await page
+      .getByRole("button", { name: "AI 建议连线", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).not.toContainText("尚未发表的假设");
+    for (const title of [
+      "研究问题 · 染色质结构如何影响转录？",
+      "文献 · 环挤出实验",
+      "文献 · 边界检验",
+    ])
+      await dialog.getByLabel(title, { exact: true }).check();
+    await dialog
+      .getByLabel("我确认将以上所选内容发送给已配置的 AI 服务商")
+      .check();
+    await dialog.getByRole("button", { name: "生成连线建议" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText("建议已处理");
+  }
+
+  test("AI links need owner decisions and rejected links never return; ideas stay manual", async ({
+    baseURL,
+  }) => {
+    const headers = {
+      Origin: baseURL!,
+      "X-CSRF-Token": (await context.cookies()).find(
+        (c) => c.name === "logion_csrf",
+      )!.value,
+    };
+    for (const title of ["环挤出实验", "边界检验"]) {
+      expect(
+        (
+          await context.request.post(`${scope}/library/resources`, {
+            headers,
+            data: { title },
+          })
+        ).status(),
+      ).toBe(201);
+    }
+    const workspace = scope.split("/")[4],
+      ai = `/api/v1/workspaces/${workspace}/ai`,
+      provider = randomUUID();
+    expect(
+      (
+        await context.request.post(`${ai}/providers`, {
+          headers,
+          data: {
+            id: provider,
+            name: "Synthetic network provider",
+            provider_type: "openai_compatible",
+            base_url: "https://api.example.com/v1",
+            credential: "synthetic-network",
+            enabled: true,
+            timeout_seconds: 30,
+            max_retries: 0,
+          },
+        })
+      ).status(),
+    ).toBe(201);
+    expect(
+      (
+        await context.request.post(
+          `${ai}/providers/${provider}/discover-models`,
+          { headers },
+        )
+      ).status(),
+    ).toBe(200);
+    const model = (await (await context.request.get(`${ai}/models`)).json())
+      .models[0];
+    expect(
+      (
+        await context.request.put(`${ai}/models/${model.id}`, {
+          headers,
+          data: {
+            expected_version: model.version,
+            display_name: "Synthetic network",
+            enabled: true,
+            supports_json: true,
+            supports_stream: false,
+            context_window: 32000,
+            pricing_currency: "USD",
+            input_cost_per_million_minor: 1,
+            output_cost_per_million_minor: 1,
+          },
+        })
+      ).status(),
+    ).toBe(200);
+    expect(
+      (
+        await context.request.post(
+          `/api/v1/workspaces/${workspace}/research/ai/presets`,
+          {
+            headers,
+            data: {
+              economical_model_ids: [model.id],
+              quality_model_ids: [model.id],
+            },
+          },
+        )
+      ).status(),
+    ).toBe(201);
+    await page.goto("/graph");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await generate();
+    const first = page.getByRole("button", {
+      name: /^环挤出实验 → 回应 →.*AI 建议$/,
+    });
+    await first.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("complementary", { name: "知识网详情" }),
+    ).toContainText("Synthetic evidence");
+    await page.getByRole("button", { name: "确认连线", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: /^环挤出实验 → 回应 →.*已确认$/ }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: /^边界检验 → 回应 →.*AI 建议$/ })
+      .click();
+    await page.getByRole("button", { name: "拒绝连线", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: /^边界检验 → 回应/ }),
+    ).toHaveCount(0);
+  });
+
+  test("rejected suggestions stay absent and private ideas can be linked manually", async () => {
+    await generate();
+    const edges = (
+      await (
+        await context.request.get(`${scope}/research/knowledge/edges`)
+      ).json()
+    ).edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].status).toBe("confirmed");
+    await page.getByRole("button", { name: "手动连线", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("combobox", { name: "起点", exact: true })
+      .selectOption({ label: "私人想法 · 尚未发表的假设" });
+    await dialog
+      .getByRole("combobox", { name: "终点", exact: true })
+      .selectOption({ label: "文献 · 环挤出实验" });
+    await dialog
+      .getByLabel("理由（可选）")
+      .fill("本人把想法和阅读证据联系起来。");
+    await dialog.getByRole("button", { name: "保存连线" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /^尚未发表的假设 → 启发于/ }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: /^尚未发表的假设 → 启发于/ }),
+    ).toBeVisible();
+    await page
+      .getByLabel("聚焦研究问题", { exact: true })
+      .selectOption({ label: "染色质结构如何影响转录？" });
+    await expect(
+      page.getByRole("button", { name: "文献：边界检验", exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: /^尚未发表的假设 → 启发于/ })
+      .click();
+  });
+
+  test("network is usable at four widths in both themes", async ({}, testInfo) => {
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        expect(
+          await page
+            .locator(".wb-network,.wb-network-view,.wb-inspector")
+            .evaluateAll((elements) =>
+              elements
+                .filter(
+                  (el) => el.clientWidth && el.scrollWidth > el.clientWidth + 1,
+                )
+                .map((el) => el.className),
+            ),
+        ).toEqual([]);
+        await page.screenshot({
+          path: testInfo.outputPath(`network-${width}-${theme}.png`),
+          fullPage: true,
+        });
+      }
+    }
+  });
+
+  test("200 nodes and 400 edges remain responsive without a simulation", async () => {
+    const nodes = Array.from({ length: 200 }, (_, i) => ({
+      id: randomUUID(),
+      kind: "resource",
+      title: `规模节点 ${i}`,
+      version: 1,
+      personal: true,
+    }));
+    const edges = Array.from({ length: 400 }, (_, i) => ({
+      id: randomUUID(),
+      from_type: "resource",
+      from_id: nodes[i % 200].id,
+      to_type: "resource",
+      to_id: nodes[(i + 1 + Math.floor(i / 200)) % 200].id,
+      relation: "extends",
+      reason: "Synthetic bounded performance relation",
+      status: "suggested",
+      origin: "ai",
+      version: 1,
+      ai_run_id: randomUUID(),
+      evidence_excerpt_id: null,
+      created_at: new Date().toISOString(),
+      decided_at: null,
+    }));
+    await page.route("**/research/knowledge/graph*", (route) =>
+      route.fulfill({
+        json: { nodes, edges, prerequisites: [], truncated: false },
+      }),
+    );
+    await page.goto("/graph");
+    await expect(page.locator(".wb-network-node")).toHaveCount(200);
+    await expect(page.locator(".wb-network-edge")).toHaveCount(400);
+    const start = performance.now();
+    await page
+      .getByRole("button", { name: "文献：规模节点 0", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("complementary", { name: "知识网详情" }),
+    ).toContainText("规模节点 0");
+    await page.getByRole("button", { name: "放大", exact: true }).click();
+    await expect(page.locator(".wb-network-canvas svg")).toHaveAttribute(
+      "width",
+      "1250",
+    );
+    expect(performance.now() - start).toBeLessThan(2000);
+    await page.unroute("**/research/knowledge/graph*");
+  });
 });

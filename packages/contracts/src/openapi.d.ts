@@ -2631,6 +2631,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/knowledge/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Network */
+        get: operations["knowledge_network_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/metrics": {
         parameters: {
             query?: never;
@@ -6867,6 +6884,54 @@ export interface components {
             type: "multi-select";
         };
         NameText: string;
+        /** NetworkNode */
+        NetworkNode: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "resource" | "question" | "topic" | "claim" | "idea";
+            /** Personal */
+            personal: boolean;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /** NetworkPrerequisite */
+        NetworkPrerequisite: {
+            /**
+             * Dependent Id
+             * Format: uuid
+             */
+            dependent_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Prerequisite Id
+             * Format: uuid
+             */
+            prerequisite_id: string;
+        };
+        /** NetworkSnapshot */
+        NetworkSnapshot: {
+            /** Edges */
+            edges: components["schemas"]["EdgeView"][];
+            /** Nodes */
+            nodes: components["schemas"]["NetworkNode"][];
+            /** Prerequisites */
+            prerequisites: components["schemas"]["NetworkPrerequisite"][];
+            /** Truncated */
+            truncated: boolean;
+        };
         /** NoteResponse */
         NoteResponse: {
             /**
@@ -26086,6 +26151,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_network_read: {
+        parameters: {
+            query?: {
+                focus_type?: ("question" | "resource") | null;
+                focus_id?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

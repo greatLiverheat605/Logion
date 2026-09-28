@@ -15,6 +15,8 @@ export function createWorkbenchQueryClient() {
 }
 export function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
+    if (error.code === "AI_ROUTE_TOKEN_LIMIT")
+      return "所选内容或输出超过任务路由的额度，请减少来源或在设置中调整额度。";
     if (error.code.startsWith("AI_") && error.code.includes("BUDGET"))
       return "AI 预算不足，请在设置中调整额度。";
     if (error.code.startsWith("AI_") && /BLOCKED|DENIED/.test(error.code))
@@ -25,6 +27,8 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      KNOWLEDGE_EDGE_EXISTS: "这条关系已存在或已被拒绝，不会重复建立。",
+      KNOWLEDGE_EDGE_TERMINAL: "这条连线已处理，请刷新知识网。",
       READING_TRANSITION_INVALID:
         "请先开始阅读，再标记精读完成。已归档文献不会恢复同步。",
       NOTE_DOCUMENT_UPDATE_INVALID:
