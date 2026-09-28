@@ -167,6 +167,19 @@ async function installLibrary(context: BrowserContext) {
     const request = route.request(),
       url = new URL(request.url());
     const id = url.pathname.split("/resources/")[1];
+    if (url.pathname.endsWith("/pdf/prepare")) {
+      expect(request.method()).toBe("POST");
+      expect(request.headers()["x-csrf-token"]).toBeTruthy();
+      return route.fulfill({
+        status: 409,
+        json: {
+          code: "PDF_LOCATOR_INVALID",
+          message: "The synthetic metadata-only source has no PDF.",
+          request_id: "synthetic",
+          retryable: false,
+        },
+      });
+    }
     if (request.method() === "GET") {
       if (id)
         return route.fulfill({
