@@ -99,6 +99,23 @@ test("real research API persists literature and preferences, rejects conflicts a
   const setting = (await current.json()).settings[0];
   expect(setting.value).toBe('"dark"');
   expect(setting.version).toBe(1);
+  // Prove the saved theme is in server HTML, before any hydration can run.
+  const noScript = await browser.newContext({
+    baseURL: origin,
+    javaScriptEnabled: false,
+    colorScheme: "light",
+    storageState: await context.storageState(),
+  });
+  try {
+    const firstPaint = await noScript.newPage();
+    await firstPaint.goto("/library");
+    await expect(firstPaint.locator("html")).toHaveAttribute(
+      "data-theme",
+      "dark",
+    );
+  } finally {
+    await noScript.close();
+  }
   const csrf = (await context.cookies()).find(
     (cookie) => cookie.name === "logion_csrf",
   )!.value;

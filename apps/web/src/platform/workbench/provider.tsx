@@ -169,6 +169,8 @@ function PreferenceProvider({ children }: { children: ReactNode }) {
   const writing = useRef(false);
   const theme = preferences["appearance.theme"];
   useEffect(() => {
+    // Keep the authenticated server-rendered theme until preferences arrive.
+    if (!settings.data) return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
       document.documentElement.dataset.theme =
@@ -177,7 +179,7 @@ function PreferenceProvider({ children }: { children: ReactNode }) {
     apply();
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
-  }, [theme]);
+  }, [theme, settings.data]);
   const [online, setOnline] = useState(true);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);

@@ -28,7 +28,19 @@ class ResearchContext(StrictPreference):
 
 
 class PanePreference(StrictPreference):
-    content: Literal["info", "document", "translation", "quiz"]
+    content: Literal[
+        "info",
+        "document",
+        "translation",
+        "quiz",
+        "pdf",
+        "outline",
+        "thumbs",
+        "note",
+        "excerpts",
+        "chat",
+        "translate",
+    ]
     width: float = Field(ge=10, le=80, allow_inf_nan=False)
     collapsed: bool
 

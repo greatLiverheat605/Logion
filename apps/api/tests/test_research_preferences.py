@@ -35,6 +35,38 @@ def test_research_preferences_are_default_off_and_strictly_typed() -> None:
     assert validate_research_preference("reader.hint_dismissed", "true") is None
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        "pdf",
+        "outline",
+        "thumbs",
+        "note",
+        "excerpts",
+        "chat",
+        "translate",
+        "quiz",
+        "info",
+        "document",
+        "translation",
+    ],
+)
+def test_reader_content_types_are_additive(content: str) -> None:
+    assert (
+        validate_research_preference(
+            "workbench.layouts",
+            json.dumps(
+                {
+                    "preset": "custom",
+                    "toolbars": False,
+                    "panes": [{"content": content, "width": 30, "collapsed": False}] * 3,
+                }
+            ),
+        )
+        is None
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_research_preferences_gate_permissions_versions_and_session_reuse(
