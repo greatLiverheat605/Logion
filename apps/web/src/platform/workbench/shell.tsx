@@ -43,6 +43,12 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
       pane: (index) => {
         void state.save("workbench.layouts", togglePane(layout, index));
       },
+      reader: path.startsWith("/read/")
+        ? (id) =>
+            window.dispatchEvent(
+              new CustomEvent("workbench:reader-command", { detail: id }),
+            )
+        : undefined,
       palette: () => setPalette(true),
       help: () => setHelp(true),
       toolbars: () => {

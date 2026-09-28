@@ -165,3 +165,26 @@ POST 同一路径接收 `economical_model_ids`、`quality_model_ids` 及可选�
 每次运行保存任务及提示词摘要；升级后若提示词已变，旧任务返回
 `AI_PROMPT_VERSION_CHANGED`，需要重新创建。模型输出仅为待人工审查的草稿。
 Provider 配置与可选模型比较见[研究 AI 配置](../operations/research-ai.md)。
+
+## PDF reader and extracted text (ADR-0039)
+
+The reader uses locked `pdfjs-dist` 6.3.289 (Apache-2.0). Build/dev copies the worker,
+cMaps, standard fonts, decoder resources and upstream LICENSE into versioned same-origin
+public assets. No CDN or native canvas dependency is used. Canvas/text rendering does not
+instantiate the PDF scripting manager or annotation actions. `enableXfa` and `useWasm` are
+false; `isEvalSupported: false` is supplied defensively. Version 6 removed eval-based font
+compilation itself. The existing nonce CSP is unchanged and verified by the real browser test.
+Only visible/nearby pages allocate canvases, each capped at 16M backing pixels. Offline
+business persistence is not added. Scanned PDFs remain readable but have no OCR text.
+
+`GET` and `POST /api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{id}/text`
+are feature gated and owner scoped through the same resource authorization as PDF access.
+POST receives `file_sha256`, `pages`, `extracted_by` (`pdfjs@version`) and normalization
+`utf8-nfc-lf-v1`; the server checks the verified current file SHA under a resource lock.
+A duplicate file version returns the existing text. The 5 MiB limit is checked both before
+and after NFC/LF normalization. Each page ends with LF; `page_offsets` uses zero-based
+Unicode scalar offsets with exclusive ends, including that LF. This avoids confusing
+JavaScript UTF-16 offsets with Python's Unicode characters (including non-BMP characters).
+Historical file versions stay stored but are unavailable through current-file reads and AI
+context selection. Research ideas remain excluded by both existing AI gates.
+Migration 0049 adds only `source_texts`; downgrade refuses every stored row.

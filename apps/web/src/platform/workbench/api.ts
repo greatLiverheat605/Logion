@@ -16,6 +16,8 @@ export function createWorkbenchQueryClient() {
 export function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
     const pdfErrors: Record<string, string> = {
+      SOURCE_FILE_CHANGED: "附件已更新，请重新打开原文。",
+      SOURCE_TEXT_NOT_FOUND: "全文尚未就绪，请打开原文后再试。",
       PDF_TOO_LARGE: "PDF 超过允许的大小，请选择更小的文件。",
       PDF_INVALID: "文件不是有效的 PDF。",
       PDF_ZIP_INVALID: "附件压缩包不符合安全要求，请检查 Zotero 附件。",

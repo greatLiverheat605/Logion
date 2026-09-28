@@ -76,3 +76,6 @@ Thumbs.db
 /.codex/
 /.local/
 /sisyphus/
+
+# Packaged from the pinned pdfjs-dist dependency during Web build.
+/apps/web/public/pdfjs/

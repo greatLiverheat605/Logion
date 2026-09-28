@@ -388,3 +388,160 @@ test("local PDFs import through real WebDAV and deduplicate", async ({
   ).toBe("");
   await expectOnlineOnly(page);
 });
+
+test("PDF reader renders local assets, text, outline and thumbnails under nonce CSP", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
+  const { readFile } = await import("node:fs/promises");
+  const registered = await context.request.post("/api/v1/auth/register", {
+    headers: { Origin: baseURL! },
+    data: {
+      email: `reader-${randomUUID()}@example.com`,
+      password: `${randomBytes(24).toString("base64url")}Aa1!`,
+      device_name: "Synthetic reader",
+    },
+  });
+  expect(registered.status()).toBe(201);
+  const csrf = (await context.cookies()).find(
+    (c) => c.name === "logion_csrf",
+  )!.value;
+  const headers = { Origin: baseURL!, "X-CSRF-Token": csrf };
+  expect(
+    (
+      await context.request.put("/api/v1/research/integrations/webdav", {
+        headers,
+        data: { username: "synthetic-account", credential: "synthetic-webdav" },
+      })
+    ).status(),
+  ).toBe(200);
+  expect(
+    (
+      await context.request.post("/api/v1/research/integrations/webdav/test", {
+        headers,
+      })
+    ).status(),
+  ).toBe(200);
+  const workspace = (
+    await (await context.request.get("/api/v1/workspaces")).json()
+  ).workspaces[0].id;
+  const space = (
+    await (
+      await context.request.get(`/api/v1/workspaces/${workspace}/spaces`)
+    ).json()
+  ).spaces[0].id;
+  const base = `/api/v1/workspaces/${workspace}/spaces/${space}/library/resources`;
+  const imported = await context.request.post(`${base}/pdf-import`, {
+    headers: {
+      ...headers,
+      "Content-Type": "application/pdf",
+      "X-PDF-Title": "Synthetic reader paper",
+    },
+    data: await readFile("tests/fixtures/synthetic-reader.pdf"),
+  });
+  expect(imported.status()).toBe(201);
+  const resource = await imported.json();
+  const outbound: string[] = [],
+    errors: string[] = [],
+    assetUrls: string[] = [];
+  let pdfRequests = 0;
+  page.on("request", (request) => {
+    if (
+      request.url().startsWith("http") &&
+      new URL(request.url()).origin !== baseURL
+    )
+      outbound.push(request.url());
+    if (request.url().endsWith(`/${resource.id}/pdf`)) pdfRequests++;
+    if (request.url().includes("/pdfjs/")) assetUrls.push(request.url());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("dialog", async (dialog) => {
+    errors.push(dialog.message());
+    await dialog.dismiss();
+  });
+  await page.addInitScript(() => {
+    (window as unknown as { cspViolations: string[] }).cspViolations = [];
+    document.addEventListener("securitypolicyviolation", (event) =>
+      (window as unknown as { cspViolations: string[] }).cspViolations.push(
+        event.violatedDirective,
+      ),
+    );
+  });
+  const textSaved = page.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/${resource.id}/text`) &&
+      r.request().method() === "POST",
+  );
+  await page.goto(`/read/${resource.id}`);
+  const response = await textSaved;
+  expect(response.status()).toBe(200);
+  const fulltext = await response.json();
+  expect(fulltext.normalization_version).toBe("utf8-nfc-lf-v1");
+  expect(fulltext.page_offsets).toHaveLength(3);
+  expect(fulltext.text).toContain("careful reading");
+  await expect(
+    page.locator('[data-pdf-page="1"] [data-reader-text-layer]'),
+  ).toContainText("Motivation");
+  await expect(page.locator('[data-pdf-page="1"]')).toHaveAttribute(
+    "data-rendered",
+    "true",
+  );
+  await page.getByRole("button", { name: "知道了" }).click();
+  await expect(
+    page.getByRole("complementary", { name: "阅读工具提示" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("Control+f");
+  await page.getByLabel("在原文中查找").fill("synthetic");
+  await expect(page.locator(".wb-text-match").first()).toBeVisible();
+  await page.getByRole("button", { name: "放大原文", exact: true }).click();
+  await expect(page.getByText("110%", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "缩小原文", exact: true }).click();
+  await page.getByRole("button", { name: "选择左栏内容" }).click();
+  await page.getByRole("menuitem", { name: "大纲", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "论文大纲" })
+    .getByRole("button", { name: "Experiments" })
+    .click();
+  await expect(page.getByLabel("跳到页码")).toHaveValue("2");
+  await page.getByRole("button", { name: "选择右栏内容" }).click();
+  await page.getByRole("menuitem", { name: "缩略图", exact: true }).click();
+  await expect(
+    page.locator('.wb-pdf-thumbnail[data-rendered="true"]'),
+  ).toHaveCount(3);
+  await page.getByRole("button", { name: "第 1 页", exact: true }).click();
+  await expect(page.getByLabel("跳到页码")).toHaveValue("1");
+  await page.getByLabel("在原文中查找").fill("");
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath(`reader-${width}-${theme}.png`),
+        fullPage: true,
+      });
+    }
+  }
+  expect(assetUrls.some((url) => url.endsWith("pdf.worker.min.mjs"))).toBe(
+    true,
+  );
+  expect(outbound).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { cspViolations: string[] }).cspViolations,
+    ),
+  ).toEqual([]);
+  expect(
+    await page.evaluate(() => Reflect.get(globalThis, "__PDF_SCRIPT_EXECUTED")),
+  ).toBeUndefined();
+  expect(pdfRequests).toBe(1);
+  await expectOnlineOnly(page);
+});

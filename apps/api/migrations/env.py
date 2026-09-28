@@ -16,6 +16,7 @@ from logion_api.identity import models as identity_models  # noqa: F401
 from logion_api.integrations import models as integration_models  # noqa: F401
 from logion_api.knowledge_space import models as knowledge_space_models  # noqa: F401
 from logion_api.library import pdf_models as pdf_models  # noqa: F401
+from logion_api.library import text_models as text_models  # noqa: F401
 from logion_api.memory import models as memory_models  # noqa: F401
 from logion_api.planning import models as planning_models  # noqa: F401
 from logion_api.portability import models as portability_models  # noqa: F401

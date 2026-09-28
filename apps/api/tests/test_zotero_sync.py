@@ -353,10 +353,20 @@ async def test_zotero_sync_is_incremental_private_resumable_and_non_destructive(
             response = await client.get(base + "/knowledge/source-excerpts")
             assert response.status_code == 200, response.text
             assert response.json()["excerpts"] == []
+        assert resource["zotero_attachment_version"] == 10
         edited = {
             key: value
             for key, value in resource.items()
-            if key not in {"id", "workspace_id", "space_id", "version", "created_at", "updated_at"}
+            if key
+            not in {
+                "id",
+                "workspace_id",
+                "space_id",
+                "version",
+                "created_at",
+                "updated_at",
+                "zotero_attachment_version",
+            }
         }
         edited.update(expected_version=resource["version"], tags=["synthetic", "collection:Forged"])
         refused = await owner.put(base + f"/library/resources/{resource_id}", json=edited)

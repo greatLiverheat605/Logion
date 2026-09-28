@@ -14,7 +14,13 @@ import {
 } from "./preferences";
 import { useWorkbench } from "./provider";
 
-export function ThreePanes({ info }: { info?: ReactNode }) {
+export function ThreePanes({
+  info,
+  renderContent,
+}: {
+  info?: ReactNode;
+  renderContent?: (kind: PaneContent) => ReactNode;
+}) {
   const { preferences, save, pending } = useWorkbench();
   const modifier = useModifierKey();
   const stored = preferences["workbench.layouts"];
@@ -154,20 +160,21 @@ export function ThreePanes({ info }: { info?: ReactNode }) {
                     </Button>
                   </div>
                 </header>
-                <div className="wb-pane-content">
-                  {pane.content === "info" ? (
-                    (info ?? (
+                <div className="wb-pane-content" tabIndex={0}>
+                  {renderContent?.(pane.content) ??
+                    (pane.content === "info" ? (
+                      (info ?? (
+                        <div className="wb-empty">
+                          <h2>文献信息</h2>
+                          <p>从文献库选择一篇文献，在这里查看详细信息。</p>
+                        </div>
+                      ))
+                    ) : (
                       <div className="wb-empty">
-                        <h2>文献信息</h2>
-                        <p>从文献库选择一篇文献，在这里查看详细信息。</p>
+                        <h2>{CONTENTS[pane.content]}</h2>
+                        <p>将在 R2–R4 提供</p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="wb-empty">
-                      <h2>{CONTENTS[pane.content]}</h2>
-                      <p>将在 R2–R4 提供</p>
-                    </div>
-                  )}
+                    ))}
                 </div>
               </section>
               {next !== undefined && (

@@ -158,6 +158,7 @@ class LibraryDelete(Strict):
 
 
 class LibraryResource(LibraryFields):
+    zotero_attachment_version: int | None = None
     id: UUID
     workspace_id: UUID
     space_id: UUID

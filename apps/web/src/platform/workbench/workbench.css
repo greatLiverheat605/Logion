@@ -821,3 +821,114 @@
   overflow: auto;
   overflow-wrap: anywhere;
 }
+
+/* The PDF surface scrolls inside a pane; the workbench never grows sideways. */
+.wb-reader-document {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.wb-reader-document > .wb-reader {
+  flex: 1;
+  height: auto;
+}
+.wb-pdf-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wb-sep);
+}
+.wb-pdf-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wb-pdf-controls input {
+  width: 9em;
+  min-width: 0;
+}
+.wb-pdf-controls input[type="number"] {
+  width: 4em;
+}
+.wb-pdf-pages {
+  padding: 12px;
+  background: var(--wb-fill);
+}
+.wb-pdf-page {
+  position: relative;
+  margin-bottom: 16px;
+  min-width: 0;
+  scroll-margin-block: 8px;
+}
+.wb-pdf-paper {
+  position: relative;
+  aspect-ratio: 0.707;
+  min-height: 1px;
+  background: white;
+  color: black;
+  box-shadow: 0 2px 6px #0002;
+  overflow: hidden;
+}
+.wb-pdf-paper canvas {
+  display: block;
+}
+.wb-pdf-page-number {
+  display: block;
+  padding: 4px;
+  text-align: center;
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+.wb-pdf-paper .textLayer {
+  inset: 0;
+}
+.wb-pdf-paper .wb-text-match {
+  background: #f5bd3680;
+}
+html[data-theme="dark"]
+  .wb-reader-document:not([data-white-paper="true"])
+  .wb-pdf-paper {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+.wb-pdf-thumbnails {
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+.wb-pdf-thumbnail {
+  width: min(100%, 150px);
+}
+.wb-pdf-thumbnail button {
+  width: 100%;
+  margin-top: 6px;
+}
+.wb-pdf-outline {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+}
+.wb-pdf-outline button {
+  width: 100%;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  justify-content: start;
+}
+@media (max-width: 700px) {
+  .wb-pdf-controls .wb-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+.wb-scope .wb-reader-title {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--wb-sep);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}

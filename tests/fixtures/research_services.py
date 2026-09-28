@@ -5,9 +5,10 @@ import io
 import json
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-PDF = b"%PDF-1.7\nSynthetic browser paper\n%%EOF"
+PDF = Path(__file__).with_name("synthetic-reader.pdf").read_bytes()
 FILES: dict[str, bytes] = {}
 _buffer = io.BytesIO()
 with zipfile.ZipFile(_buffer, "w") as _zip:
