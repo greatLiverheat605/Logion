@@ -257,7 +257,11 @@ async def build_research_context(
                 "normalization_version": item.normalization_version,
             }
         value = json.dumps(
-            {"entity_type": ref.entity_type, "data": data},
+            {
+                "entity_type": ref.entity_type,
+                "data": data,
+                **({"ref": ref.model_dump(mode="json")} if task_type == "link_suggest" else {}),
+            },
             ensure_ascii=False,
             sort_keys=True,
         )

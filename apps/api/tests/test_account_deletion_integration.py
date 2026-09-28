@@ -17,6 +17,7 @@ from logion_api.content.yjs_documents import state_from_markdown
 from logion_api.db import session_factory
 from logion_api.identity.models import AuthSession, EmailOutbox, PasswordCredential, User
 from logion_api.integrations.models import IntegrationCredential
+from logion_api.knowledge.models import KnowledgeEdge
 from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
 from logion_api.main import app
 from logion_api.memory.models import MasteryRecord, QuizAttempt, QuizItem, ReviewSchedule, Topic
@@ -307,6 +308,7 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         integration_id = uuid4()
         resource_id, excerpt_id, citation_id = uuid4(), uuid4(), uuid4()
         private_note_id, private_topic_id = uuid4(), uuid4()
+        private_edge_id = uuid4()
         private_quiz_id, private_attempt_id, private_mastery_id, private_schedule_id = (
             uuid4() for _ in range(4)
         )
@@ -384,6 +386,21 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
                 acceptance_operation_id=uuid4(),
                 accepted_by=user_id,
                 accepted_at=datetime.now(UTC),
+            )
+        )
+        db.add(
+            KnowledgeEdge(
+                id=private_edge_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                user_id=user_id,
+                from_resource_id=resource_id,
+                to_topic_id=private_topic_id,
+                evidence_excerpt_id=excerpt_id,
+                relation="defines",
+                status="rejected",
+                origin="user",
+                reason="Private rejection preserved until account erasure",
             )
         )
         db.add(
@@ -477,6 +494,7 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert await db.get(ReviewSchedule, private_schedule_id) is None
         assert await db.get(SourceExcerpt, excerpt_id) is None
         assert await db.get(KnowledgeCitation, citation_id) is None
+        assert await db.get(KnowledgeEdge, private_edge_id) is None
         assert not path_exists(attachment_path)
         assert await db.get(PasswordCredential, user_id) is None
         assert not list(

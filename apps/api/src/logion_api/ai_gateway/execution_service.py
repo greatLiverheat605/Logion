@@ -33,6 +33,7 @@ from logion_api.db import session_factory, utc_now
 from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
+from logion_api.knowledge.suggestions import save_link_suggestions, validate_link_run
 from logion_api.reading.quiz_grading import save_grading_evidence
 
 FALLBACK_ERRORS = {"AI_PROVIDER_RATE_LIMITED", "AI_PROVIDER_UNAVAILABLE"}
@@ -214,7 +215,10 @@ class AIExecutionService:
                     status_code=503,
                     retryable=True,
                 )
-            return candidate, run, model, provider, self._input_cipher.decrypt(run)
+            fields = self._input_cipher.decrypt(run)
+            if run.task_type == "link_suggest" and run.prompt_version == "research-v1/link_suggest":
+                await validate_link_run(db, run, fields)
+            return candidate, run, model, provider, fields
 
     async def _record_attempt(self, run_id: UUID) -> None:
         async with session_factory() as db:
@@ -281,6 +285,27 @@ class AIExecutionService:
                 await self._terminal(db, run, "succeeded", None, actual_tokens, actual_cost)
                 await db.commit()
                 return
+            draft_output = result.output
+            if run.task_type == "link_suggest" and run.prompt_version == "research-v1/link_suggest":
+                try:
+                    if not self._settings.research_v3_enabled:
+                        raise APIError(
+                            code="RESEARCH_FEATURE_DISABLED",
+                            message="Research is disabled.",
+                            status_code=404,
+                        )
+                    async with db.begin_nested():
+                        draft_output = await save_link_suggestions(
+                            db,
+                            run,
+                            self._input_cipher.decrypt(run),
+                            result.output,
+                            maximum=self._settings.research_entity_per_user_quota,
+                        )
+                except APIError as exc:
+                    await self._terminal(db, run, "failed", exc.code, actual_tokens, actual_cost)
+                    await db.commit()
+                    return
             db.add(
                 AIOutputDraft(
                     workspace_id=run.workspace_id,
@@ -288,7 +313,7 @@ class AIExecutionService:
                     target_type=run.target_type,
                     target_id=run.target_id,
                     target_version=run.target_version,
-                    structured_output=result.output,
+                    structured_output=draft_output,
                 )
             )
             await EngagementService.emit(

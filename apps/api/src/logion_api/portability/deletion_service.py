@@ -33,6 +33,7 @@ from logion_api.identity.models import (
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
 from logion_api.integrations.models import IntegrationCredential
+from logion_api.knowledge.models import KnowledgeEdge
 from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
 from logion_api.library.pdf_cache import lock_cache, remove_resource_cache
 from logion_api.library.pdf_models import WebDAVUsage
@@ -341,6 +342,7 @@ class AccountDeletionService:
         ):
             await remove_resource_cache(db, self._settings, resource)
         await db.execute(delete(WebDAVUsage).where(WebDAVUsage.user_id == user.id))
+        await db.execute(delete(KnowledgeEdge).where(KnowledgeEdge.user_id == user.id))
         private_resources = select(Resource.id).where(Resource.research_owner_id == user.id)
         private_excerpts = select(SourceExcerpt.id).where(
             SourceExcerpt.resource_id.in_(private_resources)
