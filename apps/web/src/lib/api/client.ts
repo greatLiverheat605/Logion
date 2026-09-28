@@ -63,7 +63,7 @@ export interface ApiRequestOptions extends Omit<
   query?: Readonly<Record<string, string>>;
   signal?: AbortSignal;
   timeoutMs?: number;
-  responseType?: "zip";
+  responseType?: "zip" | "pdf";
 }
 
 export interface ApiZipResponse {
@@ -137,9 +137,11 @@ function prepareHeaders(
   }
   headers.set(
     "Accept",
-    options.responseType === "zip"
-      ? "application/zip, application/json"
-      : "application/json",
+    options.responseType === "pdf"
+      ? "application/pdf, application/json"
+      : options.responseType === "zip"
+        ? "application/zip, application/json"
+        : "application/json",
   );
   if (options.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -275,6 +277,18 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
             signal,
           },
         );
+        if (response.ok && responseType === "pdf") {
+          if (
+            response.headers.get("content-type")?.split(";")[0] !==
+            "application/pdf"
+          )
+            throw new LogionApiError({
+              code: "WEB_API_RESPONSE_INVALID",
+              message: "Invalid PDF response.",
+              status: response.status,
+            });
+          return (await response.blob()) as T;
+        }
         if (response.ok && responseType === "zip") {
           if (
             response.headers

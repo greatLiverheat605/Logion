@@ -2112,6 +2112,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Text */
+        get: operations["research_source_text_get"];
+        put?: never;
+        /** Upload Text */
+        post: operations["research_source_text_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/mock-exams": {
         parameters: {
             query?: never;
@@ -5836,6 +5854,8 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+            /** Zotero Attachment Version */
+            zotero_attachment_version?: number | null;
             /** Zotero Item Key */
             zotero_item_key?: string | null;
             /** Zotero Library Id */
@@ -8040,6 +8060,51 @@ export interface components {
              * @enum {string}
              */
             kind: "source";
+        };
+        /** SourceTextCreate */
+        SourceTextCreate: {
+            /** Extracted By */
+            extracted_by: string;
+            /** File Sha256 */
+            file_sha256: string;
+            /**
+             * Normalization Version
+             * @default utf8-nfc-lf-v1
+             * @constant
+             */
+            normalization_version: "utf8-nfc-lf-v1";
+            /** Pages */
+            pages: string[];
+        };
+        /** SourceTextResponse */
+        SourceTextResponse: {
+            /** Extracted By */
+            extracted_by: string;
+            /** File Sha256 */
+            file_sha256: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Normalization Version
+             * @constant
+             */
+            normalization_version: "utf8-nfc-lf-v1";
+            /** Page Offsets */
+            page_offsets: {
+                [key: string]: number;
+            }[];
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /** Text */
+            text: string;
+            /** Version */
+            version: number;
         };
         /** SpaceCreateRequest */
         SpaceCreateRequest: {
@@ -22721,6 +22786,78 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_source_text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTextResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_source_text_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceTextCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceTextResponse"];
                 };
             };
             /** @description Validation Error */

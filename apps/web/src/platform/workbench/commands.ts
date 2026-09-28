@@ -35,7 +35,7 @@ export function validateCommands(commands: readonly Command[]): void {
     if (!s) continue;
     // An allowlist avoids taking browser or OS navigation shortcuts.
     const allowed = s.mod
-      ? !s.alt && !s.shift && ["KeyK", "Backslash"].includes(s.code)
+      ? !s.alt && !s.shift && ["KeyK", "KeyF", "Backslash"].includes(s.code)
       : s.alt
         ? /^Digit[1-4]$/.test(s.code) && (s.shift || s.code !== "Digit4")
         : s.code === "Slash" && s.shift;
@@ -76,6 +76,7 @@ export function createCommands(
     palette: () => void;
     toolbars: () => void;
     help: () => void;
+    reader?: (id: string) => void;
   },
   { toolbarsVisible = false, modifier = "Ctrl" } = {},
 ): Command[] {
@@ -135,6 +136,26 @@ export function createCommands(
       action: () => actions.pane(i),
     })),
   ];
+  if (actions.reader) {
+    for (const [id, label] of Object.entries({
+      find: "在原文中查找",
+      white: "切换固定白纸",
+      zoomIn: "放大原文",
+      zoomOut: "缩小原文",
+      next: "原文下一页",
+      previous: "原文上一页",
+    })) {
+      commands.push({
+        id: `reader:${id}`,
+        label,
+        group: "阅读",
+        action: () => actions.reader?.(id),
+        ...(id === "find"
+          ? { shortcut: { mod: true, code: "KeyF" }, hint: `${modifier}+F` }
+          : {}),
+      });
+    }
+  }
   validateCommands(commands);
   return commands;
 }

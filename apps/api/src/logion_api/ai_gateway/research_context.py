@@ -16,6 +16,7 @@ from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import AuditEvent
 from logion_api.knowledge_space.models import SourceExcerpt
+from logion_api.library.text_models import SourceText
 from logion_api.memory.models import Topic
 from logion_api.research.models import ResearchClaim, ResearchQuestion
 
@@ -103,9 +104,9 @@ async def build_research_context(
         )
     fields: dict[str, str] = {}
     for index, ref in enumerate(entities):
-        # Full text has no model in R1; admit it only once a scoped loader ships in R2.
         model: Any = {
             "resource": Resource,
+            "source_text": SourceText,
             "note": Note,
             "source_excerpt": SourceExcerpt,
             "research_question": ResearchQuestion,
@@ -129,6 +130,12 @@ async def build_research_context(
         elif model is Resource:
             query = query.where(
                 (Resource.research_owner_id.is_(None)) | (Resource.research_owner_id == user_id)
+            )
+        elif model is SourceText:
+            query = query.join(Resource, Resource.id == SourceText.resource_id).where(
+                Resource.research_owner_id == user_id,
+                Resource.deleted_at.is_(None),
+                Resource.sha256 == SourceText.file_sha256,
             )
         elif model is SourceExcerpt:
             query = query.join(Resource, Resource.id == SourceExcerpt.resource_id).where(
@@ -157,6 +164,7 @@ async def build_research_context(
             ),
             "note": ("title", "markdown_body"),
             "source_excerpt": ("excerpt_text",),
+            "source_text": ("text", "page_offsets", "normalization_version"),
             "research_question": ("question", "rationale"),
             "topic": ("title", "description"),
             "research_claim": ("statement", "stance"),

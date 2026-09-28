@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 const origin = "http://127.0.0.1:3090";
 // API integration tests run before this suite; their rate-limit buckets are separate.
@@ -11,6 +11,8 @@ const integrationKeyring = JSON.stringify({
   active: "test",
   keys: { test: randomBytes(32).toString("base64url") },
 });
+// Each launch has an ephemeral keyring; never reuse ciphertext from an older launch.
+const attachmentRoot = `reports/research-real/attachments/${randomUUID()}`;
 
 // Only this suite starts real research-enabled services. The regular browser
 // configuration and integration tests keep their existing environments.
@@ -57,7 +59,7 @@ export default defineConfig({
         LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
         LOGION_INTEGRATION_KEYRING: integrationKeyring,
         LOGION_PDF_CACHE_KEYRING: integrationKeyring,
-        LOGION_ATTACHMENT_ROOT: "reports/research-real/attachments",
+        LOGION_ATTACHMENT_ROOT: attachmentRoot,
         LOGION_RESEARCH_V3_ENABLED: String(enabled),
         LOGION_ALLOWED_ORIGINS: JSON.stringify([origin]),
         LOGION_WEBAUTHN_RP_ID: "127.0.0.1",
@@ -75,7 +77,7 @@ export default defineConfig({
         LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
         LOGION_INTEGRATION_KEYRING: integrationKeyring,
         LOGION_PDF_CACHE_KEYRING: integrationKeyring,
-        LOGION_ATTACHMENT_ROOT: "reports/research-real/attachments",
+        LOGION_ATTACHMENT_ROOT: attachmentRoot,
         LOGION_REDIS_URL:
           process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
           researchRedis.toString(),

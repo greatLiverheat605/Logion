@@ -320,3 +320,33 @@ describe("API client security boundary", () => {
     });
   });
 });
+
+describe("PDF response boundary", () => {
+  it("returns a PDF blob and rejects HTML masquerading as a successful response", async () => {
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("%PDF-1.7", {
+          headers: { "Content-Type": "application/pdf" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("<html>login</html>", {
+          headers: { "Content-Type": "text/html" },
+        }),
+      );
+    const client = createApiClient({ fetchImplementation });
+    const path = "/api/v1/workspaces/a/spaces/b/library/resources/c/pdf";
+    expect(
+      await (await client.request<Blob>(path, { responseType: "pdf" })).text(),
+    ).toBe("%PDF-1.7");
+    expect(fetchImplementation.mock.calls[0]![1]).toMatchObject({
+      cache: "no-store",
+      credentials: "same-origin",
+      redirect: "error",
+    });
+    await expect(
+      client.request(path, { responseType: "pdf" }),
+    ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
+  });
+});

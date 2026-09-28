@@ -133,3 +133,18 @@ it("refuses offline writes immediately without fetching or queuing", async () =>
     vi.unstubAllGlobals();
   }
 });
+
+it("registers reader actions only in the reading scope and allows its find shortcut", () => {
+  const reader = vi.fn();
+  const commands = createCommands({ ...actions(), reader });
+  commands.find((command) => command.id === "reader:white")!.action();
+  expect(reader).toHaveBeenCalledWith("white");
+  expect(
+    commands.find((command) => command.id === "reader:find")!.shortcut,
+  ).toEqual({ mod: true, code: "KeyF" });
+  expect(
+    createCommands(actions()).some((command) =>
+      command.id.startsWith("reader:"),
+    ),
+  ).toBe(false);
+});
