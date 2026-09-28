@@ -54,7 +54,7 @@ it("exposes segmented keyboard navigation and menu focus", async () => {
         ]}
         onChange={change}
       />
-      <Menu label="操作" items={[{ label: "执行", action }]} />
+      <Menu label="操作" items={[{ label: "执行", action, checked: true }]} />
     </>,
   );
   screen.getByRole("radio", { name: "精读" }).focus();

@@ -1035,3 +1035,41 @@ html[data-theme="dark"]
   gap: 8px;
   min-height: 44px;
 }
+
+.wb-reading-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--wb-sep);
+}
+.wb-reading-progress .wb-button {
+  min-height: 44px;
+}
+.wb-reading-progress [role="alert"] {
+  flex-basis: 100%;
+}
+.wb-today-page {
+  overflow: auto;
+}
+.wb-continue-reading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+}
+.wb-continue-reading > div {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.wb-continue-reading h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.wb-continue-reading p {
+  margin: 8px 0 0;
+}

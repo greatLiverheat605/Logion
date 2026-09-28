@@ -21,6 +21,7 @@ import {
 import { ReadingAiResult } from "./reading-ai";
 import { useCloseReadingNote } from "./close-reading-note";
 import { useReadingQuiz } from "./reading-quiz";
+import { ReadingProgress } from "./reading-progress";
 
 type Resource = components["schemas"]["LibraryResource"];
 type Outline = { title: string; page: number | null; depth: number };
@@ -542,6 +543,7 @@ function ReaderScope({
       data-white-paper={whitePaper}
     >
       <h1 className="wb-reader-title">{detail.data?.title ?? "论文阅读"}</h1>
+      {detail.data && <ReadingProgress item={detail.data} path={path} />}
       {actionStatus && <p role="status">{actionStatus}</p>}
       {action.isPending && <p role="status">正在处理选中内容…</p>}
       {action.error && <p role="alert">{errorMessage(action.error)}</p>}

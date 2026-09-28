@@ -2335,6 +2335,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/reading-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Reading Status */
+        patch: operations["research_reading_status_update"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/text": {
         parameters: {
             query?: never;
@@ -7574,6 +7591,16 @@ export interface components {
             update_base64: string;
             /** Yjs Generation */
             yjs_generation: number;
+        };
+        /** ReadingProgressUpdate */
+        ReadingProgressUpdate: {
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "reading" | "close_read";
         };
         /** ReadingQuiz */
         ReadingQuiz: {
@@ -23926,6 +23953,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_reading_status_update: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingProgressUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryResource"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

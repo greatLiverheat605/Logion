@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
+from logion_api.db import utc_now
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -20,6 +21,7 @@ from logion_api.library.schemas import (
     LibraryPage,
     LibraryResource,
     LibraryUpdate,
+    ReadingProgressUpdate,
     ReadingStatus,
 )
 from logion_api.library.service import LibraryService
@@ -168,6 +170,48 @@ async def update_resource(
     except Exception:
         await db.rollback()
         raise
+
+
+@router.patch(
+    "/{resource_id}/reading-status",
+    response_model=LibraryResource,
+    operation_id="research_reading_status_update",
+    dependencies=[Depends(write_boundary)],
+)
+async def update_reading_status(
+    workspace_id: UUID,
+    space_id: UUID,
+    resource_id: UUID,
+    payload: ReadingProgressUpdate,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    service: Service,
+) -> LibraryResource:
+    item = await service.get(
+        db, context, workspace_id, space_id, resource_id, request_id(request), write=True
+    )
+    service.check_version(item, payload.expected_version)
+    if item.reading_status == "archived" or (
+        payload.status == "close_read" and item.reading_status not in {"reading", "close_read"}
+    ):
+        raise APIError(
+            code="READING_TRANSITION_INVALID",
+            message="Start reading before completing; archived sources stay archived.",
+            status_code=409,
+        )
+    if item.reading_status != payload.status:
+        item.reading_status = payload.status
+        item.updated_at = utc_now()
+        item.updated_by = context.user.id
+        item.version += 1
+        if payload.status == "close_read":
+            item.read_at = item.updated_at
+        service.audit(db, context, request_id(request), "reading_status_updated")
+        await db.flush()
+    result = LibraryResource.model_validate(item)
+    await db.commit()
+    return result
 
 
 @router.delete(

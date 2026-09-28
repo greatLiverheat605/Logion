@@ -281,7 +281,11 @@ for (const theme of ["light", "dark"] as const) {
       await page.keyboard.press("Escape");
       await page.getByRole("link", { name: "进入阅读" }).click();
       if (width < 768)
-        await page.getByRole("radio", { name: "左 · 文献信息" }).click();
+        await page.getByRole("radio", { name: "左 · 大纲" }).click();
+      await page.getByRole("button", { name: "选择左栏内容" }).click();
+      await page
+        .getByRole("menuitem", { name: "文献信息", exact: true })
+        .click();
       await expect(
         page
           .getByRole("region", { name: "左栏", exact: true })
@@ -426,11 +430,19 @@ for (const theme of ["light", "dark"] as const) {
         page.getByRole("region", { name: "三栏阅读布局" }),
       ).toBeVisible();
       if (width >= 768) {
+        const left = page.getByRole("region", { name: "左栏", exact: true });
+        await expect(left.locator(".wb-pane-header")).toContainText("大纲");
+        await page.getByRole("button", { name: "选择左栏内容" }).click();
+        await page
+          .getByRole("menuitem", { name: "文献信息", exact: true })
+          .click();
         await expect(
           page
             .getByRole("region", { name: "左栏", exact: true })
             .getByRole("heading", { name: initial.title }),
         ).toBeVisible();
+        await page.getByRole("button", { name: "选择左栏内容" }).click();
+        await page.getByRole("menuitem", { name: "大纲", exact: true }).click();
         await expect(
           page.getByRole("button", { name: "打开指令面板" }),
         ).toContainText(

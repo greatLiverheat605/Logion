@@ -13,7 +13,7 @@ Playwright 的 `workbench-chromium` 项目从同一构建启动两个隔离 Web 
 分别以开关开启和关闭运行，覆盖真实路由状态、键盘和响应式布局。
 
 `playwright.research.config.ts` 另启真实 API（8000 开、8001 关）与 Web（3090），
-仅匹配 `research-real-backend.spec.ts`，不拦截任何请求。先用
+运行 `research-real-backend.spec.ts` 和 `research-reading-loop.spec.ts`，不拦截任何浏览器请求。先用
 `LOGION_PUBLIC_API_URL=http://127.0.0.1:8000 pnpm --filter @logion/web build`
 构建（Next 的代理目标在构建时确定），在已迁移的合成测试数据库与 Redis 环境中运行
 `pnpm exec playwright test --config playwright.research.config.ts`。
@@ -42,8 +42,8 @@ Claude 建议 A，本轮仅修正文档。
 | `reader.hint_dismissed` | 布尔值，关闭首次阅读提示后为 `true`    |
 
 每栏包含 `content`、10–80 的相对 `width` 和 `collapsed`；至少一栏保持可见。
-内容标识为 `info / document / translation / quiz`，仅文献信息已实现，
-其他是后续阅读功能占位。预设为 `reading / translation / quiz / focus`，
+内容标识包含 `pdf / outline / thumbs / note / excerpts / chat / translate / quiz / info`，
+旧 `document / translation` 仍兼容。预设为 `reading / translation / quiz / focus`，
 手动调整标记为 `custom`。
 
 新键关闭时，按键读取和写入返回 404，批量读取不暴露这些研究偏好键。
@@ -215,4 +215,10 @@ Resource-scoped endpoints under `.../library/resources/{id}/quiz`: `GET` lists a
 
 Generation uses the existing research AI endpoint with resource target and `expected_output_fields=["questions"]`; this string contains exactly five validated question objects. Grading targets a stored `quiz_attempt` with `expected_output_fields=["grade"]`. Only that task admits the explicit attempt loader and source excerpts from the same paper; the general context whitelist is unchanged. Grading context includes the question, server answer key, own response and selected excerpts, never ideas. At completion the Worker validates the result, current ownership/access and attempt version before storing score (0–100), reasoning, weak concepts, run ID and timestamp. Invalid or stale evidence fails the run but still settles measured usage. No grading path updates mastery or schedules. Owner confirmation uses the same intervals as legacy memory, with personal audit scope and later review timestamps.
 
-The real-backend suite includes a serial, four-stage reading journey sharing one synthetic paper and session: credentials/sync/PDF/excerpt, translation/explanation/notes, mobile quiz/draft/grade/mastery, and review. Each stage retains the normal browser timeout. All providers and integration services remain local synthetic fixtures.
+The real-backend suite includes a serial, six-stage reading journey sharing one synthetic paper and session: credentials/sync/PDF/excerpt, translation/explanation/notes, mobile quiz/draft/grade/mastery, review, Today resume, and owner completion. Each stage retains the normal browser timeout. All providers and integration services remain local synthetic fixtures.
+
+## Reading progress (ADR-0039, ADR-0045)
+
+`PATCH .../library/resources/{id}/reading-status` takes `expected_version` and `status` (`reading` or `close_read`). It reuses the feature flag, owner/Space authorization, resource lock, CSRF, Origin and write rate boundary. Only progress/version/update metadata change; Zotero identity, CSL, tags and file locator are untouched. Completion requires current `reading` state; an already matching state is a no-op at the current version. Archived resources cannot resume through this endpoint. Completing sets `read_at` to server time, reopening retains the previous completion time, and a later completion replaces it. This reuses existing columns without a migration.
+
+Today reuses the paginated library query with `status=reading` and the same query cache as that library filter. Writes invalidate both listings and reader detail. AI processing never calls the progress endpoint. The six-stage real browser journey now verifies resume, explicit completion, offline refusal, completion date, library filters and Today removal. Stored legacy pane values remain accepted; new reading/translation/focus presets use the actual R2 content types. The R2 quiz preset keeps PDF and quiz while the local knowledge graph awaits R3.

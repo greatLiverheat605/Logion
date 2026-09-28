@@ -322,7 +322,7 @@ test("selection commands preserve source citations and use the real AI draft pip
   await page.reload();
   expect((await ready).status()).toBe(200);
   if (page.viewportSize()!.width < 768)
-    await page.getByRole("radio", { name: "中 · 文献正文" }).click();
+    await page.getByRole("radio", { name: "中 · PDF 原文" }).click();
   await selectFirstPassage(page);
   await expect(
     page.getByRole("toolbar", { name: "选中文字操作" }),
@@ -837,6 +837,13 @@ test("PDF reader renders local assets, text, outline and thumbnails under nonce 
   await expect(page.getByLabel("跳到页码")).toHaveValue("2");
   await page.getByRole("button", { name: "选择右栏内容" }).click();
   await page.getByRole("menuitem", { name: "缩略图", exact: true }).click();
+  // Thumbnails render as their pane scrolls; visit every page before counting.
+  const thumbnails = page.locator(".wb-pdf-thumbnail");
+  await expect(thumbnails).toHaveCount(3);
+  for (const thumbnail of await thumbnails.all()) {
+    await thumbnail.scrollIntoViewIfNeeded();
+    await expect(thumbnail).toHaveAttribute("data-rendered", "true");
+  }
   await expect(
     page.locator('.wb-pdf-thumbnail[data-rendered="true"]'),
   ).toHaveCount(3);

@@ -73,6 +73,7 @@ export function Menu({
           {items.map((item) => (
             <Dropdown.Item
               key={item.label}
+              aria-label={item.label}
               disabled={item.disabled}
               onSelect={item.action}
             >

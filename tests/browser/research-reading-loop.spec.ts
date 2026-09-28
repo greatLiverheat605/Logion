@@ -166,6 +166,10 @@ test.describe.serial("one paper reading loop", () => {
     expect((await ready).status()).toBe(200);
     resourceId = page.url().split("/read/")[1]!;
     await page.getByRole("button", { name: "知道了" }).click();
+    await page.getByRole("button", { name: "开始阅读", exact: true }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "阅读状态：在读" }),
+    ).toBeVisible();
     await selectPassage(page);
     await page.keyboard.press("h");
     await expect(
@@ -336,5 +340,79 @@ test.describe.serial("one paper reading loop", () => {
         async () => (await navigator.serviceWorker.getRegistrations()).length,
       ),
     ).toBe(0);
+  });
+
+  test("Today resumes active reading in both themes at four widths", async ({}, testInfo) => {
+    await page.goto("/today");
+    const resume = page.getByRole("link", {
+      name: "继续阅读：Synthetic synchronized paper",
+    });
+    await expect(resume).toBeVisible();
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await page.screenshot({
+          path: testInfo.outputPath(`today-${width}-${theme}.png`),
+        });
+      }
+    }
+    await resume.click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "阅读状态：在读" }),
+    ).toBeVisible();
+  });
+
+  test("owner completion persists while offline changes are refused", async () => {
+    await context.setOffline(true);
+    await page.getByRole("button", { name: "标记精读完成" }).click();
+    await expect(
+      page.locator(".wb-reading-progress").getByRole("alert"),
+    ).toContainText("需要联网");
+    await expect(
+      page.getByRole("status").filter({ hasText: "阅读状态：在读" }),
+    ).toBeVisible();
+    await context.setOffline(false);
+    await page.getByRole("button", { name: "标记精读完成" }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "阅读状态：精读完成" }),
+    ).toBeVisible();
+    const resource = await (
+      await context.request.get(`${scope}/library/resources/${resourceId}`)
+    ).json();
+    expect(resource.reading_status).toBe("close_read");
+    expect(Number.isFinite(Date.parse(resource.read_at))).toBe(true);
+    await page.goto("/library");
+    await page
+      .getByRole("combobox", { name: "阅读状态", exact: true })
+      .selectOption("close_read");
+    await expect(
+      page.getByRole("button", { name: /Synthetic synchronized paper/ }),
+    ).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "阅读状态", exact: true })
+      .selectOption("reading");
+    await expect(
+      page.getByRole("button", { name: /Synthetic synchronized paper/ }),
+    ).toHaveCount(0);
+    await page.goto("/today");
+    await expect(
+      page.getByText("还没有在读文献。", { exact: false }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", {
+        name: "继续阅读：Synthetic synchronized paper",
+      }),
+    ).toHaveCount(0);
+    expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
   });
 });

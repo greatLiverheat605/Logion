@@ -157,6 +157,11 @@ class LibraryDelete(Strict):
     expected_version: int = Field(ge=1)
 
 
+class ReadingProgressUpdate(Strict):
+    expected_version: int = Field(ge=1)
+    status: Literal["reading", "close_read"]
+
+
 class LibraryResource(LibraryFields):
     zotero_attachment_version: int | None = None
     id: UUID
