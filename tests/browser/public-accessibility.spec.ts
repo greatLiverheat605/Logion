@@ -13,15 +13,41 @@ import {
   WORKBENCH_VIEWPORTS,
 } from "./workbench-audit";
 
-// Firefox can finish rendering/hydration without delivering the navigation
-// lifecycle notification. Check the document state, not that notification.
+// Firefox can render the new document without delivering goto's commit event.
+// Native navigation plus document readiness avoids that notification race.
 async function openPublicPage(page: Page, url: string) {
-  await page.goto(url, { waitUntil: "commit" });
-  await expect
-    .poll(() => page.evaluate(() => document.readyState))
-    .toBe("complete");
+  const target = new URL(url, test.info().project.use.baseURL).href;
+  await page.evaluate((destination) => {
+    Object.defineProperty(window, "__logionPreviousDocument", { value: true });
+    window.location.assign(destination);
+  }, target);
+  await page.waitForFunction(
+    (destination) =>
+      !("__logionPreviousDocument" in window) &&
+      window.location.href === destination &&
+      document.readyState === "complete",
+    target,
+    // Keep the existing readiness assertion budget; no navigation retry.
+    { timeout: 20_000 },
+  );
   await expect(page.locator("main")).toBeVisible();
 }
+
+test("public navigation replaces a complete document at the same URL", async ({
+  page,
+}) => {
+  await openPublicPage(page, "/auth/login");
+  await page.locator("main").evaluate((main) => {
+    main.setAttribute("data-previous-document", "true");
+  });
+  await openPublicPage(page, "/auth/login");
+  await expect(page.locator("main")).not.toHaveAttribute(
+    "data-previous-document",
+  );
+  await expect(
+    page.getByRole("heading", { name: "登录", exact: true }),
+  ).toBeVisible();
+});
 
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
