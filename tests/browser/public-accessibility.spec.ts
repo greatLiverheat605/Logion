@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   assertGlmPrimaryContract,
@@ -13,8 +13,16 @@ import {
   WORKBENCH_VIEWPORTS,
 } from "./workbench-audit";
 
-// Firefox can render and hydrate while its initial load lifecycle remains pending.
-// DOM readiness plus the assertions below define the page under audit.
+// Firefox can finish rendering/hydration without delivering the navigation
+// lifecycle notification. Check the document state, not that notification.
+async function openPublicPage(page: Page, url: string) {
+  await page.goto(url, { waitUntil: "commit" });
+  await expect
+    .poll(() => page.evaluate(() => document.readyState))
+    .toBe("complete");
+  await expect(page.locator("main")).toBeVisible();
+}
+
 const wcagTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 // Default headless Chromium hides the classic scrollbar that exposed the 15 px bug.
@@ -58,7 +66,7 @@ test.describe("M07 public geometry and copy", () => {
           "/auth/recover",
           "/m07-missing-page",
         ]) {
-          await page.goto(route, { waitUntil: "domcontentloaded" });
+          await openPublicPage(page, route);
           await expect(page.locator("h1")).toHaveCount(1);
           await expect(page.locator("h1")).toBeVisible();
           await expect(page.locator("html")).toHaveAttribute(
@@ -159,7 +167,7 @@ test("login inline validation is immediate, accessible and makes no invalid auth
       },
     });
   });
-  await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/auth/login");
   const email = page.getByLabel("邮箱", { exact: true });
   const password = page.getByLabel("密码", { exact: true });
   const submit = page.getByRole("button", { name: "登录", exact: true });
@@ -200,7 +208,7 @@ const publicRoutes = [
 
 for (const route of publicRoutes) {
   test(`${route} has no automated WCAG 2.2 AA violations`, async ({ page }) => {
-    await page.goto(route, { waitUntil: "domcontentloaded" });
+    await openPublicPage(page, route);
     await expect(page.locator("main")).toBeVisible();
     const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
     expect(results.violations).toEqual([]);
@@ -217,7 +225,7 @@ for (const { route, url } of [
   test(`${route} exposes its GLM regions and at most one primary`, async ({
     page,
   }) => {
-    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await openPublicPage(page, url);
     await page
       .getByTestId(
         manifest.routes.find((item) => item.route === route)!.regions[0]!,
@@ -246,7 +254,7 @@ test("captures public authentication evidence at all product viewports", async (
       .regions[0]!;
     for (const viewport of WORKBENCH_VIEWPORTS) {
       await page.setViewportSize(viewport);
-      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await openPublicPage(page, route);
       if (evidencePhase === "after") {
         await page.getByTestId(firstRegion).waitFor();
         await assertGlmRouteRegions(page, manifest, route);
@@ -270,7 +278,7 @@ test("captures public authentication evidence at all product viewports", async (
 test("authentication preserves password manager, paste and visibility controls", async ({
   page,
 }) => {
-  await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/auth/login");
   const email = page.getByLabel("邮箱");
   const password = page.locator("#login-password");
   await expect(email).toHaveAttribute("autocomplete", "email");
@@ -293,7 +301,7 @@ test("authentication preserves password manager, paste and visibility controls",
 test("callback failure keeps retry and login recovery reachable", async ({
   page,
 }) => {
-  await page.goto("/auth/callback", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/auth/callback");
   await expect(
     page.getByRole("heading", { name: "无法完成登录" }),
   ).toBeVisible();
@@ -310,7 +318,7 @@ test("skip link and authentication controls are keyboard reachable", async ({
     browserName === "webkit" || isMobile,
     "Safari link tabbing and physical mobile keyboards require manual sign-off",
   );
-  await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/auth/login");
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: "跳到主要内容" });
   await expect(skipLink).toBeFocused();
@@ -332,7 +340,7 @@ test("login secondary action remains readable in the light theme", async ({
   await page.addInitScript(() =>
     localStorage.setItem("app-shell-theme", "light"),
   );
-  await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/auth/login");
 
   const passkeyButton = page.getByRole("button", {
     name: "使用 Passkey 登录",
@@ -354,7 +362,7 @@ for (const route of publicRoutes) {
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 640 });
-    await page.goto(route, { waitUntil: "domcontentloaded" });
+    await openPublicPage(page, route);
     const hasOverflow = await page.evaluate(
       () =>
         document.documentElement.scrollWidth >
@@ -371,7 +379,7 @@ test("reduced-motion preference does not leave forced animation", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/");
   const movingElements = await auditReducedMotion(page, "#main-content *");
   expect(movingElements).toEqual([]);
 });
@@ -382,7 +390,7 @@ test("theme bootstrap applies a persisted preference before hydration", async ({
   await page.addInitScript(() =>
     localStorage.setItem("app-shell-theme", "dark"),
   );
-  await page.goto("/auth/login", { waitUntil: "domcontentloaded" });
+  await openPublicPage(page, "/auth/login");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.evaluate(() => localStorage.removeItem("app-shell-theme"));
 });

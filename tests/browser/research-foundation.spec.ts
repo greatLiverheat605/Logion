@@ -90,6 +90,8 @@ async function installApi(
   return settings;
 }
 async function command(page: Page, label: string) {
+  // The mock server can save before React clears the in-flight write guard.
+  await expect(page.getByLabel("空间", { exact: true })).toBeEnabled();
   await page.keyboard.press("Control+k");
   await page.getByRole("combobox", { name: "搜索指令" }).fill(label);
   await page.keyboard.press("Enter");
