@@ -50,4 +50,7 @@
 ## Rollback
 
 - Turn `LOGION_RESEARCH_V3_ENABLED` off. `/app/*` serves the legacy client again, and its offline behavior still works with the retained sync-v1 endpoints.
+- Keep the v0.3 server's private-resource filters. Reverting to unpatched v0.2.x
+  after private resources exist is unsafe; application rollback is subject to
+  [ADR-0039](0039-unified-source-model.md#rollback) and the owner's R5 policy decision.
 - Server drafts are ordinary rows and can be dropped.

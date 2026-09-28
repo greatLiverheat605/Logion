@@ -14,6 +14,7 @@ def test_research_preferences_are_default_off_and_strictly_typed() -> None:
     for key, value in [
         ("appearance.theme", '"sepia"'),
         ("reader.selection_menu", '"true"'),
+        ("reader.hint_dismissed", '"true"'),
         ("workbench.context", '{"workspace_id":"bad","space_id":"bad"}'),
         (
             "workbench.layouts",
@@ -31,6 +32,7 @@ def test_research_preferences_are_default_off_and_strictly_typed() -> None:
         assert raised.value.code == "RESEARCH_PREFERENCE_INVALID"
         assert raised.value.details == {"key": key}
     assert validate_research_preference("appearance.theme", '"dark"') is None
+    assert validate_research_preference("reader.hint_dismissed", "true") is None
 
 
 @pytest.mark.integration
@@ -109,9 +111,20 @@ async def test_research_preferences_gate_permissions_versions_and_session_reuse(
             json=context_body,
         )
         assert other_write.status_code == 404
+        hint_body = {"settings": [{"key": "reader.hint_dismissed", "value": "true", "version": 0}]}
+        hint = await owner.put("/api/v1/users/me/settings", headers=csrf, json=hint_body)
+        assert hint.status_code == 200
+        assert hint.json()["settings"][0]["version"] == 1
         monkeypatch.setattr(settings, "research_v3_enabled", False)
+        assert (
+            await owner.put("/api/v1/users/me/settings", headers=csrf, json=hint_body)
+        ).status_code == 404
+        assert (
+            await owner.get("/api/v1/users/me/settings", params={"key": "reader.hint_dismissed"})
+        ).status_code == 404
         assert (
             await owner.get("/api/v1/users/me/settings", params={"key": "workbench.context"})
         ).status_code == 404
         listed = (await owner.get("/api/v1/users/me/settings")).json()["settings"]
         assert all(item["key"] not in {"appearance.theme", "workbench.context"} for item in listed)
+        assert all(item["key"] != "reader.hint_dismissed" for item in listed)

@@ -76,6 +76,9 @@ def test_email_templates_keep_tokens_in_url_fragments() -> None:
     assert "<script>" not in invitation.html_body
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in invitation.html_body
     assert "?token=" not in verification.text_body + recovery.text_body + invitation.text_body
+    assert "?token=" not in verification.text_body + verification.html_body
+    assert "?token=" not in recovery.text_body + recovery.html_body
+    assert "?token=" not in invitation.text_body + invitation.html_body
 
 
 @pytest.mark.parametrize(

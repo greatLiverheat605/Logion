@@ -1,4 +1,4 @@
 import { Placeholder } from "@/platform/workbench/placeholder";
 export default function Page() {
-  return <Placeholder title="知识图谱" />;
+  return <Placeholder title="知识网" />;
 }

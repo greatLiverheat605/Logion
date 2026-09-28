@@ -39,7 +39,15 @@
 
 ## Compatibility
 
-- Every change is additive, so the v0.2 application still runs on the new schema.
+- Additive DDL does not guarantee safe application rollback. An unpatched v0.2.x
+  application is only a candidate on the new schema while there are no resources
+  with non-null `research_owner_id` and no `resource_type` values unsupported by
+  that application's validators. These preconditions require verification.
+- Once personal resources exist, old v0.2.x endpoints do not filter
+  `research_owner_id` and can expose private literature to other members of a
+  shared Space. Old `resource_type` validation may also fail. This can happen even
+  without enabling the research feature: legacy paper creation with the flag off
+  creates a personal resource mapping in the same transaction.
 - OpenAPI changes are additive only; this is checked by `check-openapi-breaking`.
 
 ## R1 owner-approved refinements (2026-09-27)
@@ -61,7 +69,21 @@
 
 ## Rollback
 
-Revert the application. The new columns and tables are ignored by v0.2.
+Turning off `LOGION_RESEARCH_V3_ENABLED` in the v0.3 application retains its
+privacy filters; it is not equivalent to reverting the binary to unpatched v0.2.x.
+Do not assume that old code ignores all new data safely.
+
+Before R5, the owner must choose and record one of these policies:
+
+- **A — rollback-safe v0.2.x patch (Claude's recommendation).** Publish and verify
+  a v0.2.x patch before R5 that filters `research_owner_id` on legacy paths and
+  preserves compatibility with the migrated resource types. Only that verified
+  patch may be an application rollback target once personal resources exist.
+- **B — forward fixes only.** After the v0.3 migration, prohibit rollback to v0.2.x
+  and recover through forward application/schema fixes.
+
+This R1-F change corrects documentation only. Policy selection is pending; it
+does not implement option A or claim that any current v0.2.x release is safe.
 
 Schema downgrade removes only unchanged derived paper copies. It refuses new or changed
 personal resource data, which must be preserved before downgrade. Upgrade/downgrade tests

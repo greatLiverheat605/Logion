@@ -6,7 +6,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Command } from "cmdk";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Button, Menu, Sheet } from "./components";
-import { createCommands, isEditing, matchesShortcut } from "./commands";
+import {
+  createCommands,
+  isEditing,
+  matchesShortcut,
+  useModifierKey,
+} from "./commands";
 import { presetLayout, togglePane, type Theme } from "./preferences";
 import { useWorkbench } from "./provider";
 import { WORKBENCH_ROUTES } from "./routes";
@@ -19,31 +24,50 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
     [help, setHelp] = useState(false),
     [navigation, setNavigation] = useState(false);
   const layout = state.preferences["workbench.layouts"];
-  const commands = createCommands({
-    navigate: (href) => {
-      router.push(href);
-      setNavigation(false);
+  const modifier = useModifierKey();
+  const commands = createCommands(
+    {
+      navigate: (href) => {
+        router.push(href);
+        setNavigation(false);
+      },
+      theme: (theme) => {
+        void state.save("appearance.theme", theme);
+      },
+      preset: (id) => {
+        void state.save("workbench.layouts", {
+          ...presetLayout(id),
+          toolbars: layout.toolbars,
+        });
+      },
+      pane: (index) => {
+        void state.save("workbench.layouts", togglePane(layout, index));
+      },
+      palette: () => setPalette(true),
+      help: () => setHelp(true),
+      toolbars: () => {
+        void state.save("workbench.layouts", {
+          ...layout,
+          toolbars: !layout.toolbars,
+        });
+      },
     },
-    theme: (theme) => {
-      void state.save("appearance.theme", theme);
-    },
-    preset: (id) => {
-      void state.save("workbench.layouts", presetLayout(id));
-    },
-    pane: (index) => {
-      void state.save("workbench.layouts", togglePane(layout, index));
-    },
-    palette: () => setPalette(true),
-    help: () => setHelp(true),
-    toolbars: () => {
-      void state.save("workbench.layouts", {
-        ...layout,
-        toolbars: !layout.toolbars,
-      });
-    },
-  });
+    { toolbarsVisible: layout.toolbars, modifier },
+  );
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.isComposing || event.repeat) return;
+      // Let an open Radix layer consume Escape before collapsing reader tools.
+      if (
+        event.key === "Escape" &&
+        layout.toolbars &&
+        !state.pending &&
+        !document.querySelector('[role="dialog"], [role="menu"]')
+      ) {
+        event.preventDefault();
+        void state.save("workbench.layouts", { ...layout, toolbars: false });
+        return;
+      }
       const command = commands.find(
         (item) => item.shortcut && matchesShortcut(event, item.shortcut),
       );
@@ -58,7 +82,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [commands, state.pending]);
+  }, [commands, layout, state]);
   function run(id: string) {
     commands.find((item) => item.id === id)?.action();
   }
@@ -158,7 +182,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
               />
               <Button aria-label="打开指令面板" onClick={() => run("palette")}>
                 <span>指令</span>
-                <kbd>⌘ K</kbd>
+                <kbd>{modifier}+K</kbd>
               </Button>
             </div>
           </header>
@@ -254,7 +278,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
               </div>
             ))}
           <div>
-            <dt>关闭弹层</dt>
+            <dt>关闭弹层或收起工具栏</dt>
             <dd>
               <kbd>Esc</kbd>
             </dd>

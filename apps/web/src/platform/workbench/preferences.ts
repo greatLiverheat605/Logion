@@ -26,6 +26,7 @@ export interface Preferences {
   "workbench.context": WorkbenchContext | null;
   "workbench.layouts": Layout;
   "reader.selection_menu": boolean;
+  "reader.hint_dismissed": boolean;
 }
 export const PRESETS = [
   {
@@ -89,6 +90,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   "workbench.context": null,
   "workbench.layouts": presetLayout("reading"),
   "reader.selection_menu": false,
+  "reader.hint_dismissed": false,
 };
 
 // Persisted data is untrusted, including settings written by older clients.
@@ -103,7 +105,10 @@ export function parsePreference<K extends keyof Preferences>(
       ["light", "dark", "system"].includes(value)
     )
       return value;
-    if (key === "reader.selection_menu" && typeof value === "boolean")
+    if (
+      (key === "reader.selection_menu" || key === "reader.hint_dismissed") &&
+      typeof value === "boolean"
+    )
       return value as Preferences[K];
     if (
       key === "workbench.context" &&
