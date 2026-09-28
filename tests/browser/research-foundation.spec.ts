@@ -283,7 +283,9 @@ for (const theme of ["light", "dark"] as const) {
       if (width < 768)
         await page.getByRole("radio", { name: "左 · 文献信息" }).click();
       await expect(
-        page.getByRole("heading", { name: initial.title }),
+        page
+          .getByRole("region", { name: "左栏", exact: true })
+          .getByRole("heading", { name: initial.title }),
       ).toBeVisible();
       await geometry(page);
       expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
@@ -425,7 +427,9 @@ for (const theme of ["light", "dark"] as const) {
       ).toBeVisible();
       if (width >= 768) {
         await expect(
-          page.getByRole("heading", { name: initial.title }),
+          page
+            .getByRole("region", { name: "左栏", exact: true })
+            .getByRole("heading", { name: initial.title }),
         ).toBeVisible();
         await expect(
           page.getByRole("button", { name: "打开指令面板" }),
