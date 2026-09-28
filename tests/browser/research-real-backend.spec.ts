@@ -242,7 +242,7 @@ test("selection commands preserve source citations and use the real AI draft pip
             {
               key: "reader.selection_menu",
               value: "true",
-              expected_version: null,
+              version: 0,
             },
           ],
         },
