@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { RuntimeStyleNonce } from "@/components/runtime-style-nonce";
 import { FeedbackProvider } from "@/components/feedback/feedback-provider";
 import { ServiceWorkerRetirement } from "@/components/service-worker-retirement";
+import { readServerTheme } from "@/platform/workbench/server-theme";
 
 import "./globals.css";
 import "./public-flow.css";
@@ -33,12 +34,23 @@ export default async function RootLayout({
   const requestHeaders = await headers();
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
   const workbench = requestHeaders.get("x-logion-workbench") === "1";
+  const theme = workbench
+    ? await readServerTheme(requestHeaders.get("cookie"))
+    : "system";
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html
+      lang="zh-CN"
+      data-theme={theme === "system" ? undefined : theme}
+      suppressHydrationWarning
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: workbench ? workbenchThemeBootstrap : themeBootstrap,
+            __html: workbench
+              ? theme === "system"
+                ? workbenchThemeBootstrap
+                : ""
+              : themeBootstrap,
           }}
           nonce={nonce}
           suppressHydrationWarning

@@ -52,6 +52,14 @@ Claude 建议 A，本轮仅修正文档。
 版本冲突返回 `USER_SETTING_VERSION_CONFLICT`，无效值返回
 `RESEARCH_PREFERENCE_INVALID`，均不记录设置值。
 
+## 首屏外观与阅读栏
+
+研究路由的服务端渲染通过当前请求会话读取 `appearance.theme`，禁用缓存与重定向。
+已保存的日间／夜间值直接写入 HTML；跟随系统时才运行带 nonce 的系统主题脚本。
+客户端在设置加载完成前保留服务端颜色。会话失效或服务不可用时由原有会话流程恢复。
+栏内容增加 `pdf / outline / thumbs / note / excerpts / chat / translate`，
+原有 `info / document / translation / quiz` 继续有效。
+
 ## 客户端行为
 
 沿用现有 SessionProvider 续期、CSRF 客户端和 nonce CSP。React Query 只在内存中

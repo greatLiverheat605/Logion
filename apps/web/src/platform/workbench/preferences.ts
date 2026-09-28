@@ -4,6 +4,13 @@ export const CONTENTS = {
   document: "文献正文",
   translation: "翻译",
   quiz: "自测",
+  pdf: "PDF 原文",
+  outline: "大纲",
+  thumbs: "缩略图",
+  note: "精读笔记",
+  excerpts: "摘录",
+  chat: "AI 对话",
+  translate: "翻译对照",
 } as const;
 export type PaneContent = keyof typeof CONTENTS;
 export type PaneIndex = 0 | 1 | 2;
