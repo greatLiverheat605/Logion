@@ -1,4 +1,9 @@
-import { Placeholder } from "@/platform/workbench/placeholder";
+import { Suspense } from "react";
+import { KnowledgeNetwork } from "@/platform/workbench/network";
 export default function Page() {
-  return <Placeholder title="知识网" />;
+  return (
+    <Suspense fallback={<p>正在载入知识网…</p>}>
+      <KnowledgeNetwork />
+    </Suspense>
+  );
 }

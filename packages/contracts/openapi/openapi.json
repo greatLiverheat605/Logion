@@ -8545,6 +8545,110 @@
         "minLength": 1,
         "type": "string"
       },
+      "NetworkNode": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "resource",
+              "question",
+              "topic",
+              "claim",
+              "idea"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "personal": {
+            "title": "Personal",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "version",
+          "personal"
+        ],
+        "title": "NetworkNode",
+        "type": "object"
+      },
+      "NetworkPrerequisite": {
+        "properties": {
+          "dependent_id": {
+            "format": "uuid",
+            "title": "Dependent Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "prerequisite_id": {
+            "format": "uuid",
+            "title": "Prerequisite Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "prerequisite_id",
+          "dependent_id"
+        ],
+        "title": "NetworkPrerequisite",
+        "type": "object"
+      },
+      "NetworkSnapshot": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeView"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkPrerequisite"
+            },
+            "title": "Prerequisites",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges",
+          "prerequisites",
+          "truncated"
+        ],
+        "title": "NetworkSnapshot",
+        "type": "object"
+      },
       "NoteResponse": {
         "additionalProperties": false,
         "properties": {
@@ -42748,6 +42852,96 @@
           }
         },
         "summary": "Decide Edge",
+        "tags": [
+          "research-knowledge"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/knowledge/graph": {
+      "get": {
+        "operationId": "knowledge_network_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "focus_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "question",
+                    "resource"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "focus_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Network",
         "tags": [
           "research-knowledge"
         ]

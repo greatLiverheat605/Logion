@@ -25,6 +25,7 @@ async def resolve(_hostname: str, _port: int) -> list[str]:
 def synthetic_provider(request: httpx.Request) -> httpx.Response:
     assert request.headers["Host"] == "api.example.com"
     assert "UNPUBLISHED_SYNTHETIC_IDEA_DO_NOT_SEND" not in request.content.decode()
+    assert "PRIVATE_QUESTION_IDEA_SENTINEL" not in request.content.decode()
     if request.method == "GET" and request.url.path == "/v1/models":
         return httpx.Response(
             200, json={"data": [{"id": "synthetic-economical"}, {"id": "synthetic-quality"}]}
@@ -49,6 +50,27 @@ def synthetic_provider(request: httpx.Request) -> httpx.Response:
                         "concept": f"Reading concept {i + 1}",
                     }
                     for i in range(5)
+                ]
+            )
+        }
+    elif content["requested_output_fields"] == ["links"]:
+        sources = {key: json.loads(value) for key, value in content["data"].items()}
+        assert all(value["entity_type"] != "research_idea" for value in sources.values())
+        questions = [
+            key for key, value in sources.items() if value["entity_type"] == "research_question"
+        ]
+        papers = [key for key, value in sources.items() if value["entity_type"] == "resource"]
+        output = {
+            "links": json.dumps(
+                [
+                    {
+                        "from_source": paper,
+                        "to_source": questions[0],
+                        "relation": "addresses",
+                        "reason": "Synthetic evidence addresses the selected research question.",
+                    }
+                    for paper in papers
+                    if questions
                 ]
             )
         }

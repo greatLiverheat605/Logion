@@ -2,6 +2,7 @@ import asyncio
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
@@ -12,6 +13,7 @@ from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.ai_gateway.generation_adapter import OpenAICompatibleGenerationAdapter
 from logion_api.ai_gateway.models import AIProvider, AIRun
 from logion_api.config import get_settings
+from logion_api.content.models import Resource
 from logion_api.db import engine, session_factory, utc_now
 from logion_api.identity.models import AuditEvent
 from logion_api.knowledge.models import KnowledgeEdge
@@ -20,7 +22,7 @@ from logion_api.main import app
 from logion_api.research.models import ResearchQuestion
 from logion_api.workspaces.models import WorkspaceMembership
 from pydantic import ValidationError
-from sqlalchemy import Connection, MetaData, Table, func, select, text
+from sqlalchemy import Connection, MetaData, Table, event, func, select, text
 from sqlalchemy.exc import IntegrityError
 
 MIGRATION = Path(__file__).resolve().parents[1] / "migrations/versions/0054_knowledge_edges.py"
@@ -302,6 +304,20 @@ async def test_private_links_ai_suggestions_rejection_tombstones_and_revocation(
         assert regenerated["run"]["status"] == "succeeded", regenerated
         assert json.loads(regenerated["draft"]["structured_output"]["links"]) == []
         assert len((await owner.get(edges)).json()["edges"]) == 2
+        graph_path = scope + "/research/knowledge/graph"
+        graph = (await owner.get(graph_path)).json()
+        assert len(graph["nodes"]) == 4 and len(graph["edges"]) == 2, graph
+        assert graph["truncated"] is False
+        assert (await peer.get(graph_path)).json()["nodes"] == []
+        focus = {"focus_type": "question", "focus_id": question["id"]}
+        assert (await peer.get(graph_path, params=focus)).status_code == 404
+        assert (
+            await owner.get(graph_path.replace(space, other_space), params=focus)
+        ).status_code == 404
+        focused = (await owner.get(graph_path, params=focus)).json()
+        assert focused["nodes"][0]["id"] == question["id"]
+        assert sources[1]["id"] not in {node["id"] for node in focused["nodes"]}
+        assert idea["id"] in {node["id"] for node in focused["nodes"]}
 
         # Valid-looking suggestions followed by a fabricated label fail atomically.
         output = {
@@ -347,6 +363,67 @@ async def test_private_links_ai_suggestions_rejection_tombstones_and_revocation(
                 for e in events
             )
 
+        # Large graphs stay bounded and private even with shared endpoints.
+        async with session_factory() as db:
+            shared = Resource(
+                workspace_id=UUID(workspace),
+                space_id=UUID(space),
+                title="Shared legacy source",
+                resource_type="link",
+                created_by=users[0],
+                updated_by=users[0],
+            )
+            db.add(shared)
+            papers = [
+                Resource(
+                    workspace_id=UUID(workspace),
+                    space_id=UUID(space),
+                    title=f"Graph source {i}",
+                    resource_type="paper",
+                    research_owner_id=users[0],
+                    created_by=users[0],
+                    updated_by=users[0],
+                )
+                for i in range(210)
+            ]
+            db.add_all(papers)
+            await db.flush()
+            for paper in [shared, *papers]:
+                for relation in ("extends", "contradicts", "supersedes"):
+                    db.add(
+                        KnowledgeEdge(
+                            workspace_id=UUID(workspace),
+                            space_id=UUID(space),
+                            user_id=users[0],
+                            from_resource_id=paper.id,
+                            to_resource_id=UUID(sources[0]["id"]),
+                            relation=relation,
+                            status="confirmed",
+                            origin="user",
+                            reason="Synthetic",
+                        )
+                    )
+            await db.commit()
+            shared_id = str(shared.id)
+        writes: list[str] = []
+
+        def capture_write(_conn: Any, _cursor: Any, statement: str, *_args: Any) -> None:
+            if statement.lstrip().upper().startswith(("INSERT ", "UPDATE ", "DELETE ")):
+                writes.append(statement)
+
+        event.listen(engine.sync_engine, "before_cursor_execute", capture_write)
+        try:
+            capped = await owner.get(graph_path)
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", capture_write)
+        assert capped.status_code == 200, capped.text
+        snapshot = capped.json()
+        assert len(snapshot["nodes"]) == 200 and len(snapshot["edges"]) == 400
+        assert snapshot["truncated"] and writes == []
+        peer_graph = (await peer.get(graph_path)).json()
+        assert [node["id"] for node in peer_graph["nodes"]] == [shared_id]
+        assert peer_graph["edges"] == []
+
         # Pending requests re-authorize before any provider call, including source versions.
         stale = await queued()
         before = len(outgoing)
@@ -376,6 +453,7 @@ async def test_private_links_ai_suggestions_rejection_tombstones_and_revocation(
             run = await db.get(AIRun, revoked)
             assert run and run.status == "failed" and run.error_code == "RESOURCE_NOT_FOUND"
         monkeypatch.setattr(settings, "research_v3_enabled", False)
+        assert (await owner.get(graph_path)).status_code == 404
         for method, suffix, body in (
             ("GET", "", None),
             ("POST", "", manual),
