@@ -47,6 +47,7 @@ from logion_api.library.text_routes import router as research_text_router
 from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
 from logion_api.planning.routes import router as planning_router
+from logion_api.planning.weekly_routes import router as research_weekly_router
 from logion_api.portability.routes import account_router as account_deletion_router
 from logion_api.portability.routes import import_router as portability_import_router
 from logion_api.portability.routes import router as portability_router
@@ -117,6 +118,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(sync_router)
     application.include_router(user_settings_router)
     application.include_router(planning_router)
+    application.include_router(research_weekly_router)
     application.include_router(execution_router)
     application.include_router(content_router)
     application.include_router(attachment_router)

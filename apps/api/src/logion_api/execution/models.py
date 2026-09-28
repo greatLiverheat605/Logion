@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -37,6 +38,29 @@ class Task(Base):
             name="fk_task_phase_workspace",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["resource_id", "workspace_id", "space_id", "research_owner_id"],
+            [
+                "resources.id",
+                "resources.workspace_id",
+                "resources.space_id",
+                "resources.research_owner_id",
+            ],
+            name="fk_task_research_resource",
+            ondelete="RESTRICT",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "(research_owner_id IS NULL AND resource_id IS NULL AND reading_mode IS NULL "
+            "AND scheduled_on IS NULL AND reading_completed_at IS NULL) OR "
+            "(research_owner_id IS NOT NULL AND reading_mode IS NOT NULL AND "
+            "reading_mode IN ('close_read','skim') AND scheduled_on IS NOT NULL "
+            "AND created_by=research_owner_id)",
+            name="ck_task_research_shape",
+        ),
+        Index(
+            "ix_task_research_week", "workspace_id", "space_id", "research_owner_id", "scheduled_on"
+        ),
         CheckConstraint(
             "status IN ('backlog','planned','in_progress','submitted','verified','done',"
             "'blocked','cancelled')",
@@ -54,6 +78,13 @@ class Task(Base):
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     goal_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     phase_id: Mapped[UUID | None] = mapped_column(Uuid)
+    research_owner_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", name="fk_task_research_owner", ondelete="RESTRICT")
+    )
+    resource_id: Mapped[UUID | None] = mapped_column(Uuid)
+    reading_mode: Mapped[str | None] = mapped_column(String(16))
+    scheduled_on: Mapped[date | None] = mapped_column(Date)
+    reading_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="backlog")

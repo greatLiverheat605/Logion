@@ -34,6 +34,7 @@ from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.knowledge.suggestions import save_link_suggestions, validate_link_run
+from logion_api.planning.weekly_context import validate_weekly_run, weekly_comment
 from logion_api.reading.quiz_grading import save_grading_evidence
 
 FALLBACK_ERRORS = {"AI_PROVIDER_RATE_LIMITED", "AI_PROVIDER_UNAVAILABLE"}
@@ -218,6 +219,8 @@ class AIExecutionService:
             fields = self._input_cipher.decrypt(run)
             if run.task_type == "link_suggest" and run.prompt_version == "research-v1/link_suggest":
                 await validate_link_run(db, run, fields)
+            if run.task_type == "weekly_comment":
+                await validate_weekly_run(db, run, fields)
             return candidate, run, model, provider, fields
 
     async def _record_attempt(self, run_id: UUID) -> None:
@@ -285,6 +288,20 @@ class AIExecutionService:
                 await self._terminal(db, run, "succeeded", None, actual_tokens, actual_cost)
                 await db.commit()
                 return
+            if run.task_type == "weekly_comment":
+                try:
+                    if not self._settings.research_v3_enabled:
+                        raise APIError(
+                            code="RESEARCH_FEATURE_DISABLED",
+                            message="Research is disabled.",
+                            status_code=404,
+                        )
+                    await validate_weekly_run(db, run, self._input_cipher.decrypt(run), lock=True)
+                    weekly_comment(result.output)
+                except APIError as exc:
+                    await self._terminal(db, run, "failed", exc.code, actual_tokens, actual_cost)
+                    await db.commit()
+                    return
             draft_output = result.output
             if run.task_type == "link_suggest" and run.prompt_version == "research-v1/link_suggest":
                 try:

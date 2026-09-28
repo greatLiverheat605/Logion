@@ -58,6 +58,7 @@ class ContentService:
                 Task.workspace_id == workspace_id,
                 Task.space_id == space_id,
                 Task.deleted_at.is_(None),
+                Task.research_owner_id.is_(None),
             )
         )
         if task is None:

@@ -105,7 +105,7 @@
   background: var(--wb-selected);
 }
 .wb-scope .wb-primary {
-  background: var(--wb-accent);
+  background: #0063d1;
   color: #fff;
   border-color: transparent;
 }

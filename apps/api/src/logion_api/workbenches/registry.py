@@ -61,7 +61,7 @@ class WorkbenchTargetRegistry:
         ]
         if target.kind in ("claim", "project"):
             filters.append(model.user_id == owner_user_id)
-        if target.kind in ("source", "topic", "note"):
+        if target.kind in ("source", "topic", "note", "task"):
             filters.append(model.research_owner_id.is_(None))
 
         statement = (

@@ -1,0 +1,139 @@
+.wb-weekly-page {
+  max-width: 1500px;
+  margin-inline: auto;
+}
+.wb-week-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-block: 20px;
+}
+.wb-week-navigation label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.wb-weekly-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.wb-weekly-tasks,
+.wb-weekly-review {
+  min-width: 0;
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+  background: var(--wb-win);
+  padding: 20px;
+}
+.wb-weekly-page h2 {
+  font-size: 16px;
+}
+.wb-weekly-page h3 {
+  font-size: 14px;
+}
+.wb-weekly-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.wb-weekly-task-list > li {
+  padding-block: 18px;
+  border-top: 1px solid var(--wb-sep);
+}
+.wb-weekly-task-list h3,
+.wb-weekly-review p,
+.wb-weekly-review li {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.wb-weekly-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-block: 20px;
+}
+.wb-weekly-stats dt {
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+.wb-weekly-stats dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.wb-weekly-triage {
+  min-width: 0;
+  margin-block: 16px;
+  padding: 12px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 8px;
+}
+.wb-weekly-triage legend {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  font-size: 13px;
+}
+.wb-weekly-triage label {
+  display: grid;
+  gap: 6px;
+  margin-block: 10px;
+  font-size: 12px;
+}
+.wb-weekly-page select,
+.wb-weekly-page input:not([type="checkbox"]),
+.wb-weekly-page textarea {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+.wb-weekly-page textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+.wb-weekly-comment {
+  margin-block: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--wb-sep);
+}
+.wb-weekly-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.wb-weekly-page .wb-button {
+  min-height: 40px;
+  white-space: normal;
+}
+@media (max-width: 1100px) {
+  .wb-weekly-columns {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .wb-weekly-tasks,
+  .wb-weekly-review {
+    padding: 14px;
+  }
+  .wb-weekly-page .wb-button {
+    min-height: 44px;
+  }
+}
+
+.wb-weekly-form,
+.wb-weekly-form label {
+  display: grid;
+  gap: 8px;
+}
+.wb-weekly-form {
+  gap: 16px;
+  margin-top: 20px;
+}
+.wb-weekly-form :is(input, select, textarea) {
+  width: 100%;
+  min-height: 40px;
+}

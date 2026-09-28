@@ -18,6 +18,8 @@ from logion_api.identity.models import AuditEvent
 from logion_api.knowledge_space.models import SourceExcerpt
 from logion_api.library.text_models import SourceText
 from logion_api.memory.models import QuizAttempt, Topic
+from logion_api.planning.models import WeeklyReview
+from logion_api.planning.weekly_context import invalid_weekly_context, weekly_context
 from logion_api.reading.quiz_grading import grading_attempt
 from logion_api.reading.selections import selected_text
 from logion_api.research.models import ResearchClaim, ResearchQuestion
@@ -48,12 +50,15 @@ TASK_CONTEXT_ALLOWLIST = MappingProxyType(
     {
         task: frozenset({"quiz_attempt", "source_excerpt"})
         if task == "quiz_grade"
+        else frozenset({"weekly_review"})
+        if task == "weekly_comment"
         else AI_CONTEXT_ENTITY_TYPES
         for task in RESEARCH_TASK_TIERS
     }
 )
 CONTEXT_MODELS = MappingProxyType(
     {
+        "weekly_review": WeeklyReview,
         "resource": Resource,
         "quiz_attempt": QuizAttempt,
         "source_text": SourceText,
@@ -134,6 +139,11 @@ async def build_research_context(
             message="Context entity type is not allowed.",
             status_code=422,
         )
+    if task_type == "weekly_comment":
+        if len(entities) != 1:
+            raise invalid_weekly_context()
+        ref = entities[0]
+        return await weekly_context(db, workspace_id, space_id, user_id, ref.id, ref.version)
     fields: dict[str, str] = {}
     grading_resource_id: UUID | None = None
     if task_type == "quiz_grade":

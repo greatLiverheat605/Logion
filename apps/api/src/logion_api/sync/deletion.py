@@ -75,7 +75,7 @@ async def deletion_scope(
     )
     if (
         root is None
-        or (isinstance(root, (Topic, Note, QuizItem)) and root.research_owner_id is not None)
+        or (isinstance(root, (Topic, Note, QuizItem, Task)) and root.research_owner_id is not None)
         or (entity_type in ("inbox_item", "exam") and root.user_id != context.user.id)
     ):
         raise APIError(code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404)
@@ -117,6 +117,12 @@ async def deletion_scope(
                 .with_for_update()
             )
         )
+        if any(task.research_owner_id is not None for task in tasks):
+            raise APIError(
+                code="RESOURCE_DELETE_BLOCKED",
+                message="The goal has protected reading tasks.",
+                status_code=409,
+            )
         deleted.extend(("task", task) for task in tasks)
     child_model: Any
     if tasks:
