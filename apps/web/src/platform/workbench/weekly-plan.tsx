@@ -13,29 +13,17 @@ import { errorMessage, workbenchRequest } from "./api";
 import { Button, Menu, Sheet } from "./components";
 import { useWorkbench } from "./provider";
 import { readingAiError } from "./reading-ai";
+import { GoalEditor, GoalList } from "./online-goals";
+import { monday, shift } from "./calendar";
 import "./weekly-plan.css";
 
 type Task = components["schemas"]["ReadingTaskView"];
 type Review = components["schemas"]["WeeklyReviewView"];
 type Plan = components["schemas"]["WeeklyPlanView"];
-type Goal = components["schemas"]["GoalPlanResponse"];
+type Goal = components["schemas"]["OnlineGoalView"];
 type RunResult = components["schemas"]["ResearchRunResult"];
 type Triage = components["schemas"]["WeeklyTriage"];
 const modes = { close_read: "精读", skim: "略读" };
-
-function dayString(day: Date) {
-  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-}
-function monday(value = dayString(new Date())) {
-  const date = new Date(`${value}T12:00:00`);
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  return dayString(date);
-}
-function shift(value: string, days: number) {
-  const date = new Date(`${value}T12:00:00`);
-  date.setDate(date.getDate() + days);
-  return dayString(date);
-}
 
 export function WeeklyPlan() {
   const { context } = useWorkbench();
@@ -60,8 +48,8 @@ function PlanScope({ scope }: { scope: string }) {
   const goals = useQuery({
     queryKey: ["workbench", "goals", scope],
     queryFn: () =>
-      workbenchRequest<components["schemas"]["GoalPlanListResponse"]>(
-        `${scope}/goals`,
+      workbenchRequest<components["schemas"]["OnlineGoalPage"]>(
+        `${scope}/research/goals`,
       ),
   });
   const action = useMutation({
@@ -104,6 +92,11 @@ function PlanScope({ scope }: { scope: string }) {
           </Button>
         </div>
       </div>
+      <GoalList
+        scope={scope}
+        goals={goals.data?.goals ?? []}
+        pending={goals.isPending}
+      />
       <nav className="wb-week-navigation" aria-label="选择计划周">
         <Button
           disabled={action.isPending}
@@ -480,93 +473,6 @@ function TaskEditor({
         disabled={save.isPending || !goal}
       >
         {save.isPending ? "正在保存…" : "保存阅读计划"}
-      </Button>
-    </form>
-  );
-}
-
-function GoalEditor({
-  scope,
-  onSaved,
-}: {
-  scope: string;
-  onSaved: () => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [outcome, setOutcome] = useState("");
-  const [phase, setPhase] = useState("");
-  const [criterion, setCriterion] = useState("");
-  const save = useMutation({
-    mutationFn: () =>
-      workbenchRequest(`${scope}/goals`, {
-        method: "POST",
-        body: JSON.stringify({
-          goal_id: crypto.randomUUID(),
-          plan_id: crypto.randomUUID(),
-          plan_version_id: crypto.randomUUID(),
-          title,
-          desired_outcome: outcome,
-          weekly_minutes: 120,
-          phases: [
-            {
-              id: crypto.randomUUID(),
-              title: phase,
-              position: 0,
-              estimated_minutes: 120,
-              acceptance_criteria: [criterion],
-            },
-          ],
-        }),
-      }),
-    onSuccess: onSaved,
-  });
-  return (
-    <form
-      className="wb-weekly-form"
-      onSubmit={(e: FormEvent) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      {save.error && <p role="alert">{errorMessage(save.error)}</p>}
-      <label>
-        目标名称
-        <input
-          required
-          maxLength={160}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </label>
-      <label>
-        期望成果
-        <textarea
-          required
-          maxLength={5000}
-          value={outcome}
-          onChange={(e) => setOutcome(e.target.value)}
-        />
-      </label>
-      <label>
-        首个阶段
-        <input
-          required
-          maxLength={160}
-          value={phase}
-          onChange={(e) => setPhase(e.target.value)}
-        />
-      </label>
-      <label>
-        阶段验收标准
-        <textarea
-          required
-          maxLength={500}
-          value={criterion}
-          onChange={(e) => setCriterion(e.target.value)}
-        />
-      </label>
-      <Button type="submit" disabled={save.isPending}>
-        保存目标
       </Button>
     </form>
   );

@@ -137,3 +137,73 @@
   width: 100%;
   min-height: 40px;
 }
+
+.wb-goal-section {
+  margin-block: 24px;
+}
+.wb-goal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.wb-goal-list > li {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+  background: var(--wb-win);
+}
+.wb-goal-list summary {
+  cursor: pointer;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}
+.wb-goal-list summary > span {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.wb-goal-text,
+.wb-goal-phases {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wb-goal-phases {
+  padding-left: 24px;
+}
+.wb-phase-editor {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+}
+.wb-phase-editor legend {
+  font-weight: 600;
+}
+.wb-weekly-form .wb-weekly-confirm {
+  display: flex;
+}
+.wb-weekly-form input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+}
+
+.wb-goal-fields {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.wb-today-page > section {
+  margin-top: 28px;
+}
+.wb-today-page .wb-weekly-task-list h3 {
+  font-size: 15px;
+}
