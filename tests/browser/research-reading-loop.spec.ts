@@ -393,12 +393,14 @@ test.describe.serial("one paper reading loop", () => {
     expect(Number.isFinite(Date.parse(resource.read_at))).toBe(true);
     await page.goto("/library");
     await page
-      .getByLabel("阅读状态", { exact: true })
+      .getByRole("combobox", { name: "阅读状态", exact: true })
       .selectOption("close_read");
     await expect(
       page.getByRole("button", { name: /Synthetic synchronized paper/ }),
     ).toBeVisible();
-    await page.getByLabel("阅读状态", { exact: true }).selectOption("reading");
+    await page
+      .getByRole("combobox", { name: "阅读状态", exact: true })
+      .selectOption("reading");
     await expect(
       page.getByRole("button", { name: /Synthetic synchronized paper/ }),
     ).toHaveCount(0);
