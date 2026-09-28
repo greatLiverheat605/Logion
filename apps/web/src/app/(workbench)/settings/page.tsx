@@ -35,7 +35,7 @@ export default function Page() {
         <label className="wb-setting-row">
           <span>
             <strong>选中文字后显示菜单</strong>
-            <p>阅读器在 R2 提供，偏好可以提前保存。</p>
+            <p>在 PDF 中选中文字后，显示翻译、解释、提问、摘录和概念操作。</p>
           </span>
           <input
             type="checkbox"
