@@ -48,7 +48,12 @@ def test_research_allowlists_tiers_and_skill_files_are_an_explicit_contract() ->
         "link_suggest": "quality",
     }
     assert set(TASK_CONTEXT_ALLOWLIST) == set(TASK_SKILLS) == set(RESEARCH_TASK_TIERS)
-    assert all(value == AI_CONTEXT_ENTITY_TYPES for value in TASK_CONTEXT_ALLOWLIST.values())
+    assert all(
+        value == AI_CONTEXT_ENTITY_TYPES
+        for task, value in TASK_CONTEXT_ALLOWLIST.items()
+        if task != "quiz_grade"
+    )
+    assert TASK_CONTEXT_ALLOWLIST["quiz_grade"] == {"quiz_attempt", "source_excerpt"}
     assert len(set(TASK_SKILLS.values())) == 5
     for task in TASK_SKILLS:
         assert "untrusted" in load_research_skill(task).lower()

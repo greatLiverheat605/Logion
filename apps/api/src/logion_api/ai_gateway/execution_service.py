@@ -33,6 +33,7 @@ from logion_api.db import session_factory, utc_now
 from logion_api.engagement.service import EngagementService
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
+from logion_api.reading.quiz_grading import save_grading_evidence
 
 FALLBACK_ERRORS = {"AI_PROVIDER_RATE_LIMITED", "AI_PROVIDER_UNAVAILABLE"}
 
@@ -263,6 +264,23 @@ class AIExecutionService:
             run.actual_input_tokens = result.input_tokens
             run.actual_output_tokens = result.output_tokens
             run.actual_cost_minor = actual_cost
+            if run.task_type == "quiz_grade" and run.prompt_version == "research-v1/quiz_grade":
+                try:
+                    if not self._settings.research_v3_enabled:
+                        raise APIError(
+                            code="RESEARCH_FEATURE_DISABLED",
+                            message="Research is disabled.",
+                            status_code=404,
+                        )
+                    await save_grading_evidence(db, run, result.output)
+                except APIError as exc:
+                    # Invalid or stale evidence still consumes the provider's measured usage.
+                    await self._terminal(db, run, "failed", exc.code, actual_tokens, actual_cost)
+                    await db.commit()
+                    return
+                await self._terminal(db, run, "succeeded", None, actual_tokens, actual_cost)
+                await db.commit()
+                return
             db.add(
                 AIOutputDraft(
                     workspace_id=run.workspace_id,

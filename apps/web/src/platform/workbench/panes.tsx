@@ -26,7 +26,9 @@ export function ThreePanes({
   const stored = preferences["workbench.layouts"];
   const [draft, setDraft] = useState<Layout | null>(null);
   const layout = draft ?? stored;
-  const [mobilePane, setMobilePane] = useState<PaneIndex>(1);
+  const [mobilePane, setMobilePane] = useState<PaneIndex>(
+    stored.preset === "quiz" ? 2 : 1,
+  );
   useEffect(() => {
     const show = () => setMobilePane(2);
     window.addEventListener("workbench:reader-show-result", show);

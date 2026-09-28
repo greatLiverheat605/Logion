@@ -26,7 +26,7 @@ from logion_api.ai_gateway.run_schemas import (
     AIRunResponse,
     FieldName,
 )
-from logion_api.content.models import Note
+from logion_api.content.models import Note, Resource
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -204,6 +204,24 @@ async def create_research_run(
             task_type=payload.task_type,
             entities=entities,
         )
+        if payload.task_type in {"quiz_generate", "quiz_grade"}:
+            expected = ["questions"] if payload.task_type == "quiz_generate" else ["grade"]
+            if payload.expected_output_fields != expected:
+                raise APIError(
+                    code="AI_DRAFT_SCHEMA_INVALID",
+                    message="Unexpected quiz output fields.",
+                    status_code=422,
+                )
+        if payload.task_type == "quiz_generate":
+            resource = (
+                await db.get(Resource, payload.target.id)
+                if payload.target.entity_type == "resource"
+                else None
+            )
+            if resource is None or resource.research_owner_id != context.user.id:
+                raise APIError(
+                    code="RESOURCE_NOT_FOUND", message="Reading source not found.", status_code=404
+                )
         prompt = await asyncio.to_thread(load_research_skill, payload.task_type)
         if payload.task_type == "close_reading" and payload.target.entity_type == "note":
             note = await db.get(Note, payload.target.id)

@@ -62,6 +62,7 @@ from logion_api.memory.models import (
     Topic,
     TopicDependency,
 )
+from logion_api.memory.research_scope import is_private_memory_record
 from logion_api.memory.schemas import (
     AuditReviewCompleteRequest,
     AuditReviewCreateRequest,
@@ -1873,6 +1874,8 @@ class SyncPushService:
             ):
                 return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
             current = await db.get(MasteryRecord, operation.entity_id)
+            if await is_private_memory_record(db, current):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
             if current is not None:
                 if (
                     current.workspace_id != request.workspace_id
@@ -2856,7 +2859,9 @@ class SyncPushService:
             quiz_item = await db.get(QuizItem, operation.entity_id)
             return (
                 quiz_item.version
-                if quiz_item is not None and quiz_item.workspace_id == request.workspace_id
+                if quiz_item is not None
+                and quiz_item.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, quiz_item)
                 else None
             )
         if operation.entity_type == "topic_dependency":
@@ -2877,21 +2882,27 @@ class SyncPushService:
             mastery = await db.get(MasteryRecord, operation.entity_id)
             return (
                 mastery.version
-                if mastery is not None and mastery.workspace_id == request.workspace_id
+                if mastery is not None
+                and mastery.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, mastery)
                 else None
             )
         if operation.entity_type == "review_schedule":
             schedule = await db.get(ReviewSchedule, operation.entity_id)
             return (
                 schedule.version
-                if schedule is not None and schedule.workspace_id == request.workspace_id
+                if schedule is not None
+                and schedule.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, schedule)
                 else None
             )
         if operation.entity_type == "error_pattern":
             pattern = await db.get(ErrorPattern, operation.entity_id)
             return (
                 pattern.version
-                if pattern is not None and pattern.workspace_id == request.workspace_id
+                if pattern is not None
+                and pattern.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, pattern)
                 else None
             )
         if operation.entity_type == "audit_review":
@@ -3076,7 +3087,9 @@ class SyncPushService:
         if model is None:
             return None
         remote = await db.get(model, entity_id)
-        if isinstance(remote, (Resource, Topic, Note)) and remote.research_owner_id is not None:
+        if (
+            isinstance(remote, (Resource, Note)) and remote.research_owner_id is not None
+        ) or await is_private_memory_record(db, remote):
             return None
         if remote is None or remote.workspace_id != workspace_id:
             return None
@@ -3210,7 +3223,9 @@ class SyncPushService:
             remote = await db.get(ReportSnapshot, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
-        if isinstance(remote, (Resource, Topic, Note)) and remote.research_owner_id is not None:
+        if (
+            isinstance(remote, (Resource, Note)) and remote.research_owner_id is not None
+        ) or await is_private_memory_record(db, remote):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         remote_deleted_at = getattr(remote, "deleted_at", None)
         if remote_deleted_at is not None:

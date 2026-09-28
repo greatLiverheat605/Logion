@@ -275,6 +275,7 @@ class AIRun(Base):
         UniqueConstraint(
             "workspace_id", "requested_by", "idempotency_key", name="uq_ai_run_idempotency"
         ),
+        UniqueConstraint("id", "workspace_id", name="uq_ai_run_workspace"),
         Index("ix_ai_run_workspace_created", "workspace_id", "created_at"),
         Index(
             "ix_ai_run_queue",

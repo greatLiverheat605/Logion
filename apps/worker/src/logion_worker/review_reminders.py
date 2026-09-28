@@ -10,6 +10,7 @@ from logion_api.engagement.models import NotificationPreference
 from logion_api.engagement.service import EngagementService
 from logion_api.identity.models import User
 from logion_api.memory.models import ReviewSchedule, Topic
+from logion_api.memory.research_scope import legacy_memory_scope
 from logion_api.workspaces.models import Space, Workspace, WorkspaceMembership
 from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,7 @@ async def emit_due_review_reminders(
             ReviewSchedule.next_review_at <= now,
             ReviewSchedule.status.in_(("scheduled", "due")),
             ReviewSchedule.deleted_at.is_(None),
+            legacy_memory_scope(ReviewSchedule),
             Topic.deleted_at.is_(None),
             Space.status == "active",
             Workspace.status == "active",

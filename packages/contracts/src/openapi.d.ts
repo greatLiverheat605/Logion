@@ -2233,6 +2233,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/quiz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Quiz */
+        get: operations["reading_quiz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/quiz/ai-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quiz Runs */
+        get: operations["reading_quiz_ai_runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/quiz/drafts/{draft_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Quiz Draft */
+        post: operations["reading_quiz_draft_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/quiz/items/{item_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reveal Answer */
+        get: operations["reading_quiz_answer_reveal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/quiz/items/{item_id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Attempt */
+        post: operations["reading_quiz_attempt_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/quiz/items/{item_id}/mastery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Mastery */
+        post: operations["reading_quiz_mastery_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/text": {
         parameters: {
             query?: never;
@@ -2505,6 +2607,23 @@ export interface paths {
         put?: never;
         /** Create Question */
         post: operations["create_question_api_v1_workspaces__workspace_id__spaces__space_id__research_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reviews */
+        get: operations["reading_review_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7311,6 +7430,58 @@ export interface components {
              */
             type: "rating";
         };
+        /** ReadingAnswer */
+        ReadingAnswer: {
+            /** Answer Key */
+            answer_key: string;
+            /** Explanation */
+            explanation: string;
+        };
+        /** ReadingAttempt */
+        ReadingAttempt: {
+            ai_grade: components["schemas"]["ReadingGrade"] | null;
+            /**
+             * Attempted At
+             * Format: date-time
+             */
+            attempted_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Quiz Item Id
+             * Format: uuid
+             */
+            quiz_item_id: string;
+            /** Response Text */
+            response_text: string;
+            /** Version */
+            version: number;
+        };
+        /** ReadingAttemptCreate */
+        ReadingAttemptCreate: {
+            /**
+             * Confidence
+             * @default 3
+             */
+            confidence: number;
+            /**
+             * Duration Seconds
+             * @default 0
+             */
+            duration_seconds: number;
+            /** Expected Item Version */
+            expected_item_version: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Response Text */
+            response_text: string;
+        };
         /** ReadingConceptResponse */
         ReadingConceptResponse: {
             /**
@@ -7324,6 +7495,25 @@ export interface components {
              * Format: uuid
              */
             topic_id: string;
+        };
+        /** ReadingGrade */
+        ReadingGrade: {
+            /**
+             * Ai Run Id
+             * Format: uuid
+             */
+            ai_run_id: string;
+            /**
+             * Graded At
+             * Format: date-time
+             */
+            graded_at: string;
+            /** Reasoning */
+            reasoning: string;
+            /** Score */
+            score: number;
+            /** Weak Concepts */
+            weak_concepts: string[];
         };
         /** ReadingNote */
         ReadingNote: {
@@ -7384,6 +7574,96 @@ export interface components {
             update_base64: string;
             /** Yjs Generation */
             yjs_generation: number;
+        };
+        /** ReadingQuiz */
+        ReadingQuiz: {
+            /** Items */
+            items: components["schemas"]["ReadingQuizItem"][];
+        };
+        /** ReadingQuizDecision */
+        ReadingQuizDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "accepted" | "rejected";
+            /** Expected Draft Version */
+            expected_draft_version: number;
+            /** Expected Resource Version */
+            expected_resource_version: number;
+        };
+        /** ReadingQuizItem */
+        ReadingQuizItem: {
+            /** Ai Run Id */
+            ai_run_id: string | null;
+            /** Concept */
+            concept: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            latest_attempt: components["schemas"]["ReadingAttempt"] | null;
+            mastery: components["schemas"]["MasteryResponse"] | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "ai";
+            /** Prompt */
+            prompt: string;
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            review_schedule: components["schemas"]["ReviewScheduleResponse"] | null;
+            /**
+             * Topic Id
+             * Format: uuid
+             */
+            topic_id: string;
+            /** Version */
+            version: number;
+        };
+        /** ReadingReviewItem */
+        ReadingReviewItem: {
+            /** Concept */
+            concept: string;
+            /**
+             * Confirmed Level
+             * @enum {string}
+             */
+            confirmed_level: "unknown" | "exposed" | "practicing" | "familiar" | "proficient" | "mastered";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Next Review At
+             * Format: date-time
+             */
+            next_review_at: string;
+            /**
+             * Quiz Item Id
+             * Format: uuid
+             */
+            quiz_item_id: string;
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /** Resource Title */
+            resource_title: string;
+        };
+        /** ReadingReviewPage */
+        ReadingReviewPage: {
+            /** Items */
+            items: components["schemas"]["ReadingReviewItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** RebootstrapControl */
         RebootstrapControl: {
@@ -23430,6 +23710,226 @@ export interface operations {
             };
         };
     };
+    reading_quiz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingQuiz"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_quiz_ai_runs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingNoteRuns"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_quiz_draft_decide: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingQuizDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingQuiz"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_quiz_answer_reveal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingAnswer"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_quiz_attempt_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingAttemptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingAttempt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_quiz_mastery_confirm: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MasteryConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasteryConfirmationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     research_source_text_get: {
         parameters: {
             query?: never;
@@ -24934,6 +25434,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_review_list: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                due_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingReviewPage"];
                 };
             };
             /** @description Validation Error */

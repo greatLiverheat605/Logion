@@ -19,7 +19,7 @@ from logion_api.identity.models import AuthSession, EmailOutbox, PasswordCredent
 from logion_api.integrations.models import IntegrationCredential
 from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
 from logion_api.main import app
-from logion_api.memory.models import Topic
+from logion_api.memory.models import MasteryRecord, QuizAttempt, QuizItem, ReviewSchedule, Topic
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest
 from logion_api.workspaces.models import WorkspaceMembership
@@ -307,6 +307,9 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         integration_id = uuid4()
         resource_id, excerpt_id, citation_id = uuid4(), uuid4(), uuid4()
         private_note_id, private_topic_id = uuid4(), uuid4()
+        private_quiz_id, private_attempt_id, private_mastery_id, private_schedule_id = (
+            uuid4() for _ in range(4)
+        )
         db.add(
             Resource(
                 id=resource_id,
@@ -384,6 +387,65 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
             )
         )
         db.add(
+            QuizItem(
+                id=private_quiz_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                topic_id=private_topic_id,
+                resource_id=resource_id,
+                research_owner_id=user_id,
+                origin="user",
+                prompt="Synthetic question",
+                answer_key="Synthetic answer",
+                evaluation_mode="self_assessed",
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        await db.flush()
+        db.add(
+            QuizAttempt(
+                id=private_attempt_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                topic_id=private_topic_id,
+                quiz_item_id=private_quiz_id,
+                user_id=user_id,
+                response_text="Synthetic response",
+                is_correct=False,
+                confidence=3,
+                duration_seconds=0,
+                ai_grade={"score": 80},
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        db.add(
+            MasteryRecord(
+                id=private_mastery_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                topic_id=private_topic_id,
+                user_id=user_id,
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        db.add(
+            ReviewSchedule(
+                id=private_schedule_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                topic_id=private_topic_id,
+                user_id=user_id,
+                source="mastery_confirmation",
+                interval_days=1,
+                next_review_at=datetime.now(UTC),
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        db.add(
             IntegrationCredential(
                 id=integration_id,
                 user_id=user_id,
@@ -409,6 +471,10 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert await db.get(Resource, resource_id) is None
         assert await db.get(Note, private_note_id) is None
         assert await db.get(Topic, private_topic_id) is None
+        assert await db.get(QuizItem, private_quiz_id) is None
+        assert await db.get(QuizAttempt, private_attempt_id) is None
+        assert await db.get(MasteryRecord, private_mastery_id) is None
+        assert await db.get(ReviewSchedule, private_schedule_id) is None
         assert await db.get(SourceExcerpt, excerpt_id) is None
         assert await db.get(KnowledgeCitation, citation_id) is None
         assert not path_exists(attachment_path)

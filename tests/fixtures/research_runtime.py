@@ -38,6 +38,31 @@ def synthetic_provider(request: httpx.Request) -> httpx.Response:
         else "Synthetic explanation"
         for field in content["requested_output_fields"]
     }
+    if content["requested_output_fields"] == ["questions"]:
+        output = {
+            "questions": json.dumps(
+                [
+                    {
+                        "prompt": f"Explain reading angle {i + 1}.",
+                        "answer_key": f"Synthetic reference {i + 1}",
+                        "explanation": "Evidence from [source_1].",
+                        "concept": f"Reading concept {i + 1}",
+                    }
+                    for i in range(5)
+                ]
+            )
+        }
+    elif content["requested_output_fields"] == ["grade"]:
+        assert "quiz_attempt" in json.dumps(content)
+        output = {
+            "grade": json.dumps(
+                {
+                    "score": 80,
+                    "reasoning": "The answer identifies the motivation [source_1].",
+                    "weak_concepts": ["Experimental limits"],
+                }
+            )
+        }
     return httpx.Response(
         200,
         json={

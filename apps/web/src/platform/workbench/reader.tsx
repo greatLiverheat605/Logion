@@ -20,6 +20,7 @@ import {
 } from "./selection";
 import { ReadingAiResult } from "./reading-ai";
 import { useCloseReadingNote } from "./close-reading-note";
+import { useReadingQuiz } from "./reading-quiz";
 
 type Resource = components["schemas"]["LibraryResource"];
 type Outline = { title: string; page: number | null; depth: number };
@@ -71,6 +72,7 @@ function ReaderScope({
     ],
     queryFn: () => workbenchRequest<Resource>(path),
   });
+  const quiz = useReadingQuiz(path, context, detail.data, sourceText);
   async function showPane(content: PaneContent) {
     const layout = preferences["workbench.layouts"];
     await save("workbench.layouts", {
@@ -414,6 +416,7 @@ function ReaderScope({
     : [];
   function contents(kind: PaneContent) {
     if (kind === "note") return note;
+    if (kind === "quiz") return quiz;
     if (kind === "excerpts") return <ReadingExcerpts path={path} jump={jump} />;
     if (["chat", "translate", "translation"].includes(kind))
       return (

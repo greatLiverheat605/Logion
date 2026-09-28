@@ -35,6 +35,7 @@ from logion_api.memory.models import (
     Topic,
     TopicDependency,
 )
+from logion_api.memory.research_scope import legacy_memory_scope
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.portability.crypto import ExportArtifactCipher
 from logion_api.portability.models import DataExportJob
@@ -362,7 +363,7 @@ class PortabilityService:
         objects: dict[str, list[dict[str, Any]]] = {"spaces": [self._record(row) for row in spaces]}
         for model in SHARED_MODELS:
             query = select(model).where(model.workspace_id == job.workspace_id)
-            if model in (Resource, Topic, Note):
+            if model in (Resource, Topic, Note, QuizItem):
                 query = query.where(model.research_owner_id.is_(None))
             if hasattr(model, "space_id"):
                 query = query.where(model.space_id.in_(space_ids))
@@ -379,6 +380,7 @@ class PortabilityService:
             query = select(personal_model).where(
                 personal_model.workspace_id == job.workspace_id,
                 personal_model.user_id == job.requested_by,
+                legacy_memory_scope(personal_model),
             )
             if hasattr(personal_model, "deleted_at"):
                 query = query.where(personal_model.deleted_at.is_(None))
@@ -410,6 +412,10 @@ class PortabilityService:
         result: dict[str, Any] = {}
         for column in inspect(row).mapper.column_attrs:
             key = column.key
+            if isinstance(row, QuizItem) and key in {"resource_id", "origin", "ai_run_id"}:
+                continue
+            if isinstance(row, QuizAttempt) and key == "ai_grade":
+                continue
             if isinstance(row, Note) and key in {"note_kind", "resource_id"}:
                 continue
             if isinstance(row, Resource) and key in {

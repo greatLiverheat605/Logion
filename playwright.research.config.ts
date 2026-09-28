@@ -18,7 +18,7 @@ const attachmentRoot = `reports/research-real/attachments/${randomUUID()}`;
 // configuration and integration tests keep their existing environments.
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: /research-real-backend\.spec\.ts/,
+  testMatch: /research-(real-backend|reading-loop)\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
@@ -52,6 +52,8 @@ export default defineConfig({
       url: `http://127.0.0.1:${enabled ? 8000 : 8001}/health/live`,
       env: {
         LOGION_ENV: "test",
+        // Six isolated accounts share this suite's one loopback proxy IP.
+        LOGION_REGISTRATION_LIMIT_PER_HOUR: "6",
         LOGION_REDIS_URL:
           process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
           researchRedis.toString(),

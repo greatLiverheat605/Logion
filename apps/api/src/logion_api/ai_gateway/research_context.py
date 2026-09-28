@@ -17,7 +17,8 @@ from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import AuditEvent
 from logion_api.knowledge_space.models import SourceExcerpt
 from logion_api.library.text_models import SourceText
-from logion_api.memory.models import Topic
+from logion_api.memory.models import QuizAttempt, Topic
+from logion_api.reading.quiz_grading import grading_attempt
 from logion_api.reading.selections import selected_text
 from logion_api.research.models import ResearchClaim, ResearchQuestion
 
@@ -44,11 +45,17 @@ AI_CONTEXT_ENTITY_TYPES = frozenset(
     }
 )
 TASK_CONTEXT_ALLOWLIST = MappingProxyType(
-    {task: AI_CONTEXT_ENTITY_TYPES for task in RESEARCH_TASK_TIERS}
+    {
+        task: frozenset({"quiz_attempt", "source_excerpt"})
+        if task == "quiz_grade"
+        else AI_CONTEXT_ENTITY_TYPES
+        for task in RESEARCH_TASK_TIERS
+    }
 )
 CONTEXT_MODELS = MappingProxyType(
     {
         "resource": Resource,
+        "quiz_attempt": QuizAttempt,
         "source_text": SourceText,
         "note": Note,
         "source_excerpt": SourceExcerpt,
@@ -128,7 +135,50 @@ async def build_research_context(
             status_code=422,
         )
     fields: dict[str, str] = {}
+    grading_resource_id: UUID | None = None
+    if task_type == "quiz_grade":
+        if (
+            not entities
+            or entities[0].entity_type != "quiz_attempt"
+            or any(ref.entity_type != "source_excerpt" for ref in entities[1:])
+        ):
+            raise APIError(
+                code="AI_CONTEXT_TYPE_BLOCKED",
+                message="Grading needs an attempt and source excerpts.",
+                status_code=422,
+            )
+        _, quiz = await grading_attempt(
+            db,
+            workspace_id=workspace_id,
+            space_id=space_id,
+            user_id=user_id,
+            attempt_id=entities[0].id,
+        )
+        grading_resource_id = quiz.resource_id
     for index, ref in enumerate(entities):
+        if ref.entity_type == "quiz_attempt":
+            attempt, quiz = await grading_attempt(
+                db, workspace_id=workspace_id, space_id=space_id, user_id=user_id, attempt_id=ref.id
+            )
+            if attempt.version != ref.version or attempt.ai_grade is not None:
+                raise APIError(
+                    code="RESOURCE_VERSION_CONFLICT",
+                    message="The attempt changed or is graded.",
+                    status_code=409,
+                )
+            fields[f"source_{index}"] = json.dumps(
+                {
+                    "entity_type": "quiz_attempt",
+                    "data": {
+                        "question": quiz.prompt,
+                        "answer_key": quiz.answer_key,
+                        "response": attempt.response_text,
+                    },
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            continue
         model: Any = CONTEXT_MODELS.get(ref.entity_type)
         if model is None:
             raise APIError(
@@ -170,6 +220,8 @@ async def build_research_context(
                 Resource.deleted_at.is_(None),
                 (Resource.research_owner_id.is_(None)) | (Resource.research_owner_id == user_id),
             )
+        if grading_resource_id is not None:
+            query = query.where(SourceExcerpt.resource_id == grading_resource_id)
         item = await db.scalar(query)
         if item is None:
             raise APIError(
