@@ -3894,6 +3894,280 @@
         "title": "DeviceResponse",
         "type": "object"
       },
+      "EdgeCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_excerpt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Excerpt Id"
+          },
+          "from_id": {
+            "format": "uuid",
+            "title": "From Id",
+            "type": "string"
+          },
+          "from_type": {
+            "enum": [
+              "resource",
+              "question",
+              "topic",
+              "claim",
+              "idea"
+            ],
+            "title": "From Type",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Reason",
+            "type": "string"
+          },
+          "relation": {
+            "enum": [
+              "addresses",
+              "defines",
+              "uses",
+              "extends",
+              "contradicts",
+              "supersedes",
+              "supports",
+              "challenges",
+              "inspired_by"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "to_id": {
+            "format": "uuid",
+            "title": "To Id",
+            "type": "string"
+          },
+          "to_type": {
+            "enum": [
+              "resource",
+              "question",
+              "topic",
+              "claim",
+              "idea"
+            ],
+            "title": "To Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_type",
+          "from_id",
+          "to_type",
+          "to_id",
+          "relation"
+        ],
+        "title": "EdgeCreate",
+        "type": "object"
+      },
+      "EdgeDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "confirmed",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "expected_version"
+        ],
+        "title": "EdgeDecision",
+        "type": "object"
+      },
+      "EdgePage": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeView"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "edges"
+        ],
+        "title": "EdgePage",
+        "type": "object"
+      },
+      "EdgeView": {
+        "additionalProperties": false,
+        "properties": {
+          "ai_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Run Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "evidence_excerpt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Excerpt Id"
+          },
+          "from_id": {
+            "format": "uuid",
+            "title": "From Id",
+            "type": "string"
+          },
+          "from_type": {
+            "enum": [
+              "resource",
+              "question",
+              "topic",
+              "claim",
+              "idea"
+            ],
+            "title": "From Type",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "user",
+              "ai"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "pattern": "^[^\\x00]*$",
+            "title": "Reason",
+            "type": "string"
+          },
+          "relation": {
+            "enum": [
+              "addresses",
+              "defines",
+              "uses",
+              "extends",
+              "contradicts",
+              "supersedes",
+              "supports",
+              "challenges",
+              "inspired_by"
+            ],
+            "title": "Relation",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "suggested",
+              "confirmed",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "to_id": {
+            "format": "uuid",
+            "title": "To Id",
+            "type": "string"
+          },
+          "to_type": {
+            "enum": [
+              "resource",
+              "question",
+              "topic",
+              "claim",
+              "idea"
+            ],
+            "title": "To Type",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_type",
+          "from_id",
+          "to_type",
+          "to_id",
+          "relation",
+          "id",
+          "status",
+          "origin",
+          "ai_run_id",
+          "version",
+          "created_at",
+          "decided_at"
+        ],
+        "title": "EdgeView",
+        "type": "object"
+      },
       "EmailVerificationConfirmationRequest": {
         "properties": {
           "password": {
@@ -42078,6 +42352,404 @@
         "summary": "Update Idea",
         "tags": [
           "research-ideas"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/knowledge/edges": {
+      "get": {
+        "operationId": "knowledge_edge_list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Edges",
+        "tags": [
+          "research-knowledge"
+        ]
+      },
+      "post": {
+        "operationId": "knowledge_edge_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdgeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Edge",
+        "tags": [
+          "research-knowledge"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/knowledge/edges/{edge_id}/decision": {
+      "post": {
+        "operationId": "knowledge_edge_decide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "edge_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Edge Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdgeDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EdgeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Decide Edge",
+        "tags": [
+          "research-knowledge"
         ]
       }
     },

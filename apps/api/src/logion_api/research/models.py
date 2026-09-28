@@ -61,6 +61,9 @@ class ResearchIdea(PersonalResearch, Base):
             ondelete="CASCADE",
         ),
         CheckConstraint("status IN ('active','archived')", name="ck_research_idea_status"),
+        UniqueConstraint(
+            "id", "workspace_id", "space_id", "user_id", name="uq_research_idea_scope"
+        ),
         Index("ix_research_idea_owner", "workspace_id", "space_id", "user_id", "id"),
     )
     title: Mapped[str] = mapped_column(String(300), nullable=False)

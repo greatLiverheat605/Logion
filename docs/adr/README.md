@@ -31,3 +31,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0047：Agent 收件箱、个人令牌与 MCP 桥（Accepted；v0.3.1，只读加写收件箱，不能删除）](0047-agent-inbox-and-mcp-bridge.md)
 - [ADR-0048：PDF 准备与只读读取（Accepted；写入由受保护的 POST 完成，GET 只返回已授权缓存）](0048-pdf-preparation-and-read-only-retrieval.md)
 - [ADR-0049：研究问题树（Accepted；拆分与合并保留原问题及引用，父子关系按本人和空间隔离）](0049-research-question-hierarchy.md)
+- [ADR-0050：私人连线与 AI 建议边界（Accepted；类型外键、本人决策、拒绝永久去重）](0050-private-typed-link-suggestions.md)

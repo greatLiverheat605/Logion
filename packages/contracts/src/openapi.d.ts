@@ -2596,6 +2596,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/knowledge/edges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Edges */
+        get: operations["knowledge_edge_list"];
+        put?: never;
+        /** Create Edge */
+        post: operations["knowledge_edge_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/knowledge/edges/{edge_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Edge */
+        post: operations["knowledge_edge_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/metrics": {
         parameters: {
             query?: never;
@@ -4935,6 +4970,119 @@ export interface components {
             platform: string;
             /** Revoked At */
             revoked_at: string | null;
+        };
+        /** EdgeCreate */
+        EdgeCreate: {
+            /** Evidence Excerpt Id */
+            evidence_excerpt_id?: string | null;
+            /**
+             * From Id
+             * Format: uuid
+             */
+            from_id: string;
+            /**
+             * From Type
+             * @enum {string}
+             */
+            from_type: "resource" | "question" | "topic" | "claim" | "idea";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Relation
+             * @enum {string}
+             */
+            relation: "addresses" | "defines" | "uses" | "extends" | "contradicts" | "supersedes" | "supports" | "challenges" | "inspired_by";
+            /**
+             * To Id
+             * Format: uuid
+             */
+            to_id: string;
+            /**
+             * To Type
+             * @enum {string}
+             */
+            to_type: "resource" | "question" | "topic" | "claim" | "idea";
+        };
+        /** EdgeDecision */
+        EdgeDecision: {
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "confirmed" | "rejected";
+        };
+        /** EdgePage */
+        EdgePage: {
+            /** Edges */
+            edges: components["schemas"]["EdgeView"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** EdgeView */
+        EdgeView: {
+            /** Ai Run Id */
+            ai_run_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Evidence Excerpt Id */
+            evidence_excerpt_id?: string | null;
+            /**
+             * From Id
+             * Format: uuid
+             */
+            from_id: string;
+            /**
+             * From Type
+             * @enum {string}
+             */
+            from_type: "resource" | "question" | "topic" | "claim" | "idea";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "ai";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Relation
+             * @enum {string}
+             */
+            relation: "addresses" | "defines" | "uses" | "extends" | "contradicts" | "supersedes" | "supports" | "challenges" | "inspired_by";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "suggested" | "confirmed" | "rejected";
+            /**
+             * To Id
+             * Format: uuid
+             */
+            to_id: string;
+            /**
+             * To Type
+             * @enum {string}
+             */
+            to_type: "resource" | "question" | "topic" | "claim" | "idea";
+            /** Version */
+            version: number;
         };
         /** EmailVerificationConfirmationRequest */
         EmailVerificationConfirmationRequest: {
@@ -25638,6 +25786,253 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_edge_list: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgePage"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_edge_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeView"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    knowledge_edge_decide: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                edge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EdgeView"];
+                };
             };
             /** @description Unauthorized */
             401: {
