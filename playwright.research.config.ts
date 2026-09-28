@@ -52,6 +52,8 @@ export default defineConfig({
       url: `http://127.0.0.1:${enabled ? 8000 : 8001}/health/live`,
       env: {
         LOGION_ENV: "test",
+        // Six isolated accounts share this suite's one loopback proxy IP.
+        LOGION_REGISTRATION_LIMIT_PER_HOUR: "6",
         LOGION_REDIS_URL:
           process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
           researchRedis.toString(),
