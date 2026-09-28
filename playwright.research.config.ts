@@ -56,6 +56,8 @@ export default defineConfig({
         LOGION_ZOTERO_ORIGIN: "http://127.0.0.1:8192",
         LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
         LOGION_INTEGRATION_KEYRING: integrationKeyring,
+        LOGION_PDF_CACHE_KEYRING: integrationKeyring,
+        LOGION_ATTACHMENT_ROOT: "reports/research-real/attachments",
         LOGION_RESEARCH_V3_ENABLED: String(enabled),
         LOGION_ALLOWED_ORIGINS: JSON.stringify([origin]),
         LOGION_WEBAUTHN_RP_ID: "127.0.0.1",
@@ -72,6 +74,8 @@ export default defineConfig({
         LOGION_ZOTERO_ORIGIN: "http://127.0.0.1:8192",
         LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
         LOGION_INTEGRATION_KEYRING: integrationKeyring,
+        LOGION_PDF_CACHE_KEYRING: integrationKeyring,
+        LOGION_ATTACHMENT_ROOT: "reports/research-real/attachments",
         LOGION_REDIS_URL:
           process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
           researchRedis.toString(),

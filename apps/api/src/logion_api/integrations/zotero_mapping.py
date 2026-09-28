@@ -177,7 +177,7 @@ class ZoteroMapper:
             elif self.state.phase == "items":
                 await self.resource(key, version, data)
             elif self.state.phase == "attachments":
-                await self.attachment(key, data)
+                await self.attachment(key, version, data)
             elif self.state.phase == "annotations":
                 await self.annotation(key, version, data)
         if self.state.phase == "collections":
@@ -257,9 +257,9 @@ class ZoteroMapper:
             raise integration_error("ZOTERO_TAG_LIMIT")
         self.touch(row)
         if data.get("itemType") == "attachment":
-            await self.attachment(key, data)
+            await self.attachment(key, version, data)
 
-    async def attachment(self, key: str, data: dict[str, Any]) -> None:
+    async def attachment(self, key: str, version: int, data: dict[str, Any]) -> None:
         if data.get("contentType") != "application/pdf":
             return
         row = await self.mapped(item_key(data.get("parentItem") or key))
@@ -274,7 +274,9 @@ class ZoteroMapper:
         # Stable first attachment selection when a paper has several PDFs.
         if row.file_locator is None or row.file_locator.get("path") == f"zotero/{key}.zip":
             locator: dict[str, object] = {"kind": "zotero_webdav", "path": f"zotero/{key}.zip"}
-            if row.file_locator != locator:
+            if row.file_locator != locator or row.zotero_attachment_version != version:
+                row.sha256 = None
+                row.zotero_attachment_version = version
                 row.file_locator = locator
                 self.touch(row)
 

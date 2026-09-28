@@ -15,6 +15,21 @@ export function createWorkbenchQueryClient() {
 }
 export function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
+    const pdfErrors: Record<string, string> = {
+      PDF_TOO_LARGE: "PDF 超过允许的大小，请选择更小的文件。",
+      PDF_INVALID: "文件不是有效的 PDF。",
+      PDF_ZIP_INVALID: "附件压缩包不符合安全要求，请检查 Zotero 附件。",
+      PDF_HASH_MISMATCH: "远端文件与记录不一致，请重新导入。",
+      PDF_REMOTE_UNAVAILABLE: "暂时无法取得原文，请检查坚果云连接和文件。",
+      PDF_UPLOAD_FAILED: "原文未能保存到坚果云，请检查连接后重试。",
+      PDF_LOCATOR_INVALID: "这篇文献没有可读取的 PDF，请先导入原文。",
+      PDF_BUSY: "另一个 PDF 正在处理，请稍后重试。",
+      WEBDAV_CONNECTION_REQUIRED: "请先在设置中连接坚果云并测试连接。",
+      WEBDAV_RATE_LIMITED: "已达到坚果云请求频率上限，请稍后重试。",
+      WEBDAV_RATE_UNAVAILABLE: "暂时无法确认请求额度，请稍后重试。",
+    };
+    const pdfMessage = pdfErrors[error.code];
+    if (pdfMessage) return pdfMessage;
     if (error.code === "AUTH_RECENT_LOGIN_REQUIRED")
       return "请重新登录以确认身份，再继续操作。";
     if (error.code === "INTEGRATION_KEY_UNAVAILABLE")

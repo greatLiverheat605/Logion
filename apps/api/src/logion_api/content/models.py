@@ -160,6 +160,7 @@ class Resource(Base):
     )
     zotero_library_id: Mapped[str | None] = mapped_column(String(80))
     zotero_item_key: Mapped[str | None] = mapped_column(String(80))
+    zotero_attachment_version: Mapped[int | None] = mapped_column(BigInteger)
     zotero_version: Mapped[int | None] = mapped_column(BigInteger)
     zotero_sync_stopped: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

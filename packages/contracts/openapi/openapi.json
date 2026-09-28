@@ -14026,6 +14026,39 @@
         "title": "UrlFieldDefinition",
         "type": "object"
       },
+      "UsageStatus": {
+        "properties": {
+          "allowance_bytes": {
+            "default": 3000000000,
+            "title": "Allowance Bytes",
+            "type": "integer"
+          },
+          "downloaded_bytes": {
+            "title": "Downloaded Bytes",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "near_limit": {
+            "title": "Near Limit",
+            "type": "boolean"
+          },
+          "pdf_max_bytes": {
+            "title": "Pdf Max Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "month",
+          "downloaded_bytes",
+          "near_limit",
+          "pdf_max_bytes"
+        ],
+        "title": "UsageStatus",
+        "type": "object"
+      },
       "UserResponse": {
         "properties": {
           "created_at": {
@@ -20546,6 +20579,27 @@
         "summary": "Test Connection",
         "tags": [
           "research-integrations"
+        ]
+      }
+    },
+    "/api/v1/research/pdf-usage": {
+      "get": {
+        "operationId": "research_pdf_usage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Usage",
+        "tags": [
+          "research-pdf"
         ]
       }
     },
@@ -36630,6 +36684,97 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/pdf-import": {
+      "post": {
+        "operationId": "research_pdf_import",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-PDF-Title",
+            "required": true,
+            "schema": {
+              "maxLength": 3600,
+              "minLength": 1,
+              "title": "X-Pdf-Title",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/pdf": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Pdf",
+        "tags": [
+          "research-pdf"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}": {
       "delete": {
         "operationId": "research_library_delete",
@@ -37007,6 +37152,70 @@
         "summary": "Update Resource",
         "tags": [
           "research-library"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/pdf": {
+      "get": {
+        "operationId": "research_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Pdf",
+        "tags": [
+          "research-pdf"
         ]
       }
     },

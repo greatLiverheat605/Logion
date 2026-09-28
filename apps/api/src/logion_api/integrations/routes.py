@@ -1,4 +1,3 @@
-import base64
 import json
 from datetime import datetime
 from typing import Any
@@ -25,6 +24,7 @@ from logion_api.identity.models import User
 from logion_api.integrations.keyring import decrypt, encrypt
 from logion_api.integrations.models import IntegrationCredential
 from logion_api.integrations.network import Provider, integration_error, request_integration
+from logion_api.integrations.webdav import request_webdav
 from logion_api.integrations.zotero_sync import observe_backoff
 from logion_api.library.routes import require_enabled
 
@@ -120,7 +120,9 @@ async def set_credential(
     ):
         raise integration_error("INTEGRATION_CREDENTIAL_INVALID")
     # Serialize updates and first creation for this owner, including concurrent tabs.
-    await db.scalar(select(User.id).where(User.id == context.user.id).with_for_update())
+    await db.scalar(
+        select(User.id).where(User.id == context.user.id).with_for_update(key_share=True)
+    )
     row = await db.scalar(
         select(IntegrationCredential).where(
             IntegrationCredential.user_id == context.user.id,
@@ -163,7 +165,9 @@ async def set_credential(
 async def revoke(
     provider: Provider, request: Request, context: AuthContextDependency, db: DatabaseSession
 ) -> Response:
-    await db.scalar(select(User.id).where(User.id == context.user.id).with_for_update())
+    await db.scalar(
+        select(User.id).where(User.id == context.user.id).with_for_update(key_share=True)
+    )
     row = await db.scalar(
         select(IntegrationCredential)
         .where(
@@ -209,7 +213,9 @@ async def test_connection(
     db: DatabaseSession,
     settings: SettingsDependency,
 ) -> IntegrationStatus:
-    await db.scalar(select(User.id).where(User.id == context.user.id).with_for_update())
+    await db.scalar(
+        select(User.id).where(User.id == context.user.id).with_for_update(key_share=True)
+    )
     row = await db.scalar(
         select(IntegrationCredential)
         .where(
@@ -234,15 +240,12 @@ async def test_connection(
             )
             observe_backoff(row, response)
         else:
-            basic = base64.b64encode(
-                f"{secret['username']}:{secret['credential']}".encode()
-            ).decode()
-            response = await request_integration(
+            response = await request_webdav(
                 settings,
-                provider,
+                row,
                 "PROPFIND",
                 "/dav/",
-                headers={"Authorization": f"Basic {basic}", "Depth": "0"},
+                headers={"Depth": "0"},
             )
         if response.status in (401, 403):
             raise integration_error("INTEGRATION_AUTH_FAILED")

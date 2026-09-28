@@ -34,6 +34,8 @@ from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
 from logion_api.integrations.models import IntegrationCredential
 from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
+from logion_api.library.pdf_cache import lock_cache, remove_resource_cache
+from logion_api.library.pdf_models import WebDAVUsage
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
@@ -318,6 +320,7 @@ class AccountDeletionService:
         )
 
     async def _physical_cleanup(self, db: AsyncSession, request: AccountDeletionRequest) -> None:
+        await lock_cache(db)
         user = await db.scalar(select(User).where(User.id == request.user_id).with_for_update())
         if user is None or user.status != "pending_deletion" or request.status != "pending":
             return
@@ -331,6 +334,11 @@ class AccountDeletionService:
                 storage_key=attachment.storage_key,
             )
         await db.execute(delete(Attachment).where(Attachment.created_by == user.id))
+        for resource in await db.scalars(
+            select(Resource).where(Resource.research_owner_id == user.id)
+        ):
+            await remove_resource_cache(db, self._settings, resource)
+        await db.execute(delete(WebDAVUsage).where(WebDAVUsage.user_id == user.id))
         private_resources = select(Resource.id).where(Resource.research_owner_id == user.id)
         private_excerpts = select(SourceExcerpt.id).where(
             SourceExcerpt.resource_id.in_(private_resources)
