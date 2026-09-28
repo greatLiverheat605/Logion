@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { components } from "@logion/contracts";
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from "pdfjs-dist";
@@ -12,11 +12,16 @@ import { ResourceDetails } from "./library";
 import { PdfPage } from "./pdf-page";
 import { Button } from "./components";
 import type { PaneContent, WorkbenchContext } from "./preferences";
+import {
+  readPdfSelection,
+  normalizePdfText as normalize,
+  type PdfSelection,
+  type SourceText,
+} from "./selection";
+import { ReadingAiResult } from "./reading-ai";
 
 type Resource = components["schemas"]["LibraryResource"];
 type Outline = { title: string; page: number | null; depth: number };
-const normalize = (value: string) =>
-  value.replace(/\r\n?/g, "\n").normalize("NFC");
 
 export function Reader({ id }: { id: string }) {
   const { context } = useWorkbench();
@@ -39,7 +44,19 @@ function ReaderScope({
   id: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const { preferences } = useWorkbench();
+  const { preferences, save } = useWorkbench();
+  const client = useQueryClient();
+  const [sourceText, setSourceText] = useState<SourceText | null>(null);
+  const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const paletteSelection = useRef<PdfSelection | null>(null);
+  const [quote, setQuote] = useState<PdfSelection | null>(null);
+  const [question, setQuestion] = useState("");
+  const [runId, setRunId] = useState<string | null>(null);
+  const [actionStatus, setActionStatus] = useState("");
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const path = `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}/library/resources/${encodeURIComponent(id)}`;
   const detail = useQuery({
     queryKey: [
@@ -52,6 +69,155 @@ function ReaderScope({
     ],
     queryFn: () => workbenchRequest<Resource>(path),
   });
+  async function showPane(content: PaneContent) {
+    const layout = preferences["workbench.layouts"];
+    await save("workbench.layouts", {
+      ...layout,
+      preset: "custom",
+      panes: layout.panes.map((pane, index) =>
+        index === 2 ? { ...pane, content, collapsed: false } : pane,
+      ) as typeof layout.panes,
+    });
+    window.dispatchEvent(new Event("workbench:reader-show-result"));
+  }
+  const action = useMutation({
+    mutationFn: async ({
+      kind,
+      selected,
+      questionText,
+    }: {
+      kind: string;
+      selected: PdfSelection;
+      questionText?: string;
+    }) => {
+      setActionStatus("");
+      if (kind === "chat") {
+        setQuote(selected);
+        setRunId(null);
+        await showPane("chat");
+        return;
+      }
+      if (kind === "excerpt" || kind === "concept") {
+        await workbenchRequest(
+          `${path}/${kind === "excerpt" ? "excerpts" : "concepts"}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              source_text_id: selected.source_text_id,
+              char_start: selected.char_start,
+              char_end: selected.char_end,
+            }),
+          },
+        );
+        await client.invalidateQueries({
+          queryKey: ["workbench", "excerpts", path],
+        });
+        setActionStatus(
+          kind === "concept"
+            ? "概念已创建，并已关联原文摘录。"
+            : "摘录已保存。",
+        );
+        await showPane("excerpts");
+        return;
+      }
+      if (!sourceText || sourceText.id !== selected.source_text_id)
+        throw new Error("Source changed");
+      setRunId(null);
+      const result = await workbenchRequest<
+        components["schemas"]["AIRunResponse"]
+      >(
+        `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}/research/ai/runs`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            idempotency_key: crypto.randomUUID(),
+            task_type: kind === "translate" ? "translate" : "explain",
+            target: {
+              entity_type: "source_text",
+              id: sourceText.id,
+              version: sourceText.version,
+              char_start: selected.char_start,
+              char_end: selected.char_end,
+            },
+            context_entities: [],
+            expected_output_fields: ["text"],
+            requested_output_tokens: 2000,
+            send_confirmed: true,
+            ...(questionText ? { question: questionText } : {}),
+          }),
+        },
+      );
+      setRunId(result.id);
+      setQuote(selected);
+      await showPane(questionText ? "chat" : "translate");
+    },
+  });
+  const actionRef = useRef(action);
+  useEffect(() => {
+    actionRef.current = action;
+  }, [action]);
+  useEffect(() => {
+    function capture() {
+      paletteSelection.current =
+        root.current && sourceText
+          ? readPdfSelection(root.current, sourceText)
+          : null;
+    }
+    function update() {
+      const selected =
+        root.current && sourceText
+          ? readPdfSelection(root.current, sourceText)
+          : null;
+      setSelection(selected);
+      const rect = selected
+        ? window.getSelection()?.getRangeAt(0).getBoundingClientRect()
+        : null;
+      setMenuPosition(
+        rect
+          ? {
+              left: Math.max(8, Math.min(rect.left, window.innerWidth - 300)),
+              top: Math.min(
+                window.innerHeight - 60,
+                Math.max(8, rect.bottom + 8),
+              ),
+            }
+          : null,
+      );
+    }
+    function command(event: Event) {
+      const kind = (event as CustomEvent<string>).detail;
+      if (
+        !["translate", "explain", "excerpt", "concept", "chat"].includes(
+          kind,
+        ) ||
+        actionRef.current.isPending
+      )
+        return;
+      const fromPalette = !!document.querySelector('[role="dialog"]');
+      const selected = fromPalette
+        ? paletteSelection.current
+        : root.current && sourceText
+          ? readPdfSelection(root.current, sourceText)
+          : null;
+      paletteSelection.current = null;
+      if (!selected) {
+        setActionStatus(
+          "请先在 PDF 文字层选中一段内容，等待全文就绪后再操作。",
+        );
+        return;
+      }
+      actionRef.current.mutate({ kind, selected });
+    }
+    document.addEventListener("selectionchange", update);
+    window.addEventListener("workbench:reader-capture-selection", capture);
+    window.addEventListener("workbench:reader-command", command);
+    return () => {
+      document.removeEventListener("selectionchange", update);
+      window.removeEventListener("workbench:reader-capture-selection", capture);
+      window.removeEventListener("workbench:reader-command", command);
+    };
+  }, [sourceText]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null),
     [outline, setOutline] = useState<Outline[]>([]),
     [failure, setFailure] = useState<unknown>(null),
@@ -104,6 +270,9 @@ function ReaderScope({
       setPdf(null);
       setOutline([]);
       setTexts([]);
+      setSourceText(null);
+      setSelection(null);
+      paletteSelection.current = null;
       setTextStatus("正在抽取全文…");
       const { getDocument, GlobalWorkerOptions, version } =
         await import("pdfjs-dist");
@@ -189,7 +358,7 @@ function ReaderScope({
         }
         if (stopped) return;
         setTexts(pages);
-        await workbenchRequest(`${path}/text`, {
+        const saved = await workbenchRequest<SourceText>(`${path}/text`, {
           method: "POST",
           signal: abort.signal,
           body: JSON.stringify({
@@ -199,7 +368,14 @@ function ReaderScope({
             normalization_version: "utf8-nfc-lf-v1",
           }),
         });
-        if (!stopped) setTextStatus("全文已就绪");
+        if (saved.text !== pages.join("\n") + "\n")
+          throw new Error(
+            "已保存全文与当前文字层不一致，划选操作暂不可用，仍可阅读原文。",
+          );
+        if (!stopped) {
+          setSourceText(saved);
+          setTextStatus("全文已就绪");
+        }
       } catch (error) {
         if (!stopped)
           setTextStatus(
@@ -235,9 +411,53 @@ function ReaderScope({
       )
     : [];
   function contents(kind: PaneContent) {
+    if (kind === "excerpts") return <ReadingExcerpts path={path} jump={jump} />;
+    if (["chat", "translate", "translation"].includes(kind))
+      return (
+        <div className="wb-reading-panel">
+          <h2>{kind === "chat" ? "引用原文提问" : "翻译与解释"}</h2>
+          {quote ? (
+            <blockquote>{quote.text}</blockquote>
+          ) : (
+            <p>在 PDF 中选中文字，按 T 翻译、E 解释或 Q 提问。</p>
+          )}
+          {kind === "chat" && quote && (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (question.trim())
+                  action.mutate({
+                    kind: "explain",
+                    selected: quote,
+                    questionText: question.trim(),
+                  });
+              }}
+            >
+              <label>
+                关于这段原文的问题
+                <textarea
+                  value={question}
+                  maxLength={2000}
+                  onChange={(event) => setQuestion(event.target.value)}
+                />
+              </label>
+              <Button
+                type="submit"
+                disabled={action.isPending || !question.trim()}
+              >
+                发送问题与引用
+              </Button>
+            </form>
+          )}
+          {runId && (
+            <ReadingAiResult workspaceId={context.workspace_id} runId={runId} />
+          )}
+        </div>
+      );
     if (kind === "info")
       return detail.data ? (
         <div className="wb-reader-info">
+          <h2>文献信息</h2>
           <ResourceDetails item={detail.data} />
           <p role="status">{textStatus}</p>
         </div>
@@ -316,6 +536,36 @@ function ReaderScope({
       data-white-paper={whitePaper}
     >
       <h1 className="wb-reader-title">{detail.data?.title ?? "论文阅读"}</h1>
+      {actionStatus && <p role="status">{actionStatus}</p>}
+      {action.isPending && <p role="status">正在处理选中内容…</p>}
+      {action.error && <p role="alert">{errorMessage(action.error)}</p>}
+      {preferences["reader.selection_menu"] && selection && menuPosition && (
+        <div
+          className="wb-selection-menu"
+          role="toolbar"
+          aria-label="选中文字操作"
+          style={menuPosition}
+          onPointerDown={(event) => event.preventDefault()}
+        >
+          {[
+            ["translate", "翻译 T"],
+            ["explain", "解释 E"],
+            ["excerpt", "摘录 H"],
+            ["chat", "提问 Q"],
+            ["concept", "概念 C"],
+          ].map(([kind, label]) => (
+            <Button
+              key={kind}
+              disabled={action.isPending}
+              onClick={() =>
+                action.mutate({ kind: kind!, selected: selection })
+              }
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      )}
       {!!(detail.error || failure) && (
         <div role="alert">
           {errorMessage(detail.error ?? failure)}{" "}
@@ -389,5 +639,45 @@ function ReaderScope({
       )}
       <ThreePanes renderContent={contents} />
     </div>
+  );
+}
+
+function ReadingExcerpts({
+  path,
+  jump,
+}: {
+  path: string;
+  jump: (page: number) => void;
+}) {
+  const query = useQuery({
+    queryKey: ["workbench", "excerpts", path],
+    queryFn: () =>
+      workbenchRequest<{
+        excerpts: {
+          id: string;
+          excerpt_text: string;
+          page_start: number | null;
+          origin: string;
+        }[];
+      }>(`${path}/excerpts`),
+  });
+  return (
+    <section className="wb-reading-panel" aria-label="原文摘录">
+      <h2>原文摘录</h2>
+      {query.error && <p role="alert">{errorMessage(query.error)}</p>}
+      {query.isPending && <p role="status">正在读取摘录…</p>}
+      {query.data?.excerpts.map((item) => (
+        <article key={item.id}>
+          <blockquote>{item.excerpt_text}</blockquote>
+          <Button onClick={() => jump(item.page_start ?? 1)}>
+            第 {item.page_start ?? 1} 页
+          </Button>
+          {item.origin === "zotero" && (
+            <span className="wb-muted">Zotero · 只读</span>
+          )}
+        </article>
+      ))}
+      {query.data?.excerpts.length === 0 && <p>选中原文后按 H 保存摘录。</p>}
+    </section>
   );
 }

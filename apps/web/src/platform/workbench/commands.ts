@@ -23,6 +23,7 @@ export interface Command {
   group: string;
   shortcut?: Shortcut;
   hint?: string;
+  selectionOnly?: boolean;
   action: () => void;
 }
 export function validateCommands(commands: readonly Command[]): void {
@@ -38,7 +39,10 @@ export function validateCommands(commands: readonly Command[]): void {
       ? !s.alt && !s.shift && ["KeyK", "KeyF", "Backslash"].includes(s.code)
       : s.alt
         ? /^Digit[1-4]$/.test(s.code) && (s.shift || s.code !== "Digit4")
-        : s.code === "Slash" && s.shift;
+        : (s.code === "Slash" && s.shift) ||
+          (command.selectionOnly &&
+            !s.shift &&
+            ["KeyT", "KeyE", "KeyH", "KeyQ", "KeyC"].includes(s.code));
     if (!allowed) throw new Error("Reserved or unsupported shortcut");
     const key = JSON.stringify([s.code, !!s.mod, !!s.alt, !!s.shift]);
     if (shortcuts.has(key)) throw new Error("Shortcut conflict");
@@ -144,6 +148,11 @@ export function createCommands(
       zoomOut: "缩小原文",
       next: "原文下一页",
       previous: "原文上一页",
+      translate: "翻译选中文字",
+      explain: "解释选中文字",
+      excerpt: "摘录选中文字",
+      chat: "引用选中文字提问",
+      concept: "从选中文字新建概念",
     })) {
       commands.push({
         id: `reader:${id}`,
@@ -152,6 +161,23 @@ export function createCommands(
         action: () => actions.reader?.(id),
         ...(id === "find"
           ? { shortcut: { mod: true, code: "KeyF" }, hint: `${modifier}+F` }
+          : {}),
+        ...(["translate", "explain", "excerpt", "chat", "concept"].includes(id)
+          ? {
+              selectionOnly: true,
+              shortcut: {
+                code: `Key${({ translate: "T", explain: "E", excerpt: "H", chat: "Q", concept: "C" } as Record<string, string>)[id]}`,
+              },
+              hint: (
+                {
+                  translate: "T",
+                  explain: "E",
+                  excerpt: "H",
+                  chat: "Q",
+                  concept: "C",
+                } as Record<string, string>
+              )[id],
+            }
           : {}),
       });
     }

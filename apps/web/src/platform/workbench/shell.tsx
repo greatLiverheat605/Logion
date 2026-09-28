@@ -15,6 +15,7 @@ import {
 import { presetLayout, togglePane, type Theme } from "./preferences";
 import { useWorkbench } from "./provider";
 import { WORKBENCH_ROUTES } from "./routes";
+import { livePdfRange } from "./selection";
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
   const state = useWorkbench();
@@ -49,7 +50,10 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
               new CustomEvent("workbench:reader-command", { detail: id }),
             )
         : undefined,
-      palette: () => setPalette(true),
+      palette: () => {
+        window.dispatchEvent(new Event("workbench:reader-capture-selection"));
+        setPalette(true);
+      },
       help: () => setHelp(true),
       toolbars: () => {
         void state.save("workbench.layouts", {
@@ -79,6 +83,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
       );
       if (
         !command ||
+        (command.selectionOnly && !livePdfRange()) ||
         (isEditing(event.target) && command.id !== "palette") ||
         state.pending
       )
@@ -233,7 +238,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
               />
               <Command.List>
                 <Command.Empty>没有匹配的指令</Command.Empty>
-                {["跳转", "外观", "布局", "工具"].map((group) => (
+                {["跳转", "外观", "布局", "工具", "阅读"].map((group) => (
                   <Command.Group key={group} heading={group}>
                     {commands
                       .filter(

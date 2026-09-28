@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { textLayers } from "./selection";
 import type {
   PDFDocumentProxy,
   RenderTask,
@@ -87,13 +88,23 @@ export function PdfPage({
         return;
       }
       const { TextLayer } = await import("pdfjs-dist");
+      const content = await page.getTextContent();
       textLayer = new TextLayer({
-        textContentSource: await page.getTextContent(),
+        textContentSource: content,
         container: layer,
         viewport,
       });
       if (stopped) return;
       await textLayer.render();
+      let raw = "",
+        index = 0;
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        const span = textLayer.textDivs[index++];
+        if (span) span.dataset.textStart = String(raw.length);
+        raw += item.str + (item.hasEOL ? "\n" : "");
+      }
+      textLayers.set(layer, { raw, page: pageNumber });
       if (!stopped) setRendered((value) => value + 1);
     }
     void render().catch(() => {
@@ -103,6 +114,7 @@ export function PdfPage({
       stopped = true;
       rendering?.cancel();
       textLayer?.cancel();
+      textLayers.delete(layer);
       layer.replaceChildren();
       target.width = target.height = 0;
     };

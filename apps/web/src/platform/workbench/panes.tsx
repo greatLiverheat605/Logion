@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Menu, Segmented } from "./components";
 import { useModifierKey } from "./commands";
 import {
@@ -27,6 +27,12 @@ export function ThreePanes({
   const [draft, setDraft] = useState<Layout | null>(null);
   const layout = draft ?? stored;
   const [mobilePane, setMobilePane] = useState<PaneIndex>(1);
+  useEffect(() => {
+    const show = () => setMobilePane(2);
+    window.addEventListener("workbench:reader-show-result", show);
+    return () =>
+      window.removeEventListener("workbench:reader-show-result", show);
+  }, []);
   const container = useRef<HTMLDivElement>(null);
   const dragging = useRef<{
     index: PaneIndex;

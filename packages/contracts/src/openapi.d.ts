@@ -1420,6 +1420,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/research/ai/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Research Run Result */
+        get: operations["research_ai_run_result"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/search": {
         parameters: {
             query?: never;
@@ -2090,6 +2107,41 @@ export interface paths {
         post?: never;
         /** Delete Resource */
         delete: operations["research_library_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/concepts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Concept */
+        post: operations["research_concept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/excerpts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Excerpts */
+        get: operations["research_excerpts_list"];
+        put?: never;
+        /** Create Excerpt */
+        post: operations["research_excerpt_create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4428,6 +4480,10 @@ export interface components {
         };
         /** ContextEntity */
         ContextEntity: {
+            /** Char End */
+            char_end?: number | null;
+            /** Char Start */
+            char_start?: number | null;
             /** Entity Type */
             entity_type: string;
             /**
@@ -4870,6 +4926,42 @@ export interface components {
             expected_source_version_key: string;
             /** Expected Version */
             expected_version: number;
+        };
+        /** ExcerptPage */
+        ExcerptPage: {
+            /** Excerpts */
+            excerpts: components["schemas"]["ExcerptResponse"][];
+        };
+        /** ExcerptResponse */
+        ExcerptResponse: {
+            /** Char End */
+            char_end: number | null;
+            /** Char Start */
+            char_start: number | null;
+            /** Excerpt Text */
+            excerpt_text: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Origin */
+            origin: string;
+            /** Page End */
+            page_end: number | null;
+            /** Page Start */
+            page_start: number | null;
+            /**
+             * Resource Id
+             * Format: uuid
+             */
+            resource_id: string;
+            /** Source File Sha256 */
+            source_file_sha256: string | null;
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
         };
         /** ExpectedVersionRequest */
         ExpectedVersionRequest: {
@@ -7150,6 +7242,20 @@ export interface components {
              */
             type: "rating";
         };
+        /** ReadingConceptResponse */
+        ReadingConceptResponse: {
+            /**
+             * Citation Id
+             * Format: uuid
+             */
+            citation_id: string;
+            excerpt: components["schemas"]["ExcerptResponse"];
+            /**
+             * Topic Id
+             * Format: uuid
+             */
+            topic_id: string;
+        };
         /** RebootstrapControl */
         RebootstrapControl: {
             /**
@@ -7319,6 +7425,8 @@ export interface components {
              * Format: uuid
              */
             idempotency_key: string;
+            /** Question */
+            question?: string | null;
             /** Requested Output Tokens */
             requested_output_tokens: number;
             /**
@@ -7337,6 +7445,11 @@ export interface components {
              * @enum {string}
              */
             task_type: "translate" | "explain" | "close_reading" | "quiz_generate" | "quiz_grade" | "link_suggest" | "weekly_comment";
+        };
+        /** ResearchRunResult */
+        ResearchRunResult: {
+            draft: components["schemas"]["AIOutputDraftResponse"] | null;
+            run: components["schemas"]["AIRunResponse"];
         };
         /** ResourceCreateRequest */
         ResourceCreateRequest: {
@@ -7680,6 +7793,18 @@ export interface components {
          * @enum {string}
          */
         SearchTruncationReason: "candidate_limit" | "byte_limit";
+        /** Selection */
+        Selection: {
+            /** Char End */
+            char_end: number;
+            /** Char Start */
+            char_start: number;
+            /**
+             * Source Text Id
+             * Format: uuid
+             */
+            source_text_id: string;
+        };
         /** SelfStudyListResponse */
         SelfStudyListResponse: {
             /** Deliverables */
@@ -18305,6 +18430,92 @@ export interface operations {
             };
         };
     };
+    research_ai_run_result: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchRunResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     workspace_search: {
         parameters: {
             query?: never;
@@ -22762,6 +22973,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_concept_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Selection"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingConceptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_excerpts_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExcerptPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_excerpt_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Selection"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExcerptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

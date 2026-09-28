@@ -188,3 +188,13 @@ JavaScript UTF-16 offsets with Python's Unicode characters (including non-BMP ch
 Historical file versions stay stored but are unavailable through current-file reads and AI
 context selection. Research ideas remain excluded by both existing AI gates.
 Migration 0049 adds only `source_texts`; downgrade refuses every stored row.
+
+## Reading selections (ADR-0041, ADR-0045)
+
+Owner-only `GET/POST .../library/resources/{id}/excerpts` lists excerpts or saves a selection. `POST .../library/resources/{id}/concepts` creates a private Topic and a definition KnowledgeCitation in one transaction. Both writes accept only `source_text_id`, `char_start`, `char_end`; the server slices current-file text and derives pages. Unicode scalar ranges are exclusive-end, capped at 20,000 characters / 32 KiB. Resource locking makes repeated selection writes idempotent. Zotero annotations remain read-only.
+
+Research AI context references optionally accept a complete character range only for `source_text`. No new entity type is allowed. Translation and explanation use the existing research run route and budget/egress checks. An optional bounded `question` is an explicit owner instruction for `explain`, never a replacement for authorized source references. `GET /api/v1/workspaces/{workspace_id}/research/ai/runs/{run_id}` returns the owner's run and draft after current workspace/Space authorization. These endpoints retain the default-off research flag.
+
+Migration 0050 adds nullable `topics.research_owner_id`. Legacy rows stay shared; private reading concepts are excluded from legacy memory, graph/search, deletion, workbench targets, export and sync (including conflict and tombstone paths). Account removal deletes private citations and concepts. Downgrade refuses private concepts. Older unpatched v0.2 executables are not a safe rollback target for private rows.
+
+The browser test launcher injects an in-process synthetic AI transport into real API discovery and Worker execution. It never connects to a provider. Runtime production code and network/TLS rules are unchanged. Full real-backend tests also use local fake Zotero/WebDAV services.

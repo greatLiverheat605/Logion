@@ -23,6 +23,32 @@ const actions = () => ({
   help: vi.fn(),
 });
 describe("workbench command contract", () => {
+  it("limits single-letter reading commands to PDF selections and explains AI failures", () => {
+    const commands = createCommands({ ...actions(), reader: vi.fn() });
+    const selection = commands.filter((command) => command.selectionOnly);
+    expect(selection.map((command) => command.shortcut?.code)).toEqual([
+      "KeyT",
+      "KeyE",
+      "KeyH",
+      "KeyQ",
+      "KeyC",
+    ]);
+    for (const [code, message] of [
+      ["AI_BUDGET_EXCEEDED", "预算不足"],
+      ["AI_PRIVATE_CONTENT_BLOCKED", "拦截"],
+      ["AI_PROVIDER_UNAVAILABLE", "不可用"],
+    ]) {
+      expect(
+        errorMessage(
+          new LogionApiError({
+            code: code!,
+            message: "Synthetic failure",
+            status: 503,
+          }),
+        ),
+      ).toContain(message);
+    }
+  });
   it("registers navigation, appearance, presets and pane actions in one registry", () => {
     const handlers = actions(),
       commands = createCommands(handlers);

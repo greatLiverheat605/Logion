@@ -5,6 +5,272 @@ import { join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+async function selectFirstPassage(page: Page) {
+  const layer = page.locator(
+    '[data-pdf-page="1"] [data-reader-text-layer="true"]',
+  );
+  await expect(layer).toContainText("careful reading");
+  await layer.evaluate((element) => {
+    const span = [...element.querySelectorAll("span[data-text-start]")].find(
+      (node) => node.textContent?.includes("careful reading"),
+    )!;
+    (element.closest(".wb-pane-content") as HTMLElement).focus();
+    const range = document.createRange();
+    range.selectNodeContents(span);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+}
+
+test("selection commands preserve source citations and use the real AI draft pipeline", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
+  const { readFile } = await import("node:fs/promises");
+  expect(
+    (
+      await context.request.post("/api/v1/auth/register", {
+        headers: { Origin: baseURL! },
+        data: {
+          email: `actions-${randomUUID()}@example.com`,
+          password: `${randomBytes(24).toString("base64url")}Aa1!`,
+          device_name: "Synthetic reading actions",
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  const headers = {
+    Origin: baseURL!,
+    "X-CSRF-Token": (await context.cookies()).find(
+      (c) => c.name === "logion_csrf",
+    )!.value,
+  };
+  const workspace = (
+    await (await context.request.get("/api/v1/workspaces")).json()
+  ).workspaces[0].id;
+  const space = (
+    await (
+      await context.request.get(`/api/v1/workspaces/${workspace}/spaces`)
+    ).json()
+  ).spaces[0].id;
+  const scope = `/api/v1/workspaces/${workspace}/spaces/${space}`;
+  for (const [method, path, data] of [
+    [
+      "put",
+      "/api/v1/research/integrations/webdav",
+      { username: "synthetic-account", credential: "synthetic-webdav" },
+    ],
+    ["post", "/api/v1/research/integrations/webdav/test", {}],
+  ] as const)
+    expect(
+      (await context.request[method](path, { headers, data })).status(),
+    ).toBe(200);
+  const resource = await (
+    await context.request.post(`${scope}/library/resources/pdf-import`, {
+      headers: {
+        ...headers,
+        "Content-Type": "application/pdf",
+        "X-PDF-Title": "Synthetic selection paper",
+      },
+      data: await readFile("tests/fixtures/synthetic-reader.pdf"),
+    })
+  ).json();
+  expect(resource.id).toBeTruthy();
+  const ai = `/api/v1/workspaces/${workspace}/ai`;
+  const providerId = randomUUID();
+  expect(
+    (
+      await context.request.post(`${ai}/providers`, {
+        headers,
+        data: {
+          id: providerId,
+          name: "Synthetic provider",
+          provider_type: "openai_compatible",
+          base_url: "https://api.example.com/v1",
+          credential: "synthetic-provider",
+          enabled: true,
+          timeout_seconds: 30,
+          max_retries: 0,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await context.request.post(
+        `${ai}/providers/${providerId}/discover-models`,
+        { headers },
+      )
+    ).status(),
+  ).toBe(200);
+  const models = [];
+  const discovered = (await (await context.request.get(`${ai}/models`)).json())
+    .models as { id: string; provider_model_id: string; version: number }[];
+  for (const tier of ["economical", "quality"]) {
+    const selected = discovered.find(
+      (item) => item.provider_model_id === `synthetic-${tier}`,
+    )!;
+    const model = await context.request.put(`${ai}/models/${selected.id}`, {
+      headers,
+      data: {
+        expected_version: selected.version,
+        display_name: tier,
+        enabled: true,
+        supports_json: true,
+        supports_stream: false,
+        context_window: 32000,
+        pricing_currency: "USD",
+        input_cost_per_million_minor: 1,
+        output_cost_per_million_minor: 1,
+      },
+    });
+    expect(model.status()).toBe(200);
+    models.push((await model.json()).id);
+  }
+  expect(
+    (
+      await context.request.post(
+        `/api/v1/workspaces/${workspace}/research/ai/presets`,
+        {
+          headers,
+          data: {
+            economical_model_ids: models.slice(0, 1),
+            quality_model_ids: models.slice(1),
+          },
+        },
+      )
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await context.request.post(`${scope}/research/ideas`, {
+        headers,
+        data: {
+          title: "Synthetic private idea",
+          body: "UNPUBLISHED_SYNTHETIC_IDEA_DO_NOT_SEND",
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  const stored = page.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/${resource.id}/text`) &&
+      r.request().method() === "POST",
+  );
+  await page.goto(`/read/${resource.id}`);
+  expect((await stored).status()).toBe(200);
+  await page.getByRole("button", { name: "知道了" }).click();
+  await selectFirstPassage(page);
+  await expect(page.getByRole("toolbar", { name: "选中文字操作" })).toHaveCount(
+    0,
+  );
+  await page.keyboard.press("h");
+  await expect(
+    page.getByRole("status").filter({ hasText: "摘录已保存" }),
+  ).toBeVisible();
+  const excerpts = await (
+    await context.request.get(
+      `${scope}/library/resources/${resource.id}/excerpts`,
+    )
+  ).json();
+  expect(excerpts.excerpts).toHaveLength(1);
+  expect(excerpts.excerpts[0].page_start).toBe(1);
+  expect(excerpts.excerpts[0].excerpt_text).toContain("careful reading");
+  await selectFirstPassage(page);
+  await page.keyboard.press("c");
+  await expect(
+    page.getByRole("status").filter({ hasText: "概念已创建" }),
+  ).toBeVisible();
+  await selectFirstPassage(page);
+  await page.keyboard.press("t");
+  await expect(page.getByRole("region", { name: "AI 阅读草稿" })).toContainText(
+    "Synthetic translated passage",
+  );
+  await selectFirstPassage(page);
+  await page.keyboard.press("Control+k");
+  await page.getByLabel("搜索指令").fill("解释选中文字");
+  await page.getByRole("option", { name: "解释选中文字" }).click();
+  await expect(page.getByRole("region", { name: "AI 阅读草稿" })).toContainText(
+    "Synthetic explanation",
+  );
+  await selectFirstPassage(page);
+  await page.keyboard.press("q");
+  const input = page.getByLabel("关于这段原文的问题");
+  await input.fill("What is the motivation?");
+  await page.keyboard.type("theqc");
+  await expect(input).toHaveValue("What is the motivation?theqc");
+  expect(
+    (
+      await (
+        await context.request.get(
+          `${scope}/library/resources/${resource.id}/excerpts`,
+        )
+      ).json()
+    ).excerpts,
+  ).toHaveLength(1);
+  await page.getByRole("button", { name: "发送问题与引用" }).click();
+  await expect(page.getByRole("region", { name: "AI 阅读草稿" })).toContainText(
+    "Synthetic explanation",
+  );
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      if (width < 768)
+        await page.getByRole("radio", { name: "右 · AI 对话" }).click();
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`selection-${width}-${theme}.png`),
+      });
+    }
+  }
+  await expectOnlineOnly(page);
+  expect(
+    (
+      await context.request.put("/api/v1/users/me/settings", {
+        headers,
+        data: {
+          settings: [
+            {
+              key: "reader.selection_menu",
+              value: "true",
+              expected_version: null,
+            },
+          ],
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  const ready = page.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/${resource.id}/text`) &&
+      r.request().method() === "POST",
+  );
+  await page.reload();
+  expect((await ready).status()).toBe(200);
+  if (page.viewportSize()!.width < 768)
+    await page.getByRole("radio", { name: "中 · 文献正文" }).click();
+  await selectFirstPassage(page);
+  await expect(
+    page.getByRole("toolbar", { name: "选中文字操作" }),
+  ).toBeVisible();
+  await page
+    .getByRole("toolbar", { name: "选中文字操作" })
+    .getByRole("button", { name: "摘录 H" })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "摘录已保存" }),
+  ).toBeVisible();
+});
+
 async function expectOnlineOnly(page: Page) {
   expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
   expect(

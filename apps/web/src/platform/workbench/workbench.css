@@ -932,3 +932,52 @@ html[data-theme="dark"]
   font-size: 15px;
   overflow-wrap: anywhere;
 }
+
+.wb-selection-menu {
+  position: fixed;
+  z-index: 45;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+  background: var(--wb-pop);
+  box-shadow: var(--wb-shadow);
+}
+.wb-reading-panel {
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+.wb-reading-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+}
+.wb-reading-panel blockquote {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-inline-start: 3px solid var(--wb-sep);
+  white-space: pre-wrap;
+}
+.wb-reading-panel label {
+  display: grid;
+  gap: 8px;
+}
+.wb-reading-panel textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  color: var(--wb-text);
+  background: var(--wb-fill);
+  border: 1px solid var(--wb-sep);
+  border-radius: 8px;
+}
+.wb-reading-panel article + article {
+  margin-top: 16px;
+  border-top: 1px solid var(--wb-sep);
+}
+.wb-reading-output {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}

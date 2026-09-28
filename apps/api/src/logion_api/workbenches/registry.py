@@ -61,8 +61,8 @@ class WorkbenchTargetRegistry:
         ]
         if target.kind in ("claim", "project"):
             filters.append(model.user_id == owner_user_id)
-        if target.kind == "source":
-            filters.append(Resource.research_owner_id.is_(None))
+        if target.kind in ("source", "topic"):
+            filters.append(model.research_owner_id.is_(None))
 
         statement = (
             select(model.id)
