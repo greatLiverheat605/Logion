@@ -154,7 +154,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
     <>
       <div className="wb-shell">
         <aside className="wb-sidebar">{navigationContent}</aside>
-        <section className="wb-body">
+        <div className="wb-body">
           <header className="wb-titlebar">
             <Button
               className="wb-mobile-navigation"
@@ -202,7 +202,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-        </section>
+        </div>
       </div>
       <Sheet
         title="导航"
