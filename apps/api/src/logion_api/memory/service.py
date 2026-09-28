@@ -22,6 +22,7 @@ from logion_api.memory.models import (
     Topic,
     TopicDependency,
 )
+from logion_api.memory.research_scope import legacy_memory_scope
 from logion_api.memory.schemas import (
     AuditReviewCompleteRequest,
     AuditReviewCreateRequest,
@@ -363,6 +364,7 @@ class MemoryService:
                     QuizItem.workspace_id == workspace_id,
                     QuizItem.space_id == space_id,
                     QuizItem.deleted_at.is_(None),
+                    legacy_memory_scope(QuizItem),
                 )
             )
             or 0
@@ -424,6 +426,7 @@ class MemoryService:
                         QuizItem.workspace_id == workspace_id,
                         QuizItem.space_id == space_id,
                         QuizItem.deleted_at.is_(None),
+                        legacy_memory_scope(QuizItem),
                     )
                     .order_by(QuizItem.updated_at.desc(), QuizItem.id)
                     .limit(READ_PAGE_LIMIT)
@@ -451,6 +454,7 @@ class MemoryService:
                 QuizItem.workspace_id == workspace_id,
                 QuizItem.space_id == space_id,
                 QuizItem.deleted_at.is_(None),
+                legacy_memory_scope(QuizItem),
             )
             .with_for_update()
         )
@@ -477,6 +481,7 @@ class MemoryService:
                     QuizAttempt.workspace_id == workspace_id,
                     QuizAttempt.user_id == context.user.id,
                     QuizAttempt.deleted_at.is_(None),
+                    legacy_memory_scope(QuizAttempt),
                 )
             )
             or 0
@@ -548,6 +553,7 @@ class MemoryService:
                     ErrorPattern.user_id == context.user.id,
                     ErrorPattern.cause == payload.error_cause,
                     ErrorPattern.deleted_at.is_(None),
+                    legacy_memory_scope(ErrorPattern),
                 )
                 .with_for_update()
             )
@@ -663,6 +669,7 @@ class MemoryService:
                         QuizAttempt.space_id == space_id,
                         QuizAttempt.user_id == context.user.id,
                         QuizAttempt.deleted_at.is_(None),
+                        legacy_memory_scope(QuizAttempt),
                     )
                     .order_by(QuizAttempt.attempted_at.desc(), QuizAttempt.id)
                     .limit(READ_PAGE_LIMIT)
@@ -706,6 +713,7 @@ class MemoryService:
                         ErrorPattern.space_id == space_id,
                         ErrorPattern.user_id == context.user.id,
                         ErrorPattern.deleted_at.is_(None),
+                        legacy_memory_scope(ErrorPattern),
                     )
                     .order_by(ErrorPattern.updated_at.desc(), ErrorPattern.id)
                     .limit(READ_PAGE_LIMIT)
@@ -734,6 +742,7 @@ class MemoryService:
                 ErrorPattern.space_id == space_id,
                 ErrorPattern.user_id == context.user.id,
                 ErrorPattern.deleted_at.is_(None),
+                legacy_memory_scope(ErrorPattern),
             )
             .with_for_update()
         )
@@ -1117,6 +1126,21 @@ class MemoryService:
             raise APIError(
                 code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
             )
+        return await self.confirm_locked_topic(db, context, topic, payload, request_id)
+
+    async def confirm_locked_topic(
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        topic: Topic,
+        payload: MasteryConfirmRequest,
+        request_id: str,
+    ) -> MasteryConfirmation:
+        """Caller has authorized and locked this topic; both clients use the same schedule rules."""
+        workspace_id, space_id, topic_id = topic.workspace_id, topic.space_id, topic.id
+        personal = topic.research_owner_id is not None
+        if personal and topic.research_owner_id != context.user.id:
+            raise APIError(code="RESOURCE_NOT_FOUND", message="Topic not found.", status_code=404)
         mastery = await db.scalar(
             select(MasteryRecord)
             .where(
@@ -1200,6 +1224,8 @@ class MemoryService:
                 status_code=409,
             )
         else:
+            if personal:
+                schedule.last_reviewed_at = now
             schedule.status = "scheduled"
             schedule.source = "mastery_confirmation"
             schedule.interval_days = interval
@@ -1214,9 +1240,9 @@ class MemoryService:
                 event_type="memory.mastery_confirmed",
                 result="success",
                 actor_id=context.user.id,
-                workspace_id=workspace_id,
-                target_type="mastery",
-                target_id=mastery.id,
+                workspace_id=None if personal else workspace_id,
+                target_type="reading_mastery" if personal else "mastery",
+                target_id=None if personal else mastery.id,
                 metadata={
                     "confirmed_level": mastery.confirmed_level,
                     "version": mastery.version,
@@ -1382,7 +1408,7 @@ class MemoryService:
             or target.workspace_id != workspace_id
             or target.space_id != space_id
             or target.deleted_at is not None
-            or (isinstance(target, Topic) and target.research_owner_id is not None)
+            or target.research_owner_id is not None
         ):
             raise APIError(
                 code="SOURCE_LINK_INVALID",
@@ -1495,7 +1521,11 @@ class MemoryService:
         await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
         item = await db.scalar(
             select(QuizItem)
-            .where(QuizItem.id == payload.id, QuizItem.workspace_id == workspace_id)
+            .where(
+                QuizItem.id == payload.id,
+                QuizItem.workspace_id == workspace_id,
+                QuizItem.research_owner_id.is_(None),
+            )
             .with_for_update()
         )
         if item is None or item.space_id != space_id or item.deleted_at is not None:

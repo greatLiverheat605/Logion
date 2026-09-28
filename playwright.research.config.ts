@@ -18,7 +18,7 @@ const attachmentRoot = `reports/research-real/attachments/${randomUUID()}`;
 // configuration and integration tests keep their existing environments.
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: /research-real-backend\.spec\.ts/,
+  testMatch: /research-(real-backend|reading-loop)\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,

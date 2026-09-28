@@ -41,6 +41,7 @@ from logion_api.memory.models import (
     ErrorPattern,
     MasteryRecord,
     QuizAttempt,
+    QuizItem,
     ReviewSchedule,
     Topic,
 )
@@ -353,6 +354,7 @@ class AccountDeletionService:
             delete(SourceExcerpt).where(SourceExcerpt.resource_id.in_(private_resources))
         )
         await db.execute(delete(Note).where(Note.research_owner_id == user.id))
+        await db.execute(delete(QuizItem).where(QuizItem.research_owner_id == user.id))
         for workspace_id in request.owned_workspace_ids:
             await db.execute(delete(Workspace).where(Workspace.id == UUID(workspace_id)))
         await db.execute(

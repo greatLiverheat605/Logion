@@ -994,3 +994,37 @@ html[data-theme="dark"]
   margin-top: 1rem;
   padding-top: 1rem;
 }
+.wb-reading-panel select {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  color: var(--wb-text);
+  background: var(--wb-fill);
+  border: 1px solid var(--wb-sep);
+  border-radius: 8px;
+}
+.wb-reading-quiz section,
+.wb-reading-quiz form,
+.wb-quiz-evidence {
+  margin-block: 16px;
+  padding-block: 12px;
+  border-top: 1px solid var(--wb-sep);
+}
+.wb-reading-quiz form .wb-button {
+  margin-top: 12px;
+}
+.wb-review-page {
+  overflow: auto;
+}
+.wb-review-list {
+  display: grid;
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+}
+.wb-review-list li {
+  padding: 16px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+  background: var(--wb-fill);
+}

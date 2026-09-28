@@ -75,7 +75,7 @@ async def deletion_scope(
     )
     if (
         root is None
-        or (isinstance(root, (Topic, Note)) and root.research_owner_id is not None)
+        or (isinstance(root, (Topic, Note, QuizItem)) and root.research_owner_id is not None)
         or (entity_type in ("inbox_item", "exam") and root.user_id != context.user.id)
     ):
         raise APIError(code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404)

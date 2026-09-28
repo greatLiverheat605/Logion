@@ -1,4 +1,4 @@
-import { Placeholder } from "@/platform/workbench/placeholder";
+import { ReadingReview } from "@/platform/workbench/reading-review";
 export default function Page() {
-  return <Placeholder title="复习" />;
+  return <ReadingReview />;
 }

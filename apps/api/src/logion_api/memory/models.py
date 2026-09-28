@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
@@ -16,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid6 import uuid7
 
@@ -42,6 +44,9 @@ class Topic(Base):
             ondelete="CASCADE",
         ),
         UniqueConstraint("id", "workspace_id", "space_id", name="uq_topic_scope"),
+        UniqueConstraint(
+            "id", "workspace_id", "space_id", "research_owner_id", name="uq_topic_research_scope"
+        ),
         Index("ix_topics_workspace_space_updated", "workspace_id", "space_id", "updated_at"),
     )
 
@@ -224,6 +229,38 @@ class QuizItem(Base):
     __tablename__ = "quiz_items"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["resource_id", "workspace_id", "space_id", "research_owner_id"],
+            [
+                "resources.id",
+                "resources.workspace_id",
+                "resources.space_id",
+                "resources.research_owner_id",
+            ],
+            name="fk_quiz_research_resource",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["topic_id", "workspace_id", "space_id", "research_owner_id"],
+            ["topics.id", "topics.workspace_id", "topics.space_id", "topics.research_owner_id"],
+            name="fk_quiz_research_topic",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["ai_run_id", "workspace_id"],
+            ["ai_runs.id", "ai_runs.workspace_id"],
+            name="fk_quiz_research_run",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(resource_id IS NULL AND research_owner_id IS NULL "
+            "AND origin IS NULL AND ai_run_id IS NULL) OR "
+            "(resource_id IS NOT NULL AND research_owner_id IS NOT NULL AND origin IS NOT NULL AND "
+            "((origin = 'user' AND ai_run_id IS NULL) OR "
+            "(origin = 'ai' AND ai_run_id IS NOT NULL)))",
+            name="ck_quiz_research_shape",
+        ),
+        Index("ix_quiz_research_resource", "resource_id", "research_owner_id"),
+        ForeignKeyConstraint(
             ["topic_id", "workspace_id", "space_id"],
             ["topics.id", "topics.workspace_id", "topics.space_id"],
             name="fk_quiz_item_topic_scope",
@@ -248,6 +285,12 @@ class QuizItem(Base):
     workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     topic_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    resource_id: Mapped[UUID | None] = mapped_column(Uuid)
+    research_owner_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    origin: Mapped[str | None] = mapped_column(String(16))
+    ai_run_id: Mapped[UUID | None] = mapped_column(Uuid)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     answer_key: Mapped[str] = mapped_column(Text, nullable=False)
     explanation: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -267,6 +310,9 @@ class QuizItem(Base):
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
     __table_args__ = (
+        CheckConstraint(
+            "ai_grade IS NULL OR jsonb_typeof(ai_grade) = 'object'", name="ck_quiz_attempt_ai_grade"
+        ),
         ForeignKeyConstraint(
             ["quiz_item_id", "workspace_id"],
             ["quiz_items.id", "quiz_items.workspace_id"],
@@ -307,6 +353,7 @@ class QuizAttempt(Base):
     user_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    ai_grade: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     response_text: Mapped[str] = mapped_column(Text, nullable=False)
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
     confidence: Mapped[int] = mapped_column(Integer, nullable=False)

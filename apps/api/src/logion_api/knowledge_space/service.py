@@ -1083,6 +1083,7 @@ class KnowledgeService:
                 QuizItem.workspace_id == workspace_id,
                 QuizItem.space_id == space_id,
                 QuizItem.deleted_at.is_(None),
+                QuizItem.research_owner_id.is_(None),
                 QuizItem.created_at <= cutoff_at,
                 QuizItem.updated_at <= cutoff_at,
             ]
@@ -1610,7 +1611,7 @@ class KnowledgeService:
                     model.updated_at <= cutoff_at,
                 )
             )
-        if model in (Topic, Note):
+        if model in (Topic, Note, QuizItem):
             conditions.append(model.research_owner_id.is_(None))
         if target_type is KnowledgeTargetType.RESEARCH_CLAIM and caller_user_id is not None:
             conditions.append(model.user_id == caller_user_id)

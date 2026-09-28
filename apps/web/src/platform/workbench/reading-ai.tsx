@@ -7,6 +7,10 @@ import { errorMessage, workbenchRequest } from "./api";
 type Run = components["schemas"]["AIRunResponse"];
 type Draft = components["schemas"]["AIOutputDraftResponse"];
 export const readingAiError = (code: string | null) => {
+  if (code === "AI_DRAFT_SCHEMA_INVALID")
+    return "AI 输出格式无效，请重新请求。";
+  if (code === "RESOURCE_VERSION_CONFLICT")
+    return "内容已更新，请载入最新作答后重试。";
   if (code?.includes("BUDGET")) return "AI 预算不足，请在设置中调整额度。";
   if (code?.includes("BLOCKED") || code?.includes("DENIED"))
     return "请求被隐私或出站安全规则拦截。请检查所选上下文与服务商设置。";
