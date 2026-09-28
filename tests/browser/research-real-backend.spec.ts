@@ -41,7 +41,8 @@ test("owner configures and revokes encrypted integrations through local fake ser
   await dav.getByRole("button", { name: "测试连接", exact: true }).click();
   await expect(dav.getByRole("status")).toHaveText("已连接");
   const sync = page.getByRole("region", { name: "Zotero 文献同步" });
-  await sync.getByRole("button", { name: "立即同步 Zotero" }).click();
+  await sync.getByRole("button", { name: "立即同步 Zotero" }).focus();
+  await page.keyboard.press("Enter");
   await expect(sync.getByRole("status")).toContainText("最近同步：");
   await page.goto("/library");
   await expect(
@@ -70,6 +71,15 @@ test("owner configures and revokes encrypted integrations through local fake ser
           `integrations-${width}-${theme === "日间" ? "light" : "dark"}.png`,
         ),
         fullPage: true,
+      });
+      await sync.scrollIntoViewIfNeeded();
+      await expect(
+        sync.getByRole("button", { name: "立即同步 Zotero" }),
+      ).toBeInViewport();
+      await sync.screenshot({
+        path: testInfo.outputPath(
+          `sync-${width}-${theme === "日间" ? "light" : "dark"}.png`,
+        ),
       });
     }
   }
