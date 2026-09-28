@@ -1,4 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -258,4 +261,130 @@ test("real research API persists literature and preferences, rejects conflicts a
   );
   expect(disabled.status()).toBe(404);
   expect((await disabled.json()).code).toBe("NOT_FOUND");
+});
+
+test("local PDFs import through real WebDAV and deduplicate", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
+  const registration = await context.request.post("/api/v1/auth/register", {
+    headers: { Origin: baseURL! },
+    data: {
+      email: `pdf-browser-${randomUUID()}@example.com`,
+      password: `${randomBytes(24).toString("base64url")}Aa1!`,
+      device_name: "Synthetic PDF browser",
+    },
+  });
+  expect(registration.status()).toBe(201);
+  const cookies = await context.cookies();
+  const csrf = cookies.find((cookie) => cookie.name === "logion_csrf")!.value;
+  const headers = { Origin: baseURL!, "X-CSRF-Token": csrf };
+  expect(
+    (
+      await context.request.put("/api/v1/research/integrations/webdav", {
+        headers,
+        data: { username: "synthetic-account", credential: "synthetic-webdav" },
+      })
+    ).status(),
+  ).toBe(200);
+  expect(
+    (
+      await (
+        await context.request.post(
+          "/api/v1/research/integrations/webdav/test",
+          { headers },
+        )
+      ).json()
+    ).connected,
+  ).toBe(true);
+  await page.goto("/library");
+  const pdf = {
+    name: "Synthetic imported paper.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.7\nSynthetic import\n%%EOF"),
+  };
+  const second = {
+    name: "Second paper.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.7\nSecond import\n%%EOF"),
+  };
+  await page
+    .getByLabel("选择 PDF 文件", { exact: true })
+    .setInputFiles([pdf, second]);
+  await expect(
+    page.getByRole("list", { name: "导入结果" }).getByRole("listitem"),
+  ).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: /Synthetic imported paper/ }),
+  ).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Second paper/ })).toHaveCount(
+    1,
+  );
+  await page.getByLabel("选择 PDF 文件", { exact: true }).setInputFiles(pdf);
+  await expect(
+    page.getByRole("list", { name: "导入结果" }).getByRole("listitem"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: /Synthetic imported paper/ }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: /Synthetic imported paper/ }).click();
+  const folder = await mkdtemp(join(tmpdir(), "logion-pdf-fixture-"));
+  try {
+    await mkdir(join(folder, "nested"));
+    await writeFile(
+      join(folder, "nested", "Folder paper.pdf"),
+      "%PDF-1.7\nSynthetic folder import\n%%EOF",
+      { encoding: "utf8" },
+    );
+    await page.getByLabel("选择 PDF 文件夹").setInputFiles(folder);
+    await expect(
+      page.getByRole("button", { name: /Folder paper/ }),
+    ).toHaveCount(1);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+  const reader = await page
+    .getByRole("link", { name: "进入阅读" })
+    .getAttribute("href");
+  const resourceId = reader!.split("/").at(-1);
+  const workspace = (
+    await (await context.request.get("/api/v1/workspaces")).json()
+  ).workspaces[0].id;
+  const space = (
+    await (
+      await context.request.get(`/api/v1/workspaces/${workspace}/spaces`)
+    ).json()
+  ).spaces[0].id;
+  const downloaded = await context.request.get(
+    `/api/v1/workspaces/${workspace}/spaces/${space}/library/resources/${resourceId}/pdf`,
+  );
+  expect(downloaded.status()).toBe(200);
+  expect(await downloaded.body()).toEqual(pdf.buffer);
+  expect(downloaded.headers()["content-security-policy"]).toBe("sandbox");
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ["light", "dark"]) {
+      await page.emulateMedia({ colorScheme: theme as "light" | "dark" });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath(`pdf-import-${width}-${theme}.png`),
+        fullPage: true,
+      });
+    }
+  }
+  await page.getByRole("button", { name: "选择文件夹", exact: true }).focus();
+  await expect(
+    page.getByRole("button", { name: "选择文件夹", exact: true }),
+  ).toBeFocused();
+  expect(
+    await page.getByLabel("选择 PDF 文件夹").getAttribute("webkitdirectory"),
+  ).toBe("");
+  await expectOnlineOnly(page);
 });

@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { components } from "@logion/contracts";
 import { Button, Sheet } from "@/platform/workbench/components";
 import { errorMessage, workbenchRequest } from "@/platform/workbench/api";
+import { PdfUsage } from "@/platform/workbench/pdf-import";
 import { ZoteroSync } from "./zotero-sync";
 
 type Status = components["schemas"]["IntegrationStatus"];
@@ -28,6 +29,7 @@ export function Integrations() {
         <IntegrationCard key={provider} provider={provider} />
       ))}
       <ZoteroSync />
+      <PdfUsage />
     </section>
   );
 }

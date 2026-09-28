@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { LogionApiError } from "@/lib/api/client";
 import { errorMessage, workbenchRequest } from "./api";
+import { PdfImport } from "./pdf-import";
 import { Button, Inspector, List, Sheet } from "./components";
 import { useWorkbench } from "./provider";
 import type { WorkbenchContext } from "./preferences";
@@ -112,6 +113,12 @@ function LibraryScope({ context }: { context: WorkbenchContext }) {
         </div>
         <Button onClick={() => setEditor("new")}>＋ 新建文献</Button>
       </div>
+      <PdfImport
+        path={pathFor(context)}
+        onImported={() =>
+          client.invalidateQueries({ queryKey: [...keyFor(context), "list"] })
+        }
+      />
       <div className="wb-library-filters">
         <label>
           阅读状态

@@ -809,3 +809,15 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.wb-pdf-import {
+  border: 1px dashed var(--wb-sep);
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+}
+.wb-pdf-import ul {
+  max-height: 160px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}

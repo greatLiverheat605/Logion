@@ -1,9 +1,18 @@
 """Loopback-only synthetic Zotero/WebDAV service for real-backend browser tests."""
 
 import base64
+import io
 import json
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
+
+PDF = b"%PDF-1.7\nSynthetic browser paper\n%%EOF"
+FILES: dict[str, bytes] = {}
+_buffer = io.BytesIO()
+with zipfile.ZipFile(_buffer, "w") as _zip:
+    _zip.writestr("synthetic.pdf", PDF)
+FILES["/dav/zotero/A0000001.zip"] = _buffer.getvalue()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -21,6 +30,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/health":
             self.respond(200, b"{}")
+        elif self.path.startswith("/dav/"):
+            if not self.dav_authorized():
+                self.respond(401, b"")
+            else:
+                self.respond(200 if self.path in FILES else 404, FILES.get(self.path, b""))
         elif self.path == "/keys/current":
             if self.headers.get("Zotero-API-Key") != "synthetic-zotero":
                 self.respond(401, b"{}")
@@ -85,6 +99,24 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(200, json.dumps(data).encode())
         else:
             self.respond(404, b"{}")
+
+    def dav_authorized(self) -> bool:
+        expected = base64.b64encode(b"synthetic-account:synthetic-webdav").decode()
+        return self.headers.get("Authorization") == f"Basic {expected}"
+
+    def do_MKCOL(self) -> None:  # noqa: N802
+        self.respond(201 if self.dav_authorized() and self.path == "/dav/Logion" else 403, b"")
+
+    def do_PUT(self) -> None:  # noqa: N802
+        if not self.dav_authorized() or not self.path.startswith("/dav/Logion/"):
+            self.respond(403, b"")
+            return
+        size = int(self.headers.get("Content-Length", "0"))
+        if not 0 < size <= 104857600:
+            self.respond(413, b"")
+            return
+        FILES[self.path] = self.rfile.read(size)
+        self.respond(201, b"")
 
     def do_PROPFIND(self) -> None:  # noqa: N802
         expected = base64.b64encode(b"synthetic-account:synthetic-webdav").decode()

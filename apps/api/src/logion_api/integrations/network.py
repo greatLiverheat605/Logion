@@ -2,6 +2,7 @@
 
 import asyncio
 import ipaddress
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
@@ -45,6 +46,7 @@ async def request_integration(
     headers: dict[str, str] | None = None,
     content: bytes | None = None,
     max_bytes: int = 2 * 1024 * 1024,
+    on_bytes: Callable[[int], Awaitable[None]] | None = None,
 ) -> IntegrationResponse:
     origin = settings.zotero_origin if provider == "zotero" else settings.webdav_origin
     try:
@@ -101,7 +103,11 @@ async def request_integration(
                 if 300 <= response.status_code < 400 and response.status_code != 304:
                     raise integration_error("INTEGRATION_REDIRECT_BLOCKED")
                 body = bytearray()
-                async for chunk in response.aiter_bytes():
+                if response.headers.get("Content-Encoding", "identity") != "identity":
+                    raise integration_error("INTEGRATION_ENCODING_BLOCKED")
+                async for chunk in response.aiter_raw(chunk_size=65536):
+                    if on_bytes is not None:
+                        await on_bytes(len(chunk))
                     if len(body) + len(chunk) > max_bytes:
                         raise integration_error("INTEGRATION_RESPONSE_TOO_LARGE", 413)
                     body.extend(chunk)

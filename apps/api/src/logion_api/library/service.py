@@ -10,6 +10,7 @@ from logion_api.db import utc_now
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.service import AuthContext
+from logion_api.library.pdf_cache import lock_cache, remove_resource_cache
 from logion_api.library.schemas import LibraryCreate, LibraryFields, LibraryUpdate, ReadingStatus
 from logion_api.research.models import PaperRecord
 from logion_api.workspaces.models import WorkspaceMembership
@@ -259,6 +260,10 @@ class LibraryService:
                 status_code=422,
             )
         await self.duplicate(db, context, workspace_id, space_id, payload, item.id)
+        if item.file_locator != (
+            payload.file_locator.model_dump() if payload.file_locator else None
+        ):
+            item.sha256 = None
         self.apply(item, payload)
         item.version += 1
         item.updated_at = utc_now()
@@ -277,10 +282,12 @@ class LibraryService:
         expected_version: int,
         request_id: str,
     ) -> None:
+        await lock_cache(db)
         item = await self.get(
             db, context, workspace_id, space_id, resource_id, request_id, write=True
         )
         self.check_version(item, expected_version)
+        await remove_resource_cache(db, self.settings, item)
         item.deleted_at = item.updated_at = utc_now()
         item.version += 1
         item.updated_by = context.user.id

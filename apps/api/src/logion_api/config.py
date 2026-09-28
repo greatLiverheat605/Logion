@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     healthcheck_dependencies: bool = False
     research_v3_enabled: bool = False
     integration_keyring: IntegrationKeyring = Field(default_factory=IntegrationKeyring)
+    pdf_cache_keyring: IntegrationKeyring = Field(default_factory=IntegrationKeyring)
+    pdf_max_bytes: int = Field(default=100 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    pdf_cache_max_bytes: int = Field(
+        default=2 * 1024 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024 * 1024
+    )
     zotero_origin: str = "https://api.zotero.org"
     webdav_origin: str = "https://dav.jianguoyun.com"
     worker_health_state_path: str = Field(
