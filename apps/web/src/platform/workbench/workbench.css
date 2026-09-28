@@ -1028,3 +1028,10 @@ html[data-theme="dark"]
   border-radius: 12px;
   background: var(--wb-fill);
 }
+
+.wb-reading-panel .wb-review-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}

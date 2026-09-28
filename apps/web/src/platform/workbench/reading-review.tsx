@@ -55,7 +55,7 @@ function ReviewScope({ context }: { context: WorkbenchContext }) {
       <p className="wb-muted">
         这里是你本人确认后安排的文献测验。重新作答、结合证据确认，会更新下一次复习时间。
       </p>
-      <label>
+      <label className="wb-review-filter">
         <input
           type="checkbox"
           checked={due}
@@ -65,6 +65,14 @@ function ReviewScope({ context }: { context: WorkbenchContext }) {
       </label>
       {(error || query.error) && (
         <p role="alert">{errorMessage(error || query.error)}</p>
+      )}
+      {query.isError && (
+        <Button
+          disabled={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          重新加载
+        </Button>
       )}
       {query.isPending ? (
         <p role="status">正在加载复习…</p>

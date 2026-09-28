@@ -297,16 +297,32 @@ test.describe.serial("one paper reading loop", () => {
     await expect(
       page.getByRole("heading", { name: "Reading concept 1" }),
     ).toBeVisible();
-    await page.screenshot({
-      path: testInfo.outputPath("review-1440-dark.png"),
-    });
-    await page.setViewportSize({ width: 390, height: 900 });
-    await page.emulateMedia({ colorScheme: "light" });
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-    await page.screenshot({
-      path: testInfo.outputPath("review-390-light.png"),
-    });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await page.screenshot({
+          path: testInfo.outputPath(`review-${width}-${theme}.png`),
+        });
+      }
+    }
+    await page.getByLabel("只看已到期").check();
+    await expect(
+      page.getByText("暂无到期阅读复习。", { exact: false }),
+    ).toBeVisible();
+    await page.getByLabel("只看已到期").uncheck();
+    await expect(
+      page.getByRole("heading", { name: "Reading concept 1" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "回到原文作答" }).click();
     await expect(page.getByRole("textbox", { name: "我的作答" })).toBeVisible();
     await page.getByLabel("我的判断").selectOption("practicing");
