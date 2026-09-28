@@ -981,3 +981,16 @@ html[data-theme="dark"]
   white-space: pre-wrap;
   line-height: 1.7;
 }
+.wb-reading-panel .wb-note-editor {
+  width: 100%;
+  min-height: 26rem;
+  resize: vertical;
+  line-height: 1.8;
+  font-family: inherit;
+}
+
+.wb-close-reading section {
+  border-top: 1px solid var(--wb-sep);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}

@@ -105,6 +105,7 @@ class EvidenceService:
                     Note.workspace_id == workspace_id,
                     Note.space_id == space_id,
                     Note.deleted_at.is_(None),
+                    Note.research_owner_id.is_(None),
                 )
             )
             if exists is None:

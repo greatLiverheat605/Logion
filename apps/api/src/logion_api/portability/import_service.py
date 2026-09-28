@@ -442,8 +442,8 @@ class ImportService:
             )
             if model in (Note, Resource):
                 query = query.where(model.space_id == target_space_id)
-            if model is Resource:
-                query = query.where(Resource.research_owner_id.is_(None))
+            if model in (Resource, Note):
+                query = query.where(model.research_owner_id.is_(None))
             if hasattr(model, "user_id"):
                 query = query.where(model.user_id == user_id)
             current = int(await db.scalar(query) or 0)

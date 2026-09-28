@@ -1104,6 +1104,7 @@ class KnowledgeService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
                 Note.created_at <= cutoff_at,
                 Note.updated_at <= cutoff_at,
             ]
@@ -1609,8 +1610,8 @@ class KnowledgeService:
                     model.updated_at <= cutoff_at,
                 )
             )
-        if model is Topic:
-            conditions.append(Topic.research_owner_id.is_(None))
+        if model in (Topic, Note):
+            conditions.append(model.research_owner_id.is_(None))
         if target_type is KnowledgeTargetType.RESEARCH_CLAIM and caller_user_id is not None:
             conditions.append(model.user_id == caller_user_id)
         statement = select(model).where(*conditions)

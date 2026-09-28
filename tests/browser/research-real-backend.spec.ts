@@ -170,6 +170,71 @@ test("selection commands preserve source citations and use the real AI draft pip
   await expect(
     page.getByRole("status").filter({ hasText: "摘录已保存" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "选择右栏内容" }).click();
+  await page.getByRole("menuitem", { name: "精读笔记" }).click();
+  await page.getByRole("button", { name: "创建精读笔记" }).click();
+  const editor = page.getByRole("textbox", { name: "精读笔记正文" });
+  const notePath = `${scope}/library/resources/${resource.id}/note`;
+  const savedNote = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/note/document") && r.request().method() === "PATCH",
+  );
+  await editor.fill(
+    (await editor.inputValue()).replace(
+      "## 动机\n",
+      "## 动机\nOwner motivation and evidence\n",
+    ),
+  );
+  expect((await savedNote).status()).toBe(200);
+  await expect(
+    page.getByRole("status").filter({ hasText: /^已保存$/ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "发送原文并起草缺失章节" }).click();
+  await expect(page.getByRole("heading", { name: "待确认草稿" })).toBeVisible();
+  expect(await editor.inputValue()).not.toContain("Synthetic explanation");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "待确认草稿" })).toBeVisible();
+  await page.getByRole("button", { name: "接受并写入笔记" }).click();
+  await expect(editor).toHaveValue(/Synthetic explanation/);
+  await expect(editor).toHaveValue(/Owner motivation and evidence/);
+  const acceptedNote = await (await context.request.get(notePath)).json();
+  expect(acceptedNote.missing_sections).toEqual([]);
+  await context.setOffline(true);
+  const unsaved =
+    (await editor.inputValue()) + "\nOffline draft stays in this page.";
+  await editor.fill(unsaved);
+  await expect(
+    page.locator(".wb-close-reading").getByRole("alert"),
+  ).toContainText("需要联网");
+  await context.setOffline(false);
+  expect(await editor.inputValue()).toBe(unsaved);
+  const retried = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/note/document") && r.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "重试保存" }).click();
+  expect((await retried).status()).toBe(200);
+  await editor.press("Control+Home");
+  expect((await editor.boundingBox())!.height).toBeGreaterThanOrEqual(350);
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    if (width < 768)
+      await page.getByRole("radio", { name: "右 · 精读笔记" }).click();
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`note-${width}-${theme}.png`),
+      });
+    }
+  }
+  await expectOnlineOnly(page);
   const excerpts = await (
     await context.request.get(
       `${scope}/library/resources/${resource.id}/excerpts`,

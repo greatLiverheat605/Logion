@@ -12,12 +12,14 @@ from httpx import ASGITransport, AsyncClient
 from logion_api.config import Settings, get_settings
 from logion_api.content.attachment_dependencies import get_attachment_scanner
 from logion_api.content.attachment_scanner import AttachmentScanResult
-from logion_api.content.models import Attachment, Resource
+from logion_api.content.models import Attachment, Note, Resource
+from logion_api.content.yjs_documents import state_from_markdown
 from logion_api.db import session_factory
 from logion_api.identity.models import AuthSession, EmailOutbox, PasswordCredential, User
 from logion_api.integrations.models import IntegrationCredential
 from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
 from logion_api.main import app
+from logion_api.memory.models import Topic
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest
 from logion_api.workspaces.models import WorkspaceMembership
@@ -304,6 +306,7 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         # Synthetic opaque envelope: cleanup must not require a working keyring.
         integration_id = uuid4()
         resource_id, excerpt_id, citation_id = uuid4(), uuid4(), uuid4()
+        private_note_id, private_topic_id = uuid4(), uuid4()
         db.add(
             Resource(
                 id=resource_id,
@@ -334,6 +337,33 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
                 origin="zotero",
                 zotero_annotation_key="N0000001",
                 zotero_annotation_version=1,
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        db.add(
+            Note(
+                id=private_note_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                resource_id=resource_id,
+                research_owner_id=user_id,
+                note_kind="close_reading",
+                title="Private note",
+                markdown_body="Synthetic",
+                yjs_state=state_from_markdown("Synthetic"),
+                created_by=user_id,
+                updated_by=user_id,
+            )
+        )
+        db.add(
+            Topic(
+                id=private_topic_id,
+                workspace_id=physical_workspace,
+                space_id=physical_space,
+                research_owner_id=user_id,
+                title="Private concept",
+                description="Synthetic",
                 created_by=user_id,
                 updated_by=user_id,
             )
@@ -377,6 +407,8 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert await db.get(Attachment, attachment_id) is None
         assert await db.get(IntegrationCredential, integration_id) is None
         assert await db.get(Resource, resource_id) is None
+        assert await db.get(Note, private_note_id) is None
+        assert await db.get(Topic, private_topic_id) is None
         assert await db.get(SourceExcerpt, excerpt_id) is None
         assert await db.get(KnowledgeCitation, citation_id) is None
         assert not path_exists(attachment_path)

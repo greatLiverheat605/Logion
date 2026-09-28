@@ -19,6 +19,7 @@ import {
   type SourceText,
 } from "./selection";
 import { ReadingAiResult } from "./reading-ai";
+import { useCloseReadingNote } from "./close-reading-note";
 
 type Resource = components["schemas"]["LibraryResource"];
 type Outline = { title: string; page: number | null; depth: number };
@@ -58,6 +59,7 @@ function ReaderScope({
     top: number;
   } | null>(null);
   const path = `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}/library/resources/${encodeURIComponent(id)}`;
+  const note = useCloseReadingNote(path, context, sourceText);
   const detail = useQuery({
     queryKey: [
       "workbench",
@@ -411,6 +413,7 @@ function ReaderScope({
       )
     : [];
   function contents(kind: PaneContent) {
+    if (kind === "note") return note;
     if (kind === "excerpts") return <ReadingExcerpts path={path} jump={jump} />;
     if (["chat", "translate", "translation"].includes(kind))
       return (

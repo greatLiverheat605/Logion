@@ -26,6 +26,7 @@ from logion_api.ai_gateway.run_schemas import (
     AIRunResponse,
     FieldName,
 )
+from logion_api.content.models import Note
 from logion_api.errors import APIError, ErrorResponse
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -36,6 +37,7 @@ from logion_api.identity.dependencies import (
     request_id,
 )
 from logion_api.library.routes import require_enabled
+from logion_api.reading.note_template import missing_sections
 from logion_api.workspaces.dependencies import WorkspaceServiceDependency
 
 ResearchTask = Literal[
@@ -203,6 +205,20 @@ async def create_research_run(
             entities=entities,
         )
         prompt = await asyncio.to_thread(load_research_skill, payload.task_type)
+        if payload.task_type == "close_reading" and payload.target.entity_type == "note":
+            note = await db.get(Note, payload.target.id)
+            if (
+                note is not None
+                and note.note_kind == "close_reading"
+                and not set(payload.expected_output_fields).issubset(
+                    missing_sections(note.markdown_body)
+                )
+            ):
+                raise APIError(
+                    code="AI_DRAFT_SCHEMA_INVALID",
+                    message="Only missing reading sections may be drafted.",
+                    status_code=422,
+                )
         if payload.question is not None:
             # Explicit owner instruction, never a client-supplied replacement for
             # stored source context. Entity authorization/egress checks still apply.

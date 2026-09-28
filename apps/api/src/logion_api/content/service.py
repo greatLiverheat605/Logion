@@ -73,6 +73,7 @@ class ContentService:
                     Note.workspace_id == workspace_id,
                     Note.space_id == space_id,
                     Note.deleted_at.is_(None),
+                    Note.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -157,6 +158,7 @@ class ContentService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -210,6 +212,7 @@ class ContentService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
             )
             .with_for_update()
         )

@@ -342,7 +342,7 @@ class SyncReadService:
                     .where(
                         tombstone_model.workspace_id == state.workspace_id,
                         tombstone_model.research_owner_id.is_(None)
-                        if tombstone_type in {"resource", "topic"}
+                        if tombstone_type in {"resource", "topic", "note"}
                         else true(),
                         (tombstone_model.user_id == user_id)
                         if tombstone_type in private_tombstone_types
@@ -814,6 +814,7 @@ class SyncReadService:
                     Note.workspace_id == workspace_id,
                     Note.id.in_(entity_ids),
                     Note.deleted_at.is_(None),
+                    Note.research_owner_id.is_(None),
                     (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                 )
             )
@@ -847,6 +848,7 @@ class SyncReadService:
                         .where(
                             Note.workspace_id == workspace_id,
                             Note.deleted_at.is_(None),
+                            Note.research_owner_id.is_(None),
                             (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                         )
                         .order_by(Note.id)

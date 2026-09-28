@@ -41,6 +41,24 @@ class Note(Base):
         ),
         UniqueConstraint("id", "workspace_id", name="uq_note_workspace"),
         UniqueConstraint("id", "workspace_id", "space_id", name="uq_note_scope"),
+        ForeignKeyConstraint(
+            ["resource_id", "workspace_id", "space_id", "research_owner_id"],
+            [
+                "resources.id",
+                "resources.workspace_id",
+                "resources.space_id",
+                "resources.research_owner_id",
+            ],
+            name="fk_note_research_resource",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(note_kind IS NULL AND resource_id IS NULL AND research_owner_id IS NULL) OR "
+            "(note_kind IS NOT NULL AND note_kind = 'close_reading' AND resource_id IS NOT NULL "
+            "AND research_owner_id IS NOT NULL AND task_id IS NULL)",
+            name="ck_note_research_kind",
+        ),
+        UniqueConstraint("resource_id", "research_owner_id", name="uq_note_research_resource"),
         Index("ix_notes_workspace_space_updated", "workspace_id", "space_id", "updated_at"),
     )
 
@@ -48,6 +66,11 @@ class Note(Base):
     workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     task_id: Mapped[UUID | None] = mapped_column(Uuid)
+    note_kind: Mapped[str | None] = mapped_column(String(32))
+    resource_id: Mapped[UUID | None] = mapped_column(Uuid)
+    research_owner_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT")
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     markdown_body: Mapped[str] = mapped_column(Text, nullable=False, default="")
     yjs_state: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)

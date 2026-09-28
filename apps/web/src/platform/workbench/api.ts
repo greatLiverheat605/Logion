@@ -25,6 +25,12 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      NOTE_DOCUMENT_UPDATE_INVALID:
+        "笔记更新无效或超过大小上限，当前输入仍在页面中。",
+      NOTE_DOCUMENT_TOO_LARGE: "笔记超过允许的大小，请缩短内容。",
+      AI_DRAFT_TERMINAL: "这份草稿已处理，请刷新草稿列表。",
+      AI_DRAFT_SCHEMA_INVALID:
+        "AI 草稿的章节格式不符合要求，请丢弃后重新起草。",
       SOURCE_FILE_CHANGED: "附件已更新，请重新打开原文。",
       SOURCE_TEXT_NOT_FOUND: "全文尚未就绪，请打开原文后再试。",
       SOURCE_SELECTION_INVALID: "请选择有效的原文片段，最多 20,000 字符。",
@@ -55,7 +61,7 @@ export function errorMessage(error: unknown): string {
     if (error.code === "USER_SETTING_VERSION_CONFLICT")
       return "设置已在其他页面更新，请重新载入后再操作。";
     if (error.code === "RESOURCE_VERSION_CONFLICT")
-      return "文献已在其他页面更新。当前输入已保留，请载入最新版本后再编辑。";
+      return "内容已在其他页面更新。当前输入已保留，请载入最新版本后再编辑。";
     if (error.code === "LIBRARY_DUPLICATE")
       return "这篇文献已在当前空间的个人文献库中，可以查看已有条目。";
     if (error.status === 422)
