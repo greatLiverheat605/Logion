@@ -40,6 +40,7 @@ class PanePreference(StrictPreference):
         "excerpts",
         "chat",
         "translate",
+        "graphlocal",
     ]
     width: float = Field(ge=10, le=80, allow_inf_nan=False)
     collapsed: bool

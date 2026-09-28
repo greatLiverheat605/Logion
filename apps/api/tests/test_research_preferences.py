@@ -49,6 +49,7 @@ def test_research_preferences_are_default_off_and_strictly_typed() -> None:
         "info",
         "document",
         "translation",
+        "graphlocal",
     ],
 )
 def test_reader_content_types_are_additive(content: str) -> None:

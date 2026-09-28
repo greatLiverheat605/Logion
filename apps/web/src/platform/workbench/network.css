@@ -150,6 +150,7 @@
   height: 18px;
 }
 .wb-network-compact {
+  container-type: inline-size;
   padding: 12px;
 }
 .wb-network-compact .wb-network-columns {
@@ -181,5 +182,15 @@
   }
   .wb-network .wb-button {
     min-height: 44px;
+  }
+}
+
+@container (max-width: 260px) {
+  .wb-network-compact .wb-network-canvas,
+  .wb-network-compact .wb-network-view-tools {
+    display: none;
+  }
+  .wb-network-compact .wb-network-list {
+    display: block;
   }
 }

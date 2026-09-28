@@ -9,6 +9,7 @@ import {
   DEFAULT_PREFERENCES,
   parsePreference,
   presetLayout,
+  initialMobilePane,
   togglePane,
 } from "./preferences";
 import { LogionApiError } from "@/lib/api/client";
@@ -117,6 +118,27 @@ it("retains at least one pane and validates persisted layout", () => {
     "pdf",
     "note",
   ]);
+  const quiz = presetLayout("quiz");
+  expect(quiz.panes.map((pane) => pane.content)).toEqual([
+    "pdf",
+    "quiz",
+    "graphlocal",
+  ]);
+  expect(initialMobilePane(quiz)).toBe(1);
+  const savedQuiz = {
+    ...quiz,
+    panes: [
+      { content: "info", width: 20, collapsed: true },
+      { content: "pdf", width: 40, collapsed: false },
+      { content: "quiz", width: 40, collapsed: false },
+    ],
+  };
+  const restored = parsePreference(
+    "workbench.layouts",
+    JSON.stringify(savedQuiz),
+  );
+  expect(restored).toEqual(savedQuiz);
+  expect(initialMobilePane(restored)).toBe(2);
   const focus = presetLayout("focus");
   expect(togglePane(focus, 1)).toBe(focus);
   expect(togglePane(focus, 0).panes[0].collapsed).toBe(false);

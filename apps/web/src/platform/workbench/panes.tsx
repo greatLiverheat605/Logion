@@ -7,6 +7,7 @@ import {
   CONTENTS,
   PRESETS,
   presetLayout,
+  initialMobilePane,
   togglePane,
   type Layout,
   type PaneContent,
@@ -27,7 +28,7 @@ export function ThreePanes({
   const [draft, setDraft] = useState<Layout | null>(null);
   const layout = draft ?? stored;
   const [mobilePane, setMobilePane] = useState<PaneIndex>(
-    stored.preset === "quiz" ? 2 : 1,
+    initialMobilePane(stored),
   );
   useEffect(() => {
     const show = () => setMobilePane(2);

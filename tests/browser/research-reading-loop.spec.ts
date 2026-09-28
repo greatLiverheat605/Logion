@@ -342,6 +342,92 @@ test.describe.serial("one paper reading loop", () => {
     ).toBe(0);
   });
 
+  test("self-test keeps the current paper and its local network at four widths", async ({}, testInfo) => {
+    const created = await context.request.post(
+      `${scope}/research/question-tree`,
+      {
+        headers,
+        data: {
+          question: "What evidence supports this paper?",
+          rationale: "Synthetic local graph",
+        },
+      },
+    );
+    expect(created.status()).toBe(201);
+    const question = await created.json();
+    expect(
+      (
+        await context.request.post(`${scope}/research/knowledge/edges`, {
+          headers,
+          data: {
+            from_type: "resource",
+            from_id: resourceId,
+            to_type: "question",
+            to_id: question.id,
+            relation: "addresses",
+            reason: "Local reading evidence",
+          },
+        })
+      ).status(),
+    ).toBe(201);
+    await page.setViewportSize({ width: 390, height: 900 });
+    const focused = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname.endsWith("/research/knowledge/graph") &&
+        url.searchParams.get("focus_type") === "resource" &&
+        url.searchParams.get("focus_id") === resourceId &&
+        response.status() === 200
+      );
+    });
+    await page.reload();
+    await focused;
+    await expect(page.getByRole("textbox", { name: "我的作答" })).toBeVisible();
+    const graph = page.getByRole("region", { name: "知识网局部", exact: true });
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        if (width < 768)
+          await page.getByRole("radio", { name: "右 · 知识网局部" }).click();
+        await expect(graph).toBeVisible();
+        if (width === 1024) {
+          await expect(graph.locator(".wb-network-list")).toBeVisible();
+          await expect(graph.locator(".wb-network-canvas")).toBeHidden();
+        }
+        await expect(graph).toContainText("2 个节点 · 1 条连线");
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await page.screenshot({
+          path: testInfo.outputPath(`reader-network-${width}-${theme}.png`),
+        });
+      }
+    }
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.getByRole("radio", { name: "右 · 知识网局部" }).click();
+    const link = graph.getByRole("button", {
+      name: /回应.*What evidence supports this paper/,
+    });
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      graph.getByRole("complementary", { name: "知识网详情" }),
+    ).toContainText("Local reading evidence");
+    await page.getByRole("radio", { name: "左 · PDF 原文" }).click();
+    await expect(
+      page.locator('[data-pdf-page="1"] [data-reader-text-layer="true"]'),
+    ).toContainText("careful reading");
+    await page.getByRole("radio", { name: "中 · 自测" }).click();
+    await expect(page.getByRole("textbox", { name: "我的作答" })).toBeVisible();
+  });
+
   test("Today resumes active reading in both themes at four widths", async ({}, testInfo) => {
     await page.goto("/today");
     const resume = page.getByRole("link", {
