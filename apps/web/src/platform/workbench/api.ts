@@ -19,6 +19,12 @@ export function errorMessage(error: unknown): string {
       return "请重新登录以确认身份，再继续操作。";
     if (error.code === "INTEGRATION_KEY_UNAVAILABLE")
       return "服务器尚未配置集成加密密钥，请联系维护者。";
+    if (error.code === "ZOTERO_CONNECTION_TEST_REQUIRED")
+      return "请先配置 Zotero 并测试连接，再同步文献。";
+    if (error.code === "ZOTERO_RATE_LIMITED")
+      return "Zotero 要求暂缓请求，请等待允许的继续时间。";
+    if (error.code === "ZOTERO_COLLECTION_READ_ONLY")
+      return "集合标签由 Zotero 管理，请在 Zotero 中修改。";
     if (error.code === "USER_SETTING_VERSION_CONFLICT")
       return "设置已在其他页面更新，请重新载入后再操作。";
     if (error.code === "RESOURCE_VERSION_CONFLICT")

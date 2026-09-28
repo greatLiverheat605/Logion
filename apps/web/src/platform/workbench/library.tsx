@@ -389,10 +389,13 @@ function ResourceForm({
         arxiv_id: text("arxiv_id") || null,
         pmid: text("pmid") || null,
         citation_key: text("citation_key") || null,
-        tags: text("tags")
-          .split(/[,，]/)
-          .map((t) => t.trim())
-          .filter(Boolean),
+        tags: [
+          ...(item?.tags?.filter((tag) => tag.startsWith("collection:")) ?? []),
+          ...text("tags")
+            .split(/[,，]/)
+            .map((t) => t.trim())
+            .filter(Boolean),
+        ],
         csl: {
           ...item?.csl,
           author:
@@ -519,7 +522,9 @@ function ResourceForm({
         <input
           name="tags"
           maxLength={4000}
-          defaultValue={item?.tags?.join(", ")}
+          defaultValue={item?.tags
+            ?.filter((tag) => !tag.startsWith("collection:"))
+            .join(", ")}
         />
       </label>
       <label>

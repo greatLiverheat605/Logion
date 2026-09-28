@@ -33,4 +33,18 @@ API 进程从环境变量 `LOGION_INTEGRATION_KEYRING` 读取 JSON，结构为 `
 
 自动测试只用本地假 Zotero／WebDAV 服务和合成凭据。`tests/fixtures/research_services.py` 由 `playwright.research.config.ts` 启动，真实 API/Web 浏览器测试覆盖设置、测试、刷新和撤销；安全测试覆盖跨账户隔离、近期认证、TLS 拒绝、密文绑定和非空降级。
 
-本次实现提供凭据管理，文献同步与 PDF 获取将在后续阅读链路接入；“已连接”只代表最近一次连接测试成功。
+“已连接”只代表最近一次连接测试成功。PDF 获取在后续阅读链路接入。
+
+## Zotero 同步
+
+API 和 Worker 使用相同的集成 keyring，并同时开启研究功能。本人在设置页选择当前空间并点击“立即同步 Zotero”；该目标随后每 30 分钟同步一次。每个目标的游标、分页位置、集合名称映射和条目去重映射记录在 `zotero_sync_states`。集合不新建实体表，只形成 `collection:` 标签。
+
+新增接口 `/api/v1/workspaces/{workspace_id}/spaces/{space_id}/zotero-sync`：GET 返回本人的同步状态，POST 在可信 Origin、CSRF、当前空间权限和写入限流校验后入队，返回 202。配置凭据不会自行决定同步空间。状态包含已配置、是否待处理、已完成库版本、最近完成时间、退避时间和脱敏错误码。
+
+Worker 每次只处理一个有界响应，顺序为集合、顶层条目、PDF 附件、文字批注和删除记录。请求使用 `If-Modified-Since-Version` 与 `since`，比较 `Last-Modified-Version`；远端在一轮中改变版本时，从上次完整游标重新读取。分页已应用的版本可安全重放。成功响应的 Backoff、429 的 Retry-After（秒数或 HTTP 日期）均会持久化，手动触发和连接测试不会绕过退避。每页最多 100 项，响应最多 4 MiB；集合、条目映射和文献数有上限。超限或格式异常不推进完整游标。
+
+元数据按同一空间、本人 DOI／arXiv／PMID 去重；多个 Zotero 条目可映射到同一文献。集合改名会更新未改变的文献标签；普通文献编辑不能改集合标签或已绑定的 Zotero 身份。Zotero 文字批注采用 NFC/LF 规范化，页码从 1 开始；更新产生新的只读摘录版本，原摘录标记过期并保留正文及引用。Zotero 删除条目时，资源标记已归档且停止同步，不硬删用户内容。
+
+每次 Worker 操作重新检查账户、工作区、成员与空间状态。旧知识空间读写、图和 AI 接受路径排除私人研究摘录；研究 AI 原有上下文入口仍按 Resource 归属检查。撤销凭据删除关联同步状态并停止任务，既有文献与摘录保留。账户最终删除按引用、摘录、文献顺序清理，避免外键遗留。迁移 `0047_zotero_sync` 是单 head 加法，有新增同步或批注数据时拒绝降级。
+
+常见同步错误：`ZOTERO_RATE_LIMITED` 表示等待服务允许继续；`ZOTERO_IDENTIFIER_CONFLICT` 表示远端条目的多个标识符分别匹配不同已有文献，需要本人先核对；`ZOTERO_SYNC_ACCESS_REVOKED` 表示目标空间已无法访问；`ZOTERO_RESPONSE_INVALID` 表示本页未成功解析或违反约束。错误不会输出远端正文或凭据。

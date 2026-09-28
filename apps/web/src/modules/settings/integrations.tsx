@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { components } from "@logion/contracts";
 import { Button, Sheet } from "@/platform/workbench/components";
 import { errorMessage, workbenchRequest } from "@/platform/workbench/api";
+import { ZoteroSync } from "./zotero-sync";
 
 type Status = components["schemas"]["IntegrationStatus"];
 const names = { zotero: "Zotero", webdav: "坚果云" } as const;
@@ -26,6 +27,7 @@ export function Integrations() {
       {(["zotero", "webdav"] as const).map((provider) => (
         <IntegrationCard key={provider} provider={provider} />
       ))}
+      <ZoteroSync />
     </section>
   );
 }
@@ -72,6 +74,9 @@ function IntegrationCard({ provider }: { provider: "zotero" | "webdav" }) {
         }
       }
       await client.invalidateQueries({ queryKey });
+      await client.invalidateQueries({
+        queryKey: ["workbench", "zotero-sync"],
+      });
     },
     onError: (failure) => setError(errorMessage(failure)),
   });

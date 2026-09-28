@@ -2664,6 +2664,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/zotero-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sync Status */
+        get: operations["research_zotero_sync_status"];
+        put?: never;
+        /** Trigger Sync */
+        post: operations["research_zotero_sync_trigger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/sync/bootstrap": {
         parameters: {
             query?: never;
@@ -9991,6 +10009,21 @@ export interface components {
          * @enum {string}
          */
         WorkspaceStatus: "active" | "suspended" | "deleted";
+        /** ZoteroSyncStatus */
+        ZoteroSyncStatus: {
+            /** Configured */
+            configured: boolean;
+            /** Last Error Code */
+            last_error_code: string | null;
+            /** Last Sync At */
+            last_sync_at: string | null;
+            /** Library Version */
+            library_version: number;
+            /** Pending */
+            pending: boolean;
+            /** Retry After */
+            retry_after: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -26021,6 +26054,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_zotero_sync_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoteroSyncStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_zotero_sync_trigger: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ZoteroSyncStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

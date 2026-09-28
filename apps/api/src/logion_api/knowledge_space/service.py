@@ -12,6 +12,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
+from sqlalchemy.sql.elements import ColumnElement
 from uuid6 import uuid7
 
 from logion_api.ai_gateway.models import AIOutputDraft, AIOutputDraftCandidate, AIRun
@@ -154,6 +155,13 @@ class SearchCandidate:
         )
 
 
+def _legacy_excerpt_scope() -> ColumnElement[bool]:
+    # Personal research excerpts are exposed only through the owner-scoped reader API.
+    return SourceExcerpt.resource_id.in_(
+        select(Resource.id).where(Resource.research_owner_id.is_(None))
+    )
+
+
 class KnowledgeService:
     def __init__(
         self,
@@ -259,6 +267,7 @@ class KnowledgeService:
                 SourceExcerpt.space_id == space_id,
                 SourceExcerpt.status.in_(("active", "stale")),
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             )
         )
         if excerpt is None:
@@ -311,6 +320,7 @@ class KnowledgeService:
             SourceExcerpt.space_id == space_id,
             SourceExcerpt.status.in_(("active", "stale")),
             SourceExcerpt.deleted_at.is_(None),
+            _legacy_excerpt_scope(),
             SourceExcerpt.created_at <= window.cutoff_at,
         ]
         if resource_id is not None:
@@ -394,6 +404,7 @@ class KnowledgeService:
                 SourceExcerpt.space_id == space_id,
                 SourceExcerpt.status == "active",
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             )
             .with_for_update()
         )
@@ -486,6 +497,7 @@ class KnowledgeService:
                 KnowledgeCitation.deleted_at.is_(None),
                 SourceExcerpt.status.in_(("active", "stale")),
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             )
         )
         if citation is None or not await self._citation_target_is_visible(
@@ -650,6 +662,7 @@ class KnowledgeService:
                         SourceExcerpt.space_id == space_id,
                         SourceExcerpt.status == "active",
                         SourceExcerpt.deleted_at.is_(None),
+                        _legacy_excerpt_scope(),
                     )
                     .order_by(SourceExcerpt.id)
                     .with_for_update()
@@ -844,6 +857,7 @@ class KnowledgeService:
             KnowledgeCitation.created_at <= window.cutoff_at,
             SourceExcerpt.status.in_(("active", "stale")),
             SourceExcerpt.deleted_at.is_(None),
+            _legacy_excerpt_scope(),
         ]
         conditions.append(
             or_(
@@ -1645,6 +1659,7 @@ class KnowledgeService:
                 target_column.in_(ids),
                 SourceExcerpt.status.in_(("active", "stale")),
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             ]
             if cutoff_at is not None:
                 preview_conditions.extend(

@@ -33,6 +33,7 @@ from logion_api.identity.models import (
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
 from logion_api.integrations.models import IntegrationCredential
+from logion_api.knowledge_space.models import KnowledgeCitation, SourceExcerpt
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
@@ -330,6 +331,18 @@ class AccountDeletionService:
                 storage_key=attachment.storage_key,
             )
         await db.execute(delete(Attachment).where(Attachment.created_by == user.id))
+        private_resources = select(Resource.id).where(Resource.research_owner_id == user.id)
+        private_excerpts = select(SourceExcerpt.id).where(
+            SourceExcerpt.resource_id.in_(private_resources)
+        )
+        await db.execute(
+            delete(KnowledgeCitation).where(
+                KnowledgeCitation.source_excerpt_id.in_(private_excerpts)
+            )
+        )
+        await db.execute(
+            delete(SourceExcerpt).where(SourceExcerpt.resource_id.in_(private_resources))
+        )
         for workspace_id in request.owned_workspace_ids:
             await db.execute(delete(Workspace).where(Workspace.id == UUID(workspace_id)))
         await db.execute(
