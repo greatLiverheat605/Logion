@@ -543,9 +543,13 @@ test.describe.serial("private research questions", () => {
     });
     await confirm.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("status")).toContainText("本周回顾已确认");
+    await expect(
+      page.getByRole("status").filter({ hasText: "本周回顾已确认" }),
+    ).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("status")).toContainText("本周回顾已确认");
+    await expect(
+      page.getByRole("status").filter({ hasText: "本周回顾已确认" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "添加阅读计划", exact: true }),
     ).toBeDisabled();
