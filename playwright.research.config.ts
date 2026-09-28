@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 
 const origin = "http://127.0.0.1:3090";
 
@@ -29,10 +30,23 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: [
+    {
+      command:
+        "uv run --package logion-api python tests/fixtures/research_services.py",
+      url: "http://127.0.0.1:8192/health",
+      reuseExistingServer: false,
+    },
     ...[true, false].map((enabled) => ({
       command: `uv run --package logion-api uvicorn logion_api.main:app --host 127.0.0.1 --port ${enabled ? 8000 : 8001} --no-access-log`,
       url: `http://127.0.0.1:${enabled ? 8000 : 8001}/health/live`,
       env: {
+        LOGION_ENV: "test",
+        LOGION_ZOTERO_ORIGIN: "http://127.0.0.1:8192",
+        LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
+        LOGION_INTEGRATION_KEYRING: JSON.stringify({
+          active: "test",
+          keys: { test: randomBytes(32).toString("base64url") },
+        }),
         LOGION_RESEARCH_V3_ENABLED: String(enabled),
         LOGION_ALLOWED_ORIGINS: JSON.stringify([origin]),
         LOGION_WEBAUTHN_RP_ID: "127.0.0.1",

@@ -35,6 +35,7 @@ from logion_api.identity.passkey_routes import router as passkey_router
 from logion_api.identity.routes import router as identity_router
 from logion_api.identity.totp_routes import router as totp_router
 from logion_api.identity.verification_routes import router as verification_router
+from logion_api.integrations.routes import router as research_integrations_router
 from logion_api.knowledge_space.local_worker_routes import router as local_worker_router
 from logion_api.knowledge_space.routes import router as knowledge_space_router
 from logion_api.library.routes import router as research_library_router
@@ -115,6 +116,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(self_study_router)
     application.include_router(research_router)
     application.include_router(research_library_router)
+    application.include_router(research_integrations_router)
     application.include_router(research_ideas_router)
     application.include_router(collaboration_router)
     application.include_router(ai_router)

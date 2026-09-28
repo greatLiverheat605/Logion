@@ -15,6 +15,10 @@ export function createWorkbenchQueryClient() {
 }
 export function errorMessage(error: unknown): string {
   if (error instanceof LogionApiError) {
+    if (error.code === "AUTH_RECENT_LOGIN_REQUIRED")
+      return "请重新登录以确认身份，再继续操作。";
+    if (error.code === "INTEGRATION_KEY_UNAVAILABLE")
+      return "服务器尚未配置集成加密密钥，请联系维护者。";
     if (error.code === "USER_SETTING_VERSION_CONFLICT")
       return "设置已在其他页面更新，请重新载入后再操作。";
     if (error.code === "RESOURCE_VERSION_CONFLICT")

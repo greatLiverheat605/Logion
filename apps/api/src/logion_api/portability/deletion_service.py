@@ -32,6 +32,7 @@ from logion_api.identity.models import (
 )
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
+from logion_api.integrations.models import IntegrationCredential
 from logion_api.memory.models import (
     AuditReview,
     ErrorPattern,
@@ -335,6 +336,9 @@ class AccountDeletionService:
             delete(Space).where(Space.owner_user_id == user.id, Space.visibility == "private")
         )
         await db.execute(delete(Resource).where(Resource.research_owner_id == user.id))
+        await db.execute(
+            delete(IntegrationCredential).where(IntegrationCredential.user_id == user.id)
+        )
         for personal_model in (
             Exam,
             PaperRecord,

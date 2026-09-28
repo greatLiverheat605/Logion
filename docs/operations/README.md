@@ -29,6 +29,9 @@ Compose 包含 Web、API、Worker、PostgreSQL、Redis、反向代理和 Backup�
 
 ### 功能接入
 
+研究预览的个人 Zotero／坚果云连接使用独立 `LOGION_INTEGRATION_KEYRING`，默认关闭。
+配置、固定出站主机、测试环境与轮换说明见[文献集成](research-integrations.md)。
+
 | 能力                  | 配置与验收                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | 邮件                  | [DirectMail 接入](../../infra/runbooks/aliyun-directmail-prerelease.md)；核对实收、失败与退信                            |

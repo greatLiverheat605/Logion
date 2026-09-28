@@ -781,3 +781,31 @@
     animation: none;
   }
 }
+
+.wb-integrations {
+  margin-top: 24px;
+}
+
+.wb-integration {
+  border-top: 1px solid var(--wb-sep);
+  padding: 20px 0;
+  max-width: 720px;
+}
+.wb-integration form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.wb-integration label {
+  display: grid;
+  gap: 6px;
+}
+.wb-integration input {
+  min-width: 0;
+  width: 100%;
+}
+.wb-integration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
