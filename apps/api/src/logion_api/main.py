@@ -46,6 +46,7 @@ from logion_api.library.routes import router as research_library_router
 from logion_api.library.text_routes import router as research_text_router
 from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
+from logion_api.planning.online_routes import router as online_planning_router
 from logion_api.planning.routes import router as planning_router
 from logion_api.planning.weekly_routes import router as research_weekly_router
 from logion_api.portability.routes import account_router as account_deletion_router
@@ -54,6 +55,7 @@ from logion_api.portability.routes import router as portability_router
 from logion_api.reading.notes import router as research_notes_router
 from logion_api.reading.quiz import router as research_quiz_router
 from logion_api.reading.review import router as research_review_router
+from logion_api.reading.review_queue import router as online_review_router
 from logion_api.reading.routes import router as research_reading_router
 from logion_api.research.ideas import router as research_ideas_router
 from logion_api.research.questions import router as research_questions_router
@@ -118,6 +120,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(sync_router)
     application.include_router(user_settings_router)
     application.include_router(planning_router)
+    application.include_router(online_planning_router)
     application.include_router(research_weekly_router)
     application.include_router(execution_router)
     application.include_router(content_router)
@@ -133,6 +136,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(research_reading_router)
     application.include_router(research_quiz_router)
     application.include_router(research_review_router)
+    application.include_router(online_review_router)
     application.include_router(research_notes_router)
     application.include_router(research_integrations_router)
     application.include_router(research_sync_router)

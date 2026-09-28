@@ -27,6 +27,9 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      PLANNING_PHASE_REFERENCED: "阶段已有任务引用，可以归档，不能移除。",
+      PLANNING_PHASE_MISSING: "请保留所有现有阶段，或明确选择归档、移除。",
+      FEATURE_DISABLED: "当前服务器尚未开启这项功能。",
       WEEKLY_SNAPSHOT_STALE:
         "本周计划已变化，请刷新统计与任务快照，再逐项确认。",
       WEEKLY_TRIAGE_REQUIRED: "请为每个未完成项选择顺延、降级或放弃。",
