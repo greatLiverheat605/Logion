@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 async function expectOnlineOnly(page: Page) {
@@ -9,6 +10,76 @@ async function expectOnlineOnly(page: Page) {
     ),
   ).toBe(0);
 }
+
+test("owner configures and revokes encrypted integrations through local fake services", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
+  const registration = await context.request.post("/api/v1/auth/register", {
+    headers: { Origin: baseURL! },
+    data: {
+      email: `integration-browser-${randomUUID()}@example.com`,
+      password: `${randomBytes(24).toString("base64url")}Aa1!`,
+      device_name: "Synthetic integration browser",
+    },
+  });
+  expect(registration.status()).toBe(201);
+  await page.goto("/settings");
+  const zotero = page.getByRole("region", { name: "Zotero 集成" });
+  await zotero.getByRole("button", { name: "配置 Zotero" }).click();
+  await zotero.getByLabel("只读 API Key").fill("synthetic-zotero");
+  await zotero.getByRole("button", { name: "保存凭据" }).click();
+  await expect(zotero.getByLabel("只读 API Key")).toHaveCount(0);
+  await zotero.getByRole("button", { name: "测试连接", exact: true }).click();
+  await expect(zotero.getByRole("status")).toHaveText("已连接");
+  const dav = page.getByRole("region", { name: "坚果云 集成" });
+  await dav.getByRole("button", { name: "配置 坚果云" }).click();
+  await dav.getByLabel("坚果云账号").fill("synthetic-account");
+  await dav.getByLabel("应用密码").fill("synthetic-webdav");
+  await dav.getByRole("button", { name: "保存凭据" }).click();
+  await dav.getByRole("button", { name: "测试连接", exact: true }).click();
+  await expect(dav.getByRole("status")).toHaveText("已连接");
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ["日间", "夜间"]) {
+      await page.getByRole("radio", { name: theme, exact: true }).click();
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-theme",
+        theme === "日间" ? "light" : "dark",
+      );
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath(
+          `integrations-${width}-${theme === "日间" ? "light" : "dark"}.png`,
+        ),
+        fullPage: true,
+      });
+    }
+  }
+  await page.reload();
+  await expect(zotero.getByRole("status")).toHaveText("已连接");
+  await zotero.getByRole("button", { name: "撤销连接" }).click();
+  await page.getByRole("button", { name: "确认撤销" }).click();
+  await expect(zotero.getByRole("status")).toHaveText("未配置");
+  const state = await context.request.get(
+    "/api/v1/research/integrations/webdav",
+  );
+  expect(Object.keys(await state.json()).sort()).toEqual([
+    "configured",
+    "connected",
+    "last_error_code",
+    "last_sync_at",
+    "provider",
+  ]);
+  expect(await state.text()).not.toContain("synthetic");
+  await expectOnlineOnly(page);
+});
 
 test("real research API persists literature and preferences, rejects conflicts and gates disabled routes", async ({
   page,

@@ -8,6 +8,9 @@
 研究 API 另提供私人想法 CRUD、AI 上下文隐私检查和七类任务路由预设，
 想法界面与具体阅读 AI 交互在后续阶段提供。
 
+预览的 `/settings` 支持本人配置、测试和撤销 Zotero 只读 Key 与坚果云应用密码，
+仅返回连接状态、最近同步时间和错误码；配置说明见[文献集成](../operations/research-integrations.md)。
+
 本页按当前 Web 应用的 21 个业务页面组织功能。详细步骤见[用户操作手册](../user-guide.md)，内部路由合同见[架构说明](../architecture/route-function-contract.md)。
 
 画像控制入口的显示顺序与可见性，工作区角色和空间权限决定实际操作权限。未显示的页面可在有权限时通过直接地址访问。

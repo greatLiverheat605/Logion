@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from logion_api.integrations.keyring import IntegrationKeyring
+
 
 class Settings(BaseSettings):
     """Runtime configuration loaded only from environment variables."""
@@ -26,6 +28,9 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     healthcheck_dependencies: bool = False
     research_v3_enabled: bool = False
+    integration_keyring: IntegrationKeyring = Field(default_factory=IntegrationKeyring)
+    zotero_origin: str = "https://api.zotero.org"
+    webdav_origin: str = "https://dav.jianguoyun.com"
     worker_health_state_path: str = Field(
         default="/tmp/logion-worker-health.json",  # noqa: S108 - dedicated container tmpfs
         min_length=1,

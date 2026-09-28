@@ -2,6 +2,7 @@
 import { Segmented } from "@/platform/workbench/components";
 import { useWorkbench } from "@/platform/workbench/provider";
 import type { Theme } from "@/platform/workbench/preferences";
+import { Integrations } from "@/modules/settings/integrations";
 export default function Page() {
   const { preferences, save, pending } = useWorkbench();
   return (
@@ -46,6 +47,7 @@ export default function Page() {
           />
         </label>
       </div>
+      <Integrations />
     </div>
   );
 }

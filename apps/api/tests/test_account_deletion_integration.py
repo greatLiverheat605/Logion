@@ -15,6 +15,7 @@ from logion_api.content.attachment_scanner import AttachmentScanResult
 from logion_api.content.models import Attachment
 from logion_api.db import session_factory
 from logion_api.identity.models import AuthSession, EmailOutbox, PasswordCredential, User
+from logion_api.integrations.models import IntegrationCredential
 from logion_api.main import app
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.models import AccountDeletionRequest
@@ -299,6 +300,20 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         row = await db.get(AccountDeletionRequest, deletion_id)
         assert row is not None
         row.delete_after = datetime.now(UTC) - timedelta(seconds=1)
+        # Synthetic opaque envelope: cleanup must not require a working keyring.
+        integration_id = uuid4()
+        db.add(
+            IntegrationCredential(
+                id=integration_id,
+                user_id=user_id,
+                provider="webdav",
+                ciphertext=b"synthetic-ciphertext",
+                nonce=b"n" * 12,
+                wrapped_key=b"synthetic-wrapped-key",
+                key_nonce=b"k" * 12,
+                key_id="synthetic",
+            )
+        )
         await db.commit()
     assert await AccountDeletionService(enabled_clean_attachment_storage).execute_next() is True
     async with session_factory() as db:
@@ -309,6 +324,7 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert user.email_verified_at is None
         assert request is not None and request.status == "completed"
         assert await db.get(Attachment, attachment_id) is None
+        assert await db.get(IntegrationCredential, integration_id) is None
         assert not path_exists(attachment_path)
         assert await db.get(PasswordCredential, user_id) is None
         assert not list(
