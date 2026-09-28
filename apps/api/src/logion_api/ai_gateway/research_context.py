@@ -144,10 +144,20 @@ async def build_research_context(
         )
         if model in (ResearchQuestion, ResearchClaim):
             query = query.where(model.user_id == user_id)
-        elif model in (Resource, Topic):
+        elif model in (Resource, Topic, Note):
             query = query.where(
                 (model.research_owner_id.is_(None)) | (model.research_owner_id == user_id)
             )
+            if model is Note:
+                query = query.where(
+                    Note.research_owner_id.is_(None)
+                    | Note.resource_id.in_(
+                        select(Resource.id).where(
+                            Resource.research_owner_id == user_id,
+                            Resource.deleted_at.is_(None),
+                        )
+                    )
+                )
         elif model is SourceText:
             query = query.join(Resource, Resource.id == SourceText.resource_id).where(
                 Resource.research_owner_id == user_id,

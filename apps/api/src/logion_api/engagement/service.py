@@ -154,6 +154,7 @@ class EngagementService:
                             Note.workspace_id == workspace_id,
                             Note.space_id.in_(space_ids),
                             Note.deleted_at.is_(None),
+                            Note.research_owner_id.is_(None),
                             or_(
                                 Note.title.ilike(pattern, escape="\\"),
                                 Note.markdown_body.ilike(pattern, escape="\\"),

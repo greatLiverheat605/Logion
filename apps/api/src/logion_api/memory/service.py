@@ -1377,6 +1377,7 @@ class MemoryService:
             or source.workspace_id != workspace_id
             or source.space_id != space_id
             or source.deleted_at is not None
+            or source.research_owner_id is not None
             or target is None
             or target.workspace_id != workspace_id
             or target.space_id != space_id

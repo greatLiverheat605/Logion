@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logion_api.ai_gateway.models import AIOutputDraft, AIRun, AIRunCandidate
 from logion_api.config import Settings
 from logion_api.content.attachment_storage import FilesystemAttachmentStorage
-from logion_api.content.models import Attachment, Resource
+from logion_api.content.models import Attachment, Note, Resource
 from logion_api.db import session_factory, utc_now
 from logion_api.engagement.models import CalendarFeed, Notification, NotificationPreference
 from logion_api.errors import APIError
@@ -352,6 +352,7 @@ class AccountDeletionService:
         await db.execute(
             delete(SourceExcerpt).where(SourceExcerpt.resource_id.in_(private_resources))
         )
+        await db.execute(delete(Note).where(Note.research_owner_id == user.id))
         for workspace_id in request.owned_workspace_ids:
             await db.execute(delete(Workspace).where(Workspace.id == UUID(workspace_id)))
         await db.execute(

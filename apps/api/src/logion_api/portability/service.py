@@ -362,7 +362,7 @@ class PortabilityService:
         objects: dict[str, list[dict[str, Any]]] = {"spaces": [self._record(row) for row in spaces]}
         for model in SHARED_MODELS:
             query = select(model).where(model.workspace_id == job.workspace_id)
-            if model in (Resource, Topic):
+            if model in (Resource, Topic, Note):
                 query = query.where(model.research_owner_id.is_(None))
             if hasattr(model, "space_id"):
                 query = query.where(model.space_id.in_(space_ids))
@@ -410,6 +410,8 @@ class PortabilityService:
         result: dict[str, Any] = {}
         for column in inspect(row).mapper.column_attrs:
             key = column.key
+            if isinstance(row, Note) and key in {"note_kind", "resource_id"}:
+                continue
             if isinstance(row, Resource) and key in {
                 "research_owner_id",
                 "legacy_paper_id",
