@@ -1,0 +1,81 @@
+.wb-records-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 30%) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.wb-records-list,
+.wb-record-editor {
+  min-width: 0;
+}
+.wb-records-list h2,
+.wb-record-editor h2 {
+  overflow-wrap: anywhere;
+}
+.wb-records-page form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 20px;
+}
+.wb-records-page label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.wb-records-page input,
+.wb-records-page textarea {
+  width: 100%;
+  min-width: 0;
+}
+.wb-records-list ul {
+  padding: 0;
+  list-style: none;
+}
+.wb-records-list li {
+  margin: 8px 0;
+}
+.wb-records-list li button {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 10px;
+  background: var(--wb-win);
+  color: var(--wb-text);
+  overflow-wrap: anywhere;
+}
+.wb-records-list li button[aria-pressed="true"] {
+  border-color: var(--wb-accent);
+  background: var(--wb-selected);
+}
+.wb-records-list li span {
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+.wb-record-editor {
+  padding: 20px;
+  background: var(--wb-win);
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+}
+.wb-record-editor textarea {
+  min-height: 45vh;
+  line-height: 1.7;
+  resize: vertical;
+}
+.wb-record-editor > .wb-button {
+  margin-block: 8px;
+}
+@media (max-width: 720px) {
+  .wb-records-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wb-record-editor {
+    padding: 14px;
+  }
+}

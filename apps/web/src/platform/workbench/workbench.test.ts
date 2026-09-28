@@ -53,7 +53,9 @@ describe("workbench command contract", () => {
   it("registers navigation, appearance, presets and pane actions in one registry", () => {
     const handlers = actions(),
       commands = createCommands(handlers);
-    expect(commands).toHaveLength(20);
+    expect(commands).toHaveLength(21);
+    commands.find((command) => command.id === "go:/records")?.action();
+    expect(handlers.navigate).toHaveBeenCalledWith("/records");
     commands.find((c) => c.id === "go:/library")?.action();
     commands.find((c) => c.id === "theme:dark")?.action();
     commands.find((c) => c.id === "preset:focus")?.action();

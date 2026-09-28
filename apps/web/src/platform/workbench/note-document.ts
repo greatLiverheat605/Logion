@@ -11,13 +11,18 @@ function encode(value: Uint8Array) {
   return btoa(binary);
 }
 
-export class ReadingNoteDocument {
+type DocumentState = Pick<
+  ReadingNote,
+  "version" | "yjs_generation" | "yjs_state_base64"
+>;
+
+export class ReadingNoteDocument<T extends DocumentState = ReadingNote> {
   readonly doc = new Y.Doc();
-  server: ReadingNote;
+  server: T;
   revision = 0;
   savedRevision = 0;
   private acknowledged: Uint8Array;
-  constructor(note: ReadingNote) {
+  constructor(note: T) {
     this.server = note;
     Y.applyUpdate(this.doc, decode(note.yjs_state_base64));
     this.acknowledged = Y.encodeStateVector(this.doc);
@@ -59,7 +64,7 @@ export class ReadingNoteDocument {
   update() {
     return encode(Y.encodeStateAsUpdate(this.doc, this.acknowledged));
   }
-  acknowledge(note: ReadingNote, revision: number) {
+  acknowledge(note: T, revision: number) {
     if (note.yjs_generation !== this.server.yjs_generation)
       throw new Error("Note generation changed");
     const server = new Y.Doc();

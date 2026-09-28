@@ -29,6 +29,12 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   const commands = createCommands(
     {
       navigate: (href) => {
+        if (
+          !window.dispatchEvent(
+            new Event("workbench:before-navigate", { cancelable: true }),
+          )
+        )
+          return;
         router.push(href);
         setNavigation(false);
       },
@@ -307,6 +313,7 @@ function NavIcon({ index }: { index: number }) {
     "M6 4h4M4 6v4m8-4v4m-6 2h4M6 4a2 2 0 1 1-4 0 2 2 0 0 1 4 0m8 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0M6 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0m8 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0",
     "M2 6a6 6 0 1 1 0 4m0-8v4h4m2-2v4l3 2",
     "M3 3h10v11H3zM5 1v4m6-4v4M5 8h6m-6 3h4",
+    "M3 1h7l3 3v11H3zM10 1v4h3M5 8h6m-6 3h6",
     "M2 4h12M2 8h12M2 12h12M5 2v4m6 0v4m-5 0v4",
   ];
   return (
