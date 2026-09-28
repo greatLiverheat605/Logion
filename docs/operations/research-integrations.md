@@ -53,7 +53,7 @@ Worker 每次只处理一个有界响应，顺序为集合、顶层条目、PDF 
 
 配置 `LOGION_PDF_CACHE_KEYRING`，JSON 结构同集成 keyring，但使用独立随机密钥。历史缓存仍在时保留旧 key；也可清空缓存后移除旧 key，原件仍在 WebDAV。`LOGION_PDF_MAX_BYTES` 默认 104857600，可下调；`LOGION_PDF_CACHE_MAX_BYTES` 默认 2147483648。缓存位于附件卷的 `research-pdf` 子目录，磁盘只写 AES-GCM 密文，容量按实际密文字节计。索引、来源绑定与月流量使用迁移 `0048_pdf_cache`；任一新表非空或存在附件版本时拒绝降级。
 
-原文接口为 `GET /api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/pdf`。每次检查本人文献及当前空间权限、有效坚果云连接、凭据版本与来源绑定；仅知道另一个文件的哈希不能命中缓存。Zotero 附件版本变化强制重新下载。响应使用 application/pdf、nosniff、no-store 和 CSP sandbox。压缩包只接受一个普通 PDF 文件，拒绝额外条目、路径穿越、链接、加密项、异常压缩方法、超限大小或超过 100 倍压缩比；文件头必须为 %PDF。
+阅读器先调用 `POST /api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/pdf/prepare`，沿用写入限流、可信 Origin 与 CSRF 校验，准备缓存并记录实际下载流量、文献哈希和最近访问时间，成功返回 204；命中缓存不再请求 WebDAV。随后调用 `GET /api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/{resource_id}/pdf` 读取原文。GET 不写数据库、不下载 WebDAV、不进行缓存淘汰；缓存未准备、失效或密文文件丢失时返回 `PDF_NOT_PREPARED`（409），由本人重新打开文献触发准备，客户端不会自动重试。边界见 ADR-0048。每次检查本人文献及当前空间权限、有效坚果云连接、凭据版本与来源绑定；仅知道另一个文件的哈希不能命中缓存。Zotero 附件版本变化强制重新下载。响应使用 application/pdf、nosniff、no-store 和 CSP sandbox。压缩包只接受一个普通 PDF 文件，拒绝额外条目、路径穿越、链接、加密项、异常压缩方法、超限大小或超过 100 倍压缩比；文件头必须为 %PDF。
 
 `POST /api/v1/workspaces/{workspace_id}/spaces/{space_id}/library/resources/pdf-import` 接收 application/pdf 原始流，标题以百分号编码的 UTF-8 放在 X-PDF-Title 请求头，沿用 Origin、CSRF、空间权限及写入限流，不使用可能将明文暂存到磁盘的 multipart 上传。创建 Logion 目录后写入文件，再创建文献。目录已存在可继续；重复哈希返回本人当前空间的已有资源。远端上传成功但数据库失败时，可重传同一哈希完成导入，不删除远端文件。
 

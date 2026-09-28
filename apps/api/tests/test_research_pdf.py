@@ -14,7 +14,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from logion_api.config import get_settings
 from logion_api.content.models import Resource
-from logion_api.db import session_factory
+from logion_api.db import engine, session_factory
 from logion_api.errors import APIError
 from logion_api.integrations.keyring import IntegrationKeyring
 from logion_api.integrations.webdav import enforce_rate
@@ -22,7 +22,7 @@ from logion_api.library.pdf_cache import cache_path, lock_cache
 from logion_api.library.pdf_models import PdfCacheBinding, PdfCacheEntry
 from logion_api.library.pdf_validation import unzip_pdf, validate_pdf, webdav_path
 from logion_api.main import app
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 PDF = b"%PDF-1.7\nsynthetic paper\n%%EOF"
 
@@ -203,8 +203,33 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
         ).json()["id"] == resource["id"]
         pdf_path = base + "/" + resource["id"] + "/pdf"
         before = len(fake["requests"])
-        delivered = await owner.get(pdf_path)
+        for headers in (
+            {"X-CSRF-Token": "invalid"},
+            {"Origin": "https://untrusted.example.com"},
+        ):
+            assert (await owner.post(pdf_path + "/prepare", headers=headers)).status_code == 403
+        assert (await peer.post(pdf_path + "/prepare")).status_code == 404
+        assert len(fake["requests"]) == before
+        writes: list[str] = []
+
+        def capture_write(
+            _connection: Any,
+            _cursor: Any,
+            statement: str,
+            _parameters: Any,
+            _context: Any,
+            _executemany: bool,
+        ) -> None:
+            if statement.lstrip().upper().startswith(("INSERT ", "UPDATE ", "DELETE ")):
+                writes.append(statement)
+
+        event.listen(engine.sync_engine, "before_cursor_execute", capture_write)
+        try:
+            delivered = await owner.get(pdf_path)
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", capture_write)
         assert delivered.status_code == 200, delivered.text
+        assert writes == [], "PDF GET must not write database rows"
         assert delivered.content == PDF and len(fake["requests"]) == before
         for header, expected in {
             "content-type": "application/pdf",
@@ -220,7 +245,9 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
         )
         assert guessed.status_code == 201
         fake["files"].pop(f"/dav/Logion/{digest}.pdf")
-        denied = await peer.get(peer_base + "/" + guessed.json()["id"] + "/pdf")
+        guessed_path = peer_base + "/" + guessed.json()["id"] + "/pdf"
+        assert (await peer.get(guessed_path)).json()["code"] == "PDF_NOT_PREPARED"
+        denied = await peer.post(guessed_path + "/prepare")
         assert denied.status_code == 503 and denied.json()["code"] == "PDF_REMOTE_UNAVAILABLE"
         async with session_factory() as db:
             entry = await db.get(PdfCacheEntry, digest)
@@ -229,6 +256,7 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
             assert binding and binding.sha256 == digest
             await lock_cache(db)
             assert (await owner.get(pdf_path)).json()["code"] == "PDF_BUSY"
+            assert (await owner.post(pdf_path + "/prepare")).json()["code"] == "PDF_BUSY"
         # Zotero bytes count even when ZIP or size validation subsequently rejects them.
         zotero = await owner.post(
             base,
@@ -238,6 +266,16 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
             },
         )
         zotero_path = base + "/" + zotero.json()["id"] + "/pdf"
+        before = len(fake["requests"])
+        writes.clear()
+        event.listen(engine.sync_engine, "before_cursor_execute", capture_write)
+        try:
+            unprepared = await owner.get(zotero_path)
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", capture_write)
+        assert unprepared.status_code == 409 and unprepared.json()["code"] == "PDF_NOT_PREPARED"
+        assert writes == [] and len(fake["requests"]) == before
+        assert (await owner.post(zotero_path + "/prepare")).status_code == 204
         assert (await owner.get(zotero_path)).content == PDF
         usage = (await owner.get("/api/v1/research/pdf-usage")).json()
         assert usage["downloaded_bytes"] == len(fake["files"]["/dav/zotero/A0000001.zip"])
@@ -249,7 +287,9 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
                 "file_locator": {"kind": "zotero_webdav", "path": "zotero/A0000002.zip"},
             },
         )
-        assert (await owner.get(base + "/" + large.json()["id"] + "/pdf")).status_code == 413
+        assert (
+            await owner.post(base + "/" + large.json()["id"] + "/pdf/prepare")
+        ).status_code == 413
         assert (await owner.get("/api/v1/research/pdf-usage")).json()["downloaded_bytes"] == usage[
             "downloaded_bytes"
         ] + 1025
@@ -260,6 +300,27 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
             assert changed
             changed.zotero_attachment_version = 2
             await db.commit()
+        assert (await owner.get(zotero_path)).json()["code"] == "PDF_NOT_PREPARED"
+        assert (await owner.post(zotero_path + "/prepare")).status_code == 204
+        assert (await owner.get(zotero_path)).content == PDF + b" updated"
+        # Missing ciphertext never causes a GET to delete cache rows or fetch WebDAV.
+        updated_digest = hashlib.sha256(PDF + b" updated").hexdigest()
+        async with session_factory() as db:
+            missing = await db.get(PdfCacheEntry, updated_digest)
+            assert missing
+            cache_path(settings, missing.storage_key).unlink()
+        before = len(fake["requests"])
+        writes.clear()
+        event.listen(engine.sync_engine, "before_cursor_execute", capture_write)
+        try:
+            assert (await owner.get(zotero_path)).json()["code"] == "PDF_NOT_PREPARED"
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", capture_write)
+        assert writes == [] and len(fake["requests"]) == before
+        async with session_factory() as db:
+            assert await db.get(PdfCacheEntry, updated_digest) is not None
+            assert await db.get(PdfCacheBinding, UUID(zotero.json()["id"])) is not None
+        assert (await owner.post(zotero_path + "/prepare")).status_code == 204
         assert (await owner.get(zotero_path)).content == PDF + b" updated"
         # LRU cap is on actual ciphertext size; deletion evicts its file and all bindings.
         monkeypatch.setattr(settings, "pdf_cache_max_bytes", 1024)
@@ -286,8 +347,12 @@ async def test_pdf_import_cache_authorization_revocation_and_usage(
         assert not last_path.exists()
         assert (await owner.delete(dav)).status_code == 204
         assert (await owner.get(pdf_path)).json()["code"] == "WEBDAV_CONNECTION_REQUIRED"
+        assert (await owner.post(pdf_path + "/prepare")).json()[
+            "code"
+        ] == "WEBDAV_CONNECTION_REQUIRED"
         monkeypatch.setattr(settings, "research_v3_enabled", False)
         assert (await owner.get(pdf_path)).status_code == 404
+        assert (await owner.post(pdf_path + "/prepare")).status_code == 404
         assert (
             await owner.post(
                 base + "/pdf-import",

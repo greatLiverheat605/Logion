@@ -283,6 +283,10 @@ function ReaderScope({
         await import("pdfjs-dist");
       const assets = `/pdfjs/${version}/`;
       GlobalWorkerOptions.workerSrc = `${assets}pdf.worker.min.mjs`;
+      await workbenchRequest(`${path}/pdf/prepare`, {
+        method: "POST",
+        signal: abort.signal,
+      });
       const blob = await workbenchRequest<Blob>(`${path}/pdf`, {
         responseType: "pdf",
         signal: abort.signal,

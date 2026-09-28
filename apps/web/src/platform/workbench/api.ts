@@ -43,6 +43,7 @@ export function errorMessage(error: unknown): string {
       PDF_UPLOAD_FAILED: "原文未能保存到坚果云，请检查连接后重试。",
       PDF_LOCATOR_INVALID: "这篇文献没有可读取的 PDF，请先导入原文。",
       PDF_BUSY: "另一个 PDF 正在处理，请稍后重试。",
+      PDF_NOT_PREPARED: "原文已更新或缓存已清理，请重新打开文献。",
       WEBDAV_CONNECTION_REQUIRED: "请先在设置中连接坚果云并测试连接。",
       WEBDAV_RATE_LIMITED: "已达到坚果云请求频率上限，请稍后重试。",
       WEBDAV_RATE_UNAVAILABLE: "暂时无法确认请求额度，请稍后重试。",

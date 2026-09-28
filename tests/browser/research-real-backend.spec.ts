@@ -777,13 +777,22 @@ test("PDF reader renders local assets, text, outline and thumbnails under nonce 
     errors: string[] = [],
     assetUrls: string[] = [];
   let pdfRequests = 0;
+  const pdfOperations: string[] = [];
   page.on("request", (request) => {
     if (
       request.url().startsWith("http") &&
       new URL(request.url()).origin !== baseURL
     )
       outbound.push(request.url());
-    if (request.url().endsWith(`/${resource.id}/pdf`)) pdfRequests++;
+    if (request.url().endsWith(`/${resource.id}/pdf/prepare`)) {
+      expect(request.method()).toBe("POST");
+      expect(request.headers()["x-csrf-token"]).toBeTruthy();
+      pdfOperations.push("prepare");
+    }
+    if (request.url().endsWith(`/${resource.id}/pdf`)) {
+      pdfRequests++;
+      pdfOperations.push("read");
+    }
     if (request.url().includes("/pdfjs/")) assetUrls.push(request.url());
   });
   page.on("pageerror", (error) => errors.push(error.message));
@@ -881,5 +890,6 @@ test("PDF reader renders local assets, text, outline and thumbnails under nonce 
     await page.evaluate(() => Reflect.get(globalThis, "__PDF_SCRIPT_EXECUTED")),
   ).toBeUndefined();
   expect(pdfRequests).toBe(1);
+  expect(pdfOperations).toEqual(["prepare", "read"]);
   await expectOnlineOnly(page);
 });
