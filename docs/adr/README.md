@@ -29,3 +29,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0045：外壳、视觉系统与三栏阅读器（Accepted；macOS 风格，指令面板，可自定义三栏）](0045-shell-visual-system-and-reader.md)
 - [ADR-0046：冻结备考、自学、模板与协作审阅（Accepted；数据与接口保留，新前端不提供入口）](0046-module-freeze.md)
 - [ADR-0047：Agent 收件箱、个人令牌与 MCP 桥（Accepted；v0.3.1，只读加写收件箱，不能删除）](0047-agent-inbox-and-mcp-bridge.md)
+- [ADR-0048：PDF 准备与只读读取（Accepted；写入由受保护的 POST 完成，GET 只返回已授权缓存）](0048-pdf-preparation-and-read-only-retrieval.md)

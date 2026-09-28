@@ -305,6 +305,20 @@ server {
     add_header Strict-Transport-Security "max-age=31536000" always;
     client_max_body_size 20m;
 
+    # Match the application proxy: PDF plaintext must not enter proxy temp files.
+    location ~ ^/api/v1/workspaces/[0-9a-fA-F-]+/spaces/[0-9a-fA-F-]+/library/resources/(pdf-import|[0-9a-fA-F-]+/pdf)$ {
+        client_max_body_size 100m;
+        proxy_request_buffering off;
+        proxy_buffering off;
+        access_log off;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -317,6 +331,8 @@ server {
     }
 }
 ```
+
+PDF 导入与读取路径单独使用 100 MiB 上限，保持请求与响应缓冲关闭，避免原文写入宿主机代理临时文件；其他路径仍为 20 MiB。若调整 `LOGION_PDF_MAX_BYTES`，须同时核对宿主机和应用代理的对应上限。下列命令属于获批上线操作，开发与发布准备阶段只验证配置，不在生产执行。
 
 上线前执行：
 

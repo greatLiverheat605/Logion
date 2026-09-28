@@ -75,6 +75,56 @@ async def get_pdf(
         db, context, workspace_id, space_id, resource_id, request_id(request), write=True
     )
     settings.pdf_cache_keyring.key(settings.pdf_cache_keyring.active)
+    data = await load_cached(db, settings, resource, credential)
+    if data is None:
+        raise integration_error("PDF_NOT_PREPARED", 409)
+    digest = hashlib.sha256(data).hexdigest()
+
+    async def stream() -> AsyncIterator[bytes]:
+        try:
+            for offset in range(0, len(data), 65536):
+                yield data[offset : offset + 65536]
+        finally:
+            # Retain the memory/concurrency lease until the response leaves the server.
+            await db.rollback()
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+            "Content-Disposition": 'inline; filename="paper.pdf"',
+            "Content-Length": str(len(data)),
+            "X-Content-SHA256": digest,
+        },
+    )
+
+
+@router.post(
+    BASE + "/{resource_id}/pdf/prepare",
+    status_code=204,
+    response_class=Response,
+    operation_id="research_pdf_prepare",
+    dependencies=[Depends(write_boundary)],
+)
+async def prepare_pdf(
+    workspace_id: UUID,
+    space_id: UUID,
+    resource_id: UUID,
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    settings: SettingsDependency,
+    service: Service,
+) -> Response:
+    await lock_cache(db)
+    credential = await credential_for(db, context)
+    resource = await service.get(
+        db, context, workspace_id, space_id, resource_id, request_id(request), write=True
+    )
+    settings.pdf_cache_keyring.key(settings.pdf_cache_keyring.active)
     await cleanup(db, settings)
     data = await load_cached(db, settings, resource, credential)
     if data is None:
@@ -89,31 +139,9 @@ async def get_pdf(
         )
         if not zipped and hashlib.sha256(data).hexdigest() != path.rsplit("/", 1)[1][:-4]:
             raise integration_error("PDF_HASH_MISMATCH")
-        await store_cached(db, settings, resource, credential, data)
-    digest = hashlib.sha256(data).hexdigest()
-    resource.sha256 = digest
-    await db.flush()
-
-    async def stream() -> AsyncIterator[bytes]:
-        try:
-            for offset in range(0, len(data), 65536):
-                yield data[offset : offset + 65536]
-        finally:
-            # Retain the memory/concurrency lease until the response leaves the server.
-            await db.commit()
-
-    return StreamingResponse(
-        stream(),
-        media_type="application/pdf",
-        headers={
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "sandbox",
-            "Content-Disposition": 'inline; filename="paper.pdf"',
-            "Content-Length": str(len(data)),
-            "X-Content-SHA256": digest,
-        },
-    )
+    resource.sha256 = await store_cached(db, settings, resource, credential, data)
+    await db.commit()
+    return Response(status_code=204)
 
 
 @router.post(

@@ -96,7 +96,6 @@ async def load_cached(
         return None
     file = cache_path(settings, entry.storage_key)
     if not file.is_file() or file.is_symlink():
-        await evict(db, settings, entry)
         return None
     if file.stat().st_size != entry.encrypted_bytes:
         raise integration_error("PDF_CACHE_INVALID", 503)
@@ -114,7 +113,6 @@ async def load_cached(
     )
     if len(data) != entry.size_bytes or hashlib.sha256(data).hexdigest() != entry.sha256:
         raise integration_error("PDF_CACHE_INVALID", 503)
-    entry.last_used_at = utc_now()
     return data
 
 
