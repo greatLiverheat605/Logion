@@ -2,6 +2,11 @@ import { defineConfig, devices } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 
 const origin = "http://127.0.0.1:3090";
+// API integration tests run before this suite; their rate-limit buckets are separate.
+const researchRedis = new URL(
+  process.env.LOGION_REDIS_URL ?? "redis://127.0.0.1:6379/0",
+);
+researchRedis.pathname = "/15";
 
 // Only this suite starts real research-enabled services. The regular browser
 // configuration and integration tests keep their existing environments.
@@ -41,6 +46,9 @@ export default defineConfig({
       url: `http://127.0.0.1:${enabled ? 8000 : 8001}/health/live`,
       env: {
         LOGION_ENV: "test",
+        LOGION_REDIS_URL:
+          process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
+          researchRedis.toString(),
         LOGION_ZOTERO_ORIGIN: "http://127.0.0.1:8192",
         LOGION_WEBDAV_ORIGIN: "http://127.0.0.1:8192",
         LOGION_INTEGRATION_KEYRING: JSON.stringify({
