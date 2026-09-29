@@ -25,6 +25,7 @@ from logion_api.ai_gateway.research_context import (
     TASK_CONTEXT_ALLOWLIST,
     check_private_entities,
     privacy_audit,
+    require_run_space,
 )
 from logion_api.ai_gateway.research_skills import load_research_skill, skill_hash
 from logion_api.ai_gateway.run_crypto import AIRunInputCipher
@@ -131,6 +132,8 @@ class AIExecutionService:
                                 message="Context entity type is not allowed.",
                                 status_code=422,
                             )
+                        async with session_factory() as scope_db:
+                            await require_run_space(scope_db, run)
                         system_prompt = await asyncio.to_thread(load_research_skill, run.task_type)
                         if skill_hash(system_prompt) != run.prompt_hash:
                             raise APIError(

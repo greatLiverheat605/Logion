@@ -27,6 +27,9 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      SPACE_VERSION_CONFLICT:
+        "空间已在其他页面更新。请取消并刷新空间，再重新确认。",
+      SPACE_NO_CHANGE: "空间已经处于这个状态，请取消并刷新空间。",
       QUIZ_ITEM_MODE_LOCKED: "这道题已有作答，不能更改判定方式。",
       QUIZ_ITEM_TOPIC_IMMUTABLE: "回忆题不能移到另一个知识点。",
       SYNC_DELETE_BLOCKED_BY_REFERENCE: "仍有学习记录或引用，无法删除。",

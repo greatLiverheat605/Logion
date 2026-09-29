@@ -34,6 +34,11 @@ class ContentService:
         space_id: UUID,
         request_id: str,
     ) -> None:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
+        # A lifecycle transition may have committed while this writer waited.
         space = await self._workspaces.resolve_space(
             db, context, workspace_id, space_id, request_id=request_id
         )
@@ -45,7 +50,6 @@ class ContentService:
                 request_id=request_id,
                 permission=Permission.SHARED_PLAN_WRITE,
             )
-        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
 
     async def _validate_task(
         self, db: AsyncSession, workspace_id: UUID, space_id: UUID, task_id: UUID | None

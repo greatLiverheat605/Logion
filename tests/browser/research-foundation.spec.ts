@@ -403,6 +403,7 @@ test("feature off returns 404 for every workbench route and retains legacy acces
     "/settings",
     "/legacy-data-check",
     "/settings/legacy-data",
+    "/settings/spaces",
   ]) {
     const response = await request.get(`http://127.0.0.1:3081${path}`);
     expect(response.status()).toBe(404);

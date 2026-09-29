@@ -12,7 +12,7 @@ const destinations: Record<string, string> = {
   data: "/settings/data",
   integrations: "/settings",
   workspaces: "/settings",
-  spaces: "/settings",
+  spaces: "/settings/spaces",
 };
 
 export function legacyDestination(path: string): string {

@@ -49,6 +49,12 @@ export default function Page() {
         </label>
       </div>
       <nav className="wb-settings" aria-label="更多设置">
+        <Link className="wb-setting-row" href="/settings/spaces">
+          <div>
+            <strong>空间管理</strong>
+            <p>归档与恢复空间，保留已有内容。</p>
+          </div>
+        </Link>
         <Link className="wb-setting-row" href="/settings/legacy-data">
           <div>
             <strong>本机旧数据</strong>
