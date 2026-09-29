@@ -24,7 +24,7 @@ from logion_api.db import session_factory
 from logion_api.errors import APIError
 from logion_api.identity.models import AuditEvent
 from logion_api.main import app
-from logion_api.workspaces.models import WorkspaceMembership
+from logion_api.workspaces.models import Space, WorkspaceMembership
 from sqlalchemy import select
 
 
@@ -346,7 +346,7 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                 resolver=resolve, transport_factory=lambda: httpx.MockTransport(provider_mock)
             ),
         )
-        for mode in ("allowed", "corrupt-builder", "disabled"):
+        for mode in ("allowed", "corrupt-builder", "archived", "disabled"):
             response = await owner.post(run_url, json=run_body())
             assert response.status_code == 202, response.text
             run_id = UUID(response.json()["id"])
@@ -371,6 +371,11 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                     ):
                         setattr(run, f"input_{name}", getattr(encrypted, name))
                 await db.commit()
+            if mode == "archived":
+                async with session_factory() as db:
+                    scope = await db.get(Space, UUID(space_id))
+                    scope.status = "archived"
+                    await db.commit()
             if mode == "disabled":
                 monkeypatch.setattr(settings, "research_v3_enabled", False)
                 assert (await owner.get(result_url)).status_code == 404
@@ -384,10 +389,16 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                     == {
                         "allowed": None,
                         "corrupt-builder": "AI_PRIVATE_CONTENT_BLOCKED",
+                        "archived": "AI_CONTEXT_UNAVAILABLE",
                         "disabled": "RESEARCH_FEATURE_DISABLED",
                     }[mode]
                 )
             assert len(outgoing) == 1
+            if mode == "archived":
+                async with session_factory() as db:
+                    scope = await db.get(Space, UUID(space_id))
+                    scope.status = "active"
+                    await db.commit()
         assert "Close reading" in outgoing[0]["messages"][0]["content"]
         assert "Public synthetic evidence" in outgoing[0]["messages"][1]["content"]
         async with session_factory() as db:

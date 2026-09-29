@@ -10,11 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.ai_gateway.models import AIRun
 from logion_api.ai_gateway.run_schemas import ObjectType
 from logion_api.content.models import Note, Resource
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
-from logion_api.identity.models import AuditEvent
+from logion_api.identity.models import AuditEvent, User
 from logion_api.knowledge_space.models import SourceExcerpt
 from logion_api.library.text_models import SourceText
 from logion_api.memory.models import QuizAttempt, Topic
@@ -23,6 +24,7 @@ from logion_api.planning.weekly_context import invalid_weekly_context, weekly_co
 from logion_api.reading.quiz_grading import grading_attempt
 from logion_api.reading.selections import selected_text
 from logion_api.research.models import ResearchClaim, ResearchQuestion
+from logion_api.workspaces.models import Space, Workspace, WorkspaceMembership
 
 RESEARCH_TASK_TIERS = MappingProxyType(
     {
@@ -69,6 +71,41 @@ CONTEXT_MODELS = MappingProxyType(
         "research_claim": ResearchClaim,
     }
 )
+
+
+async def require_run_space(db: AsyncSession, run: AIRun) -> None:
+    """Recheck queued research scope before each provider attempt."""
+    model: Any = CONTEXT_MODELS.get(run.target_type)
+    available = None
+    if model is not None:
+        available = await db.scalar(
+            select(model.id)
+            .join(Space, Space.id == model.space_id)
+            .join(Workspace, Workspace.id == Space.workspace_id)
+            .join(WorkspaceMembership, WorkspaceMembership.workspace_id == Workspace.id)
+            .join(User, User.id == WorkspaceMembership.user_id)
+            .where(
+                model.id == run.target_id,
+                model.workspace_id == run.workspace_id,
+                model.deleted_at.is_(None),
+                Space.workspace_id == run.workspace_id,
+                Space.status == "active",
+                Space.deleted_at.is_(None),
+                (Space.visibility == "shared") | (Space.owner_user_id == run.requested_by),
+                Workspace.status == "active",
+                Workspace.deleted_at.is_(None),
+                WorkspaceMembership.user_id == run.requested_by,
+                WorkspaceMembership.status == "active",
+                User.status == "active",
+                User.email_verified_at.is_not(None),
+            )
+        )
+    if available is None:
+        raise APIError(
+            code="AI_CONTEXT_UNAVAILABLE",
+            message="Research scope is no longer available.",
+            status_code=409,
+        )
 
 
 class ContextEntity(BaseModel):

@@ -1,6 +1,17 @@
 .wb-config-page {
   max-width: 1100px;
 }
+.wb-space-settings .wb-button,
+.wb-space-settings select,
+.wb-space-settings .wb-segmented button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.wb-space-workspace {
+  display: grid;
+  gap: 8px;
+  max-width: 440px;
+}
 .wb-legacy-data .wb-button {
   min-height: 44px;
   min-width: 44px;

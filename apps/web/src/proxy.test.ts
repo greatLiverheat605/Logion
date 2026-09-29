@@ -22,6 +22,7 @@ describe("proxy CSP", () => {
       "/settings",
       "/legacy-data-check",
       "/settings/legacy-data",
+      "/settings/spaces",
     ]) {
       const response = proxy(new NextRequest(`http://localhost:3000${path}`));
       expect(response.status).toBe(404);

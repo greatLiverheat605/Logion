@@ -76,6 +76,7 @@ from logion_api.workspaces.invitation_routes import (
     invitation_router,
     workspace_invitation_router,
 )
+from logion_api.workspaces.lifecycle_routes import router as space_lifecycle_router
 from logion_api.workspaces.routes import router as workspace_router
 
 
@@ -121,6 +122,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(invitation_router)
     application.include_router(workspace_invitation_router)
     application.include_router(workspace_router)
+    application.include_router(space_lifecycle_router)
     application.include_router(sync_router)
     application.include_router(user_settings_router)
     application.include_router(planning_router)
