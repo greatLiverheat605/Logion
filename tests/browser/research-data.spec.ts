@@ -178,4 +178,165 @@ test.describe.serial("online data export", () => {
       page.getByRole("region", { name: "导出任务" }).getByRole("listitem"),
     ).toHaveCount(1);
   });
+
+  test("notifications read real worker receipts once, retain failures and require explicit read", async () => {
+    const reads: string[] = [];
+    const watch = (request: import("@playwright/test").Request) => {
+      if (
+        request.method() === "GET" &&
+        new URL(request.url()).pathname ===
+          `/api/v1/workspaces/${workspace}/notifications`
+      )
+        reads.push(request.url());
+    };
+    page.on("request", watch);
+    await page.goto("/settings/notifications");
+    await expect(
+      page.getByRole("status").filter({ hasText: "2 条待处理未读通知" }),
+    ).toBeVisible();
+    expect(reads).toHaveLength(1);
+    page.off("request", watch);
+    await expect(
+      page.getByRole("link", { name: "通知，2 条待处理未读", exact: true }),
+    ).toBeVisible();
+    const history = page.getByRole("region", { name: "通知历史" });
+    await expect(history.getByRole("listitem")).toHaveCount(2);
+    await expect(history).not.toContainText("Data export ready");
+    await context.setOffline(true);
+    await history
+      .getByRole("button", { name: "标为已读", exact: true })
+      .first()
+      .click();
+    await expect(history.getByRole("alert")).toContainText("通知尚未标为已读");
+    await expect(
+      page.getByRole("status").filter({ hasText: "2 条待处理未读通知" }),
+    ).toBeVisible();
+    await context.setOffline(false);
+    // Reconnect must not replay a failed mutation.
+    expect(
+      (
+        await (
+          await context.request.get(
+            `/api/v1/workspaces/${workspace}/notifications`,
+          )
+        ).json()
+      ).notifications.every(
+        (row: { read_at: string | null }) => row.read_at === null,
+      ),
+    ).toBe(true);
+    const notificationPath = `**/api/v1/workspaces/${workspace}/notifications`;
+    const beforeRead = await (
+      await context.request.get(`/api/v1/workspaces/${workspace}/notifications`)
+    ).json();
+    let releaseRefresh!: () => void;
+    let sawRefresh!: () => void;
+    const heldRefresh = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const refreshing = new Promise<void>((resolve) => {
+      sawRefresh = resolve;
+    });
+    await page.route(notificationPath, async (route) => {
+      sawRefresh();
+      await heldRefresh;
+      await route.fulfill({ json: beforeRead });
+    });
+    try {
+      await history
+        .getByRole("button", { name: "刷新通知", exact: true })
+        .click();
+      await refreshing;
+      await history
+        .getByRole("button", { name: "标为已读", exact: true })
+        .first()
+        .focus();
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByRole("status").filter({ hasText: "1 条待处理未读通知" }),
+      ).toBeVisible();
+    } finally {
+      releaseRefresh();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+    await expect(
+      history.getByRole("button", { name: "刷新通知", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("status").filter({ hasText: "1 条待处理未读通知" }),
+    ).toBeVisible();
+    await history
+      .getByRole("button", { name: "标为已读", exact: true })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "0 条待处理未读通知" }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      history.getByRole("button", { name: "已读", exact: true }),
+    ).toHaveCount(2);
+    await expect(
+      page.getByRole("link", { name: "通知，0 条待处理未读", exact: true }),
+    ).toBeVisible();
+    await page.route(notificationPath, (route) => route.abort());
+    await history
+      .getByRole("button", { name: "刷新通知", exact: true })
+      .click();
+    await expect(history.getByRole("alert")).toContainText("已显示的记录保留");
+    await expect(history.getByRole("listitem")).toHaveCount(2);
+    await page.unrouteAll({ behavior: "wait" });
+    await history
+      .getByRole("button", { name: "刷新通知", exact: true })
+      .click();
+    await expect(history.getByRole("alert")).toHaveCount(0);
+    await history
+      .getByRole("link", { name: "前往处理", exact: true })
+      .first()
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "数据导出", exact: true }),
+    ).toBeVisible();
+  });
+
+  test("notification history supports four widths, themes, keyboard and online-only storage", async ({}, info) => {
+    await page.goto("/settings/notifications");
+    await expect(
+      page.getByRole("region", { name: "通知历史" }).getByRole("listitem"),
+    ).toHaveCount(2);
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({
+          colorScheme: theme,
+          reducedMotion: "reduce",
+        });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        for (const control of await page
+          .locator(".wb-notification-settings button, .wb-notification-entry")
+          .all()) {
+          const box = (await control.boundingBox())!;
+          expect(box.height).toBeGreaterThanOrEqual(44);
+          expect(box.width).toBeGreaterThanOrEqual(44);
+        }
+        await page.screenshot({
+          path: info.outputPath(`notifications-${width}-${theme}.png`),
+          fullPage: true,
+        });
+      }
+    }
+    expect(storageCalls).toBe(0);
+    expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+    expect(
+      await page.evaluate(
+        async () => (await navigator.serviceWorker.getRegistrations()).length,
+      ),
+    ).toBe(0);
+  });
 });
