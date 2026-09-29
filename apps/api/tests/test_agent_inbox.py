@@ -449,7 +449,7 @@ async def test_agent_shared_space_isolation(agent_case):
             "/api/v1/auth/register",
             json={
                 "email": f"agent-peer-{uuid4()}@example.com",
-                "password": "synthetic-peer-987654321",
+                "password": f"synthetic-{uuid4()}-Aa1!",
                 "device_name": "Synthetic peer",
             },
         )
