@@ -234,7 +234,8 @@ function AgentScope({ context }: { context: WorkbenchContext }) {
                   <p>
                     {token.revoked_at
                       ? "已撤销"
-                      : new Date(token.expires_at).getTime() <= Date.now()
+                      : new Date(token.expires_at).getTime() <=
+                          query.dataUpdatedAt
                         ? "已过期"
                         : `有效至 ${new Date(token.expires_at).toLocaleDateString("zh-CN")}`}
                   </p>
