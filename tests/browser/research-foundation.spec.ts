@@ -46,6 +46,8 @@ async function installApi(
           })),
         },
       });
+    if (path === `/api/v1/workspaces/${workspaceId}/notifications`)
+      return route.fulfill({ json: { notifications: [] } });
     if (path === "/api/v1/users/me/settings") {
       if (request.method() === "PUT") {
         expect(request.headers()["x-csrf-token"]).toBeTruthy();
@@ -404,6 +406,7 @@ test("feature off returns 404 for every workbench route and retains legacy acces
     "/legacy-data-check",
     "/settings/legacy-data",
     "/settings/spaces",
+    "/settings/notifications",
   ]) {
     const response = await request.get(`http://127.0.0.1:3081${path}`);
     expect(response.status()).toBe(404);

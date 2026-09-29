@@ -49,6 +49,12 @@ export default function Page() {
         </label>
       </div>
       <nav className="wb-settings" aria-label="更多设置">
+        <Link className="wb-setting-row" href="/settings/notifications">
+          <div>
+            <strong>通知</strong>
+            <p>查看待处理事项与普通操作历史。</p>
+          </div>
+        </Link>
         <Link className="wb-setting-row" href="/settings/spaces">
           <div>
             <strong>空间管理</strong>

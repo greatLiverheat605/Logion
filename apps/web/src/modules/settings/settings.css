@@ -7,6 +7,10 @@
   min-height: 44px;
   min-width: 44px;
 }
+.wb-scope .wb-notification-settings .wb-button {
+  min-height: 44px;
+  min-width: 44px;
+}
 .wb-space-workspace {
   display: grid;
   gap: 8px;

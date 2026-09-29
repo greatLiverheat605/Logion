@@ -17,6 +17,7 @@ import { useWorkbench } from "./provider";
 import { WORKBENCH_ROUTES } from "./routes";
 import { livePdfRange } from "./selection";
 import { PaletteSearch } from "./search";
+import { NotificationEntry } from "./notifications";
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
   const state = useWorkbench();
@@ -202,6 +203,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
             </Button>
             <span className="wb-title">{title}</span>
             <div className="wb-title-actions">
+              <NotificationEntry />
               <Menu
                 label="外观"
                 items={(
