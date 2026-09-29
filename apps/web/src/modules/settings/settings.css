@@ -7,6 +7,10 @@
   min-height: 44px;
   min-width: 44px;
 }
+.wb-space-settings .wb-segmented button {
+  padding-inline: 8px;
+  white-space: nowrap;
+}
 .wb-scope .wb-notification-settings .wb-button {
   min-height: 44px;
   min-width: 44px;
@@ -150,4 +154,22 @@
   .wb-config-filters label {
     width: 100%;
   }
+}
+
+.wb-space-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 8px;
+}
+.wb-space-more > summary {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--wb-sep);
+}
+.wb-space-more[open] > button {
+  margin-top: 8px;
 }

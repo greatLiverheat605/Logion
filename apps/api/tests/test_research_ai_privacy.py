@@ -346,7 +346,7 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                 resolver=resolve, transport_factory=lambda: httpx.MockTransport(provider_mock)
             ),
         )
-        for mode in ("allowed", "corrupt-builder", "archived", "disabled"):
+        for mode in ("allowed", "corrupt-builder", "archived", "deleted", "disabled"):
             response = await owner.post(run_url, json=run_body())
             assert response.status_code == 202, response.text
             run_id = UUID(response.json()["id"])
@@ -371,10 +371,11 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                     ):
                         setattr(run, f"input_{name}", getattr(encrypted, name))
                 await db.commit()
-            if mode == "archived":
+            if mode in ("archived", "deleted"):
                 async with session_factory() as db:
                     scope = await db.get(Space, UUID(space_id))
-                    scope.status = "archived"
+                    scope.status = mode
+                    scope.deleted_at = scope.updated_at if mode == "deleted" else None
                     await db.commit()
             if mode == "disabled":
                 monkeypatch.setattr(settings, "research_v3_enabled", False)
@@ -390,14 +391,16 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                         "allowed": None,
                         "corrupt-builder": "AI_PRIVATE_CONTENT_BLOCKED",
                         "archived": "AI_CONTEXT_UNAVAILABLE",
+                        "deleted": "AI_CONTEXT_UNAVAILABLE",
                         "disabled": "RESEARCH_FEATURE_DISABLED",
                     }[mode]
                 )
             assert len(outgoing) == 1
-            if mode == "archived":
+            if mode in ("archived", "deleted"):
                 async with session_factory() as db:
                     scope = await db.get(Space, UUID(space_id))
                     scope.status = "active"
+                    scope.deleted_at = None
                     await db.commit()
         assert "Close reading" in outgoing[0]["messages"][0]["content"]
         assert "Public synthetic evidence" in outgoing[0]["messages"][1]["content"]

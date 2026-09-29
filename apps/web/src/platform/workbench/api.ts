@@ -29,6 +29,9 @@ export function errorMessage(error: unknown): string {
     const pdfErrors: Record<string, string> = {
       SPACE_VERSION_CONFLICT:
         "空间已在其他页面更新。请取消并刷新空间，再重新确认。",
+      SPACE_CONFIRMATION_REQUIRED: "请重新确认本次空间操作。",
+      SPACE_DELETE_BLOCKED_BY_REFERENCE:
+        "空间外仍有引用，暂时不能删除。请保留空间并检查引用关系。",
       SPACE_NO_CHANGE: "空间已经处于这个状态，请取消并刷新空间。",
       QUIZ_ITEM_MODE_LOCKED: "这道题已有作答，不能更改判定方式。",
       QUIZ_ITEM_TOPIC_IMMUTABLE: "回忆题不能移到另一个知识点。",
