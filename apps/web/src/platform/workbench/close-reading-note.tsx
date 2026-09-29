@@ -9,16 +9,10 @@ import { readingAiError } from "./reading-ai";
 import { ReadingNoteDocument, type ReadingNote } from "./note-document";
 import type { SourceText } from "./selection";
 import type { WorkbenchContext } from "./preferences";
+import { NoteSectionsEditor } from "./note-sections-editor";
+import { READING_SECTIONS } from "./note-sections";
 
-const labels: Record<string, string> = {
-  motivation: "动机",
-  modeling: "建模",
-  experiments: "实验",
-  conclusions: "结论",
-  critique: "批判",
-  takeaway: "一句话要点",
-  open_questions: "待解决问题",
-};
+const labels: Record<string, string> = READING_SECTIONS;
 type Runs = components["schemas"]["ReadingNoteRuns"];
 type Draft = components["schemas"]["AIOutputDraftResponse"];
 
@@ -179,20 +173,15 @@ export function useCloseReadingNote(
         </Button>
       ) : (
         <>
-          <label>
-            精读笔记正文
-            <textarea
-              className="wb-note-editor"
-              value={document.markdown}
-              maxLength={500000}
-              disabled={busy}
-              onChange={(event) => {
-                document.edit(event.target.value);
-                setError(null);
-                render();
-              }}
-            />
-          </label>
+          <NoteSectionsEditor
+            markdown={document.markdown}
+            disabled={busy}
+            onChange={(markdown) => {
+              document.edit(markdown);
+              setError(null);
+              render();
+            }}
+          />
           <p role="status" className="wb-muted">
             {isSaving ? "正在保存…" : document.dirty ? "尚未保存" : "已保存"}
           </p>

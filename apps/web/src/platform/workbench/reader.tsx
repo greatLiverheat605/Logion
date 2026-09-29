@@ -594,8 +594,10 @@ function ReaderScope({
       ref={root}
       data-white-paper={whitePaper}
     >
-      <h1 className="wb-reader-title">{detail.data?.title ?? "论文阅读"}</h1>
-      {detail.data && <ReadingProgress item={detail.data} path={path} />}
+      <header className="wb-reader-heading">
+        <h1 className="wb-reader-title">{detail.data?.title ?? "论文阅读"}</h1>
+        {detail.data && <ReadingProgress item={detail.data} path={path} />}
+      </header>
       {actionStatus && <p role="status">{actionStatus}</p>}
       {action.isPending && <p role="status">正在处理选中内容…</p>}
       {action.error && <p role="alert">{errorMessage(action.error)}</p>}

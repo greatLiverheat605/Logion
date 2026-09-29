@@ -173,6 +173,7 @@ test("selection commands preserve source citations and use the real AI draft pip
   await page.getByRole("button", { name: "选择右栏内容" }).click();
   await page.getByRole("menuitem", { name: "精读笔记" }).click();
   await page.getByRole("button", { name: "创建精读笔记" }).click();
+  await page.getByText("完整 Markdown 与自定义内容", { exact: true }).click();
   const editor = page.getByRole("textbox", { name: "精读笔记正文" });
   const notePath = `${scope}/library/resources/${resource.id}/note`;
   const savedNote = page.waitForResponse(
@@ -201,6 +202,7 @@ test("selection commands preserve source citations and use the real AI draft pip
   );
   await page.reload();
   expect((await reloadedText).status()).toBe(200);
+  await page.getByText("完整 Markdown 与自定义内容", { exact: true }).click();
   await expect(page.getByRole("heading", { name: "待确认草稿" })).toBeVisible();
   await page.getByRole("button", { name: "接受并写入笔记" }).click();
   await expect(editor).toHaveValue(/Synthetic explanation/);
