@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import inspect, or_, select
+from sqlalchemy import inspect, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.collaboration.models import GroupFeedback, ReportSnapshot, ReviewRequest, Rubric
@@ -39,6 +39,12 @@ from logion_api.memory.research_scope import legacy_memory_scope
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.portability.crypto import ExportArtifactCipher
 from logion_api.portability.models import DataExportJob
+from logion_api.portability.research_export import (
+    RESEARCH_EXPORT_SCHEMA,
+    bibliography,
+    require_export_access,
+    research_records,
+)
 from logion_api.research.models import (
     ExperimentRun,
     MetricRecord,
@@ -113,6 +119,7 @@ OMITTED_COLUMNS = {
 
 class PortabilityService:
     def __init__(self, settings: Settings, workspaces: WorkspaceService) -> None:
+        self._settings = settings
         self._cipher = ExportArtifactCipher(settings)
         self._workspaces = workspaces
 
@@ -123,13 +130,20 @@ class PortabilityService:
         workspace_id: UUID,
         job_id: UUID,
         request_id: str,
+        *,
+        schema_version: str = EXPORT_SCHEMA,
     ) -> DataExportJob:
+        self._require_format(schema_version)
         await self._workspaces.resolve_workspace(
             db, context, workspace_id, request_id=request_id, permission=Permission.WORKSPACE_READ
         )
         existing = await db.get(DataExportJob, job_id)
         if existing is not None:
-            if existing.workspace_id == workspace_id and existing.requested_by == context.user.id:
+            if (
+                existing.workspace_id == workspace_id
+                and existing.requested_by == context.user.id
+                and existing.schema_version == schema_version
+            ):
                 return existing
             raise self._not_found()
         active_count = await db.scalar(
@@ -152,7 +166,7 @@ class PortabilityService:
             id=job_id,
             workspace_id=workspace_id,
             requested_by=context.user.id,
-            schema_version=EXPORT_SCHEMA,
+            schema_version=schema_version,
             expires_at=now + timedelta(hours=24),
         )
         db.add(row)
@@ -165,15 +179,22 @@ class PortabilityService:
                 workspace_id=workspace_id,
                 target_type="data_export",
                 target_id=row.id,
-                metadata={"schema_version": EXPORT_SCHEMA},
+                metadata={"schema_version": schema_version},
             )
         )
         await db.flush()
         return row
 
     async def list_exports(
-        self, db: AsyncSession, context: AuthContext, workspace_id: UUID, request_id: str
+        self,
+        db: AsyncSession,
+        context: AuthContext,
+        workspace_id: UUID,
+        request_id: str,
+        *,
+        schema_version: str = EXPORT_SCHEMA,
     ) -> list[DataExportJob]:
+        self._require_format(schema_version)
         await self._workspaces.resolve_workspace(
             db, context, workspace_id, request_id=request_id, permission=Permission.WORKSPACE_READ
         )
@@ -184,6 +205,7 @@ class PortabilityService:
                     .where(
                         DataExportJob.workspace_id == workspace_id,
                         DataExportJob.requested_by == context.user.id,
+                        DataExportJob.schema_version == schema_version,
                     )
                     .order_by(DataExportJob.created_at.desc(), DataExportJob.id.desc())
                     .limit(50)
@@ -198,7 +220,10 @@ class PortabilityService:
         workspace_id: UUID,
         export_id: UUID,
         request_id: str,
+        *,
+        schema_version: str = EXPORT_SCHEMA,
     ) -> tuple[DataExportJob, bytes]:
+        self._require_format(schema_version)
         await self._workspaces.resolve_workspace(
             db, context, workspace_id, request_id=request_id, permission=Permission.WORKSPACE_READ
         )
@@ -207,6 +232,7 @@ class PortabilityService:
                 DataExportJob.id == export_id,
                 DataExportJob.workspace_id == workspace_id,
                 DataExportJob.requested_by == context.user.id,
+                DataExportJob.schema_version == schema_version,
             )
         )
         if row is None or row.status != "succeeded" or row.expires_at <= utc_now():
@@ -218,6 +244,10 @@ class PortabilityService:
                 message="The export artifact failed integrity verification.",
                 status_code=503,
             )
+        if schema_version == RESEARCH_EXPORT_SCHEMA:
+            with zipfile.ZipFile(io.BytesIO(value)) as archive:
+                manifest = json.loads(archive.read("manifest.json"))
+            await require_export_access(db, row, [UUID(value) for value in manifest["space_ids"]])
         return row, value
 
     async def cancel_export(
@@ -228,7 +258,10 @@ class PortabilityService:
         export_id: UUID,
         expected_version: int,
         request_id: str,
+        *,
+        schema_version: str = EXPORT_SCHEMA,
     ) -> DataExportJob:
+        self._require_format(schema_version)
         await self._workspaces.resolve_workspace(
             db, context, workspace_id, request_id=request_id, permission=Permission.WORKSPACE_READ
         )
@@ -238,6 +271,7 @@ class PortabilityService:
                 DataExportJob.id == export_id,
                 DataExportJob.workspace_id == workspace_id,
                 DataExportJob.requested_by == context.user.id,
+                DataExportJob.schema_version == schema_version,
             )
             .with_for_update()
         )
@@ -256,6 +290,19 @@ class PortabilityService:
             row.artifact_encryption_key_id = None
             row.version += 1
             row.completed_at = utc_now()
+            if schema_version == RESEARCH_EXPORT_SCHEMA:
+                db.add(
+                    new_audit_event(
+                        request_id=request_id,
+                        event_type="data.export_cancelled",
+                        result="success",
+                        actor_id=context.user.id,
+                        workspace_id=workspace_id,
+                        target_type="data_export",
+                        target_id=row.id,
+                        metadata={"schema_version": schema_version},
+                    )
+                )
             await db.flush()
         return row
 
@@ -263,7 +310,13 @@ class PortabilityService:
         async with session_factory() as db:
             row = await db.scalar(
                 select(DataExportJob)
-                .where(DataExportJob.status == "queued")
+                .where(
+                    DataExportJob.status == "queued",
+                    or_(
+                        DataExportJob.schema_version != RESEARCH_EXPORT_SCHEMA,
+                        literal(self._settings.research_v3_enabled),
+                    ),
+                )
                 .order_by(DataExportJob.created_at, DataExportJob.id)
                 .with_for_update(skip_locked=True)
                 .limit(1)
@@ -304,8 +357,14 @@ class PortabilityService:
                     workspace_id=row.workspace_id,
                     recipient_user_id=row.requested_by,
                     category="system",
-                    title="Data export ready",
-                    summary="Your encrypted export artifact is ready for authenticated download.",
+                    title="数据导出已就绪"
+                    if row.schema_version == RESEARCH_EXPORT_SCHEMA
+                    else "Data export ready",
+                    summary=(
+                        "请在 24 小时内到设置的数据导出页下载。"
+                        if row.schema_version == RESEARCH_EXPORT_SCHEMA
+                        else "Your encrypted export artifact is ready for authenticated download."
+                    ),
                     dedupe_key=f"data-export:{row.id}",
                     target_type="data_export",
                     target_id=row.id,
@@ -319,7 +378,10 @@ class PortabilityService:
                         workspace_id=row.workspace_id,
                         target_type="data_export",
                         target_id=row.id,
-                        metadata={"artifact_bytes": len(artifact), "schema_version": EXPORT_SCHEMA},
+                        metadata={
+                            "artifact_bytes": len(artifact),
+                            "schema_version": row.schema_version,
+                        },
                     )
                 )
                 await db.commit()
@@ -337,58 +399,67 @@ class PortabilityService:
                     await db.commit()
 
     async def _build_archive(self, db: AsyncSession, job: DataExportJob) -> bytes:
+        # Transient legacy jobs have not received SQLAlchemy column defaults yet.
+        schema_version = job.schema_version or EXPORT_SCHEMA
+        self._require_format(schema_version)
         workspace = await db.get(Workspace, job.workspace_id)
         if workspace is None:
             raise self._not_found()
-        spaces = list(
-            (
-                await db.scalars(
-                    select(Space).where(
-                        Space.workspace_id == job.workspace_id,
-                        Space.status != "deleted",
-                        or_(Space.visibility == "shared", Space.owner_user_id == job.requested_by),
+        if schema_version == RESEARCH_EXPORT_SCHEMA:
+            objects = await research_records(db, job)
+        else:
+            spaces = list(
+                (
+                    await db.scalars(
+                        select(Space).where(
+                            Space.workspace_id == job.workspace_id,
+                            Space.status != "deleted",
+                            or_(
+                                Space.visibility == "shared",
+                                Space.owner_user_id == job.requested_by,
+                            ),
+                        )
                     )
-                )
-            ).all()
-        )
-        space_ids = [row.id for row in spaces]
-        allowed_plan_ids = select(LearningPlan.id).where(
-            LearningPlan.workspace_id == job.workspace_id,
-            LearningPlan.space_id.in_(space_ids),
-        )
-        allowed_plan_version_ids = select(PlanVersion.id).where(
-            PlanVersion.workspace_id == job.workspace_id,
-            PlanVersion.plan_id.in_(allowed_plan_ids),
-        )
-        objects: dict[str, list[dict[str, Any]]] = {"spaces": [self._record(row) for row in spaces]}
-        for model in SHARED_MODELS:
-            query = select(model).where(model.workspace_id == job.workspace_id)
-            if model in (Resource, Topic, Note, QuizItem, Task):
-                query = query.where(model.research_owner_id.is_(None))
-            if hasattr(model, "space_id"):
-                query = query.where(model.space_id.in_(space_ids))
-            elif model is PlanVersion:
-                query = query.where(model.plan_id.in_(allowed_plan_ids))
-            elif model is PlanPhase:
-                query = query.where(model.plan_version_id.in_(allowed_plan_version_ids))
-            if hasattr(model, "deleted_at"):
-                query = query.where(model.deleted_at.is_(None))
-            objects[model.__tablename__] = [
-                self._record(row) for row in (await db.scalars(query)).all()
-            ]
-        for personal_model in PERSONAL_MODELS:
-            query = select(personal_model).where(
-                personal_model.workspace_id == job.workspace_id,
-                personal_model.user_id == job.requested_by,
-                legacy_memory_scope(personal_model),
+                ).all()
             )
-            if hasattr(personal_model, "deleted_at"):
-                query = query.where(personal_model.deleted_at.is_(None))
-            objects[personal_model.__tablename__] = [
-                self._record(row) for row in (await db.scalars(query)).all()
-            ]
+            space_ids = [row.id for row in spaces]
+            allowed_plan_ids = select(LearningPlan.id).where(
+                LearningPlan.workspace_id == job.workspace_id,
+                LearningPlan.space_id.in_(space_ids),
+            )
+            allowed_plan_version_ids = select(PlanVersion.id).where(
+                PlanVersion.workspace_id == job.workspace_id,
+                PlanVersion.plan_id.in_(allowed_plan_ids),
+            )
+            objects = {"spaces": [self._record(row) for row in spaces]}
+            for model in SHARED_MODELS:
+                query = select(model).where(model.workspace_id == job.workspace_id)
+                if model in (Resource, Topic, Note, QuizItem, Task):
+                    query = query.where(model.research_owner_id.is_(None))
+                if hasattr(model, "space_id"):
+                    query = query.where(model.space_id.in_(space_ids))
+                elif model is PlanVersion:
+                    query = query.where(model.plan_id.in_(allowed_plan_ids))
+                elif model is PlanPhase:
+                    query = query.where(model.plan_version_id.in_(allowed_plan_version_ids))
+                if hasattr(model, "deleted_at"):
+                    query = query.where(model.deleted_at.is_(None))
+                objects[model.__tablename__] = [
+                    self._record(row) for row in (await db.scalars(query)).all()
+                ]
+            for personal_model in PERSONAL_MODELS:
+                query = select(personal_model).where(
+                    personal_model.workspace_id == job.workspace_id,
+                    personal_model.user_id == job.requested_by,
+                    legacy_memory_scope(personal_model),
+                )
+                if hasattr(personal_model, "deleted_at"):
+                    query = query.where(personal_model.deleted_at.is_(None))
+                objects[personal_model.__tablename__] = [
+                    self._record(row) for row in (await db.scalars(query)).all()
+                ]
         package = {
-            "schema_version": EXPORT_SCHEMA,
+            "schema_version": schema_version,
             "product": "Logion",
             "exported_at": datetime.now(UTC).isoformat(),
             "workspace": {"id": str(workspace.id), "name": workspace.name},
@@ -461,7 +532,10 @@ class PortabilityService:
         objects = package["objects"]
         notes = objects.get("notes", [])
         tasks = objects.get("tasks", [])
-        papers = objects.get("paper_records", [])
+        papers = objects.get(
+            "resources" if package["schema_version"] == RESEARCH_EXPORT_SCHEMA else "paper_records",
+            [],
+        )
         markdown = "\n\n".join(
             f"# {row.get('title', 'Untitled')}\n\n{row.get('markdown_body', '')}" for row in notes
         )
@@ -476,7 +550,14 @@ class PortabilityService:
             {field: PortabilityService._csv_cell(row.get(field)) for field in writer.fieldnames}
             for row in tasks
         )
-        bibtex = "\n\n".join(PortabilityService._bibtex(row) for row in papers)
+        bibtex = "\n\n".join(
+            (
+                bibliography(row)
+                if package["schema_version"] == RESEARCH_EXPORT_SCHEMA
+                else PortabilityService._bibtex(row)
+            )
+            for row in papers
+        )
         manifest = {
             "schema_version": package["schema_version"],
             "product": package["product"],
@@ -486,6 +567,8 @@ class PortabilityService:
             "excluded": package["excluded"],
             "counts": {name: len(rows) for name, rows in objects.items()},
         }
+        if package["schema_version"] == RESEARCH_EXPORT_SCHEMA:
+            manifest["space_ids"] = [row["id"] for row in objects["spaces"]]
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
             archive.writestr("data.json", json.dumps(package, ensure_ascii=False, indent=2))
@@ -509,6 +592,12 @@ class PortabilityService:
         if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
             return f"'{value}"
         return value
+
+    def _require_format(self, schema_version: str) -> None:
+        if schema_version not in (EXPORT_SCHEMA, RESEARCH_EXPORT_SCHEMA) or (
+            schema_version == RESEARCH_EXPORT_SCHEMA and not self._settings.research_v3_enabled
+        ):
+            raise self._not_found()
 
     @staticmethod
     def _not_found() -> APIError:

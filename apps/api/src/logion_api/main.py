@@ -51,6 +51,7 @@ from logion_api.middleware import request_id_middleware
 from logion_api.planning.online_routes import router as online_planning_router
 from logion_api.planning.routes import router as planning_router
 from logion_api.planning.weekly_routes import router as research_weekly_router
+from logion_api.portability.research_routes import router as research_portability_router
 from logion_api.portability.routes import account_router as account_deletion_router
 from logion_api.portability.routes import import_router as portability_import_router
 from logion_api.portability.routes import router as portability_router
@@ -159,6 +160,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(engagement_router)
     application.include_router(public_calendar_router)
     application.include_router(portability_router)
+    application.include_router(research_portability_router)
     application.include_router(portability_import_router)
     application.include_router(account_deletion_router)
     application.include_router(knowledge_space_router)

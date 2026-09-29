@@ -11,6 +11,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createWorkbenchQueryClient } from "@/platform/workbench/api";
 import { AISettings } from "./ai-settings";
 import { AuditSettings } from "./audit-settings";
+import { DataSettings } from "./data-settings";
 import { SecuritySettings } from "./security-settings";
 import { LogionApiError } from "@/lib/api/client";
 const mocks = vi.hoisted(() => ({ request: vi.fn(), role: "owner" }));
@@ -131,4 +132,38 @@ it("keeps device revocation confirmation and failure visible without reporting s
   expect(screen.queryByRole("status")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("requires explicit export confirmation and retains authentication failures in the dialog", async () => {
+  mocks.request.mockImplementation(
+    async (_path: string, options: { method?: string }) => {
+      if (options.method === "POST")
+        throw new LogionApiError({
+          code: "AUTH_RECENT_LOGIN_REQUIRED",
+          status: 403,
+          message: "Recent authentication required",
+        });
+      return { exports: [] };
+    },
+  );
+  render(
+    <QueryClientProvider client={createWorkbenchQueryClient()}>
+      <DataSettings />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("还没有导出记录。");
+  fireEvent.click(screen.getByRole("button", { name: "创建导出" }));
+  expect(
+    screen.getByRole<HTMLButtonElement>("button", {
+      name: "确认创建",
+    }).disabled,
+  ).toBe(true);
+  expect(
+    mocks.request.mock.calls.filter((call) => call[1]?.method === "POST"),
+  ).toHaveLength(0);
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "确认创建" }));
+  await screen.findByRole("alert");
+  expect(screen.getByRole("alert").textContent).toContain("请重新登录");
+  expect(screen.getByRole("dialog")).toBeTruthy();
 });

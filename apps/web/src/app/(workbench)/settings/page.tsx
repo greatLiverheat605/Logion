@@ -49,6 +49,12 @@ export default function Page() {
         </label>
       </div>
       <nav className="wb-settings" aria-label="更多设置">
+        <Link className="wb-setting-row" href="/settings/data">
+          <div>
+            <strong>数据导出</strong>
+            <p>下载研究记录与私人想法，保留旧版导出格式。</p>
+          </div>
+        </Link>
         <Link className="wb-setting-row" href="/settings/ai">
           <div>
             <strong>AI 服务商与路由</strong>
