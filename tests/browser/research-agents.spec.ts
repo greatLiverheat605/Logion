@@ -228,7 +228,7 @@ test.describe.serial("personal agent inbox", () => {
         });
         await page
           .getByRole("heading", { name: "收件箱", exact: true })
-          .scrollIntoViewIfNeeded();
+          .evaluate((element) => element.scrollIntoView({ block: "start" }));
         await page.screenshot({
           path: info.outputPath(`agents-inbox-${width}-${theme}.png`),
           fullPage: true,
