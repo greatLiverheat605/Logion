@@ -138,7 +138,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
             {!state.workspaces.length && <option value="">暂无工作区</option>}
             {state.workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
+                {workspace.name === "Personal workspace"
+                  ? "个人工作区"
+                  : workspace.name}
               </option>
             ))}
           </select>
@@ -154,7 +156,11 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
             {!state.spaces.length && <option value="">暂无可访问空间</option>}
             {state.spaces.map((space) => (
               <option key={space.id} value={space.id}>
-                {space.name}
+                {space.name === "Private" && space.visibility === "private"
+                  ? "私人空间"
+                  : space.name === "Shared" && space.visibility === "shared"
+                    ? "共享空间"
+                    : space.name}
               </option>
             ))}
           </select>
@@ -219,9 +225,12 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
             {children}
           </main>
           <nav className="wb-bottom-nav" aria-label="快捷导航">
-            {WORKBENCH_ROUTES.filter((route) =>
-              ["/today", "/library", "/review", "/graph"].includes(route.path),
-            ).map((route) => (
+            {[
+              { path: "/review", label: "复习" },
+              { path: "/records", label: "笔记" },
+              { path: "/library", label: "文献" },
+              { path: "/graph", label: "知识网" },
+            ].map((route) => (
               <Link
                 key={route.path}
                 href={route.path}

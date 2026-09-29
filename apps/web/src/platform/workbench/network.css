@@ -172,7 +172,7 @@
     border-top: 1px solid var(--wb-sep);
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   .wb-network-canvas,
   .wb-network-view-tools {
     display: none;

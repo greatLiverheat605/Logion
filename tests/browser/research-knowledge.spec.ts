@@ -336,6 +336,16 @@ test.describe.serial("private research questions", () => {
   test("network is usable at four widths in both themes", async ({}, testInfo) => {
     for (const width of [320, 390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      if (width < 768) {
+        await expect(
+          page.getByRole("button", {
+            name: /^(手动连线|AI 建议连线|确认连线|拒绝连线)$/,
+          }),
+        ).toHaveCount(0);
+        await expect(
+          page.getByRole("complementary", { name: "知识网详情" }),
+        ).toContainText("本人把想法和阅读证据联系起来。");
+      }
       for (const theme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: theme });
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);

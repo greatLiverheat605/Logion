@@ -203,6 +203,7 @@ test.describe.serial("one paper reading loop", () => {
     await page.getByRole("button", { name: "选择右栏内容" }).click();
     await page.getByRole("menuitem", { name: "精读笔记" }).click();
     await page.getByRole("button", { name: "创建精读笔记" }).click();
+    await page.getByText("完整 Markdown 与自定义内容", { exact: true }).click();
     const editor = page.getByRole("textbox", { name: "精读笔记正文" });
     const saved = page.waitForResponse(
       (r) =>

@@ -2,7 +2,14 @@
 
 import "./network.css";
 
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -28,6 +35,14 @@ import {
   type NetworkNode,
   type NetworkEdge,
 } from "./network-model";
+
+const phoneQuery = "(max-width: 767px)";
+const subscribePhone = (update: () => void) => {
+  const media = window.matchMedia(phoneQuery);
+  media.addEventListener("change", update);
+  return () => media.removeEventListener("change", update);
+};
+const isPhone = () => window.matchMedia(phoneQuery).matches;
 
 type Run = components["schemas"]["AIRunResponse"];
 type Draft = components["schemas"]["AIOutputDraftResponse"];
@@ -78,8 +93,10 @@ export function NetworkScope({
   compact?: boolean;
 }) {
   const client = useQueryClient();
+  const readOnly = useSyncExternalStore(subscribePhone, isPhone, () => true);
   const [selection, select] = useState<string | null>(null);
   const [editor, setEditor] = useState<"manual" | "ai" | null>(null);
+  if (readOnly && editor) setEditor(null);
   const [runId, setRunId] = useState<string | null>(null);
   const path = `${scope}/research/knowledge`;
   const key = ["workbench", "network", path];
@@ -188,18 +205,22 @@ export function NetworkScope({
             载入更多问题
           </Button>
         )}
-        <Button
-          disabled={!network?.nodes.length}
-          onClick={() => setEditor("manual")}
-        >
-          手动连线
-        </Button>
-        <Button
-          disabled={!network?.nodes.length}
-          onClick={() => setEditor("ai")}
-        >
-          AI 建议连线
-        </Button>
+        {!readOnly && (
+          <Button
+            disabled={!network?.nodes.length}
+            onClick={() => setEditor("manual")}
+          >
+            手动连线
+          </Button>
+        )}
+        {!readOnly && (
+          <Button
+            disabled={!network?.nodes.length}
+            onClick={() => setEditor("ai")}
+          >
+            AI 建议连线
+          </Button>
+        )}
         <Button
           disabled={query.isFetching}
           onClick={() => void query.refetch()}
@@ -207,6 +228,9 @@ export function NetworkScope({
           刷新知识网
         </Button>
       </div>
+      {readOnly && (
+        <p className="wb-muted">手机端仅供查看，建立和确认连线请使用电脑。</p>
+      )}
       <p className="wb-network-legend">
         <span>实线 · 已确认</span>
         <span>虚线 · AI 建议</span>
@@ -264,29 +288,33 @@ export function NetworkScope({
                     {edge.origin === "ai" && (
                       <p className="wb-muted">AI 建议需要结合原文核实。</p>
                     )}
-                    <div className="wb-research-actions">
-                      {edge.status === "suggested" && (
+                    {!readOnly && (
+                      <div className="wb-research-actions">
+                        {edge.status === "suggested" && (
+                          <Button
+                            disabled={decision.isPending}
+                            onClick={() =>
+                              decision.mutate({ edge, status: "confirmed" })
+                            }
+                          >
+                            确认连线
+                          </Button>
+                        )}
                         <Button
                           disabled={decision.isPending}
                           onClick={() =>
-                            decision.mutate({ edge, status: "confirmed" })
+                            decision.mutate({ edge, status: "rejected" })
                           }
                         >
-                          确认连线
+                          拒绝连线
                         </Button>
-                      )}
-                      <Button
-                        disabled={decision.isPending}
-                        onClick={() =>
-                          decision.mutate({ edge, status: "rejected" })
-                        }
-                      >
-                        拒绝连线
-                      </Button>
-                    </div>
-                    <p className="wb-muted">
-                      拒绝后隐藏，之后不再建议这条关系。
-                    </p>
+                      </div>
+                    )}
+                    {!readOnly && (
+                      <p className="wb-muted">
+                        拒绝后隐藏，之后不再建议这条关系。
+                      </p>
+                    )}
                   </>
                 ) : node ? (
                   <>
@@ -326,7 +354,7 @@ export function NetworkScope({
             ? "只发送你勾选的内容；想法和已有连线不参与。建议需本人逐条确认。"
             : "选择节点和关系。保存表示本人确认这条连线。"
         }
-        open={editor !== null}
+        open={!readOnly && editor !== null}
         onOpenChange={(open) => {
           if (!open) setEditor(null);
         }}
