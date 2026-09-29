@@ -13148,6 +13148,137 @@
         "title": "ResearchRunResult",
         "type": "object"
       },
+      "ResearchSearchConcept": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description"
+        ],
+        "title": "ResearchSearchConcept",
+        "type": "object"
+      },
+      "ResearchSearchItem": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "resource",
+              "text",
+              "excerpt",
+              "topic",
+              "quiz"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "personal": {
+            "title": "Personal",
+            "type": "boolean"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "topic_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Id"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "snippet",
+          "resource_id",
+          "topic_id",
+          "page",
+          "personal"
+        ],
+        "title": "ResearchSearchItem",
+        "type": "object"
+      },
+      "ResearchSearchPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSearchItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "ResearchSearchPage",
+        "type": "object"
+      },
       "ResourceCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -50186,6 +50317,185 @@
         "summary": "Create Run",
         "tags": [
           "research"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/search": {
+      "get": {
+        "operationId": "research_search",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 2,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "resource",
+                    "text",
+                    "excerpt",
+                    "topic",
+                    "quiz"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchSearchPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search",
+        "tags": [
+          "research-search"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/search/concepts/{topic_id}": {
+      "get": {
+        "operationId": "research_search_concept",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Topic Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchSearchConcept"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Concept",
+        "tags": [
+          "research-search"
         ]
       }
     },

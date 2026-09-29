@@ -1,0 +1,71 @@
+.wb-search-page {
+  max-width: 1000px;
+}
+.wb-search-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.wb-search-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.wb-search-form label:first-child {
+  flex: 1 1 240px;
+}
+.wb-scope .wb-search-form input,
+.wb-scope .wb-search-form select {
+  width: 100%;
+  min-height: 44px;
+}
+.wb-search-results {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.wb-search-results a {
+  padding: 16px;
+  background: var(--wb-pop);
+  border: 1px solid var(--wb-sep);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--wb-text);
+}
+.wb-search-result {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.wb-search-result strong {
+  font-size: 15px;
+}
+.wb-search-kind {
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+.wb-search-snippet {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.wb-search-concept {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wb-command [cmdk-item] {
+  min-height: 44px;
+}
+@media (max-width: 480px) {
+  .wb-search-form label:last-child {
+    flex: 1 1 100%;
+  }
+}
+
+.wb-scope .wb-search-form .wb-button {
+  min-height: 44px;
+}
