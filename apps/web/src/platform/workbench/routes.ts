@@ -11,7 +11,7 @@ export const WORKBENCH_ROUTES = [
 ] as const;
 
 export function isWorkbenchPath(path: string): boolean {
-  return /^(?:\/(?:today|library|questions|graph|review|plan|records|search|settings)(?:\/|$)|\/read(?:\/|$))/.test(
+  return /^(?:\/(?:today|library|questions|graph|review|plan|records|search|settings|legacy-data-check)(?:\/|$)|\/read(?:\/|$))/.test(
     path,
   );
 }

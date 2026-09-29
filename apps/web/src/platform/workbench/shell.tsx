@@ -116,7 +116,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   const activeRoute = WORKBENCH_ROUTES.find(
     (route) => path === route.path || path.startsWith(`${route.path}/`),
   );
-  const title = activeRoute?.label ?? "阅读器";
+  const title =
+    activeRoute?.label ??
+    (path === "/legacy-data-check" ? "旧数据检查" : "阅读器");
   const navigationContent = (
     <>
       <div className="wb-brand">

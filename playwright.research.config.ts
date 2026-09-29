@@ -19,7 +19,7 @@ const attachmentRoot = `reports/research-real/attachments/${randomUUID()}`;
 export default defineConfig({
   testDir: "./tests/browser",
   testMatch:
-    /research-(real-backend|reading-loop|knowledge|online-planning|records|memory-review|settings|security|data|search|mobile-reading)\.spec\.ts/,
+    /research-(real-backend|reading-loop|knowledge|online-planning|records|memory-review|settings|security|data|search|mobile-reading|legacy-data)\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
@@ -57,8 +57,8 @@ export default defineConfig({
         LOGION_KNOWLEDGE_CURSOR_KEYS: JSON.stringify({
           test: randomBytes(32).toString("hex"),
         }),
-        // Fifteen isolated accounts share this suite's one loopback proxy IP.
-        LOGION_REGISTRATION_LIMIT_PER_HOUR: "15",
+        // Sixteen isolated accounts share this suite's one loopback proxy IP.
+        LOGION_REGISTRATION_LIMIT_PER_HOUR: "16",
         LOGION_PLANNING_PHASE_REVISION_ENABLED: "true",
         LOGION_SOURCE_LINKS_ENABLED: "true",
         LOGION_REDIS_URL:

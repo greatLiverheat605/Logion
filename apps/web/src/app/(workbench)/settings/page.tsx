@@ -49,6 +49,12 @@ export default function Page() {
         </label>
       </div>
       <nav className="wb-settings" aria-label="更多设置">
+        <Link className="wb-setting-row" href="/settings/legacy-data">
+          <div>
+            <strong>本机旧数据</strong>
+            <p>检查旧队列，确认后清除当前浏览器的旧数据。</p>
+          </div>
+        </Link>
         <Link className="wb-setting-row" href="/settings/data">
           <div>
             <strong>数据导出</strong>
