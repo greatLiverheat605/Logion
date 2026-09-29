@@ -250,7 +250,8 @@ async def test_archive_ledger_failure_rolls_back_status(online_case, monkeypatch
         assert row.status == "active" and row.version == 1
 
 
-async def test_legacy_note_writer_rechecks_space_after_lock_wait(online_case, monkeypatch):
+@pytest.mark.parametrize("status", ["archived", "deleted"])
+async def test_legacy_note_writer_rechecks_space_after_lock_wait(online_case, monkeypatch, status):
     c = online_case
     note = await create_note(c)
     observed = asyncio.Event()
@@ -277,7 +278,8 @@ async def test_legacy_note_writer_rechecks_space_after_lock_wait(online_case, mo
         )
         try:
             await asyncio.wait_for(observed.wait(), timeout=5)
-            row.status = "archived"
+            row.status = status
+            row.deleted_at = utc_now() if status == "deleted" else None
             await db.commit()
             assert (await asyncio.wait_for(pending, timeout=5)).status_code == 404
         finally:

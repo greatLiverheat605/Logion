@@ -58,7 +58,7 @@ export default function Page() {
         <Link className="wb-setting-row" href="/settings/spaces">
           <div>
             <strong>空间管理</strong>
-            <p>归档与恢复空间，保留已有内容。</p>
+            <p>归档、软删除与持续恢复，保留已有内容。</p>
           </div>
         </Link>
         <Link className="wb-setting-row" href="/settings/legacy-data">

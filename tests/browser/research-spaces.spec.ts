@@ -76,7 +76,9 @@ test.describe.serial("recoverable Space archive", () => {
           ),
         ).toBe(true);
         for (const control of await page
-          .locator(".wb-space-settings button, .wb-space-settings select")
+          .locator(
+            ".wb-space-settings button:visible, .wb-space-settings select:visible, .wb-space-settings summary:visible",
+          )
           .all()) {
           const box = (await control.boundingBox())!;
           expect(box.height).toBeGreaterThanOrEqual(44);
@@ -181,5 +183,164 @@ test.describe.serial("recoverable Space archive", () => {
     await expect(
       page.getByRole("status").filter({ hasText: "空间已恢复" }),
     ).toBeVisible();
+  });
+
+  test("delete needs a second confirmation and offline failure never replays", async () => {
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await page.getByRole("radio", { name: "使用中", exact: true }).click();
+    const more = page.getByLabel("更多空间操作：私人空间", { exact: true });
+    await more.focus();
+    await page.keyboard.press("Enter");
+    await page
+      .getByRole("button", { name: "删除空间：私人空间", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("button", { name: "取消", exact: true }),
+    ).toBeFocused();
+    await expect(dialog).toContainText("持续恢复，没有自动清理期限");
+    await expect(
+      dialog.getByRole("link", { name: "前往数据导出" }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "确认删除", exact: true }),
+    ).toBeDisabled();
+    await dialog.getByLabel("输入“删除”以确认").fill("错误确认");
+    await expect(
+      dialog.getByRole("button", { name: "确认删除", exact: true }),
+    ).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await more.click();
+    await page
+      .getByRole("button", { name: "删除空间：私人空间", exact: true })
+      .click();
+    await dialog.getByLabel("输入“删除”以确认").fill("删除");
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    let writes = 0;
+    const observe = (request: import("@playwright/test").Request) => {
+      if (
+        new URL(request.url()).pathname.endsWith(`/${spaceId}/deletion`) &&
+        request.method() === "PATCH"
+      )
+        writes++;
+    };
+    page.on("request", observe);
+    try {
+      await context.setOffline(true);
+      await dialog
+        .getByRole("button", { name: "确认删除", exact: true })
+        .click();
+      await expect(dialog.getByRole("alert")).toBeVisible();
+      await expect(dialog.getByLabel("输入“删除”以确认")).toHaveValue("删除");
+      await expect(
+        dialog.getByRole("button", { name: "确认删除", exact: true }),
+      ).toBeEnabled();
+      await context.setOffline(false);
+      const notePath = `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/research/notes/${noteId}`;
+      expect((await context.request.get(notePath)).status()).toBe(200);
+      expect(
+        (
+          await (
+            await context.request.get(
+              `/api/v1/workspaces/${workspaceId}/research/spaces/deleted`,
+            )
+          ).json()
+        ).spaces,
+      ).toEqual([]);
+      expect(writes).toBe(0); // Offline writes are rejected before fetch.
+      await expect(dialog.getByRole("alert")).toBeVisible();
+      await dialog
+        .getByRole("button", { name: "确认删除", exact: true })
+        .click();
+      await expect(dialog).toHaveCount(0);
+      await expect(
+        page.getByRole("status").filter({ hasText: "空间已删除" }),
+      ).toBeVisible();
+      expect(writes).toBe(1);
+      expect((await context.request.get(notePath)).status()).toBe(404);
+    } finally {
+      await context.setOffline(false);
+      page.off("request", observe);
+    }
+  });
+
+  test("deleted final Space stays recoverable and recovery remains archived until activated", async ({}, info) => {
+    await page.reload();
+    await page.getByRole("radio", { name: "已删除", exact: true }).click();
+    const restore = page.getByRole("button", {
+      name: "恢复已删除空间：私人空间",
+      exact: true,
+    });
+    await expect(restore).toBeVisible();
+    for (const width of [320, 390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        expect((await new AxeBuilder({ page }).analyze()).violations).toEqual(
+          [],
+        );
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        for (const control of await page
+          .locator(
+            ".wb-space-settings button:visible, .wb-space-settings select:visible",
+          )
+          .all()) {
+          const box = (await control.boundingBox())!;
+          expect(box.height).toBeGreaterThanOrEqual(44);
+          expect(box.width).toBeGreaterThanOrEqual(44);
+        }
+        await page.screenshot({
+          path: info.outputPath(`spaces-deleted-${width}-${theme}.png`),
+          fullPage: true,
+        });
+      }
+    }
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await restore.click();
+    await expect(
+      page
+        .getByRole("dialog")
+        .getByRole("button", { name: "取消", exact: true }),
+    ).toBeFocused();
+    await page
+      .getByRole("button", { name: "确认恢复为已归档", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(
+      page.getByRole("status").filter({ hasText: "空间已恢复为已归档" }),
+    ).toBeVisible();
+    const notePath = `/api/v1/workspaces/${workspaceId}/spaces/${spaceId}/research/notes/${noteId}`;
+    expect((await context.request.get(notePath)).status()).toBe(404);
+    expect(
+      (
+        await (
+          await context.request.get(`/api/v1/workspaces/${workspaceId}/spaces`)
+        ).json()
+      ).spaces,
+    ).toEqual([]);
+    await page.getByRole("radio", { name: "已归档", exact: true }).click();
+    await page
+      .getByRole("button", { name: "恢复空间：私人空间", exact: true })
+      .click();
+    await page.getByRole("button", { name: "确认恢复", exact: true }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "空间已恢复，可以继续" }),
+    ).toBeVisible();
+    const restored = await context.request.get(notePath);
+    expect(restored.status()).toBe(200);
+    expect((await restored.json()).title).toBe("归档保留的笔记");
+    expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+    expect(
+      await page.evaluate(
+        async () => (await navigator.serviceWorker.getRegistrations()).length,
+      ),
+    ).toBe(0);
   });
 });

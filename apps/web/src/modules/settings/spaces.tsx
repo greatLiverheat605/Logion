@@ -9,9 +9,18 @@ import { workbenchRequest, errorMessage } from "@/platform/workbench/api";
 import { Button, Segmented, Sheet } from "@/platform/workbench/components";
 import "./settings.css";
 
-type Space = components["schemas"]["ManagedSpace"];
-type Page = components["schemas"]["ManagedSpacePage"];
-type Filter = "all" | "active" | "archived";
+type Space =
+  | components["schemas"]["ManagedSpace"]
+  | components["schemas"]["DeletedSpace"];
+type Page = { spaces: Space[]; next_cursor: string | null };
+type Filter = "all" | "active" | "archived" | "deleted";
+type Action = "archive" | "activate" | "delete" | "restore";
+const actionLabels: Record<Action, string> = {
+  archive: "归档",
+  activate: "恢复",
+  delete: "删除",
+  restore: "恢复为已归档",
+};
 const spaceName = (row: Space) =>
   row.name === "Private" && row.visibility === "private"
     ? "私人空间"
@@ -35,7 +44,7 @@ export function SpaceSettings() {
       <div className="wb-page-heading">
         <div>
           <h1>空间管理</h1>
-          <p>归档暂时不用的空间，需要时可以恢复。</p>
+          <p>管理使用中、已归档和已删除的空间。</p>
         </div>
       </div>
       <label className="wb-space-workspace">
@@ -63,7 +72,11 @@ export function SpaceSettings() {
 function Spaces({ workspaceId }: { workspaceId: string }) {
   const queries = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
-  const [confirmation, setConfirmation] = useState<Space | null>(null);
+  const [confirmation, setConfirmation] = useState<{
+    space: Space;
+    action: Action;
+  } | null>(null);
+  const [deleteText, setDeleteText] = useState("");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState("");
   const [status, setStatus] = useState("");
@@ -77,28 +90,56 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
     initialPageParam: null as string | null,
     queryFn: ({ signal, pageParam }) => {
       const query: Record<string, string> = { limit: "50" };
-      if (filter !== "all") query.status = filter;
+      if (filter !== "all" && filter !== "deleted") query.status = filter;
       if (pageParam) query.cursor = pageParam;
-      return workbenchRequest<Page>(url, { signal, query });
+      return workbenchRequest<Page>(
+        filter === "deleted" ? `${url}/deleted` : url,
+        { signal, query },
+      );
     },
     getNextPageParam: (page) => page.next_cursor,
   });
   const rows = spaces.data?.pages.flatMap((page) => page.spaces) ?? [];
+  function confirm(space: Space, action: Action, control: HTMLElement) {
+    trigger.current = control;
+    setDeleteText("");
+    setFailure("");
+    setStatus("");
+    setConfirmation({ space, action });
+  }
   async function change() {
-    if (!confirmation || writing.current) return;
+    if (
+      !confirmation ||
+      writing.current ||
+      (confirmation.action === "delete" && deleteText !== "删除")
+    )
+      return;
     writing.current = true;
     setPending(true);
     setFailure("");
     setStatus("");
     try {
-      const next = confirmation.status === "active" ? "archived" : "active";
-      await workbenchRequest(`${url}/${confirmation.id}/archive`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          expected_version: confirmation.version,
-          status: next,
-        }),
-      });
+      const { space, action } = confirmation;
+      const deleting = action === "delete" || action === "restore";
+      await workbenchRequest(
+        `${url}/${space.id}/${deleting ? "deletion" : "archive"}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(
+            deleting
+              ? {
+                  expected_version: space.version,
+                  action,
+                  confirmation:
+                    action === "delete" ? "DELETE SPACE" : "RESTORE SPACE",
+                }
+              : {
+                  expected_version: space.version,
+                  status: action === "archive" ? "archived" : "active",
+                },
+          ),
+        },
+      );
       await Promise.all([
         queries.invalidateQueries({
           queryKey: ["workbench", "managed-spaces", workspaceId],
@@ -109,9 +150,12 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
       ]);
       setConfirmation(null);
       setStatus(
-        next === "archived"
-          ? "空间已归档，内容保留，可随时恢复。"
-          : "空间已恢复，可以继续阅读与编辑。",
+        {
+          archive: "空间已归档，内容保留，可随时恢复。",
+          activate: "空间已恢复，可以继续阅读与编辑。",
+          delete: "空间已删除，内容保留，可在已删除列表中持续恢复。",
+          restore: "空间已恢复为已归档；可切换到已归档列表，再恢复使用。",
+        }[action],
       );
     } catch (error) {
       setFailure(errorMessage(error));
@@ -137,15 +181,19 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
           归档后，空间会从日常列表中隐藏，内容仍保留在数据导出中。已经发出的请求可能仍会完成。
         </p>
         <p>
-          旧设备下次同步需要重新获取快照；未同步修改仍保留，请先同步其他设备，遇到冲突时由你处理。
+          旧设备下次同步需要重新获取快照；未同步修改仍保留，请先同步其他设备，遇到冲突时由你处理。删除不会清除已下载的副本。
+        </p>
+        <p>
+          软删除可持续恢复，没有自动清理期限。删除前请先导出；已删除空间不在数据导出中，恢复后先保持已归档。
         </p>
         <Segmented
           label="空间状态"
           value={filter}
           options={[
-            { id: "all", label: "全部" },
+            { id: "all", label: "未删除" },
             { id: "active", label: "使用中" },
             { id: "archived", label: "已归档" },
+            { id: "deleted", label: "已删除" },
           ]}
           onChange={(value) => {
             if (!pending) setFilter(value as Filter);
@@ -155,7 +203,7 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
         {spaces.isPending && <p role="status">正在读取空间…</p>}
         {spaces.error && <p role="alert">{errorMessage(spaces.error)}</p>}
         {!spaces.isPending && !spaces.error && rows.length === 0 && (
-          <p>这里没有空间。可以切换状态查看已归档空间并恢复。</p>
+          <p>这里没有空间。可以切换状态查看已归档或已删除的空间并恢复。</p>
         )}
         <ul className="wb-config-list">
           {rows.map((row) => (
@@ -164,25 +212,59 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
                 <strong>{spaceName(row)}</strong>
                 <p>
                   {row.visibility === "private" ? "私人" : "共享"} ·{" "}
-                  {row.status === "active" ? "使用中" : "已归档"}
+                  {row.status === "active"
+                    ? "使用中"
+                    : row.status === "archived"
+                      ? "已归档"
+                      : "已删除 · 持续可恢复"}
                 </p>
               </div>
               {row.can_manage ? (
-                <Button
-                  disabled={pending}
-                  aria-label={`${row.status === "active" ? "归档" : "恢复"}空间：${spaceName(row)}`}
-                  onClick={() => {
-                    trigger.current =
-                      document.activeElement instanceof HTMLElement
-                        ? document.activeElement
-                        : null;
-                    setFailure("");
-                    setStatus("");
-                    setConfirmation(row);
-                  }}
-                >
-                  {row.status === "active" ? "归档" : "恢复"}
-                </Button>
+                <div className="wb-space-actions">
+                  <Button
+                    disabled={pending || spaces.isFetching}
+                    aria-label={`${row.status === "active" ? "归档" : row.status === "deleted" ? "恢复已删除" : "恢复"}空间：${spaceName(row)}`}
+                    onClick={(event) =>
+                      confirm(
+                        row,
+                        row.status === "active"
+                          ? "archive"
+                          : row.status === "deleted"
+                            ? "restore"
+                            : "activate",
+                        event.currentTarget,
+                      )
+                    }
+                  >
+                    {row.status === "active"
+                      ? "归档"
+                      : row.status === "deleted"
+                        ? "恢复为已归档"
+                        : "恢复"}
+                  </Button>
+                  {row.status !== "deleted" && (
+                    <details className="wb-space-more">
+                      <summary aria-label={`更多空间操作：${spaceName(row)}`}>
+                        更多
+                      </summary>
+                      <Button
+                        disabled={pending}
+                        onClick={(event) => {
+                          const menu = event.currentTarget.closest("details")!;
+                          confirm(
+                            row,
+                            "delete",
+                            menu.querySelector("summary")!,
+                          );
+                          menu.open = false;
+                        }}
+                        aria-label={`删除空间：${spaceName(row)}`}
+                      >
+                        删除空间
+                      </Button>
+                    </details>
+                  )}
+                </div>
               ) : (
                 <span>仅所有者或管理员可管理</span>
               )}
@@ -201,9 +283,11 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
       </section>
       <Sheet
         title={
-          confirmation?.status === "active" ? "确认归档空间" : "确认恢复空间"
+          confirmation
+            ? `确认${actionLabels[confirmation.action]}空间`
+            : "确认空间操作"
         }
-        description={confirmation ? spaceName(confirmation) : ""}
+        description={confirmation ? spaceName(confirmation.space) : ""}
         open={confirmation !== null}
         onOpenChange={(open) => {
           if (!open && !pending) setConfirmation(null);
@@ -222,10 +306,31 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
       >
         <div className="wb-config-form">
           <p>
-            {confirmation?.status === "active"
-              ? "归档会暂时隐藏整个空间，已有内容保留。共享空间的其他成员也将无法访问，恢复后继续使用。"
-              : "恢复后，原来有权限的成员可以重新访问空间及其已有内容。"}
+            {confirmation?.action === "delete"
+              ? "删除会隐藏整个空间，所有成员暂时无法读取、编辑或导出其中内容。原内容保留，可持续恢复，没有自动清理期限；恢复后先进入已归档。"
+              : confirmation?.action === "restore"
+                ? "恢复后先进入已归档列表，内容重新纳入授权的数据导出；需要阅读和编辑时，请再选择恢复使用。不会复活此前单独删除的内容。"
+                : confirmation?.action === "archive"
+                  ? "归档会暂时隐藏整个空间，已有内容保留。共享空间的其他成员也将无法访问，恢复后继续使用。"
+                  : "恢复后，原来有权限的成员可以重新访问空间及其已有内容。"}
           </p>
+          {confirmation?.action === "delete" && (
+            <>
+              <p>
+                请先导出需要保留的资料，再确认删除。
+                <Link href="/settings/data">前往数据导出</Link>
+              </p>
+              <label>
+                输入“删除”以确认
+                <input
+                  value={deleteText}
+                  onChange={(event) => setDeleteText(event.target.value)}
+                  disabled={pending}
+                  autoComplete="off"
+                />
+              </label>
+            </>
+          )}
           {failure && <p role="alert">{failure}</p>}
           <div className="wb-config-actions">
             <Button
@@ -235,12 +340,18 @@ function Spaces({ workspaceId }: { workspaceId: string }) {
             >
               取消
             </Button>
-            <Button disabled={pending} onClick={() => void change()}>
+            <Button
+              disabled={
+                pending ||
+                (confirmation?.action === "delete" && deleteText !== "删除")
+              }
+              onClick={() => void change()}
+            >
               {pending
                 ? "正在处理…"
-                : confirmation?.status === "active"
-                  ? "确认归档"
-                  : "确认恢复"}
+                : confirmation
+                  ? `确认${actionLabels[confirmation.action]}`
+                  : "确认"}
             </Button>
           </div>
         </div>

@@ -1523,6 +1523,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/research/spaces/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Deleted Spaces */
+        get: operations["research_space_deleted_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/research/spaces/{space_id}/archive": {
         parameters: {
             query?: never;
@@ -1538,6 +1555,23 @@ export interface paths {
         head?: never;
         /** Change Archive */
         patch: operations["research_space_archive_change"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/research/spaces/{space_id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change Deletion */
+        patch: operations["research_space_deletion_change"];
         trace?: never;
     };
     "/api/v1/workspaces/{workspace_id}/search": {
@@ -5560,6 +5594,42 @@ export interface components {
              * @enum {string}
              */
             type: "date";
+        };
+        /** DeletedSpace */
+        DeletedSpace: {
+            /** Can Manage */
+            can_manage: boolean;
+            /**
+             * Deleted At
+             * Format: date-time
+             */
+            deleted_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "deleted";
+            /** Version */
+            version: number;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "private" | "shared";
+        };
+        /** DeletedSpacePage */
+        DeletedSpacePage: {
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Spaces */
+            spaces: components["schemas"]["DeletedSpace"][];
         };
         /** DeletionPreview */
         DeletionPreview: {
@@ -10314,6 +10384,38 @@ export interface components {
             /** Name */
             name: string;
             visibility: components["schemas"]["SpaceVisibility"];
+        };
+        /** SpaceDeletionChange */
+        SpaceDeletionChange: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "delete" | "restore";
+            /**
+             * Confirmation
+             * @enum {string}
+             */
+            confirmation: "DELETE SPACE" | "RESTORE SPACE";
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** SpaceDeletionResult */
+        SpaceDeletionResult: {
+            /** Deleted At */
+            deleted_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "deleted" | "archived";
+            /** Version */
+            version: number;
         };
         /** SpaceListResponse */
         SpaceListResponse: {
@@ -21251,6 +21353,85 @@ export interface operations {
             };
         };
     };
+    research_space_deleted_list: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedSpacePage"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     research_space_archive_change: {
         parameters: {
             query?: never;
@@ -21276,6 +21457,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedSpace"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    research_space_deletion_change: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpaceDeletionChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceDeletionResult"];
                 };
             };
             /** @description Unauthorized */

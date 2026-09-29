@@ -25,6 +25,7 @@ async function selectPassage(page: Page) {
 test.describe.serial("one paper reading loop", () => {
   let context: BrowserContext, page: Page, scope: string, resourceId: string;
   let headers: Record<string, string>;
+  let completedExport: Awaited<ReturnType<typeof downloadResearchExport>>;
   test.beforeAll(async ({ browser, baseURL }) => {
     context = await browser.newContext({
       baseURL,
@@ -506,6 +507,7 @@ test.describe.serial("one paper reading loop", () => {
   test("exports the completed reading loop with source, notes, grading and mastery", async () => {
     await page.goto("/settings/data");
     const data = await downloadResearchExport(page);
+    completedExport = data;
     for (const name of [
       "resources",
       "source_texts",
@@ -523,5 +525,85 @@ test.describe.serial("one paper reading loop", () => {
     expect(
       data.objects.notes!.some((row) => row.note_kind === "close_reading"),
     ).toBe(true);
+  });
+
+  test("Space deletion hides the completed paper and restores all reading evidence unchanged", async () => {
+    const spaceId = scope.split("/").at(-1)!;
+    const management =
+      scope.slice(0, scope.lastIndexOf("/spaces/")) + "/research/spaces";
+    const resource = `${scope}/library/resources/${resourceId}`;
+    const originalPdf = await context.request.get(resource + "/pdf");
+    expect(originalPdf.status()).toBe(200);
+    const pdfBytes = await originalPdf.body();
+    const managed = (
+      await (await context.request.get(management)).json()
+    ).spaces.find((row: { id: string }) => row.id === spaceId);
+    const deleted = await context.request.patch(
+      `${management}/${spaceId}/deletion`,
+      {
+        headers,
+        data: {
+          expected_version: managed.version,
+          action: "delete",
+          confirmation: "DELETE SPACE",
+        },
+      },
+    );
+    expect(deleted.status()).toBe(200);
+    for (const path of [
+      resource,
+      resource + "/pdf",
+      resource + "/excerpts",
+      resource + "/quiz",
+    ])
+      expect((await context.request.get(path)).status(), path).toBe(404);
+    const restored = await context.request.patch(
+      `${management}/${spaceId}/deletion`,
+      {
+        headers,
+        data: {
+          expected_version: (await deleted.json()).version,
+          action: "restore",
+          confirmation: "RESTORE SPACE",
+        },
+      },
+    );
+    expect(restored.status()).toBe(200);
+    expect((await restored.json()).status).toBe("archived");
+    expect((await context.request.get(resource + "/pdf")).status()).toBe(404);
+    const activated = await context.request.patch(
+      `${management}/${spaceId}/archive`,
+      {
+        headers,
+        data: {
+          expected_version: (await restored.json()).version,
+          status: "active",
+        },
+      },
+    );
+    expect(activated.status()).toBe(200);
+    const recoveredPdf = await context.request.get(resource + "/pdf");
+    expect(recoveredPdf.status()).toBe(200);
+    expect(await recoveredPdf.body()).toEqual(pdfBytes);
+    await page.reload();
+    const recovered = await downloadResearchExport(page);
+    for (const name of [
+      "resources",
+      "source_texts",
+      "source_excerpts",
+      "notes",
+      "quiz_items",
+      "quiz_attempts",
+      "mastery_records",
+      "review_schedules",
+      "knowledge_citations",
+      "knowledge_edges",
+    ]) {
+      expect(completedExport.objects[name], name).toBeDefined();
+      expect(completedExport.objects[name]!.length, name).toBeGreaterThan(0);
+      expect(recovered.objects[name], name).toEqual(
+        completedExport.objects[name],
+      );
+    }
   });
 });
