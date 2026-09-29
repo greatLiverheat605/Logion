@@ -56,7 +56,8 @@ class Note(Base):
             "(note_kind IS NULL AND resource_id IS NULL AND research_owner_id IS NULL "
             "AND agent_inbox_item_id IS NULL) OR "
             "(note_kind IS NOT NULL AND note_kind = 'close_reading' AND resource_id IS NOT NULL "
-            "AND research_owner_id IS NOT NULL AND task_id IS NULL AND agent_inbox_item_id IS NULL) OR "
+            "AND research_owner_id IS NOT NULL AND task_id IS NULL "
+            "AND agent_inbox_item_id IS NULL) OR "
             "(note_kind IS NULL AND resource_id IS NULL AND research_owner_id IS NOT NULL "
             "AND task_id IS NULL AND agent_inbox_item_id IS NOT NULL)",
             name="ck_note_research_kind",
