@@ -115,8 +115,17 @@ async function geometry(page: Page) {
       ".wb-pane-header",
     )) {
       if (!header.getBoundingClientRect().width) continue;
-      if (header.getBoundingClientRect().height !== 32)
+      if (
+        header.getBoundingClientRect().height !== (innerWidth < 768 ? 52 : 32)
+      )
         issues.push("header height");
+      if (innerWidth < 768) {
+        for (const button of header.querySelectorAll("button")) {
+          const box = button.getBoundingClientRect();
+          if (box.width < 44 || box.height < 44)
+            issues.push("header touch target");
+        }
+      }
       const body = header.nextElementSibling!;
       if (
         header.getBoundingClientRect().bottom >
