@@ -1,0 +1,134 @@
+.wb-config-page {
+  max-width: 1100px;
+}
+.wb-config-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+  background: var(--wb-win);
+  min-width: 0;
+}
+.wb-config-section > header,
+.wb-config-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wb-config-section > header {
+  justify-content: space-between;
+}
+.wb-config-section h2,
+.wb-config-section h3 {
+  margin: 0;
+}
+.wb-config-list,
+.wb-config-audit-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.wb-config-list > li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+  border-top: 1px solid var(--wb-sep);
+}
+.wb-config-list > li > div {
+  min-width: 0;
+}
+.wb-config-list p {
+  margin: 6px 0;
+}
+.wb-config-break,
+.wb-config-audit-list dd {
+  overflow-wrap: anywhere;
+}
+.wb-config-form,
+.wb-config-form fieldset,
+.wb-config-form label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.wb-config-form {
+  margin-top: 16px;
+}
+.wb-config-form > fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  gap: 16px;
+}
+.wb-config-form .wb-config-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wb-config-form input[type="checkbox"] {
+  width: auto;
+}
+.wb-model-order {
+  border: 1px solid var(--wb-sep);
+  border-radius: 8px;
+  padding: 12px;
+}
+.wb-model-row {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.wb-model-row > label {
+  flex: 1;
+}
+.wb-config-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.wb-config-filters label,
+.wb-config-audit-scope {
+  display: grid;
+  gap: 8px;
+}
+.wb-config-audit-list > li {
+  padding: 16px 0;
+  border-top: 1px solid var(--wb-sep);
+}
+.wb-config-audit-list > li > div {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+.wb-config-audit-list dd {
+  margin: 4px 0 12px;
+}
+.wb-config-audit-list details {
+  margin-top: 12px;
+}
+.wb-config-audit-list p {
+  margin: 8px 0;
+}
+@media (max-width: 600px) {
+  .wb-config-section {
+    padding: 12px;
+  }
+  .wb-scope .wb-config-form :is(button, input, select),
+  .wb-scope .wb-config-page :is(button, input, select) {
+    min-height: 44px;
+  }
+  .wb-scope .wb-config-form input[type="checkbox"] {
+    min-height: auto;
+    width: 20px;
+    height: 20px;
+  }
+  .wb-config-filters label {
+    width: 100%;
+  }
+}
