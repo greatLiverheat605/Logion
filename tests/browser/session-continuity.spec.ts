@@ -126,14 +126,25 @@ test("first rejected business request shows login and returns to the route", asy
 test("explicit logout after access expiry cannot silently restore the session", async ({
   page,
 }) => {
+  const device = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "logion_device",
+  )!;
+  expect(device.httpOnly).toBe(true);
   await page.context().clearCookies({ name: "logion_access" });
+  const loggedOut = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/v1/auth/logout",
+  );
   await page.getByRole("button", { name: "退出登录", exact: true }).click();
+  expect((await loggedOut).status()).toBe(200);
   await expect(page).toHaveURL(/\/auth\/login$/);
+  // ADR-0056 retains device identity, but no credential may survive logout.
+  // Refreshing the expired access cookie renews the device cookie expiry.
   expect(
     (await page.context().cookies()).filter((cookie) =>
       cookie.name.startsWith("logion_"),
-    ).length,
-  ).toBe(0);
+    ),
+  ).toEqual([{ ...device, expires: expect.any(Number) }]);
+  expect((await page.request.get("/api/v1/auth/session")).status()).toBe(401);
   await page.goto("/app/today");
   await expect(page.getByRole("heading", { name: "需要登录" })).toBeVisible();
 });
