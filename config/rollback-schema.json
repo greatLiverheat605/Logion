@@ -1,6 +1,6 @@
 {
-  "source_commit": "0517cbd0e4c3dc7afb41df30a64ef29d6c31f55f",
-  "migration_head": "0055_weekly_reviews",
+  "source_commit": "bc1ed9394ad514422a53cec47a9dc7d9fb74e936",
+  "migration_head": "0056_agent_inbox",
   "legacy_base": "fdadebcfe76a341e3915b3c8cb000f280fbe4fb0",
   "production_approved": false
 }

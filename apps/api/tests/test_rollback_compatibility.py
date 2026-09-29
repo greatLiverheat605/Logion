@@ -1,5 +1,6 @@
 """Run the rollback binary against a schema migrated by the forward binary."""
 
+import hashlib
 import io
 import json
 import zipfile
@@ -39,8 +40,8 @@ PINNED_SCHEMA = json.loads(
 )
 
 
-@pytest_asyncio.fixture(loop_scope="session")
-async def rollback_scope():
+@pytest_asyncio.fixture(loop_scope="session", params=["close_reading", "report", "summary"])
+async def rollback_scope(request):
     async with (
         AsyncClient(
             transport=ASGITransport(
@@ -130,13 +131,69 @@ async def rollback_scope():
                 owner=users[0], resource=resources[0].id, note=note.id, task=task.id, quiz=quiz.id
             )
             # New columns deliberately are not mapped by the old application.
-            await db.execute(
-                text(
-                    "UPDATE notes SET research_owner_id=:owner, note_kind='close_reading', "
-                    "resource_id=:resource WHERE id=:note"
-                ),
-                params,
-            )
+            agent_ids = []
+            if request.param == "close_reading":
+                await db.execute(
+                    text(
+                        "UPDATE notes SET research_owner_id=:owner, note_kind='close_reading', "
+                        "resource_id=:resource WHERE id=:note"
+                    ),
+                    params,
+                )
+            else:
+                token_id, inbox_id, pending_id = uuid4(), uuid4(), uuid4()
+                agent_ids = [token_id, inbox_id, pending_id]
+                agent_params = dict(
+                    token=token_id,
+                    inbox=inbox_id,
+                    pending=pending_id,
+                    user=users[0],
+                    workspace=UUID(workspace),
+                    space=UUID(space),
+                    digest=hashlib.sha256(str(token_id).encode()).hexdigest(),
+                    kind=request.param,
+                    payload=json.dumps(
+                        {"kind": request.param, "title": SENTINEL, "markdown_body": SENTINEL}
+                    ),
+                    receipt=json.dumps({"entity_type": "note", "id": str(note.id)}),
+                    note=note.id,
+                )
+                await db.execute(
+                    text(
+                        "INSERT INTO agent_tokens (id,user_id,workspace_id,space_id,name,"
+                        "token_digest,scopes,created_at,expires_at) VALUES "
+                        "(:token,:user,:workspace,:space,'Synthetic rollback Agent',:digest,"
+                        "jsonb_build_array('read','inbox:write'),now(),now()+interval '1 day')"
+                    ),
+                    agent_params,
+                )
+                await db.execute(
+                    text(
+                        "INSERT INTO agent_inbox_items (id,token_id,user_id,workspace_id,"
+                        "space_id,submission_key,kind,payload,payload_digest,status,"
+                        "accepted_payload,receipt,decision_digest,created_at,decided_at) "
+                        "VALUES (:inbox,:token,:user,:workspace,:space,'accepted',:kind,"
+                        "CAST(:payload AS jsonb),:digest,'accepted',CAST(:payload AS jsonb),"
+                        "CAST(:receipt AS jsonb),:digest,now(),now())"
+                    ),
+                    agent_params,
+                )
+                await db.execute(
+                    text(
+                        "INSERT INTO agent_inbox_items (id,token_id,user_id,workspace_id,"
+                        "space_id,submission_key,kind,payload,payload_digest,created_at) "
+                        "VALUES (:pending,:token,:user,:workspace,:space,'pending',:kind,"
+                        "CAST(:payload AS jsonb),:digest,now())"
+                    ),
+                    agent_params,
+                )
+                await db.execute(
+                    text(
+                        "UPDATE notes SET research_owner_id=:user, "
+                        "agent_inbox_item_id=:inbox WHERE id=:note"
+                    ),
+                    agent_params,
+                )
             await db.execute(
                 text(
                     "UPDATE tasks SET research_owner_id=:owner, resource_id=:resource, "
@@ -182,7 +239,7 @@ async def rollback_scope():
                 "review_schedule": schedule.id,
                 "quiz_attempt": attempt.id,
             }
-            private_ids = [*(r.id for r in resources), *protected.values()]
+            private_ids = [*(r.id for r in resources), *protected.values(), *agent_ids]
             await db.commit()
         yield owner, peer, users, workspace, space, protected, private_ids, shared.id
 
@@ -540,3 +597,17 @@ async def test_rollback_schema_preflight_is_read_only_and_requires_exact_head():
     async with engine.connect() as connection:
         with pytest.raises(ValueError, match="exact schema head"):
             await verify_schema(connection, "0043_workspace_invitation_email")
+
+
+async def test_rollback_agent_endpoints_are_unavailable(rollback_scope):
+    owner, peer, _users, workspace, space, protected, _private_ids, _shared = rollback_scope
+    for client in (owner, peer):
+        for path in (
+            "/api/v1/research/agent-tokens",
+            "/api/v1/agent/context",
+            f"/api/v1/workspaces/{workspace}/spaces/{space}/agent-inbox",
+            f"/api/v1/workspaces/{workspace}/spaces/{space}/agent-inbox/notes/{protected['note']}",
+        ):
+            response = await client.get(path)
+            assert response.status_code == 404, response.text
+            assert SENTINEL not in response.text

@@ -12,7 +12,9 @@ from logion_api.config import get_settings
 
 REQUIRED_COLUMNS = {
     "resources": {"research_owner_id", "legacy_paper_id", "citation_key"},
-    "notes": {"research_owner_id", "note_kind", "resource_id"},
+    "notes": {"research_owner_id", "note_kind", "resource_id", "agent_inbox_item_id"},
+    "agent_tokens": {"user_id", "space_id", "token_digest", "revoked_at"},
+    "agent_inbox_items": {"user_id", "token_id", "status", "accepted_payload", "receipt"},
     "topics": {"research_owner_id"},
     "quiz_items": {"research_owner_id", "resource_id", "origin"},
     "tasks": {"research_owner_id", "resource_id", "reading_mode", "scheduled_on"},
