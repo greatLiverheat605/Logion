@@ -240,6 +240,12 @@ function PreferenceProvider({ children }: { children: ReactNode }) {
     }
   }
   async function selectWorkspace(id: string) {
+    if (
+      !window.dispatchEvent(
+        new Event("workbench:before-navigate", { cancelable: true }),
+      )
+    )
+      return;
     if (!available.some((workspace) => workspace.id === id)) return;
     try {
       const next = await client.fetchQuery(spacesQuery(id));
@@ -256,6 +262,12 @@ function PreferenceProvider({ children }: { children: ReactNode }) {
     }
   }
   async function selectSpace(id: string) {
+    if (
+      !window.dispatchEvent(
+        new Event("workbench:before-navigate", { cancelable: true }),
+      )
+    )
+      return;
     if (accessibleSpaces.some((space) => space.id === id))
       await save("workbench.context", {
         workspace_id: workspaceId,

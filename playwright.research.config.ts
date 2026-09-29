@@ -19,7 +19,7 @@ const attachmentRoot = `reports/research-real/attachments/${randomUUID()}`;
 export default defineConfig({
   testDir: "./tests/browser",
   testMatch:
-    /research-(real-backend|reading-loop|knowledge|online-planning)\.spec\.ts/,
+    /research-(real-backend|reading-loop|knowledge|online-planning|records)\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
@@ -53,8 +53,8 @@ export default defineConfig({
       url: `http://127.0.0.1:${enabled ? 8000 : 8001}/health/live`,
       env: {
         LOGION_ENV: "test",
-        // Eight isolated accounts share this suite's one loopback proxy IP.
-        LOGION_REGISTRATION_LIMIT_PER_HOUR: "8",
+        // Nine isolated accounts share this suite's one loopback proxy IP.
+        LOGION_REGISTRATION_LIMIT_PER_HOUR: "9",
         LOGION_PLANNING_PHASE_REVISION_ENABLED: "true",
         LOGION_REDIS_URL:
           process.env.LOGION_RESEARCH_TEST_REDIS_URL ??
