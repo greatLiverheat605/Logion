@@ -188,6 +188,11 @@ test.describe.serial("one paper reading loop", () => {
       "logion",
       "zotero",
     ]);
+    await selectPassage(page);
+    await page.keyboard.press("c");
+    await expect(
+      page.getByRole("status").filter({ hasText: "概念已创建" }),
+    ).toBeVisible();
   });
 
   test("translate, explain and accept a close-reading note draft", async () => {
