@@ -144,3 +144,24 @@ it.each([
       expect(screen.getByRole("link", { name: "重新登录" })).toBeTruthy();
   },
 );
+
+it("uses the gated research path and disables a revoked export without creating a file", async () => {
+  vi.mocked(browserApiClient.request).mockRejectedValue(
+    new LogionApiError({
+      status: 409,
+      code: "EXPORT_SCOPE_CHANGED",
+      message: "private detail",
+    }),
+  );
+  render(<ExportDownload item={item} research />);
+  await act(async () => fireEvent.click(screen.getByRole("button")));
+  expect(browserApiClient.request).toHaveBeenCalledWith(
+    "/api/v1/workspaces/workspace-a/research/data-exports/export-a/download",
+    expect.any(Object),
+  );
+  expect(screen.getByRole("status").textContent).toContain(
+    "空间访问权限已变化",
+  );
+  expect(screen.getByRole<HTMLButtonElement>("button").disabled).toBe(true);
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+});

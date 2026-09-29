@@ -18,10 +18,12 @@ import {
 export function ExportDownload({
   item,
   className,
+  research = false,
   children = "下载 ZIP",
 }: Readonly<{
   item: DataExport;
   className?: string;
+  research?: boolean;
   children?: ReactNode;
 }>) {
   // A new artifact or workspace gets fresh local state and cancels the old request.
@@ -30,6 +32,7 @@ export function ExportDownload({
       key={`${item.workspace_id}:${item.id}`}
       item={item}
       className={className}
+      research={research}
     >
       {children}
     </ExportDownloadContent>
@@ -39,10 +42,12 @@ export function ExportDownload({
 function ExportDownloadContent({
   item,
   className,
+  research = false,
   children,
 }: Readonly<{
   item: DataExport;
   className?: string;
+  research?: boolean;
   children: ReactNode;
 }>) {
   const [now, setNow] = useState<number | null>(null);
@@ -103,7 +108,7 @@ function ExportDownloadContent({
     setRecentAuth(false);
     try {
       const result = await browserApiClient.request<ApiZipResponse>(
-        `/api/v1/workspaces/${item.workspace_id}/data-exports/${item.id}/download`,
+        `/api/v1/workspaces/${item.workspace_id}/${research ? "research/" : ""}data-exports/${item.id}/download`,
         { responseType: "zip", signal: controller.signal, timeoutMs: 60_000 },
       );
       if (controller.signal.aborted) return;
@@ -125,6 +130,13 @@ function ExportDownloadContent({
       ) {
         setUnavailable(true);
         setMessage("导出已不可用，可能已过期；请重新读取或创建导出。");
+      } else if (
+        research &&
+        error instanceof LogionApiError &&
+        error.code === "EXPORT_SCOPE_CHANGED"
+      ) {
+        setUnavailable(true);
+        setMessage("空间访问权限已变化，请创建新的导出。");
       } else if (
         error instanceof LogionApiError &&
         error.code === "AUTH_RECENT_LOGIN_REQUIRED"

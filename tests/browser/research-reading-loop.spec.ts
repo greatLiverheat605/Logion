@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { downloadResearchExport } from "./helpers/research-export";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
@@ -500,5 +501,26 @@ test.describe.serial("one paper reading loop", () => {
       }),
     ).toHaveCount(0);
     expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+  });
+  test("exports the completed reading loop with source, notes, grading and mastery", async () => {
+    await page.goto("/settings/data");
+    const data = await downloadResearchExport(page);
+    for (const name of [
+      "resources",
+      "source_texts",
+      "source_excerpts",
+      "notes",
+      "quiz_items",
+      "quiz_attempts",
+      "mastery_records",
+      "review_schedules",
+    ])
+      expect(data.objects[name]!.length, name).toBeGreaterThan(0);
+    expect(
+      data.objects.quiz_attempts!.some((row) => row.ai_grade != null),
+    ).toBe(true);
+    expect(
+      data.objects.notes!.some((row) => row.note_kind === "close_reading"),
+    ).toBe(true);
   });
 });
