@@ -103,8 +103,10 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   function run(id: string) {
     commands.find((item) => item.id === id)?.action();
   }
-  const title =
-    WORKBENCH_ROUTES.find((route) => route.path === path)?.label ?? "阅读器";
+  const activeRoute = WORKBENCH_ROUTES.find(
+    (route) => path === route.path || path.startsWith(`${route.path}/`),
+  );
+  const title = activeRoute?.label ?? "阅读器";
   const navigationContent = (
     <>
       <div className="wb-brand">
@@ -154,7 +156,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
             key={route.path}
             href={route.path}
             onClick={() => setNavigation(false)}
-            aria-current={path === route.path ? "page" : undefined}
+            aria-current={activeRoute?.path === route.path ? "page" : undefined}
           >
             <NavIcon index={index} />
             {route.label}
@@ -213,7 +215,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
               <Link
                 key={route.path}
                 href={route.path}
-                aria-current={path === route.path ? "page" : undefined}
+                aria-current={
+                  activeRoute?.path === route.path ? "page" : undefined
+                }
               >
                 {route.label}
               </Link>

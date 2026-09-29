@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { Segmented } from "@/platform/workbench/components";
 import { useWorkbench } from "@/platform/workbench/provider";
 import type { Theme } from "@/platform/workbench/preferences";
@@ -47,6 +48,22 @@ export default function Page() {
           />
         </label>
       </div>
+      <nav className="wb-settings" aria-label="更多设置">
+        <Link className="wb-setting-row" href="/settings/ai">
+          <div>
+            <strong>AI 服务商与路由</strong>
+            <p>管理模型、研究任务预设和月度预算。</p>
+          </div>
+          <span aria-hidden="true">→</span>
+        </Link>
+        <Link className="wb-setting-row" href="/settings/audit">
+          <div>
+            <strong>审计记录</strong>
+            <p>查看账户安全与当前工作区的操作记录。</p>
+          </div>
+          <span aria-hidden="true">→</span>
+        </Link>
+      </nav>
       <Integrations />
     </div>
   );
