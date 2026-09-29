@@ -8,6 +8,8 @@ export async function downloadResearchExport(
   page: Page,
   schema = "logion-export-v03",
 ) {
+  const tasks = page.getByRole("region", { name: "导出任务", exact: true });
+  const previousCount = await tasks.getByRole("listitem").count();
   const created = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -26,15 +28,14 @@ export async function downloadResearchExport(
     (await response.json()) as components["schemas"]["ExportResponse"];
   expect(job.schema_version).toBe(schema);
   await expect(dialog).toHaveCount(0);
-  const tasks = page.getByRole("region", { name: "导出任务", exact: true });
+  await expect(tasks.getByRole("listitem")).toHaveCount(previousCount + 1);
+  // Newest task is first; an older completed task must not satisfy this wait.
+  const task = tasks.getByRole("listitem").first();
   await expect(
-    tasks.getByRole("button", { name: "下载 ZIP", exact: true }).first(),
+    task.getByRole("button", { name: "下载 ZIP", exact: true }),
   ).toBeEnabled();
   const event = page.waitForEvent("download");
-  await tasks
-    .getByRole("button", { name: "下载 ZIP", exact: true })
-    .first()
-    .click();
+  await task.getByRole("button", { name: "下载 ZIP", exact: true }).click();
   const download = await event;
   expect(download.suggestedFilename()).toBe(`logion-export-${job.id}.zip`);
   const artifact = await download.path();
@@ -54,8 +55,8 @@ export async function downloadResearchExport(
   const digest = createHash("sha256")
     .update(readFileSync(artifact!))
     .digest("hex");
-  await tasks.getByText("校验 SHA-256", { exact: true }).first().click();
-  await expect(tasks.getByText(digest, { exact: true })).toBeVisible();
+  await task.getByText("校验 SHA-256", { exact: true }).click();
+  await expect(task.getByText(digest, { exact: true })).toBeVisible();
   return JSON.parse(inspected.stdout) as {
     schema_version: string;
     objects: Record<string, Record<string, unknown>[]>;
