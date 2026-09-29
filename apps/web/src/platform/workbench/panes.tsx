@@ -18,17 +18,48 @@ import { useWorkbench } from "./provider";
 export function ThreePanes({
   info,
   renderContent,
+  initialContent,
 }: {
   info?: ReactNode;
+  initialContent?: PaneContent;
   renderContent?: (kind: PaneContent) => ReactNode;
 }) {
   const { preferences, save, pending } = useWorkbench();
   const modifier = useModifierKey();
   const stored = preferences["workbench.layouts"];
+  const existingIndex = stored.panes.findIndex(
+    (pane) =>
+      pane.content === initialContent ||
+      (initialContent === "pdf" && pane.content === "document"),
+  );
+  const initialIndex: PaneIndex =
+    existingIndex >= 0
+      ? (existingIndex as PaneIndex)
+      : initialContent === "pdf"
+        ? 1
+        : 2;
+  const signature = JSON.stringify(stored);
+  const [entry, setEntry] = useState(() =>
+    initialContent
+      ? {
+          signature,
+          layout: {
+            ...stored,
+            panes: stored.panes.map((pane, index) =>
+              index === initialIndex
+                ? { ...pane, content: initialContent, collapsed: false }
+                : pane,
+            ) as Layout["panes"],
+          },
+        }
+      : null,
+  );
+  // A source link opens its content temporarily; later user choices take precedence.
+  if (entry && entry.signature !== signature) setEntry(null);
   const [draft, setDraft] = useState<Layout | null>(null);
-  const layout = draft ?? stored;
+  const layout = draft ?? entry?.layout ?? stored;
   const [mobilePane, setMobilePane] = useState<PaneIndex>(
-    initialMobilePane(stored),
+    initialContent ? initialIndex : initialMobilePane(stored),
   );
   useEffect(() => {
     const show = () => setMobilePane(2);
@@ -51,6 +82,7 @@ export function ThreePanes({
   const activeMobile = visible.includes(mobilePane) ? mobilePane : visible[0];
   async function commit(next: Layout) {
     await save("workbench.layouts", next);
+    setEntry(null);
     setDraft(null);
   }
   function resize(

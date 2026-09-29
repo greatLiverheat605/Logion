@@ -6,11 +6,12 @@ export const WORKBENCH_ROUTES = [
   { path: "/review", label: "复习", icon: "review" },
   { path: "/plan", label: "计划", icon: "plan" },
   { path: "/records", label: "记录", icon: "note" },
+  { path: "/search", label: "搜索", icon: "search" },
   { path: "/settings", label: "设置", icon: "settings" },
 ] as const;
 
 export function isWorkbenchPath(path: string): boolean {
-  return /^(?:\/(?:today|library|questions|graph|review|plan|records|settings)(?:\/|$)|\/read(?:\/|$))/.test(
+  return /^(?:\/(?:today|library|questions|graph|review|plan|records|search|settings)(?:\/|$)|\/read(?:\/|$))/.test(
     path,
   );
 }

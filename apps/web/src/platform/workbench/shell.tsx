@@ -16,11 +16,15 @@ import { presetLayout, togglePane, type Theme } from "./preferences";
 import { useWorkbench } from "./provider";
 import { WORKBENCH_ROUTES } from "./routes";
 import { livePdfRange } from "./selection";
+import { PaletteSearch } from "./search";
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
   const state = useWorkbench();
   const path = usePathname(),
     router = useRouter();
+  const [paletteReturnFocus, setPaletteReturnFocus] =
+    useState<HTMLElement | null>(null);
+  const [paletteQuery, setPaletteQuery] = useState("");
   const [palette, setPalette] = useState(false),
     [help, setHelp] = useState(false),
     [navigation, setNavigation] = useState(false);
@@ -58,6 +62,12 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
         : undefined,
       palette: () => {
         window.dispatchEvent(new Event("workbench:reader-capture-selection"));
+        setPaletteReturnFocus(
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null,
+        );
+        setPaletteQuery("");
         setPalette(true);
       },
       help: () => setHelp(true),
@@ -236,18 +246,27 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
       <Dialog.Root open={palette} onOpenChange={setPalette}>
         <Dialog.Portal>
           <Dialog.Overlay className="wb-overlay" />
-          <Dialog.Content className="wb-scope wb-command">
+          <Dialog.Content
+            className="wb-scope wb-command"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (paletteReturnFocus?.isConnected) paletteReturnFocus.focus();
+            }}
+          >
             <Dialog.Title className="wb-visually-hidden">指令面板</Dialog.Title>
             <Dialog.Description className="wb-visually-hidden">
-              搜索指令，使用方向键选择，回车执行，Esc 关闭。
+              搜索指令和当前空间内容，使用方向键选择，回车执行，Esc 关闭。
             </Dialog.Description>
             <Command label="搜索指令">
               <Command.Input
-                placeholder="前往、切换外观或调整布局…"
+                value={paletteQuery}
+                onValueChange={setPaletteQuery}
+                maxLength={120}
+                placeholder="搜索内容或输入指令…"
                 aria-label="搜索指令"
               />
               <Command.List>
-                <Command.Empty>没有匹配的指令</Command.Empty>
+                <Command.Empty>没有匹配的指令或内容</Command.Empty>
                 {["跳转", "外观", "布局", "工具", "阅读"].map((group) => (
                   <Command.Group key={group} heading={group}>
                     {commands
@@ -270,6 +289,23 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
                       ))}
                   </Command.Group>
                 ))}
+                {palette && (
+                  <PaletteSearch
+                    query={paletteQuery}
+                    navigate={(href) => {
+                      if (
+                        !window.dispatchEvent(
+                          new Event("workbench:before-navigate", {
+                            cancelable: true,
+                          }),
+                        )
+                      )
+                        return;
+                      setPalette(false);
+                      router.push(href);
+                    }}
+                  />
+                )}
               </Command.List>
             </Command>
             <footer>
@@ -318,6 +354,7 @@ function NavIcon({ index }: { index: number }) {
     "M2 6a6 6 0 1 1 0 4m0-8v4h4m2-2v4l3 2",
     "M3 3h10v11H3zM5 1v4m6-4v4M5 8h6m-6 3h4",
     "M3 1h7l3 3v11H3zM10 1v4h3M5 8h6m-6 3h6",
+    "M11 11l4 4M12 7A5 5 0 1 1 2 7a5 5 0 0 1 10 0",
     "M2 4h12M2 8h12M2 12h12M5 2v4m6 0v4m-5 0v4",
   ];
   return (

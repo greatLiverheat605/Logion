@@ -3251,6 +3251,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["research_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/search/concepts/{topic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Concept */
+        get: operations["research_search_concept"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/weekly": {
         parameters: {
             query?: never;
@@ -9370,6 +9404,50 @@ export interface components {
         ResearchRunResult: {
             draft: components["schemas"]["AIOutputDraftResponse"] | null;
             run: components["schemas"]["AIRunResponse"];
+        };
+        /** ResearchSearchConcept */
+        ResearchSearchConcept: {
+            /** Description */
+            description: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** ResearchSearchItem */
+        ResearchSearchItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "resource" | "text" | "excerpt" | "topic" | "quiz";
+            /** Page */
+            page: number | null;
+            /** Personal */
+            personal: boolean;
+            /** Resource Id */
+            resource_id: string | null;
+            /** Snippet */
+            snippet: string;
+            /** Title */
+            title: string;
+            /** Topic Id */
+            topic_id: string | null;
+        };
+        /** ResearchSearchPage */
+        ResearchSearchPage: {
+            /** Items */
+            items: components["schemas"]["ResearchSearchItem"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** ResourceCreateRequest */
         ResourceCreateRequest: {
@@ -30887,6 +30965,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_search: {
+        parameters: {
+            query: {
+                q: string;
+                kind?: ("resource" | "text" | "excerpt" | "topic" | "quiz") | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchSearchPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_search_concept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchSearchConcept"];
                 };
             };
             /** @description Validation Error */

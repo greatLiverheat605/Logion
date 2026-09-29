@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { components } from "@logion/contracts";
 import type { PDFDocumentProxy, PDFDocumentLoadingTask } from "pdfjs-dist";
 import "pdfjs-dist/web/pdf_viewer.css";
@@ -29,9 +30,10 @@ type Outline = { title: string; page: number | null; depth: number };
 
 export function Reader({ id }: { id: string }) {
   const { context } = useWorkbench();
+  const params = useSearchParams();
   return context ? (
     <ReaderScope
-      key={`${context.workspace_id}/${context.space_id}/${id}`}
+      key={`${context.workspace_id}/${context.space_id}/${id}/${params.get("page") ?? ""}/${params.get("quiz") ?? ""}`}
       context={context}
       id={id}
     />
@@ -48,6 +50,12 @@ function ReaderScope({
   id: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const params = useSearchParams();
+  const rawPage = params.get("page") ?? "";
+  const requestedPage = /^\d{1,6}$/.test(rawPage)
+    ? Math.max(1, Number(rawPage))
+    : null;
+  const pageLocated = useRef(false);
   const { preferences, save } = useWorkbench();
   const client = useQueryClient();
   const [sourceText, setSourceText] = useState<SourceText | null>(null);
@@ -230,9 +238,29 @@ function ReaderScope({
     [textStatus, setTextStatus] = useState(""),
     [texts, setTexts] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1),
-    [page, setPage] = useState(1),
+    [page, setPage] = useState(requestedPage ?? 1),
     [query, setQuery] = useState(""),
     [whitePaper, setWhitePaper] = useState(false);
+  useEffect(() => {
+    if (!pdf || requestedPage === null) return;
+    const target = Math.min(pdf.numPages, requestedPage);
+    root.current
+      ?.querySelector(`[data-pdf-page="${target}"]`)
+      ?.scrollIntoView({ block: "start" });
+  }, [pdf, requestedPage]);
+  function locateRenderedPage(value: number) {
+    if (
+      !pdf ||
+      requestedPage === null ||
+      pageLocated.current ||
+      value !== Math.min(pdf.numPages, requestedPage)
+    )
+      return;
+    pageLocated.current = true;
+    root.current
+      ?.querySelector(`[data-pdf-page="${value}"]`)
+      ?.scrollIntoView({ block: "start" });
+  }
   const [reload, setReload] = useState(0);
   const [findOpen, setFindOpen] = useState(false);
   const search = useRef<HTMLInputElement>(null);
@@ -320,6 +348,7 @@ function ReaderScope({
       if (document.numPages > 10000)
         throw new Error("PDF 页数超过阅读器限制。");
       setPdf(document);
+      setPage(Math.min(document.numPages, requestedPage ?? 1));
       async function flatten(
         items: Awaited<ReturnType<PDFDocumentProxy["getOutline"]>>,
         depth = 0,
@@ -403,7 +432,14 @@ function ReaderScope({
       abort.abort();
       void loading?.destroy();
     };
-  }, [path, resourceReady, fileIdentity, attachmentVersion, reload]);
+  }, [
+    path,
+    resourceReady,
+    fileIdentity,
+    attachmentVersion,
+    reload,
+    requestedPage,
+  ]);
 
   function jump(value: number) {
     if (!pdf) return;
@@ -499,6 +535,7 @@ function ReaderScope({
               pageNumber={index + 1}
               zoom={zoom}
               query={query}
+              onReady={locateRenderedPage}
             />
           ))}
         </div>
@@ -660,7 +697,16 @@ function ReaderScope({
           </Button>
         </div>
       )}
-      <ThreePanes renderContent={contents} />
+      <ThreePanes
+        initialContent={
+          params.get("quiz")
+            ? "quiz"
+            : requestedPage !== null
+              ? "pdf"
+              : undefined
+        }
+        renderContent={contents}
+      />
     </div>
   );
 }

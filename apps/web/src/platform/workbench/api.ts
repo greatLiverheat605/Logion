@@ -88,6 +88,14 @@ export function errorMessage(error: unknown): string {
       return "内容已在其他页面更新。当前输入已保留，请载入最新版本后再编辑。";
     if (error.code === "LIBRARY_DUPLICATE")
       return "这篇文献已在当前空间的个人文献库中，可以查看已有条目。";
+    if (error.code === "SEARCH_CURSOR_UNAVAILABLE")
+      return "搜索服务尚未就绪，请联系维护者。";
+    if (error.code === "KNOWLEDGE_CURSOR_INVALID")
+      return "搜索结果已过期，请重新搜索。";
+    if (error.code === "KNOWLEDGE_QUERY_TIMEOUT")
+      return "搜索耗时过长，请缩小内容范围后重试。";
+    if (error.code === "SEARCH_QUERY_INVALID")
+      return "请输入 2–120 个可打印字符。";
     if (error.status === 422)
       return "请检查标识符、网址和日期的格式，再试一次。";
     if (error.status === 401) return "登录已过期，请重新登录。";

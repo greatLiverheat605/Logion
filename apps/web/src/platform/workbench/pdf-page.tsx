@@ -15,6 +15,7 @@ export function PdfPage({
   thumbnail = false,
   query = "",
   onPage,
+  onReady,
 }: {
   document: PDFDocumentProxy;
   pageNumber: number;
@@ -22,6 +23,7 @@ export function PdfPage({
   thumbnail?: boolean;
   query?: string;
   onPage?: () => void;
+  onReady?: (page: number) => void;
 }) {
   const root = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null),
@@ -144,6 +146,9 @@ export function PdfPage({
       offset = end;
     }
   }, [query, rendered]);
+  useEffect(() => {
+    if (rendered > 0 && !thumbnail) onReady?.(pageNumber);
+  }, [rendered, pageNumber, thumbnail, onReady]);
   return (
     <div
       ref={root}
