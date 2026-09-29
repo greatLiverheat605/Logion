@@ -79,6 +79,8 @@ curl --fail --silent http://127.0.0.1:8080/healthz
 
 ## 5. 升级与回退
 
+v0.3 使用专门的[切换与 A/B 回滚步骤](../../infra/runbooks/v03-release.md)和[隔离迁移演练](../../infra/runbooks/v03-migration-rehearsal.md)，发布前核对[版本说明](../release-notes-v0.3.md)。未经修补的旧应用不得直接连接升级后的数据库。
+
 1. 核对待升级提交、兼容性和对应发布说明。
 2. 停写或进入维护窗口，完成可验证的升级前备份与异机校验。
 3. 保留原源码、镜像、配置及密钥，使用固定 digest 切换应用。
