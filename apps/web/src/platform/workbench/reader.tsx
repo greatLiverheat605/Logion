@@ -126,12 +126,12 @@ function ReaderScope({
         await client.invalidateQueries({
           queryKey: ["workbench", "excerpts", path],
         });
+        await showPane("excerpts");
         setActionStatus(
           kind === "concept"
             ? "概念已创建，并已关联原文摘录。"
             : "摘录已保存。",
         );
-        await showPane("excerpts");
         return;
       }
       if (!sourceText || sourceText.id !== selected.source_text_id)
