@@ -11,18 +11,25 @@ import { presetLayout, type WorkbenchContext } from "./preferences";
 import { MASTERY_LABELS } from "./reading-quiz";
 
 type Page = components["schemas"]["ReadingReviewPage"];
-export function ReadingReview() {
+export function ReadingReview({ embedded = false }: { embedded?: boolean }) {
   const { context } = useWorkbench();
   return context ? (
     <ReviewScope
       key={`${context.workspace_id}/${context.space_id}`}
       context={context}
+      embedded={embedded}
     />
   ) : (
     <p>请先选择空间。</p>
   );
 }
-function ReviewScope({ context }: { context: WorkbenchContext }) {
+function ReviewScope({
+  context,
+  embedded,
+}: {
+  context: WorkbenchContext;
+  embedded: boolean;
+}) {
   const { save } = useWorkbench();
   const router = useRouter();
   const [due, setDue] = useState(false);
@@ -51,7 +58,7 @@ function ReviewScope({ context }: { context: WorkbenchContext }) {
   });
   return (
     <div className="wb-reading-panel wb-review-page">
-      <h1>阅读复习</h1>
+      {embedded ? <h2>阅读复习</h2> : <h1>阅读复习</h1>}
       <p className="wb-muted">
         这里是你本人确认后安排的文献测验。重新作答、结合证据确认，会更新下一次复习时间。
       </p>

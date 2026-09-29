@@ -308,11 +308,11 @@ function PlanScope({ scope }: { scope: string }) {
         {goalEditor && (
           <GoalEditor
             scope={scope}
-            onSaved={() => {
-              setGoalEditor(false);
-              void client.invalidateQueries({
+            onSaved={async () => {
+              await client.invalidateQueries({
                 queryKey: ["workbench", "goals", scope],
               });
+              setGoalEditor(false);
             }}
           />
         )}

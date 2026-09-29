@@ -1,4 +1,4 @@
-import { ReadingReview } from "@/platform/workbench/reading-review";
+import { UnifiedReview } from "@/platform/workbench/unified-review";
 export default function Page() {
-  return <ReadingReview />;
+  return <UnifiedReview />;
 }

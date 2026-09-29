@@ -179,18 +179,18 @@ export function GoalList({
               <GoalEditor
                 scope={scope}
                 goal={editing.goal}
-                onSaved={() => {
+                onSaved={async () => {
+                  await invalidate();
                   setEditing(null);
-                  void invalidate();
                 }}
               />
             ) : (
               <PhaseEditor
                 scope={scope}
                 goal={editing.goal}
-                onSaved={() => {
+                onSaved={async () => {
+                  await invalidate();
                   setEditing(null);
-                  void invalidate();
                 }}
               />
             )}
@@ -232,7 +232,7 @@ export function GoalEditor({
 }: {
   scope: string;
   goal?: Goal;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 }) {
   const [title, setTitle] = useState(goal?.title ?? "");
   const [outcome, setOutcome] = useState(goal?.desired_outcome ?? "");
@@ -373,7 +373,7 @@ function PhaseEditor({
 }: {
   scope: string;
   goal: Goal;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 }) {
   const [phases, setPhases] = useState<Phase[]>(() =>
     goal.phases.map((p) => ({
