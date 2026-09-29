@@ -253,11 +253,44 @@ test("selection commands preserve source citations and use the real AI draft pip
   expect(excerpts.excerpts).toHaveLength(1);
   expect(excerpts.excerpts[0].page_start).toBe(1);
   expect(excerpts.excerpts[0].excerpt_text).toContain("careful reading");
-  await selectFirstPassage(page);
-  await page.keyboard.press("c");
+  // Hold the resulting pane preference save: success must mean the command
+  // gate is ready for the next selection action, not only that the POST ended.
+  let releaseLayout!: () => void;
+  let layoutStarted!: () => void;
+  const layoutHeld = new Promise<void>((resolve) => {
+    releaseLayout = resolve;
+  });
+  const layoutRequest = new Promise<void>((resolve) => {
+    layoutStarted = resolve;
+  });
+  const settingsPath = "**/api/v1/users/me/settings";
+  await page.route(settingsPath, async (route) => {
+    if (route.request().method() === "PUT") {
+      layoutStarted();
+      await layoutHeld;
+    }
+    await route.continue();
+  });
+  try {
+    await selectFirstPassage(page);
+    await page.keyboard.press("c");
+    await layoutRequest;
+    await expect(
+      page.getByRole("status").filter({ hasText: "正在处理选中内容" }),
+    ).toBeVisible();
+    expect(
+      await page.getByRole("status").filter({ hasText: "概念已创建" }).count(),
+    ).toBe(0);
+  } finally {
+    releaseLayout();
+    await page.unrouteAll({ behavior: "wait" });
+  }
   await expect(
     page.getByRole("status").filter({ hasText: "概念已创建" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "正在处理选中内容" }),
+  ).toHaveCount(0);
   await selectFirstPassage(page);
   await page.keyboard.press("t");
   await expect(page.getByRole("region", { name: "AI 阅读草稿" })).toContainText(

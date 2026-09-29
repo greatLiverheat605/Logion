@@ -1,6 +1,10 @@
 .wb-config-page {
   max-width: 1100px;
 }
+.wb-legacy-data .wb-button {
+  min-height: 44px;
+  min-width: 44px;
+}
 .wb-config-section {
   margin-top: 24px;
   padding: 20px;
