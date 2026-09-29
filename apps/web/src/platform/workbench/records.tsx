@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
   useInfiniteQuery,
@@ -24,9 +25,10 @@ const canLeave = () =>
 
 export function Records() {
   const { context } = useWorkbench();
+  const params = useSearchParams();
   return context ? (
     <RecordsScope
-      key={`${context.workspace_id}/${context.space_id}`}
+      key={`${context.workspace_id}/${context.space_id}/${params.get("note") ?? ""}/${params.get("source") ?? ""}`}
       context={context}
     />
   ) : (
@@ -35,9 +37,10 @@ export function Records() {
 }
 
 function RecordsScope({ context }: { context: WorkbenchContext }) {
+  const params = useSearchParams();
   const path = `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}/research/notes`;
   const client = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(params.get("note"));
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -149,6 +152,7 @@ function RecordsScope({ context }: { context: WorkbenchContext }) {
             path={`${path}/${selected}`}
             spaceId={context.space_id}
             listPath={path}
+            sourceId={params.get("source")}
           />
         ) : (
           <section className="wb-empty" aria-label="笔记编辑器">
@@ -165,12 +169,22 @@ function LoadNote({
   path,
   spaceId,
   listPath,
+  sourceId,
 }: {
   path: string;
   spaceId: string;
   listPath: string;
+  sourceId: string | null;
 }) {
   const [epoch, reload] = useReducer((n: number) => n + 1, 0);
+  const source = useQuery({
+    queryKey: ["workbench", "note-source", listPath, sourceId],
+    enabled: Boolean(sourceId),
+    queryFn: () =>
+      workbenchRequest<components["schemas"]["OnlineNoteSource"]>(
+        `${listPath.replace("/research/notes", "/research/memory/sources")}/${sourceId}`,
+      ),
+  });
   const query = useQuery({
     queryKey: ["workbench", "record", path, epoch],
     queryFn: () => workbenchRequest<Note>(path),
@@ -180,6 +194,9 @@ function LoadNote({
   });
   return (
     <section aria-label="笔记编辑器" className="wb-record-editor">
+      {sourceId && source.error && (
+        <p role="alert">来源定位不可用：{errorMessage(source.error)}</p>
+      )}
       {query.isPending && <p role="status">正在打开笔记…</p>}
       {query.error && (
         <>
@@ -191,6 +208,9 @@ function LoadNote({
         <NoteEditor
           key={epoch}
           initial={query.data}
+          source={
+            source.data?.note_id === query.data.id ? source.data : undefined
+          }
           path={path}
           spaceId={spaceId}
           listPath={listPath}
@@ -203,18 +223,27 @@ function LoadNote({
 
 function NoteEditor({
   initial,
+  source,
   path,
   spaceId,
   listPath,
   reload,
 }: {
   initial: Note;
+  source?: components["schemas"]["OnlineNoteSource"];
   path: string;
   spaceId: string;
   listPath: string;
   reload: () => void;
 }) {
   const [document] = useState(() => new ReadingNoteDocument<Note>(initial));
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (source?.start != null && source.end != null && bodyRef.current) {
+      bodyRef.current.focus();
+      bodyRef.current.setSelectionRange(source.start, source.end);
+    }
+  }, [source]);
   const [title, setTitle] = useState(initial.title);
   const [revision, render] = useReducer((n: number) => n + 1, 0);
   const [error, setError] = useState<unknown>(null);
@@ -318,6 +347,15 @@ function NoteEditor({
   return (
     <>
       <h2>{document.server.title}</h2>
+      {source && (
+        <p role="status">
+          {source.state === "modified"
+            ? "来源已修改，请核对原选段。"
+            : source.start != null
+              ? "已定位原选段。"
+              : "已打开来源笔记。"}
+        </p>
+      )}
       {document.server.note_kind === "close_reading" ? (
         <>
           <p className="wb-muted">精读笔记 · 仅自己可见</p>
@@ -369,6 +407,7 @@ function NoteEditor({
           <label>
             笔记正文
             <textarea
+              ref={bodyRef}
               value={document.markdown}
               maxLength={500000}
               readOnly={!document.server.can_edit}

@@ -27,6 +27,10 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      QUIZ_ITEM_MODE_LOCKED: "这道题已有作答，不能更改判定方式。",
+      QUIZ_ITEM_TOPIC_IMMUTABLE: "回忆题不能移到另一个知识点。",
+      TOPIC_DEPENDENCY_CYCLE: "这条先修关系会形成循环，请重新选择。",
+      SYNC_DELETE_BLOCKED_BY_REFERENCE: "仍有学习记录或引用，无法删除。",
       PLANNING_PHASE_REFERENCED: "阶段已有任务引用，可以归档，不能移除。",
       PLANNING_PHASE_MISSING: "请保留所有现有阶段，或明确选择归档、移除。",
       FEATURE_DISABLED: "当前服务器尚未开启这项功能。",

@@ -1,0 +1,138 @@
+.wb-unified-review > section,
+.wb-unified-review > .wb-reading-panel {
+  margin-block: 28px;
+}
+.wb-memory-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 27%) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.wb-memory-layout > *,
+.wb-topic-detail {
+  min-width: 0;
+}
+.wb-review-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wb-review-heading h2,
+.wb-review-heading h3,
+.wb-review-heading h4 {
+  margin-block: 12px;
+  overflow-wrap: anywhere;
+}
+.wb-topic-list {
+  padding: 0;
+  list-style: none;
+  margin-top: 12px;
+}
+.wb-topic-list .wb-button {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  margin-block: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 14px;
+}
+.wb-topic-list span,
+.wb-memory-sources {
+  color: var(--wb-muted);
+  font-size: 13px;
+}
+.wb-topic-list [aria-pressed="true"] {
+  background: var(--wb-selected);
+  border-color: var(--wb-accent);
+}
+.wb-topic-detail {
+  padding: 20px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 12px;
+  background: var(--wb-win);
+}
+.wb-recall-card {
+  border-block-start: 1px solid var(--wb-sep);
+  padding-block: 18px;
+}
+.wb-recall-card form,
+.wb-memory-form {
+  display: grid;
+  gap: 16px;
+}
+.wb-memory-form {
+  margin-block: 20px;
+}
+.wb-unified-review label,
+.wb-memory-form label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.wb-unified-review .wb-review-filter {
+  display: flex;
+  align-items: center;
+}
+.wb-review-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.wb-review-fields > label {
+  flex: 1 1 140px;
+}
+.wb-unified-review textarea,
+.wb-memory-form textarea {
+  min-height: 100px;
+  resize: vertical;
+  width: 100%;
+  max-width: 100%;
+  line-height: 1.6;
+}
+.wb-memory-form input,
+.wb-memory-form select,
+.wb-unified-review select {
+  width: 100%;
+  min-width: 0;
+}
+.wb-mastery-confirm {
+  border-block: 1px solid var(--wb-sep);
+  padding-block: 16px;
+  margin-block: 16px;
+  display: grid;
+  gap: 12px;
+}
+.wb-review-history {
+  margin-block: 20px;
+}
+.wb-review-history summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+.wb-review-history > div {
+  border-block-start: 1px solid var(--wb-sep);
+  padding-block: 12px;
+}
+.wb-unified-review p,
+.wb-unified-review a {
+  overflow-wrap: anywhere;
+}
+.wb-preserve-lines {
+  white-space: pre-wrap;
+}
+@media (max-width: 720px) {
+  .wb-memory-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wb-topic-detail {
+    padding: 14px;
+  }
+  .wb-unified-review .wb-button,
+  .wb-unified-review select {
+    min-height: 44px;
+  }
+}

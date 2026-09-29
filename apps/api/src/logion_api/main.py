@@ -45,6 +45,7 @@ from logion_api.knowledge_space.routes import router as knowledge_space_router
 from logion_api.library.pdf_routes import router as research_pdf_router
 from logion_api.library.routes import router as research_library_router
 from logion_api.library.text_routes import router as research_text_router
+from logion_api.memory.online_routes import router as online_memory_router
 from logion_api.memory.routes import router as memory_router
 from logion_api.middleware import request_id_middleware
 from logion_api.planning.online_routes import router as online_planning_router
@@ -129,6 +130,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     application.include_router(attachment_router)
     application.include_router(evidence_router)
     application.include_router(memory_router)
+    application.include_router(online_memory_router)
     application.include_router(exam_router)
     application.include_router(self_study_router)
     application.include_router(research_router)
