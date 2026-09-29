@@ -9,13 +9,15 @@ export async function downloadResearchExport(
   schema = "logion-export-v03",
 ) {
   const tasks = page.getByRole("region", { name: "导出任务", exact: true });
+  const create = page.getByRole("button", { name: "创建导出", exact: true });
+  await expect(create).toBeEnabled();
   const previousCount = await tasks.getByRole("listitem").count();
   const created = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       response.url().endsWith("/data-exports"),
   );
-  await page.getByRole("button", { name: "创建导出", exact: true }).click();
+  await create.click();
   const dialog = page.getByRole("dialog");
   await expect(
     dialog.getByRole("button", { name: "确认创建", exact: true }),
