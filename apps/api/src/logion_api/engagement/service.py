@@ -121,6 +121,7 @@ class EngagementService:
                             Task.workspace_id == workspace_id,
                             Task.space_id.in_(space_ids),
                             Task.deleted_at.is_(None),
+                            Task.research_owner_id.is_(None),
                             or_(
                                 Task.title.ilike(pattern, escape="\\"),
                                 Task.description.ilike(pattern, escape="\\"),
@@ -154,6 +155,7 @@ class EngagementService:
                             Note.workspace_id == workspace_id,
                             Note.space_id.in_(space_ids),
                             Note.deleted_at.is_(None),
+                            Note.research_owner_id.is_(None),
                             or_(
                                 Note.title.ilike(pattern, escape="\\"),
                                 Note.markdown_body.ilike(pattern, escape="\\"),
@@ -187,6 +189,7 @@ class EngagementService:
                             Resource.workspace_id == workspace_id,
                             Resource.space_id.in_(space_ids),
                             Resource.deleted_at.is_(None),
+                            Resource.research_owner_id.is_(None),
                             or_(
                                 Resource.title.ilike(pattern, escape="\\"),
                                 Resource.pdf_filename.ilike(pattern, escape="\\"),
@@ -478,6 +481,7 @@ class EngagementService:
                             Task.space_id.in_(spaces),
                             Task.due_at.is_not(None),
                             Task.deleted_at.is_(None),
+                            Task.research_owner_id.is_(None),
                             Task.status.not_in(("done", "cancelled")),
                         )
                     )
@@ -511,6 +515,7 @@ class EngagementService:
                         ReviewSchedule.status.not_in(("completed", "skipped")),
                         ReviewSchedule.deleted_at.is_(None),
                         Topic.deleted_at.is_(None),
+                        Topic.research_owner_id.is_(None),
                     )
                 )
             ).all()

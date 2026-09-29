@@ -22,6 +22,7 @@ from logion_api.memory.models import (
     Topic,
     TopicDependency,
 )
+from logion_api.memory.research_scope import legacy_memory_scope
 from logion_api.memory.schemas import (
     AuditReviewCompleteRequest,
     AuditReviewCreateRequest,
@@ -133,6 +134,7 @@ class MemoryService:
                     Topic.workspace_id == workspace_id,
                     Topic.space_id == space_id,
                     Topic.deleted_at.is_(None),
+                    Topic.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -190,6 +192,7 @@ class MemoryService:
                         Topic.workspace_id == workspace_id,
                         Topic.space_id == space_id,
                         Topic.deleted_at.is_(None),
+                        Topic.research_owner_id.is_(None),
                     )
                     .order_by(Topic.updated_at.desc(), Topic.id)
                 )
@@ -250,6 +253,7 @@ class MemoryService:
                         Topic.space_id == space_id,
                         Topic.id.in_([payload.prerequisite_topic_id, payload.dependent_topic_id]),
                         Topic.deleted_at.is_(None),
+                        Topic.research_owner_id.is_(None),
                     )
                 )
             ).all()
@@ -346,6 +350,7 @@ class MemoryService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
             )
         )
         if topic is None:
@@ -359,6 +364,7 @@ class MemoryService:
                     QuizItem.workspace_id == workspace_id,
                     QuizItem.space_id == space_id,
                     QuizItem.deleted_at.is_(None),
+                    legacy_memory_scope(QuizItem),
                 )
             )
             or 0
@@ -420,6 +426,7 @@ class MemoryService:
                         QuizItem.workspace_id == workspace_id,
                         QuizItem.space_id == space_id,
                         QuizItem.deleted_at.is_(None),
+                        legacy_memory_scope(QuizItem),
                     )
                     .order_by(QuizItem.updated_at.desc(), QuizItem.id)
                     .limit(READ_PAGE_LIMIT)
@@ -447,6 +454,7 @@ class MemoryService:
                 QuizItem.workspace_id == workspace_id,
                 QuizItem.space_id == space_id,
                 QuizItem.deleted_at.is_(None),
+                legacy_memory_scope(QuizItem),
             )
             .with_for_update()
         )
@@ -473,6 +481,7 @@ class MemoryService:
                     QuizAttempt.workspace_id == workspace_id,
                     QuizAttempt.user_id == context.user.id,
                     QuizAttempt.deleted_at.is_(None),
+                    legacy_memory_scope(QuizAttempt),
                 )
             )
             or 0
@@ -544,6 +553,7 @@ class MemoryService:
                     ErrorPattern.user_id == context.user.id,
                     ErrorPattern.cause == payload.error_cause,
                     ErrorPattern.deleted_at.is_(None),
+                    legacy_memory_scope(ErrorPattern),
                 )
                 .with_for_update()
             )
@@ -659,6 +669,7 @@ class MemoryService:
                         QuizAttempt.space_id == space_id,
                         QuizAttempt.user_id == context.user.id,
                         QuizAttempt.deleted_at.is_(None),
+                        legacy_memory_scope(QuizAttempt),
                     )
                     .order_by(QuizAttempt.attempted_at.desc(), QuizAttempt.id)
                     .limit(READ_PAGE_LIMIT)
@@ -702,6 +713,7 @@ class MemoryService:
                         ErrorPattern.space_id == space_id,
                         ErrorPattern.user_id == context.user.id,
                         ErrorPattern.deleted_at.is_(None),
+                        legacy_memory_scope(ErrorPattern),
                     )
                     .order_by(ErrorPattern.updated_at.desc(), ErrorPattern.id)
                     .limit(READ_PAGE_LIMIT)
@@ -730,6 +742,7 @@ class MemoryService:
                 ErrorPattern.space_id == space_id,
                 ErrorPattern.user_id == context.user.id,
                 ErrorPattern.deleted_at.is_(None),
+                legacy_memory_scope(ErrorPattern),
             )
             .with_for_update()
         )
@@ -1105,6 +1118,7 @@ class MemoryService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -1243,6 +1257,7 @@ class MemoryService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
             )
         )
         if topic is None:
@@ -1371,10 +1386,12 @@ class MemoryService:
             or source.workspace_id != workspace_id
             or source.space_id != space_id
             or source.deleted_at is not None
+            or source.research_owner_id is not None
             or target is None
             or target.workspace_id != workspace_id
             or target.space_id != space_id
             or target.deleted_at is not None
+            or target.research_owner_id is not None
         ):
             raise APIError(
                 code="SOURCE_LINK_INVALID",
@@ -1429,7 +1446,11 @@ class MemoryService:
         await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
         topic = await db.scalar(
             select(Topic)
-            .where(Topic.id == payload.id, Topic.workspace_id == workspace_id)
+            .where(
+                Topic.id == payload.id,
+                Topic.workspace_id == workspace_id,
+                Topic.research_owner_id.is_(None),
+            )
             .with_for_update()
         )
         if topic is None or topic.space_id != space_id or topic.deleted_at is not None:
@@ -1483,7 +1504,11 @@ class MemoryService:
         await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
         item = await db.scalar(
             select(QuizItem)
-            .where(QuizItem.id == payload.id, QuizItem.workspace_id == workspace_id)
+            .where(
+                QuizItem.id == payload.id,
+                QuizItem.workspace_id == workspace_id,
+                QuizItem.research_owner_id.is_(None),
+            )
             .with_for_update()
         )
         if item is None or item.space_id != space_id or item.deleted_at is not None:

@@ -76,6 +76,7 @@ class AttachmentService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
             )
         elif target_type == "evidence_item":
             query = select(EvidenceItem.id).where(

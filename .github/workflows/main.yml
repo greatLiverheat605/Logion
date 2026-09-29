@@ -1,8 +1,8 @@
-name: Main candidate
+name: Rollback candidate
 
 on:
   push:
-    branches: [main]
+    branches: [codex/v03-rollback-a]
   workflow_dispatch:
 
 permissions:
@@ -19,11 +19,110 @@ env:
   IMAGE_PREFIX: ghcr.io/greatliverheat605/logion
 
 concurrency:
-  group: main-candidate
+  group: rollback-candidate
   cancel-in-progress: false
 
 jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        env:
+          POSTGRES_DB: logion_test
+          POSTGRES_USER: logion
+          POSTGRES_PASSWORD: logion_test
+        ports:
+          - 5432:5432
+        options:
+          --health-cmd "pg_isready -U logion -d logion_test" --health-interval
+          5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8.6.1-alpine
+        ports:
+          - 6379:6379
+        options:
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout
+          5s --health-retries 10
+    env:
+      LOGION_DATABASE_URL: postgresql+asyncpg://logion:logion_test@localhost:5432/logion_test
+      LOGION_SYNC_COMPAT_RESPONSES: reports/sync-legacy
+      LOGION_REDIS_URL: redis://localhost:6379/0
+      LOGION_ALLOWED_ORIGINS: '["http://test","http://localhost:3000"]'
+      LOGION_SECRET_KEY: phase1-integration-secret-key-must-be-at-least-32
+      LOGION_WEBAUTHN_RP_ID: test
+      LOGION_WEBAUTHN_ORIGINS: '["http://test"]'
+      LOGION_TOTP_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+      LOGION_TOTP_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktaW50ZWdyYXRpb24tdG90cC1rZXktMzJieXRlcyE"}'
+      LOGION_EMAIL_DELIVERY_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+      LOGION_EMAIL_DELIVERY_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZW1haWwtZGVsaXZlcnkta2V5LTMyLWJ5dGVzISE"}'
+      LOGION_AI_CREDENTIAL_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+      LOGION_AI_CREDENTIAL_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktYWktY3JlZGVudGlhbC1rZXktMzItYnl0ZXMhISE"}'
+      LOGION_DATA_EXPORT_ACTIVE_ENCRYPTION_KEY_ID: ci-v1
+      LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Secret history scan
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: Read pinned forward schema
+        id: schema
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          schema = json.loads(Path("config/rollback-schema.json").read_text())
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("commit=" + schema["source_commit"] + "\n")
+              output.write("head=" + schema["migration_head"] + "\n")
+          PY
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.schema.outputs.commit }}
+          path: .local/forward-schema
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: 0.11.29
+          python-version: "3.12"
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages --group dev --frozen
+      - name: Migrate with the pinned forward source only
+        run: |
+          test "$(git -C .local/forward-schema rev-parse HEAD)" = "${{ steps.schema.outputs.commit }}"
+          uv run --no-sync --package logion-api alembic \
+            -c .local/forward-schema/apps/api/alembic.ini upgrade head
+      - name: Old API and Worker regression on the upgraded schema
+        run: |
+          uv run --no-sync python -m logion_api.rollback \
+            --expected-head "${{ steps.schema.outputs.head }}" \
+            --output reports/rollback/schema-preflight.json
+          uv run --no-sync --group dev pytest -m integration apps/api/tests apps/worker/tests
+          pnpm test:sync-compat --responses reports/sync-legacy
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rollback-compatibility-${{ github.sha }}
+          path: |
+            reports/rollback
+            reports/sync-legacy
+            config/rollback-schema.json
+          retention-days: 90
+
   candidate:
+    needs: compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -155,6 +254,21 @@ jobs:
             --manifest candidate/candidate-manifest.json \
             --expected-commit "$GITHUB_SHA" \
             --expected-repository "$GITHUB_REPOSITORY"
+      - name: Read pinned forward schema
+        id: schema
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          schema = json.loads(Path("config/rollback-schema.json").read_text())
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("commit=" + schema["source_commit"] + "\n")
+              output.write("head=" + schema["migration_head"] + "\n")
+          PY
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.schema.outputs.commit }}
+          path: .local/forward-schema
       - name: Smoke exact candidate images
         env:
           POSTGRES_PASSWORD: phase0-ci-only
@@ -172,8 +286,20 @@ jobs:
           LOGION_DATA_EXPORT_ENCRYPTION_KEYS: '{"ci-v1":"Y2ktZGF0YS1leHBvcnQta2V5LTMyLWJ5dGVzISEhISE"}'
         run: |
           docker compose up --no-build --wait --timeout 180 postgres redis
-          docker compose run --no-deps --rm api \
-            alembic -c apps/api/alembic.ini upgrade head
+          docker compose run --no-deps --rm \
+            -v "$PWD/.local/forward-schema/apps/api:/forward-api:ro" \
+            -e PYTHONPATH=/forward-api/src api \
+            alembic -c /forward-api/alembic.ini upgrade head
+          docker compose run --no-deps --rm api python -m logion_api.rollback \
+            --expected-head "${{ steps.schema.outputs.head }}" > candidate/rollback-schema-check.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          schema = json.loads(Path("config/rollback-schema.json").read_text())
+          schema["rollback_commit"] = os.environ["GITHUB_SHA"]
+          Path("candidate/rollback-compatibility.json").write_text(
+              json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+          PY
           docker compose up --no-build --wait --timeout 180 web api worker reverse-proxy
           curl --fail --silent http://localhost:8080/healthz
           curl --fail --silent http://localhost:8080/health
@@ -325,6 +451,8 @@ jobs:
             logion-sbom.spdx.json
             candidate/candidate-manifest.json
             candidate/performance-smoke.json
+            candidate/rollback-schema-check.json
+            candidate/rollback-compatibility.json
             security-reports/candidate-security-summary.json
             security-reports/license-policy.json
             packages/contracts/openapi/openapi.json

@@ -62,6 +62,7 @@ from logion_api.memory.models import (
     Topic,
     TopicDependency,
 )
+from logion_api.memory.research_scope import is_private_memory_record
 from logion_api.memory.schemas import (
     AuditReviewCompleteRequest,
     AuditReviewCreateRequest,
@@ -961,7 +962,11 @@ class SyncPushService:
         except (TypeError, ValueError):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
         task = await db.get(Task, payload.task_id)
-        if task is None or task.workspace_id != request.workspace_id:
+        if (
+            task is None
+            or task.workspace_id != request.workspace_id
+            or task.research_owner_id is not None
+        ):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         # Offline callers must enqueue the planned -> in_progress task transition
         # first; otherwise the implicit task mutation would have no ledger entry.
@@ -1175,6 +1180,7 @@ class SyncPushService:
             task is None
             or task.workspace_id != request.workspace_id
             or task.space_id != parsed_space_id
+            or task.research_owner_id is not None
         ):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         # The client must enqueue the task transition first so that every
@@ -1873,6 +1879,8 @@ class SyncPushService:
             ):
                 return self._rejected(operation.operation_id, "SYNC_OPERATION_INVALID")
             current = await db.get(MasteryRecord, operation.entity_id)
+            if await is_private_memory_record(db, current):
+                return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
             if current is not None:
                 if (
                     current.workspace_id != request.workspace_id
@@ -2803,7 +2811,11 @@ class SyncPushService:
             )
         if operation.entity_type == "task":
             task = await db.get(Task, operation.entity_id)
-            if task is None or task.workspace_id != request.workspace_id:
+            if (
+                task is None
+                or task.workspace_id != request.workspace_id
+                or task.research_owner_id is not None
+            ):
                 return None
             return task.version
         if operation.entity_type == "study_session":
@@ -2815,14 +2827,18 @@ class SyncPushService:
             note = await db.get(Note, operation.entity_id)
             return (
                 note.version
-                if note is not None and note.workspace_id == request.workspace_id
+                if note is not None
+                and note.workspace_id == request.workspace_id
+                and note.research_owner_id is None
                 else None
             )
         if operation.entity_type == "resource":
             resource = await db.get(Resource, operation.entity_id)
             return (
                 resource.version
-                if resource is not None and resource.workspace_id == request.workspace_id
+                if resource is not None
+                and resource.workspace_id == request.workspace_id
+                and resource.research_owner_id is None
                 else None
             )
         if operation.entity_type == "evidence":
@@ -2843,14 +2859,18 @@ class SyncPushService:
             topic = await db.get(Topic, operation.entity_id)
             return (
                 topic.version
-                if topic is not None and topic.workspace_id == request.workspace_id
+                if topic is not None
+                and topic.workspace_id == request.workspace_id
+                and topic.research_owner_id is None
                 else None
             )
         if operation.entity_type == "quiz_item":
             quiz_item = await db.get(QuizItem, operation.entity_id)
             return (
                 quiz_item.version
-                if quiz_item is not None and quiz_item.workspace_id == request.workspace_id
+                if quiz_item is not None
+                and quiz_item.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, quiz_item)
                 else None
             )
         if operation.entity_type == "topic_dependency":
@@ -2871,21 +2891,27 @@ class SyncPushService:
             mastery = await db.get(MasteryRecord, operation.entity_id)
             return (
                 mastery.version
-                if mastery is not None and mastery.workspace_id == request.workspace_id
+                if mastery is not None
+                and mastery.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, mastery)
                 else None
             )
         if operation.entity_type == "review_schedule":
             schedule = await db.get(ReviewSchedule, operation.entity_id)
             return (
                 schedule.version
-                if schedule is not None and schedule.workspace_id == request.workspace_id
+                if schedule is not None
+                and schedule.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, schedule)
                 else None
             )
         if operation.entity_type == "error_pattern":
             pattern = await db.get(ErrorPattern, operation.entity_id)
             return (
                 pattern.version
-                if pattern is not None and pattern.workspace_id == request.workspace_id
+                if pattern is not None
+                and pattern.workspace_id == request.workspace_id
+                and not await is_private_memory_record(db, pattern)
                 else None
             )
         if operation.entity_type == "audit_review":
@@ -3070,6 +3096,10 @@ class SyncPushService:
         if model is None:
             return None
         remote = await db.get(model, entity_id)
+        if (
+            isinstance(remote, (Resource, Note, Task)) and remote.research_owner_id is not None
+        ) or await is_private_memory_record(db, remote):
+            return None
         if remote is None or remote.workspace_id != workspace_id:
             return None
         return cast(int, remote.version)
@@ -3201,6 +3231,10 @@ class SyncPushService:
         elif operation.entity_type == "report_snapshot":
             remote = await db.get(ReportSnapshot, operation.entity_id)
         if remote is None or remote.workspace_id != request.workspace_id:
+            return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
+        if (
+            isinstance(remote, (Resource, Note, Task)) and remote.research_owner_id is not None
+        ) or await is_private_memory_record(db, remote):
             return self._rejected(operation.operation_id, "SYNC_OPERATION_FORBIDDEN")
         remote_deleted_at = getattr(remote, "deleted_at", None)
         if remote_deleted_at is not None:

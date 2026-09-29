@@ -52,6 +52,7 @@ class Topic(Base):
     space_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False
     )
+    research_owner_id: Mapped[UUID | None] = mapped_column(Uuid)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
@@ -244,6 +245,7 @@ class QuizItem(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    research_owner_id: Mapped[UUID | None] = mapped_column(Uuid)
     topic_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     answer_key: Mapped[str] = mapped_column(Text, nullable=False)

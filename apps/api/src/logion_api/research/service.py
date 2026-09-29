@@ -111,6 +111,16 @@ class ResearchService:
         )
         db.add(item)
         await db.flush()
+        # Preserve the legacy API while disabled, with an atomic resource mapping.
+        from logion_api.research.legacy_mapping import map_legacy_paper
+
+        if isinstance(item, PaperRecord):
+            await map_legacy_paper(db, item)
+        elif isinstance(item, ResearchClaim):
+            paper = await db.get(PaperRecord, item.paper_id)
+            assert paper is not None
+            item.resource_id = (await map_legacy_paper(db, paper)).id
+            await db.flush()
         db.add(
             new_audit_event(
                 request_id=request_id,

@@ -188,7 +188,7 @@ async def test_account_deletion_revokes_pending_workspace_invitations() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_grace(
+async def test_rollback_deletion_blocks_shared_ownership_and_preserves_files_after_grace(
     enabled_clean_attachment_storage: Settings,
 ) -> None:
     origin = "http://test"
@@ -291,17 +291,19 @@ async def test_account_deletion_blocks_shared_ownership_and_pseudonymizes_after_
         assert row is not None
         row.delete_after = datetime.now(UTC) - timedelta(seconds=1)
         await db.commit()
-    assert await AccountDeletionService(enabled_clean_attachment_storage).execute_next() is True
+    assert await AccountDeletionService(enabled_clean_attachment_storage).execute_next() is False
     async with session_factory() as db:
         user = await db.get(User, user_id)
         request = await db.get(AccountDeletionRequest, deletion_id)
-        assert user is not None and user.status == "deleted"
-        assert user.email != original_email and user.email.endswith("@invalid.example")
-        assert user.email_verified_at is None
-        assert request is not None and request.status == "completed"
-        assert await db.get(Attachment, attachment_id) is None
-        assert not path_exists(attachment_path)
-        assert await db.get(PasswordCredential, user_id) is None
-        assert not list(
+        assert user is not None and user.status == "pending_deletion"
+        assert user.email == original_email
+        assert user.email_verified_at is not None
+        assert request is not None and request.status == "pending"
+        assert request.completed_at is None
+        assert await db.get(Attachment, attachment_id) is not None
+        assert path_exists(attachment_path)
+        assert await db.get(PasswordCredential, user_id) is not None
+        sessions = list(
             (await db.scalars(select(AuthSession).where(AuthSession.user_id == user_id))).all()
         )
+        assert sessions and all(session.revoked_at is not None for session in sessions)

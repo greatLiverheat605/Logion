@@ -21,6 +21,7 @@ from logion_api.ai_gateway.models import (
     AIRunCandidate,
     AIUsageMonthly,
 )
+from logion_api.ai_gateway.rollback_policy import legacy_run_scope, require_legacy_run
 from logion_api.ai_gateway.run_crypto import AIRunInputCipher
 from logion_api.config import Settings
 from logion_api.db import session_factory, utc_now
@@ -50,7 +51,7 @@ class AIExecutionService:
         async with session_factory() as db:
             run = await db.scalar(
                 select(AIRun)
-                .where(AIRun.status == "queued")
+                .where(AIRun.status == "queued", legacy_run_scope())
                 .order_by(AIRun.created_at, AIRun.id)
                 .with_for_update(skip_locked=True)
                 .limit(1)
@@ -67,6 +68,8 @@ class AIExecutionService:
         return True
 
     async def execute_run(self, run_id: UUID) -> None:
+        async with session_factory() as db:
+            await require_legacy_run(db, run_id)
         candidates = await self._candidate_ids(run_id)
         final_error = "AI_ROUTE_UNAVAILABLE"
         for candidate_id in candidates:
@@ -91,6 +94,8 @@ class AIExecutionService:
                 await self._record_attempt(run_id)
                 credential = ""
                 try:
+                    async with session_factory() as db:
+                        await require_legacy_run(db, run_id)
                     credential = self._provider_cipher.decrypt(provider)
                     result = await self._adapter_factory().generate(
                         base_url=provider.base_url,
@@ -144,6 +149,7 @@ class AIExecutionService:
                     message="The AI run state requires administrator review.",
                     status_code=503,
                 )
+            await require_legacy_run(db, run_id)
             model = await db.scalar(
                 select(AIModel).where(
                     AIModel.id == candidate.model_id,
@@ -172,7 +178,9 @@ class AIExecutionService:
 
     async def _record_attempt(self, run_id: UUID) -> None:
         async with session_factory() as db:
-            run = await db.scalar(select(AIRun).where(AIRun.id == run_id).with_for_update())
+            run = await db.scalar(
+                select(AIRun).where(AIRun.id == run_id, legacy_run_scope()).with_for_update()
+            )
             if run is None or run.status != "running":
                 raise APIError(
                     code="AI_RUN_STATE_INVALID",
@@ -197,7 +205,9 @@ class AIExecutionService:
         result: GeneratedDraft,
     ) -> None:
         async with session_factory() as db:
-            run = await db.scalar(select(AIRun).where(AIRun.id == run_id).with_for_update())
+            run = await db.scalar(
+                select(AIRun).where(AIRun.id == run_id, legacy_run_scope()).with_for_update()
+            )
             if run is None or run.status != "running":
                 return
             if run.cancel_requested_at is not None:
@@ -244,7 +254,9 @@ class AIExecutionService:
 
     async def _finish_failed(self, run_id: UUID, error_code: str) -> None:
         async with session_factory() as db:
-            run = await db.scalar(select(AIRun).where(AIRun.id == run_id).with_for_update())
+            run = await db.scalar(
+                select(AIRun).where(AIRun.id == run_id, legacy_run_scope()).with_for_update()
+            )
             if run is None or run.status not in {"queued", "running"}:
                 return
             await self._terminal(db, run, "failed", error_code, None, None)
@@ -252,7 +264,9 @@ class AIExecutionService:
 
     async def _finish_cancelled(self, run_id: UUID) -> None:
         async with session_factory() as db:
-            run = await db.scalar(select(AIRun).where(AIRun.id == run_id).with_for_update())
+            run = await db.scalar(
+                select(AIRun).where(AIRun.id == run_id, legacy_run_scope()).with_for_update()
+            )
             if run is None or run.status in {"succeeded", "failed", "cancelled"}:
                 return
             await self._terminal(db, run, "cancelled", "AI_RUN_CANCELLED", None, None)

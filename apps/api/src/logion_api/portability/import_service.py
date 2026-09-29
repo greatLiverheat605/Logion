@@ -24,6 +24,7 @@ from logion_api.identity.service import AuthContext
 from logion_api.portability.crypto import ImportPreviewCipher
 from logion_api.portability.models import DataImportPreview
 from logion_api.portability.schemas import ImportPreviewCreate
+from logion_api.research.legacy_mapping import map_legacy_paper
 from logion_api.research.models import PaperRecord
 from logion_api.self_study.models import InboxItem
 from logion_api.workspaces.models import Space, WorkspaceMembership
@@ -233,15 +234,16 @@ class ImportService:
                     )
                 )
             elif row.kind == "paper":
-                db.add(
-                    PaperRecord(
-                        **common,
-                        user_id=context.user.id,
-                        title=row.title,
-                        citation_key=row.citation_key or f"imported-{uuid7()}",
-                        source_url=row.source_url,
-                    )
+                paper = PaperRecord(
+                    **common,
+                    user_id=context.user.id,
+                    title=row.title,
+                    citation_key=row.citation_key or f"imported-{uuid7()}",
+                    source_url=row.source_url,
                 )
+                db.add(paper)
+                await db.flush()
+                await map_legacy_paper(db, paper)
             else:
                 db.add(
                     InboxItem(
@@ -433,7 +435,9 @@ class ImportService:
                 model.deleted_at.is_(None),
             )
             if model in (Note, Resource):
-                query = query.where(model.space_id == target_space_id)
+                query = query.where(
+                    model.space_id == target_space_id, model.research_owner_id.is_(None)
+                )
             if hasattr(model, "user_id"):
                 query = query.where(model.user_id == user_id)
             current = int(await db.scalar(query) or 0)

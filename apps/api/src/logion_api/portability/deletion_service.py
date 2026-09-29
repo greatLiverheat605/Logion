@@ -1,54 +1,29 @@
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from logion_api.ai_gateway.models import AIOutputDraft, AIRun, AIRunCandidate
+from logion_api.ai_gateway.models import AIRun
 from logion_api.config import Settings
 from logion_api.content.attachment_storage import FilesystemAttachmentStorage
-from logion_api.content.models import Attachment
-from logion_api.db import session_factory, utc_now
-from logion_api.engagement.models import CalendarFeed, Notification, NotificationPreference
+from logion_api.db import utc_now
+from logion_api.engagement.models import CalendarFeed
 from logion_api.errors import APIError
-from logion_api.exam.models import Exam
-from logion_api.execution.models import StudySession
 from logion_api.growth.models import ShareSnapshot
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import (
-    AuditEvent,
     AuthSession,
     Device,
-    EmailOutbox,
-    IdentityActionToken,
-    MfaChallenge,
-    PasskeyCredential,
-    PasswordCredential,
-    RecoveryCode,
     RefreshToken,
-    TotpCredential,
     User,
-    WebAuthnChallenge,
 )
 from logion_api.identity.security import IdentitySecurity
 from logion_api.identity.service import AuthContext
-from logion_api.memory.models import (
-    AuditReview,
-    ErrorPattern,
-    MasteryRecord,
-    QuizAttempt,
-    ReviewSchedule,
-)
 from logion_api.portability.models import (
     AccountDeletionRequest,
-    DataExportJob,
-    DataImportPreview,
 )
-from logion_api.research.models import PaperRecord, ResearchQuestion
-from logion_api.self_study.models import InboxItem, LearningTrack
 from logion_api.workspaces.models import (
-    Space,
-    Workspace,
     WorkspaceInvitation,
     WorkspaceMembership,
 )
@@ -228,22 +203,8 @@ class AccountDeletionService:
         return row
 
     async def execute_next(self) -> bool:
-        async with session_factory() as db:
-            row = await db.scalar(
-                select(AccountDeletionRequest)
-                .where(
-                    AccountDeletionRequest.status == "pending",
-                    AccountDeletionRequest.delete_after <= utc_now(),
-                )
-                .order_by(AccountDeletionRequest.delete_after, AccountDeletionRequest.id)
-                .with_for_update(skip_locked=True)
-                .limit(1)
-            )
-            if row is None:
-                return False
-            await self._physical_cleanup(db, row)
-            await db.commit()
-            return True
+        # ADR-0063: preserve requests and files until the forward version resumes cleanup.
+        return False
 
     async def _revoke_access(self, db: AsyncSession, user_id: UUID, now: datetime) -> None:
         session_ids = select(AuthSession.id).where(AuthSession.user_id == user_id)
@@ -296,90 +257,6 @@ class AccountDeletionService:
             .where(AIRun.requested_by == user_id, AIRun.status.in_(("queued", "running")))
             .values(cancel_requested_at=now)
         )
-
-    async def _physical_cleanup(self, db: AsyncSession, request: AccountDeletionRequest) -> None:
-        user = await db.scalar(select(User).where(User.id == request.user_id).with_for_update())
-        if user is None or user.status != "pending_deletion" or request.status != "pending":
-            return
-        now = utc_now()
-        attachments = list(
-            (await db.scalars(select(Attachment).where(Attachment.created_by == user.id))).all()
-        )
-        for attachment in attachments:
-            await self._attachment_storage.delete(
-                staging_key=attachment.staging_key,
-                storage_key=attachment.storage_key,
-            )
-        await db.execute(delete(Attachment).where(Attachment.created_by == user.id))
-        for workspace_id in request.owned_workspace_ids:
-            await db.execute(delete(Workspace).where(Workspace.id == UUID(workspace_id)))
-        await db.execute(
-            delete(Space).where(Space.owner_user_id == user.id, Space.visibility == "private")
-        )
-        for personal_model in (
-            Exam,
-            PaperRecord,
-            ResearchQuestion,
-            LearningTrack,
-            InboxItem,
-            MasteryRecord,
-            ReviewSchedule,
-            ErrorPattern,
-            QuizAttempt,
-            AuditReview,
-        ):
-            await db.execute(delete(personal_model).where(personal_model.user_id == user.id))
-        await db.execute(delete(StudySession).where(StudySession.created_by == user.id))
-        run_ids = select(AIRun.id).where(AIRun.requested_by == user.id)
-        await db.execute(delete(AIOutputDraft).where(AIOutputDraft.run_id.in_(run_ids)))
-        await db.execute(delete(AIRunCandidate).where(AIRunCandidate.run_id.in_(run_ids)))
-        await db.execute(delete(AIRun).where(AIRun.id.in_(run_ids)))
-        for scoped_model, field in (
-            (Notification, Notification.recipient_user_id),
-            (NotificationPreference, NotificationPreference.user_id),
-            (CalendarFeed, CalendarFeed.user_id),
-            (DataExportJob, DataExportJob.requested_by),
-            (DataImportPreview, DataImportPreview.requested_by),
-            (WorkspaceMembership, WorkspaceMembership.user_id),
-        ):
-            await db.execute(delete(scoped_model).where(field == user.id))
-        await db.execute(
-            delete(WorkspaceInvitation).where(
-                WorkspaceInvitation.email_normalized == user.email_normalized
-            )
-        )
-        for identity_model in (
-            EmailOutbox,
-            IdentityActionToken,
-            MfaChallenge,
-            PasskeyCredential,
-            RecoveryCode,
-            TotpCredential,
-            WebAuthnChallenge,
-            PasswordCredential,
-            Device,
-        ):
-            await db.execute(delete(identity_model).where(identity_model.user_id == user.id))
-        await db.execute(
-            update(AuditEvent)
-            .where(AuditEvent.actor_id == user.id)
-            .values(actor_id=None, event_metadata={"retained": "account_deletion_policy"})
-        )
-        await db.execute(
-            update(AuditEvent)
-            .where(AuditEvent.target_type == "user", AuditEvent.target_id == user.id)
-            .values(target_id=None)
-        )
-        pseudonym = self._security.privacy_hash(str(user.id)) or user.id.hex
-        user.email = f"deleted+{pseudonym[:32]}@invalid.example"
-        user.email_normalized = user.email
-        user.email_verified_at = None
-        user.status = "deleted"
-        user.updated_at = now
-        user.version += 1
-        request.status = "completed"
-        request.completed_at = now
-        request.version += 1
 
     @staticmethod
     def _not_found() -> APIError:

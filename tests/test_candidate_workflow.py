@@ -24,14 +24,18 @@ def test_candidate_database_is_migrated_before_worker_readiness(
 ) -> None:
     source = (ROOT / workflow).read_text(encoding="utf-8")
 
-    dependencies = source.index(
-        "docker compose up --no-build --wait --timeout 180 postgres redis"
-    )
+    dependencies = source.index("docker compose up --no-build --wait --timeout 180 postgres redis")
     migration = source.index(
-        "docker compose run --no-deps --rm api \\\n"
-        "            alembic -c apps/api/alembic.ini upgrade head",
+        "alembic -c /forward-api/alembic.ini upgrade head"
+        if workflow.endswith("main.yml")
+        else "alembic -c apps/api/alembic.ini upgrade head",
         dependencies,
     )
+    if workflow.endswith("main.yml"):
+        preflight = source.index("api python -m logion_api.rollback", migration)
+        assert migration < preflight < source.index(full_stack_command)
+        assert "needs: compatibility" in source
+        assert "alembic -c apps/api/alembic.ini upgrade head" not in source
     full_stack = source.index(full_stack_command, migration)
 
     assert dependencies < migration < full_stack
@@ -63,7 +67,6 @@ def test_authenticated_browser_origin_is_trusted_by_compose_api(
 
     assert (
         "LOGION_ALLOWED_ORIGINS: "
-        "'[\"http://localhost:3000\",\"http://127.0.0.1:8080\"]'"
-        in source[start:end]
+        '\'["http://localhost:3000","http://127.0.0.1:8080"]\'' in source[start:end]
     )
     assert "LOGION_E2E_BASE_URL: http://127.0.0.1:8080" in source[end:]

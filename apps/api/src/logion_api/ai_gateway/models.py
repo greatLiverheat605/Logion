@@ -293,6 +293,7 @@ class AIRun(Base):
     target_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     target_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
     selected_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    context_entity_types: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     expected_output_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     input_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary)
     input_nonce: Mapped[bytes | None] = mapped_column(LargeBinary(12))

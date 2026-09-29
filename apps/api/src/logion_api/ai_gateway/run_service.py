@@ -15,6 +15,11 @@ from logion_api.ai_gateway.models import (
     AIRunCandidate,
     AIUsageMonthly,
 )
+from logion_api.ai_gateway.rollback_policy import (
+    legacy_run_scope,
+    require_legacy_run,
+    require_legacy_task,
+)
 from logion_api.ai_gateway.routing_schemas import AIRouteResolveRequest
 from logion_api.ai_gateway.routing_service import AIRoutingService
 from logion_api.ai_gateway.run_crypto import AIRunInputCipher
@@ -66,6 +71,7 @@ class AIRunService:
         request_id: str,
     ) -> AIRun:
         await self.authorize(db, context, workspace_id, request_id)
+        require_legacy_task(payload.task_type, payload.target_type)
         if len(json.dumps(payload.input_fields, ensure_ascii=False).encode()) > 262_144:
             raise APIError(
                 code="AI_RUN_INPUT_TOO_LARGE",
@@ -77,10 +83,12 @@ class AIRunService:
             select(AIRun).where(
                 AIRun.workspace_id == workspace_id,
                 AIRun.requested_by == context.user.id,
+                legacy_run_scope(),
                 AIRun.idempotency_key == payload.idempotency_key,
             )
         )
         if existing is not None:
+            await require_legacy_run(db, existing.id)
             if existing.request_hash != request_hash:
                 raise APIError(
                     code="IDEMPOTENCY_KEY_REUSED",
@@ -89,7 +97,12 @@ class AIRunService:
                 )
             return existing
         existing_id = await db.get(AIRun, payload.id)
-        if existing_id is not None and existing_id.workspace_id != workspace_id:
+        if existing_id is not None and (
+            existing_id.workspace_id != workspace_id
+            or existing_id.requested_by != context.user.id
+            or await db.scalar(select(AIRun.id).where(AIRun.id == payload.id, legacy_run_scope()))
+            is None
+        ):
             raise APIError(code="RESOURCE_NOT_FOUND", message="AI run not found.", status_code=404)
         if existing_id is not None:
             raise APIError(
@@ -143,10 +156,12 @@ class AIRunService:
             select(AIRun).where(
                 AIRun.workspace_id == workspace_id,
                 AIRun.requested_by == context.user.id,
+                legacy_run_scope(),
                 AIRun.idempotency_key == payload.idempotency_key,
             )
         )
         if committed_race is not None:
+            await require_legacy_run(db, committed_race.id)
             if committed_race.request_hash != request_hash:
                 raise APIError(
                     code="IDEMPOTENCY_KEY_REUSED",
@@ -209,15 +224,18 @@ class AIRunService:
             async with db.begin_nested():
                 db.add(run)
                 await db.flush()
+                await require_legacy_run(db, run.id)
         except IntegrityError as exc:
             raced = await db.scalar(
                 select(AIRun).where(
                     AIRun.workspace_id == workspace_id,
                     AIRun.requested_by == context.user.id,
+                    legacy_run_scope(),
                     AIRun.idempotency_key == payload.idempotency_key,
                 )
             )
             if raced is not None and raced.request_hash == request_hash:
+                await require_legacy_run(db, raced.id)
                 return raced
             raise APIError(
                 code="IDEMPOTENCY_KEY_REUSED",
@@ -265,6 +283,7 @@ class AIRunService:
                     .where(
                         AIRun.workspace_id == workspace_id,
                         AIRun.requested_by == context.user.id,
+                        legacy_run_scope(),
                     )
                     .order_by(AIRun.created_at.desc(), AIRun.id.desc())
                     .limit(200)
@@ -318,6 +337,7 @@ class AIRunService:
                     .where(
                         AIOutputDraft.workspace_id == workspace_id,
                         AIRun.requested_by == context.user.id,
+                        legacy_run_scope(),
                     )
                     .order_by(AIOutputDraft.created_at.desc(), AIOutputDraft.id.desc())
                     .limit(200)
@@ -342,6 +362,7 @@ class AIRunService:
                 AIOutputDraft.id == draft_id,
                 AIOutputDraft.workspace_id == workspace_id,
                 AIRun.requested_by == context.user.id,
+                legacy_run_scope(),
             )
             .with_for_update()
         )
@@ -433,6 +454,7 @@ class AIRunService:
             AIRun.id == run_id,
             AIRun.workspace_id == workspace_id,
             AIRun.requested_by == user_id,
+            legacy_run_scope(),
         )
         if lock:
             statement = statement.with_for_update()

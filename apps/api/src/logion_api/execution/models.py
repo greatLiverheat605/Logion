@@ -52,6 +52,7 @@ class Task(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid7)
     workspace_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    research_owner_id: Mapped[UUID | None] = mapped_column(Uuid)
     goal_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     phase_id: Mapped[UUID | None] = mapped_column(Uuid)
     title: Mapped[str] = mapped_column(String(200), nullable=False)

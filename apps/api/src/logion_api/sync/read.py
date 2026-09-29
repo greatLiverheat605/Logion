@@ -22,6 +22,7 @@ from logion_api.memory.models import (
     Topic,
     TopicDependency,
 )
+from logion_api.memory.research_scope import legacy_memory_scope
 from logion_api.planning.models import LearningGoal, LearningPlan, PlanPhase, PlanVersion
 from logion_api.research.models import (
     ExperimentRun,
@@ -341,6 +342,10 @@ class SyncReadService:
                     .join(Space, Space.id == tombstone_model.space_id)
                     .where(
                         tombstone_model.workspace_id == state.workspace_id,
+                        legacy_memory_scope(tombstone_model),
+                        tombstone_model.research_owner_id.is_(None)
+                        if tombstone_type in {"resource", "topic", "note", "task"}
+                        else true(),
                         (tombstone_model.user_id == user_id)
                         if tombstone_type in private_tombstone_types
                         else true(),
@@ -536,6 +541,7 @@ class SyncReadService:
                     .where(
                         Space.workspace_id == workspace_id,
                         Space.deleted_at.is_(None),
+                        Space.status == "active",
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                     .order_by(Space.id)
@@ -574,6 +580,7 @@ class SyncReadService:
                         Space.workspace_id == workspace_id,
                         Space.id.in_(entity_ids),
                         Space.deleted_at.is_(None),
+                        Space.status == "active",
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                 )
@@ -598,6 +605,8 @@ class SyncReadService:
                         LearningGoal.workspace_id == workspace_id,
                         LearningGoal.id.in_(entity_ids),
                         LearningGoal.deleted_at.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                 )
@@ -618,6 +627,8 @@ class SyncReadService:
                     .where(
                         LearningGoal.workspace_id == workspace_id,
                         LearningGoal.deleted_at.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                     .order_by(LearningGoal.id)
@@ -697,6 +708,9 @@ class SyncReadService:
                         Task.workspace_id == workspace_id,
                         Task.id.in_(entity_ids),
                         Task.deleted_at.is_(None),
+                        Task.research_owner_id.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                 )
@@ -721,6 +735,8 @@ class SyncReadService:
                         StudySession.workspace_id == workspace_id,
                         StudySession.id.in_(entity_ids),
                         StudySession.deleted_at.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                 )
@@ -738,6 +754,9 @@ class SyncReadService:
                     .where(
                         Task.workspace_id == workspace_id,
                         Task.deleted_at.is_(None),
+                        Task.research_owner_id.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                     .order_by(Task.id)
@@ -771,6 +790,8 @@ class SyncReadService:
                     .where(
                         StudySession.workspace_id == workspace_id,
                         StudySession.deleted_at.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                     .order_by(StudySession.id)
@@ -811,6 +832,9 @@ class SyncReadService:
                     Note.workspace_id == workspace_id,
                     Note.id.in_(entity_ids),
                     Note.deleted_at.is_(None),
+                    Note.research_owner_id.is_(None),
+                    Space.status == "active",
+                    Space.deleted_at.is_(None),
                     (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                 )
             )
@@ -821,7 +845,10 @@ class SyncReadService:
                 .where(
                     Resource.workspace_id == workspace_id,
                     Resource.id.in_(entity_ids),
+                    Resource.research_owner_id.is_(None),
                     Resource.deleted_at.is_(None),
+                    Space.status == "active",
+                    Space.deleted_at.is_(None),
                     (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                 )
             )
@@ -843,6 +870,9 @@ class SyncReadService:
                         .where(
                             Note.workspace_id == workspace_id,
                             Note.deleted_at.is_(None),
+                            Note.research_owner_id.is_(None),
+                            Space.status == "active",
+                            Space.deleted_at.is_(None),
                             (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                         )
                         .order_by(Note.id)
@@ -889,7 +919,10 @@ class SyncReadService:
                     .join(Space, Space.id == Resource.space_id)
                     .where(
                         Resource.workspace_id == workspace_id,
+                        Resource.research_owner_id.is_(None),
                         Resource.deleted_at.is_(None),
+                        Space.status == "active",
+                        Space.deleted_at.is_(None),
                         (Space.visibility == "shared") | (Space.owner_user_id == user_id),
                     )
                     .order_by(Resource.id)
@@ -928,6 +961,8 @@ class SyncReadService:
             .where(
                 model.workspace_id == workspace_id,
                 model.id.in_(entity_ids),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
         )
@@ -947,6 +982,8 @@ class SyncReadService:
             .join(Space, Space.id == model.space_id)
             .where(
                 model.workspace_id == workspace_id,
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
             .order_by(model.id)
@@ -1011,9 +1048,12 @@ class SyncReadService:
                 model.workspace_id == workspace_id,
                 model.id.in_(entity_ids),
                 model.deleted_at.is_(None),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
         )
+        statement = statement.where(legacy_memory_scope(model))
         return set((await db.scalars(statement)).all())
 
     async def _visible_personal_memory_ids(
@@ -1054,8 +1094,11 @@ class SyncReadService:
             .where(
                 model.workspace_id == workspace_id,
                 model.user_id == user_id,
+                legacy_memory_scope(model),
                 model.id.in_(entity_ids),
                 model.deleted_at.is_(None),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
         )
@@ -1077,6 +1120,8 @@ class SyncReadService:
                 model.workspace_id == workspace_id,
                 model.id.in_(entity_ids),
                 model.deleted_at.is_(None),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 Space.visibility == "shared",
             )
         )
@@ -1098,6 +1143,8 @@ class SyncReadService:
                         .where(
                             model.workspace_id == workspace_id,
                             model.deleted_at.is_(None),
+                            Space.status == "active",
+                            Space.deleted_at.is_(None),
                             Space.visibility == "shared",
                         )
                         .order_by(model.id)
@@ -1140,10 +1187,13 @@ class SyncReadService:
             .where(
                 model.workspace_id == workspace_id,
                 model.deleted_at.is_(None),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
             .order_by(model.id)
         )
+        statement = statement.where(legacy_memory_scope(model))
         items = cast(
             list[Topic | TopicDependency | KnowledgeSourceLink | QuizItem],
             list((await db.scalars(statement)).all()),
@@ -1212,7 +1262,10 @@ class SyncReadService:
             .where(
                 model.workspace_id == workspace_id,
                 model.user_id == user_id,
+                legacy_memory_scope(model),
                 model.deleted_at.is_(None),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
             .order_by(model.id)
@@ -1321,6 +1374,9 @@ class SyncReadService:
                 QuizAttempt.workspace_id == workspace_id,
                 QuizAttempt.user_id == user_id,
                 QuizAttempt.deleted_at.is_(None),
+                legacy_memory_scope(QuizAttempt),
+                Space.status == "active",
+                Space.deleted_at.is_(None),
                 (Space.visibility == "shared") | (Space.owner_user_id == user_id),
             )
             .order_by(QuizAttempt.id)

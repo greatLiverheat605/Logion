@@ -34,6 +34,11 @@ class ContentService:
         space_id: UUID,
         request_id: str,
     ) -> None:
+        await self._workspaces.resolve_space(
+            db, context, workspace_id, space_id, request_id=request_id
+        )
+        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
+        # A lifecycle transition may have committed while this writer waited.
         space = await self._workspaces.resolve_space(
             db, context, workspace_id, space_id, request_id=request_id
         )
@@ -45,7 +50,6 @@ class ContentService:
                 request_id=request_id,
                 permission=Permission.SHARED_PLAN_WRITE,
             )
-        await db.scalar(select(Space.id).where(Space.id == space_id).with_for_update())
 
     async def _validate_task(
         self, db: AsyncSession, workspace_id: UUID, space_id: UUID, task_id: UUID | None
@@ -58,6 +62,7 @@ class ContentService:
                 Task.workspace_id == workspace_id,
                 Task.space_id == space_id,
                 Task.deleted_at.is_(None),
+                Task.research_owner_id.is_(None),
             )
         )
         if task is None:
@@ -73,6 +78,7 @@ class ContentService:
                     Note.workspace_id == workspace_id,
                     Note.space_id == space_id,
                     Note.deleted_at.is_(None),
+                    Note.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -83,6 +89,7 @@ class ContentService:
                     Resource.workspace_id == workspace_id,
                     Resource.space_id == space_id,
                     Resource.deleted_at.is_(None),
+                    Resource.research_owner_id.is_(None),
                 )
             )
             or 0
@@ -156,6 +163,7 @@ class ContentService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -209,6 +217,7 @@ class ContentService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -266,7 +275,12 @@ class ContentService:
         await self._authorize(db, context, workspace_id, space_id, request_id)
         await self._validate_task(db, workspace_id, space_id, payload.task_id)
         await self._quota(db, workspace_id, space_id)
-        if await db.get(Resource, resource_id) is not None:
+        existing = await db.get(Resource, resource_id)
+        if existing is not None and existing.research_owner_id is not None:
+            raise APIError(
+                code="RESOURCE_NOT_FOUND", message="Resource not found.", status_code=404
+            )
+        if existing is not None:
             raise APIError(
                 code="RESOURCE_VERSION_CONFLICT", message="Identifier exists.", status_code=409
             )
@@ -324,6 +338,7 @@ class ContentService:
                 Resource.workspace_id == workspace_id,
                 Resource.space_id == space_id,
                 Resource.deleted_at.is_(None),
+                Resource.research_owner_id.is_(None),
             )
             .with_for_update()
         )

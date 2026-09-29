@@ -12,9 +12,11 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
+from sqlalchemy.sql.elements import ColumnElement
 from uuid6 import uuid7
 
 from logion_api.ai_gateway.models import AIOutputDraft, AIOutputDraftCandidate, AIRun
+from logion_api.ai_gateway.rollback_policy import legacy_run_scope
 from logion_api.config import Settings
 from logion_api.content.models import Note, Resource
 from logion_api.errors import APIError
@@ -154,6 +156,13 @@ class SearchCandidate:
         )
 
 
+def _legacy_excerpt_scope() -> ColumnElement[bool]:
+    # Personal research excerpts are exposed only through the owner-scoped reader API.
+    return SourceExcerpt.resource_id.in_(
+        select(Resource.id).where(Resource.research_owner_id.is_(None))
+    )
+
+
 class KnowledgeService:
     def __init__(
         self,
@@ -189,6 +198,7 @@ class KnowledgeService:
                 Resource.workspace_id == workspace_id,
                 Resource.space_id == space_id,
                 Resource.deleted_at.is_(None),
+                Resource.research_owner_id.is_(None),
             )
             .with_for_update()
         )
@@ -258,6 +268,7 @@ class KnowledgeService:
                 SourceExcerpt.space_id == space_id,
                 SourceExcerpt.status.in_(("active", "stale")),
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             )
         )
         if excerpt is None:
@@ -310,6 +321,7 @@ class KnowledgeService:
             SourceExcerpt.space_id == space_id,
             SourceExcerpt.status.in_(("active", "stale")),
             SourceExcerpt.deleted_at.is_(None),
+            _legacy_excerpt_scope(),
             SourceExcerpt.created_at <= window.cutoff_at,
         ]
         if resource_id is not None:
@@ -393,6 +405,7 @@ class KnowledgeService:
                 SourceExcerpt.space_id == space_id,
                 SourceExcerpt.status == "active",
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             )
             .with_for_update()
         )
@@ -485,6 +498,7 @@ class KnowledgeService:
                 KnowledgeCitation.deleted_at.is_(None),
                 SourceExcerpt.status.in_(("active", "stale")),
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             )
         )
         if citation is None or not await self._citation_target_is_visible(
@@ -557,6 +571,7 @@ class KnowledgeService:
                 AIOutputDraft.id == draft_id,
                 AIOutputDraft.workspace_id == workspace_id,
                 AIRun.requested_by == context.user.id,
+                legacy_run_scope(),
             )
             .with_for_update()
         )
@@ -649,6 +664,7 @@ class KnowledgeService:
                         SourceExcerpt.space_id == space_id,
                         SourceExcerpt.status == "active",
                         SourceExcerpt.deleted_at.is_(None),
+                        _legacy_excerpt_scope(),
                     )
                     .order_by(SourceExcerpt.id)
                     .with_for_update()
@@ -843,6 +859,7 @@ class KnowledgeService:
             KnowledgeCitation.created_at <= window.cutoff_at,
             SourceExcerpt.status.in_(("active", "stale")),
             SourceExcerpt.deleted_at.is_(None),
+            _legacy_excerpt_scope(),
         ]
         conditions.append(
             or_(
@@ -1057,6 +1074,7 @@ class KnowledgeService:
                 Topic.workspace_id == workspace_id,
                 Topic.space_id == space_id,
                 Topic.deleted_at.is_(None),
+                Topic.research_owner_id.is_(None),
                 Topic.created_at <= cutoff_at,
                 Topic.updated_at <= cutoff_at,
             ]
@@ -1067,6 +1085,7 @@ class KnowledgeService:
                 QuizItem.workspace_id == workspace_id,
                 QuizItem.space_id == space_id,
                 QuizItem.deleted_at.is_(None),
+                QuizItem.research_owner_id.is_(None),
                 QuizItem.created_at <= cutoff_at,
                 QuizItem.updated_at <= cutoff_at,
             ]
@@ -1088,6 +1107,7 @@ class KnowledgeService:
                 Note.workspace_id == workspace_id,
                 Note.space_id == space_id,
                 Note.deleted_at.is_(None),
+                Note.research_owner_id.is_(None),
                 Note.created_at <= cutoff_at,
                 Note.updated_at <= cutoff_at,
             ]
@@ -1429,6 +1449,7 @@ class KnowledgeService:
                             Topic.workspace_id == workspace_id,
                             Topic.space_id == space_id,
                             Topic.deleted_at.is_(None),
+                            Topic.research_owner_id.is_(None),
                             Topic.created_at <= cutoff_at,
                             Topic.updated_at <= cutoff_at,
                         )
@@ -1592,6 +1613,8 @@ class KnowledgeService:
                     model.updated_at <= cutoff_at,
                 )
             )
+        if model in (Topic, Note, QuizItem):
+            conditions.append(model.research_owner_id.is_(None))
         if target_type is KnowledgeTargetType.RESEARCH_CLAIM and caller_user_id is not None:
             conditions.append(model.user_id == caller_user_id)
         statement = select(model).where(*conditions)
@@ -1644,6 +1667,7 @@ class KnowledgeService:
                 target_column.in_(ids),
                 SourceExcerpt.status.in_(("active", "stale")),
                 SourceExcerpt.deleted_at.is_(None),
+                _legacy_excerpt_scope(),
             ]
             if cutoff_at is not None:
                 preview_conditions.extend(

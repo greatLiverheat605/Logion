@@ -74,6 +74,7 @@ class ResearchClaim(PersonalResearch, Base):
         ),
     )
     paper_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    resource_id: Mapped[UUID | None] = mapped_column(Uuid)
     statement: Mapped[str] = mapped_column(Text, nullable=False)
     stance: Mapped[str] = mapped_column(String(16), nullable=False)
 
