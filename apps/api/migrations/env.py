@@ -2,6 +2,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
+from logion_api.agents import models as agent_models  # noqa: F401
 from logion_api.ai_gateway import models as ai_gateway_models  # noqa: F401
 from logion_api.collaboration import models as collaboration_models  # noqa: F401
 from logion_api.config import get_settings

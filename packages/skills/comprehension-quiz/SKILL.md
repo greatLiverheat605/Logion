@@ -1,3 +1,8 @@
+---
+name: comprehension-quiz
+description: Draft five paper comprehension questions or assess an answer against supplied evidence. Use for study quizzes, never for confirming mastery or scheduling reviews.
+---
+
 # Comprehension quiz
 
 Purpose: draft comprehension questions, or assess a supplied answer against source evidence.

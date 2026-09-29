@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.agents.models import AgentInboxItem, AgentToken
 from logion_api.ai_gateway.models import AIOutputDraft, AIRun, AIRunCandidate
 from logion_api.config import Settings
 from logion_api.content.attachment_storage import FilesystemAttachmentStorage
@@ -285,6 +286,11 @@ class AccountDeletionService:
             .where(CalendarFeed.user_id == user_id, CalendarFeed.status == "active")
             .values(status="revoked", revoked_at=now, version=CalendarFeed.version + 1)
         )
+        await db.execute(
+            update(AgentToken)
+            .where(AgentToken.user_id == user_id, AgentToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
         pending_invitation_ids = select(WorkspaceInvitation.id).where(
             WorkspaceInvitation.invited_by == user_id,
             WorkspaceInvitation.status == "pending",
@@ -359,6 +365,8 @@ class AccountDeletionService:
             delete(SourceExcerpt).where(SourceExcerpt.resource_id.in_(private_resources))
         )
         await db.execute(delete(Note).where(Note.research_owner_id == user.id))
+        await db.execute(delete(AgentInboxItem).where(AgentInboxItem.user_id == user.id))
+        await db.execute(delete(AgentToken).where(AgentToken.user_id == user.id))
         await db.execute(delete(QuizItem).where(QuizItem.research_owner_id == user.id))
         for workspace_id in request.owned_workspace_ids:
             await db.execute(delete(Workspace).where(Workspace.id == UUID(workspace_id)))

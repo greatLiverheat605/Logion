@@ -1,3 +1,8 @@
+---
+name: explain-translate
+description: Translate or explain selected research passages using supplied context. Use for passage assistance, never for private research ideas or unsupported claims.
+---
+
 # Explain and translate
 
 Purpose: translate supplied passages faithfully or explain their terminology in context.

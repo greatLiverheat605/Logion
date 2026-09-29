@@ -23,7 +23,7 @@ R5 先准备，V1–V3 合入 main 且保持默认关闭后，再冻结 `0.3.0-r
 | `LOGION_PDF_CACHE_MAX_BYTES`                                             | API，默认 2147483648；预留密文缓存、备份和运行空间              |
 | `LOGION_KNOWLEDGE_CURSOR_ACTIVE_KEY_ID` / `LOGION_KNOWLEDGE_CURSOR_KEYS` | API，配置既有签名 keyring；研究搜索缺失时失败关闭               |
 | `LOGION_PLANNING_PHASE_REVISION_ENABLED`                                 | API，目标编辑与阶段修订共用；默认关闭，按已批准范围独立开启     |
-| V1–V3 Agent 能力开关                                                     | 最终候选按 V1 配置说明核对，v0.3 本次上线保持关闭，之后单独发布 |
+| `LOGION_AGENT_API_ENABLED`                                               | API，默认 false；v0.3 本次上线保持关闭，v0.3.1 另行批准         |
 
 基础 Compose 只转发已声明的变量。集成密钥、PDF 密钥/大小/缓存上限、搜索 cursor keys 及 Worker 研究开关必须在受控覆盖文件中显式转发；覆盖文件只引用环境变量，不含实值。可使用如下模板，在部署专用目录保存为未入库文件，并通过原 Compose 包装命令加载：
 
@@ -98,3 +98,5 @@ python -m logion_api.rollback --expected-head <已验证的新-schema-head>
 上线后按 [§10.1 版本保留](aliyun-production-release.md#101-版本保留) 保留当前和上一版实际所需的镜像、源码、manifest、备份与密钥，按 Image ID 核对；回滚 A 被选定为上一版时应保留其专门补丁候选，不能保留不兼容原版替代它。未完成观察与回滚核验前不清理任何所需制品。
 
 候选证据和失败历史随最终完成包交 Claude；真实凭据、私有数据、设备细节和生产配置留在受控环境。当前阶段不执行 §10.1 的删除命令，也不部署或清理生产。
+
+所有者统一验收使用 [三小时以内的本机验收脚本](v03-owner-acceptance.md)，它不授权生产切换。

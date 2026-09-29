@@ -1,3 +1,8 @@
+---
+name: close-reading
+description: Draft missing close-reading sections from explicitly authorized paper sources. Use for paper analysis, never for private research ideas or automatic note acceptance.
+---
+
 # Close reading
 
 Purpose: explain the supplied paper's question, method, evidence and limitations.

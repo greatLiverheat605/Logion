@@ -248,6 +248,7 @@ async def build_research_context(
             if model is Note:
                 query = query.where(
                     Note.research_owner_id.is_(None)
+                    | Note.agent_inbox_item_id.is_not(None)
                     | Note.resource_id.in_(
                         select(Resource.id).where(
                             Resource.research_owner_id == user_id,

@@ -1,3 +1,8 @@
+---
+name: literature-links
+description: Suggest evidence-backed links between supplied literature, questions, concepts and claims. Use for graph proposals, never for idea links or automatic graph edits.
+---
+
 # Literature links
 
 Purpose: suggest links between supplied literature, questions, topics and claims.

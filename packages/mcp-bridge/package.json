@@ -1,0 +1,19 @@
+{
+  "name": "@logion/mcp-bridge",
+  "version": "0.3.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "export-skills": "node export-skills.mjs",
+    "test": "node --test *.test.mjs",
+    "typecheck": "node --check server.mjs && node --check rest.mjs && node --check export-skills.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.1"
+  }
+}

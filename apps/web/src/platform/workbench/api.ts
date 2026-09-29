@@ -27,6 +27,12 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      AGENT_INBOX_CONFLICT: "这条投稿已处理或发生变化，请刷新收件箱。",
+      AGENT_INBOX_KIND_IMMUTABLE: "可以修改内容，但不能改变投稿类型。",
+      AGENT_TOKEN_QUOTA: "有效令牌已达上限，请先撤销不再使用的令牌。",
+      AGENT_EXPIRY_INVALID: "请选择未来一年以内的有效期。",
+      AGENT_SCOPE_UNAVAILABLE: "当前空间或账户已不可用，请重新选择空间。",
+      AGENT_INBOX_QUOTA: "收件箱已达到容量上限，请联系维护者。",
       SPACE_VERSION_CONFLICT:
         "空间已在其他页面更新。请取消并刷新空间，再重新确认。",
       SPACE_CONFIRMATION_REQUIRED: "请重新确认本次空间操作。",

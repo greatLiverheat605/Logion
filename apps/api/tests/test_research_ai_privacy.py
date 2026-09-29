@@ -427,3 +427,17 @@ async def test_private_ideas_context_routes_and_outbound_defense(
             await owner.request("DELETE", f"{ideas}/{idea_id}", json={"expected_version": 2})
         ).status_code == 204
         assert (await owner.get(f"{ideas}/{idea_id}")).status_code == 404
+
+
+def test_local_skills_and_server_prompts_share_exact_source_bytes():
+    import hashlib
+    from pathlib import Path
+
+    from logion_api.ai_gateway.research_skills import skill_hash
+
+    root = Path(__file__).resolve().parents[3] / "packages" / "skills"
+    for task, name in TASK_SKILLS.items():
+        source = (root / name / "SKILL.md").read_bytes()
+        prompt = load_research_skill(task)
+        assert prompt.encode("utf-8") == f"Research task: {task}\n\n".encode() + source
+        assert skill_hash(prompt) == hashlib.sha256(prompt.encode()).hexdigest()

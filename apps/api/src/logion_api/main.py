@@ -6,6 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ExceptionHandler
 
 from logion_api import __version__
+from logion_api.agents.inbox import router as agent_inbox_router
+from logion_api.agents.inbox import submit_router as agent_submit_router
+from logion_api.agents.reads import router as agent_read_router
+from logion_api.agents.security import agent_middleware
+from logion_api.agents.tokens import router as agent_token_router
 from logion_api.ai_gateway.research_routes import router as research_ai_router
 from logion_api.ai_gateway.routes import model_router as ai_model_router
 from logion_api.ai_gateway.routes import router as ai_router
@@ -105,6 +110,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
             "X-Request-ID",
         ],
     )
+    application.middleware("http")(agent_middleware)
     application.middleware("http")(request_id_middleware)
     application.add_exception_handler(APIError, cast(ExceptionHandler, api_error_handler))
     application.add_exception_handler(
@@ -113,6 +119,10 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     )
     application.add_exception_handler(HTTPException, cast(ExceptionHandler, http_error_handler))
     application.include_router(health_router)
+    application.include_router(agent_inbox_router)
+    application.include_router(agent_submit_router)
+    application.include_router(agent_read_router)
+    application.include_router(agent_token_router)
     application.include_router(identity_router)
     application.include_router(passkey_router)
     application.include_router(totp_router)

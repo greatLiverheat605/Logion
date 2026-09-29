@@ -94,6 +94,12 @@ export default function Page() {
           </div>
           <span aria-hidden="true">→</span>
         </Link>
+        <Link className="wb-setting-row" href="/settings/agents">
+          <div>
+            <strong>Agent 与收件箱</strong>
+            <p>管理本机 Agent 的访问令牌，逐条审阅研究投稿。</p>
+          </div>
+        </Link>
       </nav>
       <Integrations />
     </div>

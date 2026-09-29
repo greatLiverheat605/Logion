@@ -45,3 +45,5 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 - [ADR-0061：新外壳通知只统计待处理未读](0061-action-only-research-notifications.md)
 - [ADR-0062：空间软删除可持续恢复](0062-recoverable-space-deletion.md)
 - [ADR-0063：新 schema 上的旧应用回滚准备](0063-upgraded-schema-rollback.md)
+
+- [ADR-0064：限定空间的个人 Agent 令牌与收件箱接受事务](0064-agent-token-and-inbox-boundary.md)

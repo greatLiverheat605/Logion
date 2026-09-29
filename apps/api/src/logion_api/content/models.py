@@ -53,11 +53,26 @@ class Note(Base):
             ondelete="RESTRICT",
         ),
         CheckConstraint(
-            "(note_kind IS NULL AND resource_id IS NULL AND research_owner_id IS NULL) OR "
+            "(note_kind IS NULL AND resource_id IS NULL AND research_owner_id IS NULL "
+            "AND agent_inbox_item_id IS NULL) OR "
             "(note_kind IS NOT NULL AND note_kind = 'close_reading' AND resource_id IS NOT NULL "
-            "AND research_owner_id IS NOT NULL AND task_id IS NULL)",
+            "AND research_owner_id IS NOT NULL AND task_id IS NULL AND agent_inbox_item_id IS NULL) OR "
+            "(note_kind IS NULL AND resource_id IS NULL AND research_owner_id IS NOT NULL "
+            "AND task_id IS NULL AND agent_inbox_item_id IS NOT NULL)",
             name="ck_note_research_kind",
         ),
+        ForeignKeyConstraint(
+            ["agent_inbox_item_id", "workspace_id", "space_id", "research_owner_id"],
+            [
+                "agent_inbox_items.id",
+                "agent_inbox_items.workspace_id",
+                "agent_inbox_items.space_id",
+                "agent_inbox_items.user_id",
+            ],
+            name="fk_note_agent_inbox",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("agent_inbox_item_id", name="uq_note_agent_inbox"),
         UniqueConstraint("resource_id", "research_owner_id", name="uq_note_research_resource"),
         Index("ix_notes_workspace_space_updated", "workspace_id", "space_id", "updated_at"),
     )
@@ -67,6 +82,7 @@ class Note(Base):
     space_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     task_id: Mapped[UUID | None] = mapped_column(Uuid)
     note_kind: Mapped[str | None] = mapped_column(String(32))
+    agent_inbox_item_id: Mapped[UUID | None] = mapped_column(Uuid)
     resource_id: Mapped[UUID | None] = mapped_column(Uuid)
     research_owner_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="RESTRICT")
