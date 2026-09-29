@@ -1,0 +1,3 @@
+# Exact historical false positive: an isolated test registration password.
+# Current fixture generates its password at runtime; future commits remain scanned.
+39bd42f0b132ce5313467a4055b79856c79feaed:apps/api/tests/test_agent_inbox.py:generic-api-key:452

@@ -30,3 +30,16 @@
 ## Rollback
 
 Revoke all tokens. Inbox items stay until the owner discards them.
+
+## Local Worker evaluation (2026-09-29)
+
+ADR-0029 binds a local Worker to a specific job, workspace, space and input hash,
+with a lease of at most 600 seconds and claimed/running/uploaded checkpoints.
+Its result receipts carry output hashes, not literature or note payloads. Reuse
+its security mechanisms (random tokens stored only as digests, current permission
+checks, unique idempotency receipts and transactional acceptance), but keep PATs
+and inbox submissions separate. Extending the lease protocol would widen the old
+Worker's authority and force an unrelated execution lifecycle onto MCP reads.
+The local Worker routes, switches and contracts remain unchanged.
+
+The implementation boundary and acceptance mappings are specified in ADR-0064.

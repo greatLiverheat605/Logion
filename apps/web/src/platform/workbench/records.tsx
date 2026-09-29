@@ -149,7 +149,11 @@ function RecordsScope({ context }: { context: WorkbenchContext }) {
         {selected ? (
           <LoadNote
             key={selected}
-            path={`${path}/${selected}`}
+            path={
+              params.get("agent") === "1" && selected === params.get("note")
+                ? `${path.replace("/research/notes", "/agent-inbox/notes")}/${selected}`
+                : `${path}/${selected}`
+            }
             spaceId={context.space_id}
             listPath={path}
             sourceId={params.get("source")}
@@ -347,6 +351,9 @@ function NoteEditor({
   return (
     <>
       <h2>{document.server.title}</h2>
+      {path.includes("/agent-inbox/") && (
+        <p className="wb-muted">Agent 笔记 · 仅自己可见</p>
+      )}
       {source && (
         <p role="status">
           {source.state === "modified"
@@ -378,7 +385,8 @@ function NoteEditor({
         <>
           {!document.server.can_edit && (
             <p className="wb-muted">
-              你可以阅读这篇共享笔记，当前角色没有编辑权限。
+              此入口仅供阅读。Agent
+              私人笔记请从设置中的收件箱打开编辑；共享笔记需要相应编辑权限。
             </p>
           )}
           <form onSubmit={(e) => void rename(e)}>

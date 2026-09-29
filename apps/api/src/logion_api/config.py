@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     healthcheck_dependencies: bool = False
     research_v3_enabled: bool = False
+    agent_api_enabled: bool = False
     integration_keyring: IntegrationKeyring = Field(default_factory=IntegrationKeyring)
     pdf_cache_keyring: IntegrationKeyring = Field(default_factory=IntegrationKeyring)
     pdf_max_bytes: int = Field(default=100 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)

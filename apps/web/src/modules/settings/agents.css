@@ -1,0 +1,98 @@
+.wb-agent-settings .wb-button,
+.wb-agent-settings input:not([type="checkbox"]),
+.wb-agent-settings select {
+  min-height: 44px;
+}
+.wb-agent-form {
+  display: grid;
+  gap: 14px;
+  max-width: 620px;
+}
+.wb-agent-settings label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.wb-agent-settings fieldset {
+  min-width: 0;
+  border: 1px solid var(--wb-sep);
+  border-radius: 8px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.wb-agent-form fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.wb-agent-settings input:not([type="checkbox"]),
+.wb-agent-settings textarea,
+.wb-agent-settings select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.wb-agent-settings textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+.wb-agent-secret {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--wb-sep);
+  border-radius: 10px;
+}
+.wb-agent-filter {
+  margin-block: 16px;
+  max-width: 240px;
+}
+.wb-agent-items {
+  display: grid;
+  gap: 16px;
+}
+.wb-agent-item {
+  min-width: 0;
+  border-top: 1px solid var(--wb-sep);
+  padding-block: 18px;
+  overflow-wrap: anywhere;
+}
+.wb-agent-item header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.wb-agent-item h4 {
+  margin-block: 14px 8px;
+}
+.wb-agent-item dl div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
+  margin-block: 8px;
+}
+.wb-agent-item dd {
+  margin: 0;
+}
+.wb-agent-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+}
+.wb-agent-item form {
+  margin-block: 16px;
+}
+@media (max-width: 440px) {
+  .wb-agent-settings .wb-config-section {
+    padding: 14px;
+  }
+  .wb-agent-item .wb-config-actions > .wb-button {
+    flex: 1 1 auto;
+  }
+}
