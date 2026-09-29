@@ -4,13 +4,13 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import * as Tabs from "@radix-ui/react-tabs";
-import { type ButtonHTMLAttributes, type ReactNode } from "react";
+import { type ComponentPropsWithRef, type ReactNode } from "react";
 import { toast } from "sonner";
 
 export function Button({
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement>) {
+}: ComponentPropsWithRef<"button">) {
   return (
     <button type="button" className={`wb-button ${className}`} {...props} />
   );
@@ -91,19 +91,27 @@ export function Sheet({
   description,
   open,
   onOpenChange,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   children,
 }: {
   title: string;
   description: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenAutoFocus?: (event: Event) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   children: ReactNode;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="wb-overlay" />
-        <Dialog.Content className="wb-scope wb-sheet">
+        <Dialog.Content
+          className="wb-scope wb-sheet"
+          onOpenAutoFocus={onOpenAutoFocus}
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
           <header>
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close asChild>

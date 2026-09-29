@@ -13,6 +13,8 @@ const actionLabels: Record<string, string> = {
   "identity.login_succeeded": "登录",
   "identity.logout": "退出登录",
   "identity.device_revoked": "撤销设备",
+  "identity.device_auto_revoked": "撤销长期未使用的设备",
+  "identity.other_sessions_revoked": "退出其他会话",
   "ai.provider_created": "添加 AI 服务商",
   "ai.provider_updated": "更新 AI 服务商",
   "ai.provider_deleted": "删除 AI 服务商",

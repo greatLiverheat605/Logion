@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from logion_api.config import Settings
 from logion_api.errors import APIError
 from logion_api.identity.audit import new_audit_event
+from logion_api.identity.device_hygiene import session_valid_until
 from logion_api.identity.models import (
     AuthSession,
     Device,
@@ -435,7 +436,18 @@ class IdentityService:
     async def list_devices(self, db: AsyncSession, context: AuthContext) -> list[Device]:
         result = await db.scalars(
             select(Device)
-            .where(Device.user_id == context.user.id)
+            .where(
+                Device.user_id == context.user.id,
+                Device.revoked_at.is_(None),
+                select(AuthSession.id)
+                .where(
+                    AuthSession.device_id == Device.id,
+                    AuthSession.user_id == context.user.id,
+                    AuthSession.revoked_at.is_(None),
+                    session_valid_until() > datetime.now(UTC),
+                )
+                .exists(),
+            )
             .order_by(Device.last_seen_at.desc())
         )
         return list(result.all())
@@ -475,6 +487,40 @@ class IdentityService:
             )
         )
         return device.id == context.device.id
+
+    async def revoke_other_sessions(
+        self, db: AsyncSession, context: AuthContext, *, request_id: str
+    ) -> None:
+        # Match device revocation: parent-session invalidation also denies all its
+        # refresh tokens, without acquiring their locks in reverse refresh order.
+        revoked = list(
+            await db.scalars(
+                select(AuthSession)
+                .where(
+                    AuthSession.user_id == context.user.id,
+                    AuthSession.id != context.session.id,
+                    AuthSession.revoked_at.is_(None),
+                )
+                .order_by(AuthSession.id)
+                .with_for_update(of=AuthSession)
+                .execution_options(populate_existing=True)
+            )
+        )
+        now = datetime.now(UTC)
+        for session in revoked:
+            session.revoked_at = now
+            session.revoke_reason = "other_sessions_revoked"
+        db.add(
+            new_audit_event(
+                request_id=request_id,
+                event_type="identity.other_sessions_revoked",
+                result="success",
+                actor_id=context.user.id,
+                target_type="user",
+                target_id=context.user.id,
+                metadata={"count": len(revoked)},
+            )
+        )
 
     async def logout(
         self,
@@ -520,6 +566,8 @@ class IdentityService:
             db.add(device)
             await db.flush()
         else:
+            if device.revoked_at is not None:
+                raise self._authentication_error()
             device.name = device_name.strip()
             device.platform = platform
             device.ip_hash = self._security.privacy_hash(ip_address)
@@ -568,14 +616,24 @@ class IdentityService:
             device_id = UUID(device_cookie)
         except ValueError:
             return None
+        # Session insertion takes a User FK key-share lock. Acquire it before
+        # Device, matching refresh's User -> Device order and avoiding a cycle.
+        await db.scalar(
+            select(User.id)
+            .where(User.id == user_id)
+            .with_for_update(read=True, key_share=True, of=User)
+        )
         return cast(
             Device | None,
             await db.scalar(
-                select(Device).where(
+                select(Device)
+                .where(
                     Device.id == device_id,
                     Device.user_id == user_id,
                     Device.revoked_at.is_(None),
                 )
+                .with_for_update(of=Device)
+                .execution_options(populate_existing=True)
             ),
         )
 

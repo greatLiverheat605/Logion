@@ -127,7 +127,9 @@ def set_auth_cookies(response: Response, issued: IssuedSession, settings: Settin
     )
 
 
-def clear_auth_cookies(response: Response, settings: Settings) -> None:
+def clear_auth_cookies(
+    response: Response, settings: Settings, *, preserve_device: bool = False
+) -> None:
     response.headers["Cache-Control"] = "no-store"
     for name in (
         settings.access_cookie_name,
@@ -135,6 +137,8 @@ def clear_auth_cookies(response: Response, settings: Settings) -> None:
         settings.csrf_cookie_name,
         settings.device_cookie_name,
     ):
+        if preserve_device and name == settings.device_cookie_name:
+            continue
         response.delete_cookie(name, path="/", domain=settings.cookie_domain)
 
 

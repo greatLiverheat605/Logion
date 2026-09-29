@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.config import get_settings
+from logion_api.identity.device_hygiene import DeviceHygieneService
 from logion_api.integrations.zotero_sync import ZoteroSyncService
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.service import PortabilityService
@@ -44,6 +45,7 @@ async def run_worker() -> None:
     email_delivery = EmailDeliveryService(settings)
     review_reminders = ReviewReminderService()
     zotero_sync = ZoteroSyncService(settings)
+    device_hygiene = DeviceHygieneService()
     tracker = WorkerHealthTracker(settings.worker_health_state_path)
     scheduler = RoundRobinScheduler(
         [
@@ -53,6 +55,7 @@ async def run_worker() -> None:
             QueueHandler("deletion", deletion.execute_next),
             QueueHandler("review_reminders", review_reminders.execute_next),
             QueueHandler("zotero_sync", zotero_sync.execute_next),
+            QueueHandler("device_hygiene", device_hygiene.execute_next),
         ]
     )
     heartbeat_task = asyncio.create_task(maintain_heartbeat(stop, tracker))
@@ -61,7 +64,15 @@ async def run_worker() -> None:
             {
                 **health_payload(),
                 "event": "worker_started",
-                "queues": ["email", "export", "ai", "deletion", "review_reminders", "zotero_sync"],
+                "queues": [
+                    "email",
+                    "export",
+                    "ai",
+                    "deletion",
+                    "review_reminders",
+                    "zotero_sync",
+                    "device_hygiene",
+                ],
             }
         )
     )
