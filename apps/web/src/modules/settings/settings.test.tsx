@@ -11,6 +11,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createWorkbenchQueryClient } from "@/platform/workbench/api";
 import { AISettings } from "./ai-settings";
 import { AuditSettings } from "./audit-settings";
+import { SecuritySettings } from "./security-settings";
+import { LogionApiError } from "@/lib/api/client";
 const mocks = vi.hoisted(() => ({ request: vi.fn(), role: "owner" }));
 vi.mock("@/platform/workbench/provider", () => ({
   useWorkbench: () => ({
@@ -88,4 +90,45 @@ it("appends audit pages and clears the personal projection when switching scope"
   expect(screen.queryByText("操作代码：identity.login_succeeded")).toBeNull();
   expect(screen.queryByText("操作代码：identity.logout")).toBeNull();
   await waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(3));
+});
+
+it("keeps device revocation confirmation and failure visible without reporting success", async () => {
+  const device = {
+    id: "device",
+    name: "合成设备",
+    current: false,
+    platform: "web",
+    first_seen_at: "2026-09-01T00:00:00Z",
+    last_seen_at: "2026-09-01T00:00:00Z",
+    revoked_at: null,
+  };
+  mocks.request.mockImplementation(
+    async (_path: string, options: { method?: string }) => {
+      if (options.method === "DELETE")
+        throw new LogionApiError({
+          code: "AUTH_RECENT_LOGIN_REQUIRED",
+          status: 403,
+          message: "Recent authentication required",
+        });
+      return { devices: [device] };
+    },
+  );
+  render(
+    <QueryClientProvider client={createWorkbenchQueryClient()}>
+      <SecuritySettings />
+    </QueryClientProvider>,
+  );
+  await screen.findByText("合成设备");
+  fireEvent.click(screen.getByRole("button", { name: "撤销设备" }));
+  expect(
+    mocks.request.mock.calls.filter((call) => call[1]?.method === "DELETE"),
+  ).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "确认操作" }));
+  await screen.findByRole("alert");
+  expect(screen.getByRole("alert").textContent).toContain("请重新登录");
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(screen.getAllByRole("listitem", { hidden: true })).toHaveLength(1);
+  expect(screen.queryByRole("status")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });

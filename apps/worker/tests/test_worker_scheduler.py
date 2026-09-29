@@ -13,13 +13,20 @@ def handler(name: str, calls: list[str], *, handled: bool = True) -> QueueHandle
 @pytest.mark.asyncio
 async def test_scheduler_rotates_busy_queues_without_starvation() -> None:
     calls: list[str] = []
-    scheduler = RoundRobinScheduler(
-        [handler(name, calls) for name in ("email", "export", "ai", "deletion")]
-    )
+    queues = [
+        "email",
+        "export",
+        "ai",
+        "deletion",
+        "review_reminders",
+        "zotero_sync",
+        "device_hygiene",
+    ]
+    scheduler = RoundRobinScheduler([handler(name, calls) for name in queues])
 
-    handled = [await scheduler.execute_next() for _ in range(8)]
+    handled = [await scheduler.execute_next() for _ in range(len(queues) * 2)]
 
-    assert handled == ["email", "export", "ai", "deletion"] * 2
+    assert handled == queues * 2
     assert calls == handled
 
 

@@ -312,7 +312,38 @@ async def logout(
     )
     await service.logout(db, context, request_id=request_id(request))
     await db.commit()
-    clear_auth_cookies(response, settings)
+    clear_auth_cookies(response, settings, preserve_device=True)
+    return MessageResponse()
+
+
+@router.delete(
+    "/sessions/others",
+    response_model=MessageResponse,
+    operation_id="auth_revoke_other_sessions",
+    responses={401: ERROR_RESPONSE, 403: ERROR_RESPONSE, 422: ERROR_RESPONSE, 429: ERROR_RESPONSE},
+)
+async def revoke_other_sessions(
+    request: Request,
+    context: AuthContextDependency,
+    db: DatabaseSession,
+    service: IdentityServiceDependency,
+    limiter: RateLimiterDependency,
+    settings: SettingsDependency,
+    x_csrf_token: str | None = Header(default=None),
+) -> MessageResponse:
+    require_trusted_origin(request, settings)
+    service.validate_csrf(
+        context.session, x_csrf_token, request.cookies.get(settings.csrf_cookie_name)
+    )
+    service.require_recent_authentication(context)
+    await limiter.enforce(
+        scope="revoke_other_sessions",
+        subject_hash=get_security().privacy_hash(str(context.user.id)) or "unknown",
+        limit=10,
+        window=60,
+    )
+    await service.revoke_other_sessions(db, context, request_id=request_id(request))
+    await db.commit()
     return MessageResponse()
 
 

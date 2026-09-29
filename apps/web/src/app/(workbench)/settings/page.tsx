@@ -56,6 +56,13 @@ export default function Page() {
           </div>
           <span aria-hidden="true">→</span>
         </Link>
+        <Link className="wb-setting-row" href="/settings/security">
+          <div>
+            <strong>设备与会话</strong>
+            <p>检查登录设备，退出其他会话。</p>
+          </div>
+          <span aria-hidden="true">→</span>
+        </Link>
         <Link className="wb-setting-row" href="/settings/audit">
           <div>
             <strong>审计记录</strong>
