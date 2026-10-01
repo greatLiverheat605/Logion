@@ -196,14 +196,19 @@ logion-compose up -d --no-build --wait --timeout 240 api worker web reverse-prox
 logion-compose up -d --no-build backup
 ```
 
-确认 Worker 既连接内部 `backend` 网络，也拥有单独 `egress` 网络；API、PostgreSQL 和 Redis
-不得加入 `egress`：
+确认 Worker 既连接内部 `backend` 网络，也拥有单独 `egress` 网络。自 v0.3 起，研究开关
+开启时 API 按 [ADR-0065](../../docs/adr/0065-research-api-egress.md) 通过受控覆盖接入
+`[backend, egress]`，以支持集成连接、PDF 和 AI 模型发现；启用前执行
+[v0.3 网络检查](v03-release.md#41-api-出站网络检查)。基础 Compose 不变，PostgreSQL
+和 Redis 仍只连接 backend，**不得加入 egress**：
 
 ```bash
 docker inspect "$(logion-compose ps -q worker)" \
   --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}'
 docker inspect "$(logion-compose ps -q api)" \
   --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}'
+docker inspect "$(logion-compose ps -q postgres)" "$(logion-compose ps -q redis)" \
+  --format '{{.Name}}: {{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}'
 ```
 
 检查 Worker 启动和投递事件，不打印完整环境：
