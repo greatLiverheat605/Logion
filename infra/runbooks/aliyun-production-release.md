@@ -114,18 +114,44 @@ Compose reverse-proxy
         |---------------- Worker（内部数据 + 独立出方向）
                                   |---- 阿里云邮件推送 HTTPS
 
-Backup 加密产物 ---- 受限 SSH/SCP ---- Windows 异机密文副本
+Backup 加密产物 ---- WireGuard 内受限 SSH/SCP ---- Windows 异机密文副本
 ```
 
-安全组入方向只允许：
+所有者已于 2026-10-01 关闭公网 SSH 22，当前 ECS 安全组入方向仅开放 UDP 51820。
+公网应用入口须在另行批准的 HTTPS 发布中配置，不能把下表当成当前已开放的端口：
 
-| 端口 | 来源                                                             | 用途       |
-| ---: | ---------------------------------------------------------------- | ---------- |
-|   22 | 管理员固定公网 IP `/32`                                          | SSH 运维   |
-|  443 | 受邀用户允许的来源；无法固定时才使用 `0.0.0.0/0` 并启用 WAF/限流 | HTTPS 应用 |
-|   80 | 仅证书签发和 HTTP 到 HTTPS 跳转                                  | ACME       |
+| 协议/端口 | 来源                            | 用途与条件                       |
+| --------- | ------------------------------- | -------------------------------- |
+| UDP 51820 | `<已批准的 WireGuard 入口来源>` | 当前管理通道                     |
+| TCP 443   | `<已批准的应用访问来源>`        | 仅在公网 HTTPS 发布获批后开放    |
+| TCP 80    | `<已批准的证书验证来源>`        | 仅在证书签发/HTTP 跳转获批后开放 |
 
-不得开放 `8080`、`5432`、`6379`。Compose 的 8080 必须通过部署覆盖文件绑定到 `127.0.0.1`。
+不得开放公网 `22`、`8080`、`5432`、`6379`。Compose 的 8080 必须通过部署覆盖文件绑定到 `127.0.0.1`。
+
+### 2.1 管理通道
+
+SSH 管理、发布文件传输和异机备份拉取一律先经过 WireGuard，再连接 `<隧道地址>`。
+SSH 只允许密钥登录，密码登录保持禁用；WireGuard 不替代 SSH 身份认证与 host key 校验。
+先确认管理设备和 ECS 的隧道服务运行、对应 peer 已建立握手及隧道路由正确，再连接：
+
+```sh
+ssh -o PreferredAuthentications=publickey -o PasswordAuthentication=no \
+  -o StrictHostKeyChecking=yes -i "<SSH 私钥文件路径>" "root@<隧道地址>"
+```
+
+WireGuard **只承载管理流量，不做转发或 NAT**，不作为公网出口或设备间路由器。
+每个 peer 的 AllowedIPs 仅覆盖该设备实际需要的隧道地址（IPv4 主机路由 `/32`、IPv6 `/128`），
+不得设置全流量默认路由或扩展到应用/数据库网络；不为 WireGuard 增加转发或 NAT 规则。
+这不改变 Compose 自身的容器网络规则。
+
+新增设备时，在该设备本机单独生成 WireGuard 密钥对，私钥留在本机；由所有者登记一个独立
+peer，记录设备代号、公钥、唯一隧道地址和最小 AllowedIPs。不得复用其他设备的私钥或 peer。
+SSH 登录密钥另外生成并授权；设备停用时撤销对应 peer 和 SSH 授权。登记表与实际配置只保存在
+受控环境，仓库中一律使用占位符，不记录实际 IP、密钥、主机路径或本机目录。
+
+安全组保留 UDP 51820，始终不开放公网 22；宿主机 SSH 访问策略只允许已登记的隧道管理来源。
+应急入口为 **阿里云控制台 VNC**。隧道或 SSH 故障时从 VNC 检查服务、peer 和访问策略，
+不临时放开公网 22、不启用 SSH 密码登录，也不关闭 host key 校验。
 
 ## 3. 上线前云资源
 
@@ -137,7 +163,7 @@ Backup 加密产物 ---- 受限 SSH/SCP ---- Windows 异机密文副本
 | 系统盘 | 60 GB，磁盘告警阈值 75%                                               |
 | 域名   | 已备案且解析到 ECS 公网 IP                                            |
 | TLS    | 有效证书、自动续期、TLS 1.2/1.3                                       |
-| 备份   | Windows `F:\LogionBackups` 异机密文、SHA-256 校验和计划任务           |
+| 备份   | Windows `<本地密文备份根目录>` 异机密文、SHA-256 校验和可配置计划任务 |
 | RAM    | ECS RAM 角色；不要在服务器保存长期 AccessKey                          |
 | 日志   | 至少保留应用错误、容器事件和审计事件；禁止采集 Cookie、令牌和用户正文 |
 | 告警   | 健康、5xx、OOM/重启、磁盘、备份超时、证书到期                         |
@@ -148,7 +174,7 @@ Backup 加密产物 ---- 受限 SSH/SCP ---- Windows 异机密文副本
 
 1. 为 `<DOMAIN>` 创建指向 ECS 公网 IP 的 `A` 记录；只有 ECS 已正确启用 IPv6 时才创建 `AAAA`；
 2. 等公网递归 DNS 返回新地址，不只看阿里云控制台；
-3. 安全组开放 80/443，22 仍只允许管理员固定公网 IP；
+3. 仅在本次公网 HTTPS 发布获批后开放 TCP 80/443；管理入口保留 UDP 51820，公网 22 保持关闭；
 4. 在阿里云邮件推送控制台添加专用发信域名 `mail.<ROOT_DOMAIN>`；
 5. 按控制台当前给出的值创建所有权、SPF、DKIM 和回信地址记录；
 6. 为根域名创建 DMARC，先使用观察策略，确认正常后再收紧；
@@ -169,7 +195,7 @@ dig +short CNAME <DKIM_SELECTOR>._domainkey.mail.<ROOT_DOMAIN>
 - 按[邮件手册第 3 节](./aliyun-directmail-prerelease.md#3-阿里云控制台准备)创建只允许
   `dm:SingleSendMail` 的策略并绑定 ECS RAM 角色；
 - 不创建或保存 RAM 用户长期 AccessKey，不把临时 Security Token 打印到终端；
-- 项目不使用 OSS。按 [Windows 异机加密备份手册](./windows-off-host-backup.md)配置受限 SSH 密钥和
+- 项目不使用 OSS。按 [Windows 异机加密备份手册](./windows-off-host-backup.md)配置 WireGuard 内受限 SSH 密钥和
   Windows 计划任务，只下载加密 `.backup` 和 `.sha256`，绝不复制备份密钥；没有完成下载、校验
   和空环境恢复演练时保持 `prerelease`；
 - 为健康、5xx、OOM/重启、磁盘、备份同步、证书、邮件积压、退信和投诉配置真实接收人。
@@ -346,7 +372,7 @@ curl --fail --silent --head https://<DOMAIN>/ | grep -i '^strict-transport-secur
 ss -lntp | grep -E ':(80|443|8080) '
 ```
 
-预期：公网只使用 80/443，8080 只出现 `127.0.0.1:8080`，HTTPS 响应包含一年有效期的 HSTS。先确认 HTTPS、自动续期和回滚域名均稳定，再考虑 `includeSubDomains` 或 preload，不能直接照搬开启。
+获批公网 HTTPS 发布后的预期：应用入口使用 TCP 80/443，管理入口保留 UDP 51820，公网 22 关闭，8080 只出现 `127.0.0.1:8080`，HTTPS 响应包含一年有效期的 HSTS。先确认 HTTPS、自动续期和回滚域名均稳定，再考虑 `includeSubDomains` 或 preload，不能直接照搬开启。
 
 最终 80 端口配置必须长期保留 `/.well-known/acme-challenge/` 的 Webroot 例外，只把其他请求跳转到
 HTTPS。已有证书若最初使用 Nginx 插件签发，可先执行以下命令把续期方式切换到固定 Webroot；命令会
@@ -453,8 +479,9 @@ sha256sum -c "$(basename "${LATEST_BACKUP}").sha256"
 
 再按[备份恢复手册](./backup-restore.md#空环境演练)恢复到独立空数据库验证，不得覆盖当前数据库。
 随后按 [Windows 异机加密备份手册](./windows-off-host-backup.md)把本次确切的加密 `.backup` 与
-`.sha256` 下载到 `F:\LogionBackups\encrypted`，从 Windows 重新计算 SHA-256。备份密钥必须通过
-独立安全渠道保存在 `F:\LogionRecoveryKey\backup.key`，不得放入备份目录。
+`.sha256` 经 WireGuard 内的 SSH 下载到 `<本地密文备份根目录>` 的 `encrypted` 子目录，
+从 Windows 重新计算 SHA-256。备份密钥必须通过独立安全渠道保存在
+`<独立恢复密钥文件路径>`，不得放入备份目录。
 
 本节成功前旧应用已经停止写入。若决定中止升级且尚未移动 `/opt/logion`，执行
 `logion-compose start` 并重新检查 `/health`；不要在半完成状态继续对外服务。
@@ -472,7 +499,8 @@ sha256sum -c "$(basename "${LATEST_BACKUP}").sha256"
 
 只有本轮代码合并且成功 Main/Release candidate 已生成后才执行。下载同一 source SHA 的
 `candidate-manifest.json`、Main/Release run 记录、SBOM、provenance 和安全报告；不要部署本地构建物或
-Pull Request 临时镜像。把 manifest 通过 SSH/SCP 传到：
+Pull Request 临时镜像。按 §2.1 经 WireGuard 内的 SSH/SCP 传输 manifest；后续命令中使用的
+发布工作目录应替换为受控主机上的实际目录，不连接公网 SSH：
 
 ```text
 /root/logion-upgrade/candidate-manifest.json
