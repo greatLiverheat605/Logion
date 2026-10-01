@@ -419,6 +419,151 @@ async def test_rollback_filters_retained_private_sync_changes_and_tombstones(rol
         assert all(str(identity) not in response.text for identity in private_ids)
 
 
+@pytest.mark.parametrize("space_status", ["archived", "deleted"])
+async def test_rollback_hides_shared_content_in_inactive_spaces(rollback_scope, space_status):
+    owner, peer, _users, workspace, space, _protected, _private_ids, shared_id = rollback_scope
+    scope = f"/api/v1/workspaces/{workspace}/spaces/{space}"
+    sync = f"/api/v1/workspaces/{workspace}/sync"
+    sentinel = "ROLLBACK_INACTIVE_SPACE_SENTINEL"
+    note_id, topic_id = uuid4(), uuid4()
+    identities = (shared_id, note_id, topic_id)
+    resource_body = {
+        "expected_version": 1,
+        "resource_type": "link",
+        "title": sentinel,
+        "source_url": "https://example.com/synthetic",
+    }
+    response = await owner.put(scope + f"/resources/{shared_id}", json=resource_body)
+    assert response.status_code == 200, response.text
+    resource_body["expected_version"] = response.json()["version"]
+    for suffix, body in (
+        ("notes", {"id": str(note_id), "title": sentinel, "markdown_body": sentinel}),
+        ("topics", {"id": str(topic_id), "title": sentinel}),
+    ):
+        response = await owner.post(scope + "/" + suffix, json=body)
+        assert response.status_code == 201, response.text
+
+    # Old REST writes do not append sync changes. Seed retained forward-era changes.
+    async with session_factory() as db:
+        state = WorkspaceSyncState(workspace_id=UUID(workspace))
+        db.add(state)
+        await db.flush()
+        for kind, identity in zip(("resource", "note", "topic"), identities, strict=True):
+            state.last_sequence += 1
+            operation_id = uuid4()
+            payload = {"space_id": space, "title": sentinel}
+            db.add(
+                ProcessedSyncOperation(
+                    operation_id=operation_id,
+                    workspace_id=state.workspace_id,
+                    device_id=uuid4(),
+                    entity_type=kind,
+                    entity_id=identity,
+                    operation_type="update",
+                    payload_hash=canonical_hash(payload),
+                    operation_fingerprint=canonical_hash(payload),
+                )
+            )
+            await db.flush()
+            db.add(
+                SyncChange(
+                    workspace_id=state.workspace_id,
+                    sync_epoch=state.sync_epoch,
+                    sequence=state.last_sequence,
+                    operation_id=operation_id,
+                    entity_type=kind,
+                    entity_id=identity,
+                    operation_type="update",
+                    server_version=1,
+                    occurred_at=utc_now(),
+                    tombstone=False,
+                    payload=payload,
+                    payload_hash=canonical_hash(payload),
+                )
+            )
+        await db.commit()
+
+    bootstraps = []
+    for client in (owner, peer):
+        response = await client.get(scope + "/topics")
+        assert response.status_code == 200 and sentinel in response.text, response.text
+        devices = (await client.get("/api/v1/auth/devices")).json()["devices"]
+        device = next(row["id"] for row in devices if row["current"])
+        request = {
+            "message_type": "bootstrap_request",
+            "protocol_version": "sync-v1",
+            "workspace_id": workspace,
+            "device_id": device,
+            "known_sync_epoch": None,
+            "snapshot_id": None,
+            "chunk_index": None,
+        }
+        response = await client.post(sync + "/bootstrap", json=request)
+        assert response.status_code == 200, response.text
+        boot = response.json()
+        assert boot["chunk_count"] == 1
+        assert sentinel in response.text
+        assert all(str(identity) in response.text for identity in identities)
+        pull = {
+            "message_type": "pull_request",
+            "protocol_version": "sync-v1",
+            "workspace_id": workspace,
+            "device_id": device,
+            "sync_epoch": boot["sync_epoch"],
+            "cursor": 0,
+            "limit": 1000,
+        }
+        response = await client.post(sync + "/pull", json=pull)
+        assert response.status_code == 200, response.text
+        assert response.json()["has_more"] is False
+        assert sentinel in response.text
+        assert all(str(identity) in response.text for identity in identities)
+        bootstraps.append((client, request, pull))
+
+    # Only the Space changes; retained shared rows and old sync payloads remain intact.
+    async with session_factory() as db:
+        row = await db.get(Space, UUID(space))
+        row.status = space_status
+        row.deleted_at = utc_now() if space_status == "deleted" else None
+        await db.commit()
+
+    for client, request, pull in bootstraps:
+        responses = [
+            await client.get(scope + "/topics"),
+            await client.put(scope + f"/resources/{shared_id}", json=resource_body),
+            await client.put(
+                scope + f"/notes/{note_id}",
+                json={"expected_version": 1, "title": "Overwrite", "markdown_body": "Overwrite"},
+            ),
+            await client.post(scope + "/notes", json={"id": str(uuid4()), "title": "New note"}),
+        ]
+        assert all(response.status_code == 404 for response in responses), [
+            response.text for response in responses
+        ]
+        snapshot = await client.post(sync + "/bootstrap", json=request)
+        assert snapshot.status_code == 200, snapshot.text
+        assert snapshot.json()["chunk_count"] == 1
+        delta = await client.post(sync + "/pull", json=pull)
+        assert delta.status_code == 200, delta.text
+        assert delta.json()["has_more"] is False
+        search = await client.post(
+            f"/api/v1/workspaces/{workspace}/search", json={"query": sentinel}
+        )
+        assert search.status_code == 200, search.text
+        for response in (*responses, snapshot, delta, search):
+            assert sentinel not in response.text
+            assert all(str(identity) not in response.text for identity in identities)
+
+    async with session_factory() as db:
+        resource = await db.get(Resource, shared_id)
+        note = await db.get(Note, note_id)
+        topic = await db.get(Topic, topic_id)
+        assert resource.title == note.title == topic.title == sentinel
+        assert note.markdown_body == sentinel and note.version == 1
+        assert resource.version == resource_body["expected_version"]
+        assert all(row.deleted_at is None for row in (resource, note, topic))
+
+
 async def test_rollback_research_jobs_remain_queued_and_inaccessible(rollback_scope):
     owner, peer, users, workspace, _space, protected, _private_ids, _shared = rollback_scope
     runs = []
