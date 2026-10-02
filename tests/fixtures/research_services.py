@@ -13,6 +13,28 @@ FILES: dict[str, bytes] = {}
 _buffer = io.BytesIO()
 with zipfile.ZipFile(_buffer, "w") as _zip:
     _zip.writestr("synthetic.pdf", PDF)
+# Mirrors the real Zotero API, which answers 400 for unsupported sort values.
+ZOTERO_SORTS = frozenset(
+    {
+        "dateAdded",
+        "dateModified",
+        "title",
+        "creator",
+        "itemType",
+        "date",
+        "publisher",
+        "publicationTitle",
+        "journalAbbreviation",
+        "language",
+        "accessDate",
+        "libraryCatalog",
+        "callNumber",
+        "rights",
+        "addedBy",
+        "numItems",
+    }
+)
+
 FILES["/dav/zotero/A0000001.zip"] = _buffer.getvalue()
 
 
@@ -55,6 +77,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             path = urlsplit(self.path)
             query = parse_qs(path.query)
+            if query.get("sort", ["dateModified"])[0] not in ZOTERO_SORTS:
+                self.respond(400, b"Invalid 'sort' value")
+                return
             item = {
                 "key": "P0000001",
                 "version": 1,

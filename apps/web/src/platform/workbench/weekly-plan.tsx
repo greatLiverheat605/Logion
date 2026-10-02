@@ -682,7 +682,6 @@ function ReviewPanel({
                       version: review.version,
                     },
                     expected_output_fields: ["comment"],
-                    requested_output_tokens: 1000,
                     send_confirmed: true,
                   },
                 })

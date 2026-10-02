@@ -134,6 +134,54 @@ async def test_generation_rejects_wrong_draft_schema_and_honors_cancellation() -
     assert stopped.value.code == "AI_RUN_CANCELLED"
 
 
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ("", "AI_OUTPUT_TRUNCATED"),
+        (None, "AI_OUTPUT_TRUNCATED"),
+        ('{"summary":"cut', "AI_OUTPUT_TRUNCATED"),
+        ('{"summary":"complete"}', None),
+    ],
+)
+async def test_reasoning_model_budget_exhaustion_is_reported_as_truncation(
+    content: str | None, expected: str | None
+) -> None:
+    # Reasoning models return reasoning_content first and may stop with an empty answer.
+    adapter = OpenAICompatibleGenerationAdapter(
+        resolver=public_resolver,
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "finish_reason": "length",
+                            "message": {"content": content, "reasoning_content": "thinking..."},
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 100},
+                },
+            )
+        ),
+    )
+    call = adapter.generate(
+        base_url="https://api.example.com/v1",
+        credential="provider-generation-secret",
+        provider_model_id="reasoning-model",
+        input_fields={"note": "private input"},
+        expected_output_fields=["summary"],
+        max_output_tokens=100,
+        timeout_seconds=30,
+        cancelled=not_cancelled,
+    )
+    if expected is None:
+        assert (await call).output == {"summary": "complete"}
+        return
+    with pytest.raises(APIError) as truncated:
+        await call
+    assert truncated.value.code == expected
+
+
 def test_run_input_is_encrypted_and_bound_to_workspace_and_run() -> None:
     settings = Settings()
     cipher = AIRunInputCipher(settings)

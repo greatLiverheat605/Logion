@@ -9936,12 +9936,12 @@ export interface components {
             economical_model_ids: string[];
             /**
              * Max Input Tokens
-             * @default 16000
+             * @default 64000
              */
             max_input_tokens: number;
             /**
              * Max Output Tokens
-             * @default 2000
+             * @default 8000
              */
             max_output_tokens: number;
             /** Quality Model Ids */
@@ -9971,7 +9971,7 @@ export interface components {
             /** Question */
             question?: string | null;
             /** Requested Output Tokens */
-            requested_output_tokens: number;
+            requested_output_tokens?: number | null;
             /**
              * Retain Input
              * @default false

@@ -240,7 +240,14 @@ async def decide_quiz_draft(
     x_csrf_token: str | None = Header(default=None),
 ) -> ReadingQuiz:
     await run_write_boundary(
-        request, context, identity, limiter, settings, workspace_id, x_csrf_token
+        request,
+        context,
+        identity,
+        limiter,
+        settings,
+        workspace_id,
+        x_csrf_token,
+        require_recent=False,
     )
     await runs.authorize(db, context, workspace_id, request_id(request))
     resource = await service.get(

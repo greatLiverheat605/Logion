@@ -13891,14 +13891,14 @@
             "type": "array"
           },
           "max_input_tokens": {
-            "default": 16000,
+            "default": 64000,
             "maximum": 10000000.0,
             "minimum": 1.0,
             "title": "Max Input Tokens",
             "type": "integer"
           },
           "max_output_tokens": {
-            "default": 2000,
+            "default": 8000,
             "maximum": 100000.0,
             "minimum": 1.0,
             "title": "Max Output Tokens",
@@ -13985,10 +13985,17 @@
             "title": "Question"
           },
           "requested_output_tokens": {
-            "maximum": 100000.0,
-            "minimum": 1.0,
-            "title": "Requested Output Tokens",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Output Tokens"
           },
           "retain_input": {
             "default": false,
@@ -14023,7 +14030,6 @@
           "task_type",
           "target",
           "expected_output_fields",
-          "requested_output_tokens",
           "send_confirmed"
         ],
         "title": "ResearchRunCreate",

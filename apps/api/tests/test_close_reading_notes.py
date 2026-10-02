@@ -253,11 +253,8 @@ async def test_note_yjs_owner_privacy_and_atomic_draft_acceptance(
                 .values(created_at=utc_now() - timedelta(hours=1))
             )
             await db.commit()
-        stale_auth = await owner.post(f"{path}/drafts/{draft_id}/decision", json=decision)
-        assert (
-            stale_auth.status_code == 403
-            and stale_auth.json()["code"] == "AUTH_RECENT_LOGIN_REQUIRED"
-        )
+        # ADR-0066: accepting a research draft works throughout a long reading session.
+        accepted = await owner.post(f"{path}/drafts/{draft_id}/decision", json=decision)
         async with session_factory() as db:
             await db.execute(
                 update(AuthSession)
@@ -265,7 +262,6 @@ async def test_note_yjs_owner_privacy_and_atomic_draft_acceptance(
                 .values(created_at=utc_now())
             )
             await db.commit()
-        accepted = await owner.post(f"{path}/drafts/{draft_id}/decision", json=decision)
         assert accepted.status_code == 200, accepted.text
         assert "Drafted motivation" in accepted.json()["markdown_body"]
         assert "Owner private insight" in accepted.json()["markdown_body"]

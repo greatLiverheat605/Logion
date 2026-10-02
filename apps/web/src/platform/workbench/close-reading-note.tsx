@@ -226,7 +226,6 @@ export function useCloseReadingNote(
                         },
                       ],
                       expected_output_fields: document.server.missing_sections,
-                      requested_output_tokens: 1800,
                       send_confirmed: true,
                       retain_input: false,
                     }),

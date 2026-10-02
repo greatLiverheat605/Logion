@@ -267,7 +267,7 @@ class IdentityService:
         if context.session.created_at < cutoff:
             raise APIError(
                 code="AUTH_RECENT_LOGIN_REQUIRED",
-                message="Sign in again before changing authentication methods.",
+                message="Sign in again to confirm this sensitive change.",
                 status_code=403,
             )
 

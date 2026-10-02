@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from sqlalchemy import select
 
 from logion_api.ai_gateway.dependencies import AIRoutingServiceDependency, AIRunServiceDependency
-from logion_api.ai_gateway.models import AIOutputDraft, AIRun
+from logion_api.ai_gateway.models import AIOutputDraft, AIRun, AITaskRoute
 from logion_api.ai_gateway.research_context import (
     CONTEXT_MODELS,
     RESEARCH_TASK_TIERS,
@@ -59,7 +59,8 @@ class ResearchRunCreate(BaseModel):
     target: ContextEntity
     context_entities: list[ContextEntity] = Field(default_factory=list, max_length=31)
     expected_output_fields: list[FieldName] = Field(min_length=1, max_length=32)
-    requested_output_tokens: int = Field(ge=1, le=100000)
+    # Omit to use the task route's configured output limit (reasoning models need room).
+    requested_output_tokens: int | None = Field(default=None, ge=1, le=100000)
     retain_input: bool = False
     send_confirmed: Literal[True]
     question: str | None = Field(default=None, min_length=1, max_length=2000)
@@ -80,6 +81,32 @@ class ResearchRunCreate(BaseModel):
         return value
 
 
+async def route_output_limit(
+    db: Any, workspace_id: UUID, task_type: str, user_id: UUID, idempotency_key: UUID
+) -> int:
+    # Replays keep the original resolved budget; mutable route defaults are not part of the
+    # client's request. AIRunService still checks every other field in the request hash.
+    existing_limit = await db.scalar(
+        select(AIRun.requested_output_tokens).where(
+            AIRun.workspace_id == workspace_id,
+            AIRun.requested_by == user_id,
+            AIRun.idempotency_key == idempotency_key,
+        )
+    )
+    if existing_limit is not None:
+        return int(existing_limit)
+    # Missing routes still fail later with AI_ROUTE_NOT_FOUND; 1 keeps validation intact.
+    limit = await db.scalar(
+        select(AITaskRoute.max_output_tokens).where(
+            AITaskRoute.workspace_id == workspace_id,
+            AITaskRoute.task_type == task_type,
+            AITaskRoute.enabled.is_(True),
+            AITaskRoute.deleted_at.is_(None),
+        )
+    )
+    return int(limit or 1)
+
+
 class ResearchPreset(BaseModel):
     task_type: ResearchTask
     tier: Literal["economical", "quality"]
@@ -93,8 +120,10 @@ class ResearchPresetApply(BaseModel):
     model_config = ConfigDict(extra="forbid")
     economical_model_ids: list[UUID] = Field(min_length=1, max_length=10)
     quality_model_ids: list[UUID] = Field(min_length=1, max_length=10)
-    max_input_tokens: int = Field(default=16000, ge=1, le=10000000)
-    max_output_tokens: int = Field(default=2000, ge=1, le=100000)
+    # Whole-paper close reading and quizzes exceed 16k input tokens; reasoning models
+    # spend part of the output budget before answering.
+    max_input_tokens: int = Field(default=64000, ge=1, le=10000000)
+    max_output_tokens: int = Field(default=8000, ge=1, le=100000)
 
     @field_validator("economical_model_ids", "quality_model_ids")
     @classmethod
@@ -188,7 +217,14 @@ async def create_research_run(
     x_csrf_token: str | None = Header(default=None),
 ) -> AIRunResponse:
     await run_write_boundary(
-        request, context, identity, limiter, settings, workspace_id, x_csrf_token
+        request,
+        context,
+        identity,
+        limiter,
+        settings,
+        workspace_id,
+        x_csrf_token,
+        require_recent=False,
     )
     await runs.authorize(db, context, workspace_id, request_id(request))
     await workspaces.resolve_space(
@@ -267,7 +303,10 @@ async def create_research_run(
                 target_version=payload.target.version,
                 input_fields=fields,
                 expected_output_fields=payload.expected_output_fields,
-                requested_output_tokens=payload.requested_output_tokens,
+                requested_output_tokens=payload.requested_output_tokens
+                or await route_output_limit(
+                    db, workspace_id, payload.task_type, context.user.id, payload.idempotency_key
+                ),
                 retain_input=payload.retain_input,
                 send_confirmed=payload.send_confirmed,
             ),

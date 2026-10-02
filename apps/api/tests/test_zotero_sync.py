@@ -22,6 +22,28 @@ from logion_api.workspaces.models import WorkspaceMembership
 from pydantic import SecretStr
 from sqlalchemy import select
 
+# The real API answers 400 for any other value, e.g. sort=version.
+ZOTERO_SORTS = frozenset(
+    {
+        "dateAdded",
+        "dateModified",
+        "title",
+        "creator",
+        "itemType",
+        "date",
+        "publisher",
+        "publicationTitle",
+        "journalAbbreviation",
+        "language",
+        "accessDate",
+        "libraryCatalog",
+        "callNumber",
+        "rights",
+        "addedBy",
+        "numItems",
+    }
+)
+
 
 @pytest.fixture
 def zotero_server() -> Iterator[tuple[str, dict[str, Any]]]:
@@ -93,6 +115,13 @@ def zotero_server() -> Iterator[tuple[str, dict[str, Any]]]:
                 state["requests"].append(
                     (path.path, query, self.headers.get("If-Modified-Since-Version"))
                 )
+                if query.get("sort", ["dateModified"])[0] not in ZOTERO_SORTS:
+                    payload = b"Invalid 'sort' value"
+                    self.send_response(400)
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
                 since = int(query["since"][0])
                 if int(self.headers["If-Modified-Since-Version"]) >= state["version"]:
                     status = 304

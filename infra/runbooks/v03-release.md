@@ -70,7 +70,7 @@ services:
 3. 按 [§5.2 Nginx](aliyun-production-release.md#52-最终-nginx-配置) 核对宿主机 PDF 专用路径 100 MiB、禁请求/响应缓冲与访问日志；`nginx -t` 通过后才允许获批重载。应用代理同样禁缓冲，原文不得进入代理临时文件。此步骤在 R5 只检查文档，不操作主机。
 4. 以已验证的新 API 镜像显式执行 `alembic upgrade head`，检查单一目标 head。仅新镜像负责迁移；保持旧版本与备份，禁止 downgrade、修改 version 表或删除新数据。
 5. 使用四个固定 digest 启动 API/Web，所有新能力仍关闭；检查 SHA、readiness、登录、Origin/CSRF、旧核心读写与数据数量。检查通过后再启动同版本 Worker，确认健康及队列状态。
-6. 经本次批准，先给 API/Worker 配齐独立 keyring、cursor keys、缓存卷及网络。加载 §2 覆盖并重建 API 后，按 [§4.1](#41-api-出站网络检查) 用 `docker inspect` 确认 API 在 backend/egress 上，并从 API 容器内对 `api.zotero.org`、`dav.jianguoyun.com` 和已批准的模型主机做不带凭据的 HTTPS 可达性检查；两项通过后再一致开启研究开关。由本人进入设置配置连接、测试并选择同步目标；配置凭据本身不自动选择空间。检查 PDF import/prepare/read、模型发现、草稿接受、本人掌握与旧队列保护。
+6. 经本次批准，先给 API/Worker 配齐独立 keyring、cursor keys、缓存卷及网络。加载 §2 覆盖并重建 API 后，按 [§4.1](#41-api-出站网络检查) 用 `docker inspect` 确认 API 在 backend/egress 上，并从 API 容器内对 `api.zotero.org`、`dav.jianguoyun.com` 和已批准的模型主机做不带凭据的 HTTPS 可达性检查；两项通过后再一致开启研究开关。每次重建 API 容器后执行 `logion-compose restart reverse-proxy`：应用内 Nginx 启动时解析上游地址，否则会继续指向旧 API 容器并返回 502。由本人进入设置配置连接、测试并选择同步目标；配置凭据本身不自动选择空间。检查 PDF import/prepare/read、模型发现、草稿接受、本人掌握与旧队列保护。
 7. 目标编辑/阶段修订按独立批准启用。Agent、MCP 及收件箱保持关闭；不要用 v0.3 切换授权顺带开启 v0.3.1 功能。
 8. 结束维护前核对七服务健康、四镜像身份、错误率、PDF 缓存和下载统计、后台队列、备份及告警，记录时间与结果。观察期满足既有发布标准后，才按 §10.1 收敛版本。
 
