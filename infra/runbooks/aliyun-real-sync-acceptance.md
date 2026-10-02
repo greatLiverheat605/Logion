@@ -80,7 +80,7 @@ Non-sensitive sync acceptance record. Safe to delete after verification.
 - 已按 [阿里云 2 核 2 GB 封闭测试部署手册](./aliyun-2c2g-staging-deployment.md) 完成服务器启动；
 - 既有 Owner 可以正常登录；
 - 注册模式仍为 `invite` 或 `closed`；
-- Web 只通过 SSH 隧道访问 `http://localhost:8080`；
+- WireGuard 隧道服务运行、peer 握手正常；Web 只通过隧道内 SSH 的本地端口转发访问 `http://localhost:8080`；
 - API、Web、Worker、PostgreSQL、Redis、Reverse Proxy 均为 healthy；
 - 已存在一份近期可验证的加密备份；
 - 准备两个相互隔离的浏览器环境。
@@ -96,13 +96,18 @@ Non-sensitive sync acceptance record. Safe to delete after verification.
 
 ### 5.1 建立 SSH 隧道
 
-在你的电脑上打开一个终端，执行：
+先确认 WireGuard 隧道服务运行，按[管理通道说明](./aliyun-production-release.md#21-管理通道)
+核对 peer 和隧道路由，再在你的电脑上打开一个终端执行：
 
 ```bash
-ssh -N -L 8080:127.0.0.1:8080 root@<ECS_PUBLIC_IP>
+ssh -N -o PreferredAuthentications=publickey -o PasswordAuthentication=no \
+  -o StrictHostKeyChecking=yes -i "<SSH 私钥文件路径>" \
+  -L 127.0.0.1:8080:127.0.0.1:8080 "root@<隧道地址>"
 ```
 
-将 `<ECS_PUBLIC_IP>` 替换为 ECS 公网 IP。此终端在测试期间保持运行，不要关闭。
+将 `<隧道地址>` 和密钥文件占位符替换为受控配置；仅使用密钥 SSH 登录，不连接 ECS 公网 22。
+此终端在测试期间保持运行，不要关闭。WireGuard 不做转发或 NAT；以上是 SSH 进程的本地
+回环端口转发。隧道或 SSH 故障时使用阿里云控制台 VNC 应急排障，不开放公网 22。
 
 浏览器只能访问：
 
