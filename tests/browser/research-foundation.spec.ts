@@ -98,6 +98,7 @@ async function command(page: Page, label: string) {
   await page.getByRole("combobox", { name: "搜索指令" }).fill(label);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "指令面板" })).toHaveCount(0);
+  await expect(page.getByLabel("空间", { exact: true })).toBeEnabled();
 }
 async function geometry(page: Page) {
   const problems = await page.evaluate(() => {

@@ -102,13 +102,28 @@ test("first rejected business request shows login and returns to the route", asy
   const csrf = (await page.context().cookies()).find(
     (cookie) => cookie.name === "logion_csrf",
   )!.value;
-  const logout = await page.request.post("/api/v1/auth/logout", {
-    headers: { Origin: new URL(page.url()).origin, "X-CSRF-Token": csrf },
-  });
-  expect(logout.status()).toBe(200);
+  // Expire the session when the destination's business request is ready. Expiring it
+  // during Today's initial workspace requests can remove navigation before the click.
+  const templateRequest = /\/api\/v1\/workspaces\/[^/]+\/templates(?:\?.*)?$/;
+  await page.route(
+    templateRequest,
+    async (route) => {
+      const logout = await page.request.post("/api/v1/auth/logout", {
+        headers: { Origin: new URL(page.url()).origin, "X-CSRF-Token": csrf },
+      });
+      expect(logout.status()).toBe(200);
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  const rejected = page.waitForResponse(
+    (response) =>
+      templateRequest.test(response.url()) && response.status() === 401,
+  );
   // Client navigation preserves SessionProvider, so a business response must
   // invalidate it rather than relying on a fresh document bootstrap.
   await page.locator('a[href="/app/templates"]').first().click();
+  expect((await rejected).status()).toBe(401);
   await expect(page.getByRole("heading", { name: "需要登录" })).toBeVisible();
   const login = page.getByRole("link", { name: "重新登录并返回" });
   await expect(login).toHaveAttribute(

@@ -17,7 +17,7 @@ export default defineConfig({
   globalTeardown: "./tests/browser/global-teardown.ts",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   workers: configuredCredentials !== null ? 1 : process.env.CI ? 2 : 4,
   timeout: 30_000,
   expect: { timeout: 20_000 },
