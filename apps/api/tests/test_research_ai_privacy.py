@@ -7,7 +7,7 @@ import httpx
 import pytest
 from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.ai_gateway.generation_adapter import OpenAICompatibleGenerationAdapter
-from logion_api.ai_gateway.models import AIProvider, AIRun
+from logion_api.ai_gateway.models import AIProvider, AIRun, AITaskRoute
 from logion_api.ai_gateway.research_context import (
     AI_CONTEXT_ENTITY_TYPES,
     RESEARCH_TASK_TIERS,
@@ -373,6 +373,25 @@ async def test_private_ideas_context_routes_and_outbound_defense(
             await db.commit()
         await budget_execution.execute_run(UUID(response.json()["id"]))
         assert budgets == [8000]
+        # A retry of the same request must keep its original resolved budget even when an
+        # administrator changes the route between attempts.
+        async with session_factory() as db:
+            await db.execute(
+                update(AITaskRoute)
+                .where(
+                    AITaskRoute.workspace_id == UUID(workspace),
+                    AITaskRoute.task_type == "close_reading",
+                )
+                .values(max_output_tokens=9000)
+            )
+            await db.commit()
+        replay = await owner.post(run_url, json=unbudgeted)
+        assert replay.status_code == 202, replay.text
+        assert replay.json()["id"] == response.json()["id"]
+        assert replay.json()["requested_output_tokens"] == 8000
+        changed = await owner.post(run_url, json={**unbudgeted, "requested_output_tokens": 9000})
+        assert changed.status_code == 409, changed.text
+        assert changed.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
         # Long reading sessions: research AI no longer needs a login from the last 10 minutes,
         # but changing AI configuration still does (ADR-0066).
         hour_ago = datetime.now(UTC) - timedelta(hours=1)

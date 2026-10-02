@@ -194,8 +194,8 @@ class ZoteroSyncService:
             params["itemType"] = "attachment" if suffix == "attachments" else "annotation"
             suffix = "items"
         if state.phase != "deleted":
-            # Zotero rejects sort=version (HTTP 400). Pages stay consistent because every
-            # request is pinned to target_version via If-Modified-Since-Version.
+            # Zotero rejects sort=version (HTTP 400). The Last-Modified-Version check below
+            # restarts pagination if the library changes before all phases complete.
             params.update(
                 start=state.page_offset, limit=PAGE_SIZE, sort="dateModified", direction="asc"
             )

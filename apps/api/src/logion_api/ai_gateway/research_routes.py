@@ -81,7 +81,20 @@ class ResearchRunCreate(BaseModel):
         return value
 
 
-async def route_output_limit(db: Any, workspace_id: UUID, task_type: str) -> int:
+async def route_output_limit(
+    db: Any, workspace_id: UUID, task_type: str, user_id: UUID, idempotency_key: UUID
+) -> int:
+    # Replays keep the original resolved budget; mutable route defaults are not part of the
+    # client's request. AIRunService still checks every other field in the request hash.
+    existing_limit = await db.scalar(
+        select(AIRun.requested_output_tokens).where(
+            AIRun.workspace_id == workspace_id,
+            AIRun.requested_by == user_id,
+            AIRun.idempotency_key == idempotency_key,
+        )
+    )
+    if existing_limit is not None:
+        return int(existing_limit)
     # Missing routes still fail later with AI_ROUTE_NOT_FOUND; 1 keeps validation intact.
     limit = await db.scalar(
         select(AITaskRoute.max_output_tokens).where(
@@ -291,7 +304,9 @@ async def create_research_run(
                 input_fields=fields,
                 expected_output_fields=payload.expected_output_fields,
                 requested_output_tokens=payload.requested_output_tokens
-                or await route_output_limit(db, workspace_id, payload.task_type),
+                or await route_output_limit(
+                    db, workspace_id, payload.task_type, context.user.id, payload.idempotency_key
+                ),
                 retain_input=payload.retain_input,
                 send_confirmed=payload.send_confirmed,
             ),
