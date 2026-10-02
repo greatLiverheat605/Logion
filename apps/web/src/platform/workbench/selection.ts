@@ -7,8 +7,11 @@ export type PdfSelection = {
   char_end: number;
   text: string;
 };
+// pdf.js emits U+0000 for glyphs without a Unicode mapping (common in math fonts). The
+// server rejects control characters, so replace them one-for-one to keep offsets stable.
+const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 export const normalizePdfText = (value: string) =>
-  value.replace(/\r\n?/g, "\n").normalize("NFC");
+  value.replace(/\r\n?/g, "\n").normalize("NFC").replace(CONTROL, "\ufffd");
 
 export const textLayers = new WeakMap<Element, { raw: string; page: number }>();
 

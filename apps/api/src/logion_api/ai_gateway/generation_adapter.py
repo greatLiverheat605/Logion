@@ -25,6 +25,16 @@ class GeneratedDraft:
     output_tokens: int
 
 
+def _complete_json(content: object) -> bool:
+    if not isinstance(content, str) or not content.strip():
+        return False
+    try:
+        json.loads(content)
+    except ValueError:
+        return False
+    return True
+
+
 class OpenAICompatibleGenerationAdapter:
     def __init__(
         self,
@@ -165,7 +175,15 @@ class OpenAICompatibleGenerationAdapter:
     ) -> GeneratedDraft:
         try:
             envelope = json.loads(raw)
-            content = envelope["choices"][0]["message"]["content"]
+            choice = envelope["choices"][0]
+            content = choice["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise self._error("AI_PROVIDER_RESPONSE_INVALID", 422, False) from exc
+        if choice.get("finish_reason") == "length" and not _complete_json(content):
+            # Reasoning models spend the output budget on reasoning_content first; an empty or
+            # cut-off answer is a budget problem the owner can fix, not a provider outage.
+            raise self._error("AI_OUTPUT_TRUNCATED", 422, False)
+        try:
             output = json.loads(content)
             usage = envelope.get("usage", {})
             input_tokens = int(usage.get("prompt_tokens", 0))

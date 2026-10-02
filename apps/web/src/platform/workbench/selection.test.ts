@@ -55,3 +55,11 @@ it("rejects an empty selection and selection that crosses into non-PDF content",
   window.getSelection()!.addRange(range);
   expect(livePdfRange()).toBeNull();
 });
+
+it("replaces control characters one-for-one so the server accepts full text and offsets stay stable", async () => {
+  const { normalizePdfText } = await import("./selection");
+  const raw = "TAD\u0000 boundary\u0007 score\tkept\nline";
+  const text = normalizePdfText(raw);
+  expect(text).toBe("TAD� boundary� score\tkept\nline");
+  expect(text).toHaveLength(raw.length);
+});

@@ -194,7 +194,11 @@ class ZoteroSyncService:
             params["itemType"] = "attachment" if suffix == "attachments" else "annotation"
             suffix = "items"
         if state.phase != "deleted":
-            params.update(start=state.page_offset, limit=PAGE_SIZE, sort="version", direction="asc")
+            # Zotero rejects sort=version (HTTP 400). Pages stay consistent because every
+            # request is pinned to target_version via If-Modified-Since-Version.
+            params.update(
+                start=state.page_offset, limit=PAGE_SIZE, sort="dateModified", direction="asc"
+            )
             if state.phase != "collections":
                 params["includeTrashed"] = 1
         response = await request_integration(

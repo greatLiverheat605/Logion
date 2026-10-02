@@ -37,10 +37,15 @@ async def run_write_boundary(
     settings: SettingsDependency,
     workspace_id: UUID,
     csrf: str | None,
+    *,
+    require_recent: bool = True,
 ) -> None:
     require_trusted_origin(request, settings)
     identity.validate_csrf(context.session, csrf, request.cookies.get(settings.csrf_cookie_name))
-    identity.require_recent_authentication(context)
+    # Research reading actions run throughout a long reading session (ADR-0066); provider,
+    # credential, route and budget changes keep the recent-authentication requirement.
+    if require_recent:
+        identity.require_recent_authentication(context)
     subject = get_security().privacy_hash(f"{workspace_id}:{context.user.id}") or "unknown"
     await limiter.enforce(
         scope="ai_run_write",

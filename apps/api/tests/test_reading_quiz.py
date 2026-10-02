@@ -308,9 +308,8 @@ async def test_quiz_draft_attempt_grade_owner_confirmation_and_legacy_isolation(
                 .values(created_at=utc_now() - timedelta(hours=1))
             )
             await db.commit()
-        assert (await owner.post(decision_url, json=decision)).json()[
-            "code"
-        ] == "AUTH_RECENT_LOGIN_REQUIRED"
+        # ADR-0066: accepting a research draft works throughout a long reading session.
+        accepted = await owner.post(decision_url, json=decision)
         async with session_factory() as db:
             await db.execute(
                 update(AuthSession)
@@ -318,7 +317,6 @@ async def test_quiz_draft_attempt_grade_owner_confirmation_and_legacy_isolation(
                 .values(created_at=utc_now())
             )
             await db.commit()
-        accepted = await owner.post(decision_url, json=decision)
         assert accepted.status_code == 200, accepted.text
         assert len(accepted.json()["items"]) == 5 and "answer_key" not in accepted.text
         assert (await owner.post(decision_url, json=decision)).status_code == 409

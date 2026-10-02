@@ -156,7 +156,6 @@ function ReaderScope({
             },
             context_entities: [],
             expected_output_fields: ["text"],
-            requested_output_tokens: 2000,
             send_confirmed: true,
             ...(questionText ? { question: questionText } : {}),
           }),
@@ -236,6 +235,7 @@ function ReaderScope({
     [outline, setOutline] = useState<Outline[]>([]),
     [failure, setFailure] = useState<unknown>(null),
     [textStatus, setTextStatus] = useState(""),
+    [textFailed, setTextFailed] = useState(false),
     [texts, setTexts] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1),
     [page, setPage] = useState(requestedPage ?? 1),
@@ -414,8 +414,10 @@ function ReaderScope({
         if (!stopped) {
           setSourceText(saved);
           setTextStatus("全文已就绪");
+          setTextFailed(false);
         }
       } catch (error) {
+        if (!stopped) setTextFailed(true);
         if (!stopped)
           setTextStatus(
             error instanceof Error && !("code" in error)
@@ -598,6 +600,21 @@ function ReaderScope({
         <h1 className="wb-reader-title">{detail.data?.title ?? "论文阅读"}</h1>
         {detail.data && <ReadingProgress item={detail.data} path={path} />}
       </header>
+      {textFailed && !failure && (
+        <div role="alert" className="wb-reader-text-alert">
+          全文未保存：全文搜索、回到原文定位和以全文为依据的 AI
+          暂不可用，仍可阅读原文。
+          {textStatus && ` ${textStatus}`}{" "}
+          <Button
+            onClick={() => {
+              setTextFailed(false);
+              setReload((value) => value + 1);
+            }}
+          >
+            重新抽取全文
+          </Button>
+        </div>
+      )}
       {actionStatus && <p role="status">{actionStatus}</p>}
       {action.isPending && <p role="status">正在处理选中内容…</p>}
       {action.error && <p role="alert">{errorMessage(action.error)}</p>}

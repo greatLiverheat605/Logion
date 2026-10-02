@@ -48,3 +48,4 @@ ADR 记录改变长期架构、数据寿命、安全、同步、权限或部署�
 
 - [ADR-0064：限定空间的个人 Agent 令牌与收件箱接受事务](0064-agent-token-and-inbox-boundary.md)
 - [ADR-0065：研究功能启用时的 API 出站网络（Accepted；受控覆盖接入 egress，数据库仍隔离）](0065-research-api-egress.md)
+- [ADR-0066：研究 AI 的会话要求与输出额度（Accepted；研究 AI 免最近认证，路由决定输出额度）](0066-research-ai-session-and-output-budget.md)

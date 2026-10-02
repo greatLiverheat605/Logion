@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import httpx
@@ -22,10 +22,10 @@ from logion_api.ai_gateway.run_service import AIRunService
 from logion_api.config import get_settings
 from logion_api.db import session_factory
 from logion_api.errors import APIError
-from logion_api.identity.models import AuditEvent
+from logion_api.identity.models import AuditEvent, AuthSession
 from logion_api.main import app
 from logion_api.workspaces.models import Space, WorkspaceMembership
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 
 def test_research_allowlists_tiers_and_skill_files_are_an_explicit_contract() -> None:
@@ -346,6 +346,48 @@ async def test_private_ideas_context_routes_and_outbound_defense(
                 resolver=resolve, transport_factory=lambda: httpx.MockTransport(provider_mock)
             ),
         )
+        # Presets leave room for reasoning models, and runs that omit an output budget use the
+        # route limit instead of a client-side constant.
+        routes = (await owner.get(f"{ai}/routes")).json()["routes"]
+        assert {(r["max_input_tokens"], r["max_output_tokens"]) for r in routes} == {(64000, 8000)}
+        budgets = []
+
+        def budget_mock(request: httpx.Request):
+            budgets.append(json.loads(request.content)["max_tokens"])
+            return provider_mock(request)
+
+        budget_execution = AIExecutionService(
+            settings,
+            adapter_factory=lambda: OpenAICompatibleGenerationAdapter(
+                resolver=resolve, transport_factory=lambda: httpx.MockTransport(budget_mock)
+            ),
+        )
+        unbudgeted = {k: v for k, v in run_body().items() if k != "requested_output_tokens"}
+        response = await owner.post(run_url, json=unbudgeted)
+        assert response.status_code == 202, response.text
+        assert response.json()["requested_output_tokens"] == 8000
+        async with session_factory() as db:
+            claimed = await db.get(AIRun, UUID(response.json()["id"]))
+            assert claimed is not None
+            claimed.status = "running"
+            await db.commit()
+        await budget_execution.execute_run(UUID(response.json()["id"]))
+        assert budgets == [8000]
+        # Long reading sessions: research AI no longer needs a login from the last 10 minutes,
+        # but changing AI configuration still does (ADR-0066).
+        hour_ago = datetime.now(UTC) - timedelta(hours=1)
+        async with session_factory() as db:
+            await db.execute(update(AuthSession).values(created_at=hour_ago))
+            await db.commit()
+        aged = await owner.post(run_url, json=run_body())
+        assert aged.status_code == 202, aged.text
+        reconfigure = await owner.post(presets, json=preset_payload)
+        assert reconfigure.status_code == 403, reconfigure.text
+        assert reconfigure.json()["code"] == "AUTH_RECENT_LOGIN_REQUIRED"
+        async with session_factory() as db:
+            await db.execute(update(AuthSession).values(created_at=datetime.now(UTC)))
+            await db.commit()
+        outgoing.clear()
         for mode in ("allowed", "corrupt-builder", "archived", "deleted", "disabled"):
             response = await owner.post(run_url, json=run_body())
             assert response.status_code == 202, response.text
@@ -441,3 +483,13 @@ def test_local_skills_and_server_prompts_share_exact_source_bytes():
         prompt = load_research_skill(task)
         assert prompt.encode("utf-8") == f"Research task: {task}\n\n".encode() + source
         assert skill_hash(prompt) == hashlib.sha256(prompt.encode()).hexdigest()
+
+
+def test_every_research_skill_requires_simplified_chinese_output():
+    # Real models otherwise answer in English or ask for a target language.
+    for task in TASK_SKILLS:
+        prompt = load_research_skill(task)
+        assert "Simplified Chinese (zh-CN)" in prompt, task
+    assert "translate the supplied passage into Simplified Chinese" in load_research_skill(
+        "translate"
+    )

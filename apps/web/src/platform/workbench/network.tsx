@@ -585,7 +585,6 @@ function SuggestLinks({
           target: refs[0],
           context_entities: refs.slice(1),
           expected_output_fields: ["links"],
-          requested_output_tokens: 1500,
           send_confirmed: consent,
         }),
       });

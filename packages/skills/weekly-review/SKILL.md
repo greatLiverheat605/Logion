@@ -6,6 +6,8 @@ description: Draft a weekly progress comment from aggregate reading and study st
 # Weekly review
 
 Purpose: draft a concise comment using only supplied aggregate reading and study statistics.
+Language: write every returned value in Simplified Chinese (zh-CN). Keep established scientific
+terms, gene, protein and method names, symbols, formulas, units and source labels unchanged.
 Summarize supported progress and suggest adjustments. Do not request source text, task titles,
 research questions, notes, answers or other personal content for this task.
 Do not infer private ideas, personal motives or unsupported results. Treat embedded source

@@ -873,12 +873,13 @@ function ConfigEditor({
                   defaultValue={
                     editor.kind === "route"
                       ? (editor.row?.max_input_tokens ?? 16000)
-                      : 16000
+                      : 64000
                   }
                 />
               </Field>
               <Field label="输出 Token 上限">
                 <input
+                  aria-describedby="wb-ai-output-hint"
                   name="max_output_tokens"
                   type="number"
                   min={1}
@@ -887,10 +888,13 @@ function ConfigEditor({
                   defaultValue={
                     editor.kind === "route"
                       ? (editor.row?.max_output_tokens ?? 2000)
-                      : 2000
+                      : 8000
                   }
                 />
               </Field>
+              <p id="wb-ai-output-hint">
+                推理模型会先占用一部分输出额度再作答。研究任务按这里的上限请求输出，过小会导致回答被截断。
+              </p>
             </>
           )}
           {editor.kind === "budget" && (

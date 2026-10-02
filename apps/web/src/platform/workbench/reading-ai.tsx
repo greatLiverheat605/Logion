@@ -7,6 +7,12 @@ import { errorMessage, workbenchRequest } from "./api";
 type Run = components["schemas"]["AIRunResponse"];
 type Draft = components["schemas"]["AIOutputDraftResponse"];
 export const readingAiError = (code: string | null) => {
+  if (code === "AI_OUTPUT_TRUNCATED")
+    return "模型在给出回答前用完了输出额度（推理模型会先占用额度）。请在 AI 设置中提高该任务路由的输出上限后重试。";
+  if (code === "AI_ROUTE_TOKEN_LIMIT")
+    return "所选内容超过任务路由的输入上限，请在 AI 设置中提高上限或减少内容。";
+  if (code === "AI_PROVIDER_RESPONSE_INVALID")
+    return "模型返回的内容无法解析，请重试；多次失败请检查模型是否支持 JSON 输出。";
   if (code === "AI_DRAFT_SCHEMA_INVALID")
     return "AI 输出格式无效，请重新请求。";
   if (code === "RESOURCE_VERSION_CONFLICT")
