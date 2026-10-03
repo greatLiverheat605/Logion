@@ -4,7 +4,7 @@
 
 ## 1. 固定候选与证据
 
-当前候选为 `0.3.0-rc2`；`0.3.0-rc1` 因冻结后新增的依赖安全公告已被取代，不再可发布，其证据保留且不得覆盖。固定最终完整 SHA，依次运行 Main → Full capacity profile → Nightly → Release candidate；四道门的 head SHA 必须完全相同。每次修复产生新 SHA，就从 Main 重新收集对应证据，不能拼接旧成功记录。只晋级 Main 已构建并验证的四镜像，不在 Release 重建、不移动已有标签。
+当前待验候选为 `0.3.0-rc4`；`0.3.0-rc1` 至 `0.3.0-rc3` 已被后续依赖安全公告与真实服务修复取代，不再可发布，历史证据保留且不得覆盖。固定最终完整 SHA，依次运行 Main → Full capacity profile → Nightly → Release candidate；四道门的 head SHA 必须完全相同。每次修复产生新 SHA，就从 Main 重新收集对应证据，不能拼接旧成功记录。只晋级 Main 已构建并验证的四镜像，不在 Release 重建、不移动已有标签。
 
 保留 manifest、四镜像 digest、SBOM/provenance、安全与许可摘要、容量硬件及数量/延迟、Nightly 浏览器结果、Release 恢复与同步兼容证据。参考硬件不能冒充生产等价批准；物理 Safari、真实论文及所有者签字单列。
 

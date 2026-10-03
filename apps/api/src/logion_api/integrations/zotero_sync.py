@@ -221,7 +221,12 @@ class ZoteroSyncService:
         if response.status not in (200, 304):
             raise integration_error("INTEGRATION_UNAVAILABLE", 503)
         try:
-            version = int(response.headers["Last-Modified-Version"])
+            # A 304 confirms the requested cursor and need not include a version header.
+            version = (
+                state.library_version
+                if response.status == 304
+                else int(response.headers["Last-Modified-Version"])
+            )
             if not state.library_version <= version < 2**63:
                 raise ValueError("Library version regressed")
             if state.target_version is not None and state.target_version != version:
