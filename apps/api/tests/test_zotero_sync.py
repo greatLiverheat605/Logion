@@ -142,7 +142,8 @@ def zotero_server() -> Iterator[tuple[str, dict[str, Any]]]:
                     body = entries[offset : offset + limit]
             payload = json.dumps(body).encode() if status != 304 else b""
             self.send_response(status)
-            self.send_header("Last-Modified-Version", str(state["version"]))
+            if status != 304:
+                self.send_header("Last-Modified-Version", str(state["version"]))
             self.send_header("Content-Length", str(len(payload)))
             if state["backoff"]:
                 self.send_header("Backoff", str(state["backoff"]))
@@ -407,6 +408,11 @@ async def test_zotero_sync_is_incremental_private_resumable_and_non_destructive(
         assert not await service.execute_next()
         assert len(fake["requests"]) == before + 1
         assert fake["requests"][-1][2] == "10"
+        unchanged = (await owner.get(trigger)).json()
+        assert unchanged["last_error_code"] is None
+        assert unchanged["library_version"] == 10
+        assert unchanged["last_sync_at"] > state["last_sync_at"]
+        assert not unchanged["pending"]
         # Collection renames affect unchanged items; annotation editions preserve old evidence.
         fake["version"] = 20
         fake["collections"][0].update(version=20, data={"name": "Renamed"})
