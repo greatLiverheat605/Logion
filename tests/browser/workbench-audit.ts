@@ -45,6 +45,24 @@ export async function waitForWorkbenchReady(page: Page, route: string) {
   ).toBeVisible();
 }
 
+export async function waitForWorkbenchAnimations(page: Page) {
+  // Inspect current animations so replaced or paused transitions cannot stall an audit.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        document.getAnimations().some((animation) => {
+          const endTime = animation.effect?.getComputedTiming().endTime;
+          return (
+            animation.playState === "running" &&
+            typeof endTime === "number" &&
+            endTime <= 2_000
+          );
+        }),
+      ),
+    )
+    .toBe(false);
+}
+
 export async function auditHorizontalOverflow(
   page: Page,
 ): Promise<HorizontalOverflowAudit> {
@@ -53,17 +71,7 @@ export async function auditHorizontalOverflow(
   await expect(
     page.locator('[data-sonner-toast][data-type="success"]'),
   ).toHaveCount(0);
-  await page.evaluate(async () => {
-    await Promise.allSettled(
-      document
-        .getAnimations()
-        .filter((animation) => {
-          const endTime = animation.effect?.getComputedTiming().endTime;
-          return typeof endTime === "number" && endTime <= 2_000;
-        })
-        .map((animation) => animation.finished),
-    );
-  });
+  await waitForWorkbenchAnimations(page);
   return page.evaluate(() => {
     const root = document.documentElement;
     const viewportWidth = root.clientWidth;

@@ -16,6 +16,7 @@ import {
   assertPrimaryActionContract,
   assertReducedMotion,
   captureEvidenceScreenshot,
+  waitForWorkbenchAnimations,
   waitForWorkbenchReady,
   WORKBENCH_VIEWPORTS,
 } from "./workbench-audit";
@@ -148,6 +149,7 @@ test("M06 groups real sync receipts with persistent individual reads and explici
       (value) => (document.documentElement.dataset.theme = value),
       theme,
     );
+    await waitForWorkbenchAnimations(page);
     const axe = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
     expect(axe.violations).toEqual([]);
   }
