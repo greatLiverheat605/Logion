@@ -46,17 +46,21 @@ export async function waitForWorkbenchReady(page: Page, route: string) {
 }
 
 export async function waitForWorkbenchAnimations(page: Page) {
-  await page.evaluate(async () => {
-    await Promise.allSettled(
-      document
-        .getAnimations()
-        .filter((animation) => {
+  // Inspect current animations so replaced or paused transitions cannot stall an audit.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        document.getAnimations().some((animation) => {
           const endTime = animation.effect?.getComputedTiming().endTime;
-          return typeof endTime === "number" && endTime <= 2_000;
-        })
-        .map((animation) => animation.finished),
-    );
-  });
+          return (
+            animation.playState === "running" &&
+            typeof endTime === "number" &&
+            endTime <= 2_000
+          );
+        }),
+      ),
+    )
+    .toBe(false);
 }
 
 export async function auditHorizontalOverflow(
