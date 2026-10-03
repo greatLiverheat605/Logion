@@ -45,14 +45,7 @@ export async function waitForWorkbenchReady(page: Page, route: string) {
   ).toBeVisible();
 }
 
-export async function auditHorizontalOverflow(
-  page: Page,
-): Promise<HorizontalOverflowAudit> {
-  // Success feedback has separate contrast coverage; don't scan its fade-out.
-  await page.mouse.move(0, 0);
-  await expect(
-    page.locator('[data-sonner-toast][data-type="success"]'),
-  ).toHaveCount(0);
+export async function waitForWorkbenchAnimations(page: Page) {
   await page.evaluate(async () => {
     await Promise.allSettled(
       document
@@ -64,6 +57,17 @@ export async function auditHorizontalOverflow(
         .map((animation) => animation.finished),
     );
   });
+}
+
+export async function auditHorizontalOverflow(
+  page: Page,
+): Promise<HorizontalOverflowAudit> {
+  // Success feedback has separate contrast coverage; don't scan its fade-out.
+  await page.mouse.move(0, 0);
+  await expect(
+    page.locator('[data-sonner-toast][data-type="success"]'),
+  ).toHaveCount(0);
+  await waitForWorkbenchAnimations(page);
   return page.evaluate(() => {
     const root = document.documentElement;
     const viewportWidth = root.clientWidth;

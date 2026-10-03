@@ -15,6 +15,7 @@ import {
   assertReducedMotion,
   captureEvidenceScreenshot,
   assertWorkbenchViewportFill,
+  waitForWorkbenchAnimations,
   waitForWorkbenchReady,
   WORKBENCH_VIEWPORTS,
 } from "./workbench-audit";
@@ -374,6 +375,7 @@ test("Planning completes real goal, task and offline sync workflows", async ({
       document.documentElement.dataset.theme = value;
     }, theme);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await waitForWorkbenchAnimations(page);
     const axe = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
     expect(axe.violations, `Planning ${theme} theme must pass Axe`).toEqual([]);
   }
