@@ -1,5 +1,5 @@
 {
-  "source_commit": "7d12380b6f16e80b2011533bc7bd007062f8af85",
+  "source_commit": "04d6fb1da88d647642032ad214afd28a09c3e409",
   "migration_head": "0056_agent_inbox",
   "legacy_base": "fdadebcfe76a341e3915b3c8cb000f280fbe4fb0",
   "production_approved": false
