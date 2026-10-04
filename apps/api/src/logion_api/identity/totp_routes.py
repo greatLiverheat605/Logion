@@ -203,6 +203,7 @@ async def verify_login(
             user_agent=request.headers.get("user-agent"),
             event_type="identity.login_succeeded",
             event_metadata={"mfa_method": verified.method},
+            keep_signed_in=verified.challenge.keep_signed_in,
         )
         await db.commit()
     except APIError:

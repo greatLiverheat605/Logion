@@ -256,6 +256,7 @@ async def authentication_verify(
             ip_address=client_ip(request),
             user_agent=request.headers.get("user-agent"),
             event_type="identity.login_succeeded",
+            keep_signed_in=payload.keep_signed_in,
         )
         await db.commit()
     except APIError:

@@ -1,4 +1,4 @@
-"""Read-only preflight for the old binary on an explicitly verified forward schema."""
+"""Schema preflight and private-draft retention for the compatible old binary."""
 
 import argparse
 import asyncio
@@ -9,8 +9,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from logion_api.config import get_settings
+from logion_api.db import session_factory
 
 REQUIRED_COLUMNS = {
+    "auth_sessions": {"keep_signed_in"},
+    "mfa_challenges": {"keep_signed_in"},
+    "form_drafts": {"id", "user_id", "space_id", "fields", "version", "expires_at"},
     "resources": {"research_owner_id", "legacy_paper_id", "citation_key"},
     "notes": {"research_owner_id", "note_kind", "resource_id", "agent_inbox_item_id"},
     "agent_tokens": {"user_id", "space_id", "token_digest", "revoked_at"},
@@ -21,6 +25,21 @@ REQUIRED_COLUMNS = {
     "research_claims": {"resource_id"},
     "ai_runs": {"context_entity_types"},
 }
+
+
+async def cleanup_expired_drafts() -> bool:
+    async with session_factory() as db:
+        removed = list(
+            await db.scalars(
+                text(
+                    "DELETE FROM form_drafts WHERE id IN "
+                    "(SELECT id FROM form_drafts WHERE expires_at <= now() "
+                    "ORDER BY expires_at LIMIT 100 FOR UPDATE SKIP LOCKED) RETURNING id"
+                )
+            )
+        )
+        await db.commit()
+        return bool(removed)
 
 
 async def verify_schema(connection: AsyncConnection, expected_head: str) -> dict[str, object]:

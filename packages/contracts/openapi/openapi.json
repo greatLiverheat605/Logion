@@ -6527,6 +6527,11 @@
             "title": "Email",
             "type": "string"
           },
+          "keep_signed_in": {
+            "default": true,
+            "title": "Keep Signed In",
+            "type": "boolean"
+          },
           "password": {
             "maxLength": 128,
             "minLength": 1,
@@ -7738,6 +7743,11 @@
             "minLength": 1,
             "title": "Device Name",
             "type": "string"
+          },
+          "keep_signed_in": {
+            "default": true,
+            "title": "Keep Signed In",
+            "type": "boolean"
           },
           "platform": {
             "default": "web",

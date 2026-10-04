@@ -5556,6 +5556,11 @@ export interface components {
              * Format: email
              */
             email: string;
+            /**
+             * Keep Signed In
+             * @default true
+             */
+            keep_signed_in: boolean;
             /** Password */
             password: string;
             /**
@@ -6051,6 +6056,11 @@ export interface components {
             credential: components["schemas"]["AuthenticationCredentialRequest"];
             /** Device Name */
             device_name: string;
+            /**
+             * Keep Signed In
+             * @default true
+             */
+            keep_signed_in: boolean;
             /**
              * Platform
              * @default web

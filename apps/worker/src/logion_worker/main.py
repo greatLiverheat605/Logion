@@ -8,6 +8,7 @@ from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.config import get_settings
 from logion_api.portability.deletion_service import AccountDeletionService
 from logion_api.portability.service import PortabilityService
+from logion_api.rollback import cleanup_expired_drafts
 from logion_api.workspaces.service import WorkspaceService
 
 from logion_worker.email_delivery import EmailDeliveryService
@@ -50,6 +51,7 @@ async def run_worker() -> None:
             QueueHandler("ai", execution.execute_next),
             QueueHandler("deletion", deletion.execute_next),
             QueueHandler("review_reminders", review_reminders.execute_next),
+            QueueHandler("form_drafts", cleanup_expired_drafts),
         ]
     )
     heartbeat_task = asyncio.create_task(maintain_heartbeat(stop, tracker))
@@ -58,7 +60,7 @@ async def run_worker() -> None:
             {
                 **health_payload(),
                 "event": "worker_started",
-                "queues": ["email", "export", "ai", "deletion", "review_reminders"],
+                "queues": ["email", "export", "ai", "deletion", "review_reminders", "form_drafts"],
             }
         )
     )

@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.config import Settings
@@ -171,6 +171,7 @@ class IdentityService:
             )
             challenge = MfaChallenge(
                 user_id=user.id,
+                keep_signed_in=payload.keep_signed_in,
                 token_hash=self._security.token_hash(challenge_token),
                 device_name=payload.device_name.strip(),
                 platform=payload.platform,
@@ -207,6 +208,7 @@ class IdentityService:
             ip_address=ip_address,
             user_agent=user_agent,
             event_type="identity.login_succeeded",
+            keep_signed_in=payload.keep_signed_in,
         )
         return PasswordLoginOutcome(issued=issued)
 
@@ -483,7 +485,12 @@ class IdentityService:
         *,
         request_id: str,
     ) -> None:
+        await db.scalar(select(User.id).where(User.id == context.user.id).with_for_update())
         await self._revoke_session(db, context.session, reason="logout", now=datetime.now(UTC))
+        await db.execute(
+            text("DELETE FROM form_drafts WHERE user_id=:user_id"),
+            {"user_id": context.user.id},
+        )
         db.add(
             new_audit_event(
                 request_id=request_id,
@@ -507,6 +514,7 @@ class IdentityService:
         event_type: str,
         device: Device | None = None,
         event_metadata: dict[str, str] | None = None,
+        keep_signed_in: bool = True,
     ) -> IssuedSession:
         now = datetime.now(UTC)
         if device is None:
@@ -529,6 +537,7 @@ class IdentityService:
         secrets = self._security.new_session_secrets()
         auth_session = AuthSession(
             user_id=user.id,
+            keep_signed_in=keep_signed_in,
             device_id=device.id,
             access_token_hash=self._security.token_hash(secrets.access_token),
             csrf_token_hash=self._security.token_hash(secrets.csrf_token),

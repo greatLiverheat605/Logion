@@ -20,6 +20,7 @@ from logion_api.content.yjs_documents import state_from_markdown
 from logion_api.db import session_factory, utc_now
 from logion_api.errors import APIError
 from logion_api.execution.models import Task
+from logion_api.identity.models import AuthSession
 from logion_api.main import app
 from logion_api.memory.models import MasteryRecord, QuizAttempt, QuizItem, ReviewSchedule, Topic
 from logion_api.planning.models import LearningGoal
@@ -30,6 +31,7 @@ from logion_api.sync.push import canonical_hash
 from logion_api.workspaces.models import Space, WorkspaceMembership
 from logion_api.workspaces.service import WorkspaceService
 from sqlalchemy import select, text
+from test_session_persistence import assert_refresh
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 SENTINEL = "ROLLBACK_PRIVATE_RESEARCH_SENTINEL"
@@ -240,6 +242,26 @@ async def rollback_scope(request):
                 "quiz_attempt": attempt.id,
             }
             private_ids = [*(r.id for r in resources), *protected.values(), *agent_ids]
+            for user in users:
+                identity = uuid4()
+                private_ids.append(identity)
+                await db.execute(
+                    text(
+                        "INSERT INTO form_drafts "
+                        "(id, user_id, workspace_id, space_id, form_kind, target_key, fields, "
+                        "version, updated_at, expires_at) VALUES "
+                        "(:id, :user, :workspace, :space, 'idea_create', :target, "
+                        "CAST(:fields AS jsonb), 1, now(), now() + interval '7 days')"
+                    ),
+                    {
+                        "id": identity,
+                        "user": user,
+                        "workspace": UUID(workspace),
+                        "space": UUID(space),
+                        "target": UUID(int=0),
+                        "fields": json.dumps({"body": SENTINEL}),
+                    },
+                )
             await db.commit()
         yield owner, peer, users, workspace, space, protected, private_ids, shared.id
 
@@ -756,3 +778,62 @@ async def test_rollback_agent_endpoints_are_unavailable(rollback_scope):
             response = await client.get(path)
             assert response.status_code == 404, response.text
             assert SENTINEL not in response.text
+
+
+async def test_rollback_preserves_session_choice_and_clears_only_own_drafts(rollback_scope):
+    owner, peer, users, workspace, space, _protected, _private_ids, _shared = rollback_scope
+    async with session_factory() as db:
+        sessions = await db.scalars(select(AuthSession).where(AuthSession.user_id == users[0]))
+        for session in sessions:
+            session.keep_signed_in = False
+        await db.commit()
+    await assert_refresh(owner, False)
+    owner.headers["X-CSRF-Token"] = owner.cookies["logion_csrf"]
+    scope = f"/api/v1/workspaces/{workspace}/spaces/{space}"
+    for client in (owner, peer):
+        response = await client.get(scope + f"/research/form-drafts/idea_create/{UUID(int=0)}")
+        assert response.status_code == 404 and SENTINEL not in response.text
+    response = await owner.post("/api/v1/auth/logout")
+    assert response.status_code == 200 and response.json() == {"status": "ok"}, response.text
+    async with session_factory() as db:
+        rows = list(
+            (
+                await db.execute(
+                    text(
+                        "SELECT user_id, fields FROM form_drafts WHERE user_id IN (:owner, :peer)"
+                    ),
+                    {"owner": users[0], "peer": users[1]},
+                )
+            ).all()
+        )
+        assert len(rows) == 1 and rows[0].user_id == users[1]
+        assert rows[0].fields == {"body": SENTINEL}
+
+
+async def test_rollback_expires_drafts_in_bounded_batches(rollback_scope):
+    from logion_api.rollback import cleanup_expired_drafts
+
+    _owner, _peer, users, _workspace, _space, _protected, _private_ids, _shared = rollback_scope
+    async with session_factory() as db:
+        await db.execute(
+            text(
+                "INSERT INTO form_drafts SELECT gen_random_uuid(), user_id, workspace_id, "
+                "space_id, form_kind, gen_random_uuid(), fields, version, updated_at, "
+                "now() - interval '1 second' FROM form_drafts CROSS JOIN generate_series(1, 101) "
+                "WHERE user_id=:owner"
+            ),
+            {"owner": users[0]},
+        )
+        await db.commit()
+    assert await cleanup_expired_drafts() is True
+    async with session_factory() as db:
+        remaining = await db.scalar(
+            text("SELECT count(*) FROM form_drafts WHERE user_id=:owner"), {"owner": users[0]}
+        )
+        assert remaining == 2
+    assert await cleanup_expired_drafts() is True
+    async with session_factory() as db:
+        remaining = await db.scalar(
+            text("SELECT count(*) FROM form_drafts WHERE user_id=:owner"), {"owner": users[0]}
+        )
+        assert remaining == 1
