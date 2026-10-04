@@ -669,7 +669,7 @@ async def test_weekly_inbox_counts_owner_space_week_and_preserves_closed_snapsho
                 scopes=["inbox:write"],
                 created_at=start - timedelta(days=1),
                 expires_at=end + timedelta(days=1),
-                revoked_at=start + timedelta(hours=1) if discarded else None,
+                revoked_at=end if discarded else None,
             )
             db.add(token)
             await db.flush()
