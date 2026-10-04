@@ -217,7 +217,8 @@ export function useReadingQuiz(
       <p className="wb-muted">
         默认 5 题，接受草稿后才能作答。AI 批改仅供参考，掌握程度由你确认。
       </p>
-      {(query.error || (error && answerDraft.state.status !== "error")) && (
+      {(query.error ||
+        (Boolean(error) && answerDraft.state.status !== "error")) && (
         <p role="alert">{errorMessage(error || query.error)}</p>
       )}
       <Button
