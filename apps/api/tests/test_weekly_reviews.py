@@ -2,12 +2,13 @@ import asyncio
 import io
 import json
 import zipfile
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 import pytest_asyncio
+from logion_api.agents.models import AgentInboxItem, AgentToken
 from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.ai_gateway.generation_adapter import OpenAICompatibleGenerationAdapter
 from logion_api.ai_gateway.models import AIProvider, AIRun
@@ -643,3 +644,89 @@ async def test_weekly_rollover_quota_failure_rolls_back_every_next_task(weekly_s
     assert response.status_code == 200, response.text
     listing = await owner.get(path, params={"week_start": (week + timedelta(days=7)).isoformat()})
     assert len(listing.json()["tasks"]) == 200
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_weekly_inbox_counts_owner_space_week_and_preserves_closed_snapshot(weekly_scope):
+    owner, peer, scope, workspace, users, _goal, _resource = weekly_scope
+    space = UUID(scope.rsplit("/", 1)[-1])
+    spaces = (await owner.get(f"/api/v1/workspaces/{workspace}/spaces")).json()["spaces"]
+    other_space = next(UUID(item["id"]) for item in spaces if UUID(item["id"]) != space)
+    start = datetime(2026, 9, 27, 16, tzinfo=UTC)  # Monday in Asia/Shanghai.
+    end = start + timedelta(days=7)
+    sentinel = "PRIVATE_AGENT_PAYLOAD_SENTINEL"
+
+    async def add_item(user_id, space_id, created_at, *, discarded=False):
+        async with session_factory() as db:
+            token = AgentToken(
+                id=uuid4(),
+                user_id=user_id,
+                workspace_id=UUID(workspace),
+                space_id=space_id,
+                name="Synthetic weekly token",
+                token_digest=uuid4().hex * 2,
+                scopes=["inbox:write"],
+                created_at=start - timedelta(days=1),
+                expires_at=end + timedelta(days=1),
+                revoked_at=start + timedelta(hours=1) if discarded else None,
+            )
+            db.add(token)
+            await db.flush()
+            db.add(
+                AgentInboxItem(
+                    token_id=token.id,
+                    user_id=user_id,
+                    workspace_id=UUID(workspace),
+                    space_id=space_id,
+                    submission_key=str(uuid4()),
+                    kind="source",
+                    payload={"kind": "source", "title": sentinel},
+                    payload_digest="a" * 64,
+                    created_at=created_at,
+                    status="discarded" if discarded else "pending",
+                    decided_at=end if discarded else None,
+                    decision_digest="b" * 64 if discarded else None,
+                )
+            )
+            await db.commit()
+
+    await add_item(users[0], space, start)
+    await add_item(users[0], space, end - timedelta(microseconds=1), discarded=True)
+    await add_item(users[0], space, start - timedelta(microseconds=1))
+    await add_item(users[0], space, end)
+    await add_item(users[1], space, start)
+    await add_item(users[0], other_space, start)
+    path = scope + "/research/weekly"
+    payload = {"week_start": "2026-09-28", "timezone": "Asia/Shanghai"}
+    response = await owner.post(path + "/reviews", json=payload)
+    assert response.status_code == 200, response.text
+    review = response.json()
+    assert review["stats"]["inbox_items"] == 2
+    assert all(type(value) is int for value in review["stats"].values())
+    assert sentinel not in response.text
+    peer_review = await peer.post(path + "/reviews", json=payload)
+    assert peer_review.status_code == 200, peer_review.text
+    assert peer_review.json()["stats"]["inbox_items"] == 1
+    assert (
+        await peer.post(path + f"/reviews/{review['id']}/refresh", json={"expected_version": 1})
+    ).status_code == 404
+
+    await add_item(users[0], space, start + timedelta(hours=1))
+    unchanged = await owner.get(path, params={"week_start": payload["week_start"]})
+    assert unchanged.json()["review"]["stats"]["inbox_items"] == 2
+    refreshed = await owner.post(
+        path + f"/reviews/{review['id']}/refresh", json={"expected_version": 1}
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    review = refreshed.json()
+    assert review["stats"]["inbox_items"] == 3
+    closed = await owner.post(
+        path + f"/reviews/{review['id']}/close",
+        json={"expected_version": review["version"], "triage": []},
+    )
+    assert closed.status_code == 200, closed.text
+    await add_item(users[0], space, start + timedelta(hours=2))
+    historical = await owner.get(path, params={"week_start": payload["week_start"]})
+    assert historical.json()["review"]["stats"]["inbox_items"] == 3
+    assert sentinel not in historical.text

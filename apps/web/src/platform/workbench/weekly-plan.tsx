@@ -575,9 +575,14 @@ function ReviewPanel({
             {stats.reviews_due} / {stats.reviews_completed}
           </dd>
         </div>
+        <div>
+          <dt>Agent 投稿</dt>
+          <dd>{stats.inbox_items}</dd>
+        </div>
       </dl>
       <p className="wb-muted">
-        按当前记录统计。连线统计排除想法；待复习统计截至本周末。
+        按当前记录统计。连线统计排除想法；待复习统计截至本周末。Agent
+        投稿按本周收到的条目计数，包含已接受和已丢弃的条目，不包含正文。
       </p>
       {(action.error || runs.error) && (
         <p role="alert">{errorMessage(action.error || runs.error)}</p>
