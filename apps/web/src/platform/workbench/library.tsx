@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
 import {
   useInfiniteQuery,
   useMutation,
@@ -365,17 +366,32 @@ function ResourceForm({
       ?.map((a) => a.literal ?? [a.given, a.family].filter(Boolean).join(" "))
       .join("\n") ?? "";
   const year = item?.csl?.issued?.["date-parts"]?.[0]?.[0]?.toString() ?? "";
+  const [draftAuthors, setDraftAuthors] = useState(authors);
+  const [abstract, setAbstract] = useState(item?.csl?.abstract ?? "");
+  const draft = useFormDraft({
+    scope: pathFor(context),
+    kind: item ? "source_edit" : "source_create",
+    target: item?.id,
+    fields: { authors: draftAuthors, abstract },
+    restore: (fields) => {
+      setDraftAuthors(fields.authors ?? "");
+      setAbstract(fields.abstract ?? "");
+    },
+  });
   const mutation = useMutation({
     mutationFn: (body: Fields) =>
-      workbenchRequest<Resource>(
-        `${pathFor(context)}${item ? `/${encodeURIComponent(item.id)}` : ""}`,
-        {
-          method: item ? "PUT" : "POST",
-          body: JSON.stringify({
-            ...body,
-            ...(item ? { expected_version: item.version } : {}),
-          }),
-        },
+      draft.submit((headers) =>
+        workbenchRequest<Resource>(
+          `${pathFor(context)}${item ? `/${encodeURIComponent(item.id)}` : ""}`,
+          {
+            headers,
+            method: item ? "PUT" : "POST",
+            body: JSON.stringify({
+              ...body,
+              ...(item ? { expected_version: item.version } : {}),
+            }),
+          },
+        ),
       ),
     onSuccess: onSaved,
   });
@@ -443,123 +459,130 @@ function ResourceForm({
   }
   return (
     <form className="wb-library-form" onSubmit={submit}>
-      <label>
-        标题
-        <input
-          name="title"
-          required
-          maxLength={300}
-          defaultValue={item?.title}
-        />
-      </label>
-      <label>
-        作者（每行一位）
-        <textarea
-          name="authors"
-          rows={2}
-          maxLength={200000}
-          defaultValue={authors}
-        />
-      </label>
-      <label>
-        发表年份
-        <input
-          name="year"
-          type="number"
-          min={1}
-          max={9999}
-          defaultValue={year}
-        />
-      </label>
-      <label>
-        期刊或会议
-        <input
-          name="venue"
-          maxLength={2000}
-          defaultValue={item?.csl?.["container-title"] ?? ""}
-        />
-      </label>
-      <label>
-        类型
-        <select
-          name="resource_type"
-          defaultValue={item?.resource_type ?? "paper"}
-        >
-          {Object.entries(TYPES).map(([id, title]) => (
-            <option key={id} value={id}>
-              {title}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        阅读状态
-        <select
-          name="reading_status"
-          defaultValue={item?.reading_status ?? "unread"}
-        >
-          {Object.entries(READING_STATUSES).map(([id, title]) => (
-            <option key={id} value={id}>
-              {title}
-            </option>
-          ))}
-        </select>
-      </label>
-      {(
-        [
-          ["doi", "DOI", 255],
-          ["arxiv_id", "arXiv", 80],
-          ["pmid", "PMID", 20],
-          ["citation_key", "引用键", 160],
-          ["source_url", "来源网址", 4096],
-        ] as const
-      ).map(([name, label, max]) => (
-        <label key={name}>
-          {label}
+      <DraftNotice draft={draft} />
+      <fieldset className="wb-draft-fields" disabled={mutation.isPending}>
+        <label>
+          标题
           <input
-            name={name}
-            type={name === "source_url" ? "url" : "text"}
-            maxLength={max}
-            defaultValue={item?.[name] ?? ""}
+            name="title"
+            required
+            maxLength={300}
+            defaultValue={item?.title}
           />
         </label>
-      ))}
-      <label>
-        标签（逗号分隔）
-        <input
-          name="tags"
-          maxLength={4000}
-          defaultValue={item?.tags
-            ?.filter((tag) => !tag.startsWith("collection:"))
-            .join(", ")}
-        />
-      </label>
-      <label>
-        摘要
-        <textarea
-          name="abstract"
-          rows={5}
-          maxLength={30000}
-          defaultValue={item?.csl?.abstract ?? ""}
-        />
-      </label>
-      {failure !== null && (
-        <div role="alert">
-          <p>{errorMessage(failure)}</p>
-          {duplicate && (
-            <Button onClick={() => onExisting(duplicate)}>查看已有文献</Button>
-          )}
-          {failure instanceof LogionApiError &&
-            failure.code === "RESOURCE_VERSION_CONFLICT" && (
-              <Button onClick={() => void onReload().catch(setFailure)}>
-                放弃当前输入并载入最新版本
+        <label>
+          作者（每行一位）
+          <textarea
+            name="authors"
+            rows={2}
+            maxLength={200000}
+            value={draftAuthors}
+            onChange={(e) => setDraftAuthors(e.target.value)}
+          />
+        </label>
+        <label>
+          发表年份
+          <input
+            name="year"
+            type="number"
+            min={1}
+            max={9999}
+            defaultValue={year}
+          />
+        </label>
+        <label>
+          期刊或会议
+          <input
+            name="venue"
+            maxLength={2000}
+            defaultValue={item?.csl?.["container-title"] ?? ""}
+          />
+        </label>
+        <label>
+          类型
+          <select
+            name="resource_type"
+            defaultValue={item?.resource_type ?? "paper"}
+          >
+            {Object.entries(TYPES).map(([id, title]) => (
+              <option key={id} value={id}>
+                {title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          阅读状态
+          <select
+            name="reading_status"
+            defaultValue={item?.reading_status ?? "unread"}
+          >
+            {Object.entries(READING_STATUSES).map(([id, title]) => (
+              <option key={id} value={id}>
+                {title}
+              </option>
+            ))}
+          </select>
+        </label>
+        {(
+          [
+            ["doi", "DOI", 255],
+            ["arxiv_id", "arXiv", 80],
+            ["pmid", "PMID", 20],
+            ["citation_key", "引用键", 160],
+            ["source_url", "来源网址", 4096],
+          ] as const
+        ).map(([name, label, max]) => (
+          <label key={name}>
+            {label}
+            <input
+              name={name}
+              type={name === "source_url" ? "url" : "text"}
+              maxLength={max}
+              defaultValue={item?.[name] ?? ""}
+            />
+          </label>
+        ))}
+        <label>
+          标签（逗号分隔）
+          <input
+            name="tags"
+            maxLength={4000}
+            defaultValue={item?.tags
+              ?.filter((tag) => !tag.startsWith("collection:"))
+              .join(", ")}
+          />
+        </label>
+        <label>
+          摘要
+          <textarea
+            name="abstract"
+            rows={5}
+            maxLength={30000}
+            value={abstract}
+            onChange={(e) => setAbstract(e.target.value)}
+          />
+        </label>
+        {failure !== null && (
+          <div role="alert">
+            <p>{errorMessage(failure)}</p>
+            {duplicate && (
+              <Button onClick={() => onExisting(duplicate)}>
+                查看已有文献
               </Button>
             )}
-        </div>
-      )}
-      <Button type="submit" disabled={mutation.isPending}>
-        {mutation.isPending ? "正在保存…" : "保存文献"}
-      </Button>
+            {failure instanceof LogionApiError &&
+              failure.code === "RESOURCE_VERSION_CONFLICT" && (
+                <Button onClick={() => void onReload().catch(setFailure)}>
+                  放弃当前输入并载入最新版本
+                </Button>
+              )}
+          </div>
+        )}
+        <Button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? "正在保存…" : "保存文献"}
+        </Button>
+      </fieldset>
     </form>
   );
 }

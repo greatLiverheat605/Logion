@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
 import type { components } from "@logion/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -248,36 +249,54 @@ export function GoalEditor({
     plan_version_id: crypto.randomUUID(),
     phase_id: crypto.randomUUID(),
   }));
+  const draft = useFormDraft({
+    scope,
+    kind: goal ? "goal_edit" : "goal_create",
+    target: goal?.goal_id,
+    fields: {
+      description,
+      desired_outcome: outcome,
+      ...(!goal ? { criterion } : {}),
+    },
+    restore: (fields) => {
+      setDescription(fields.description ?? "");
+      setOutcome(fields.desired_outcome ?? "");
+      setCriterion(fields.criterion ?? "");
+    },
+  });
   const save = useMutation({
     mutationFn: () =>
-      workbenchRequest(
-        `${scope}/research/goals${goal ? `/${goal.goal_id}` : ""}`,
-        {
-          method: goal ? "PATCH" : "POST",
-          body: JSON.stringify({
-            title,
-            desired_outcome: outcome,
-            description,
-            weekly_minutes: minutes,
-            target_date: target || null,
-            ...(goal
-              ? { expected_version: goal.goal_version }
-              : {
-                  goal_id: ids.goal_id,
-                  plan_id: ids.plan_id,
-                  plan_version_id: ids.plan_version_id,
-                  phases: [
-                    {
-                      id: ids.phase_id,
-                      title: phase,
-                      position: 0,
-                      estimated_minutes: 120,
-                      acceptance_criteria: [criterion],
-                    },
-                  ],
-                }),
-          }),
-        },
+      draft.submit((headers) =>
+        workbenchRequest(
+          `${scope}/research/goals${goal ? `/${goal.goal_id}` : ""}`,
+          {
+            headers,
+            method: goal ? "PATCH" : "POST",
+            body: JSON.stringify({
+              title,
+              desired_outcome: outcome,
+              description,
+              weekly_minutes: minutes,
+              target_date: target || null,
+              ...(goal
+                ? { expected_version: goal.goal_version }
+                : {
+                    goal_id: ids.goal_id,
+                    plan_id: ids.plan_id,
+                    plan_version_id: ids.plan_version_id,
+                    phases: [
+                      {
+                        id: ids.phase_id,
+                        title: phase,
+                        position: 0,
+                        estimated_minutes: 120,
+                        acceptance_criteria: [criterion],
+                      },
+                    ],
+                  }),
+            }),
+          },
+        ),
       ),
     onSuccess: onSaved,
   });
@@ -289,6 +308,7 @@ export function GoalEditor({
         save.mutate();
       }}
     >
+      <DraftNotice draft={draft} />
       {save.error && <p role="alert">{errorMessage(save.error)}</p>}
       <fieldset className="wb-goal-fields" disabled={save.isPending}>
         <label>
@@ -397,23 +417,95 @@ function PhaseEditor({
       result[index + direction] = current;
       return result;
     });
+  const draft = useFormDraft({
+    scope,
+    kind: "phase_edit",
+    target: goal.goal_id,
+    fields: {
+      phases: JSON.stringify(
+        phases.map((p) => ({
+          id: p.id,
+          new: !goal.phases.some((original) => original.id === p.id),
+          description: p.description,
+          acceptance_criteria: p.acceptance_criteria,
+        })),
+      ),
+    },
+    restore: (fields) => {
+      const saved: unknown = JSON.parse(fields.phases ?? "");
+      if (
+        !Array.isArray(saved) ||
+        saved.length > 100 ||
+        saved.some(
+          (p) =>
+            !p ||
+            typeof p.id !== "string" ||
+            !/^[0-9a-f-]{36}$/i.test(p.id) ||
+            typeof p.new !== "boolean" ||
+            typeof p.description !== "string" ||
+            p.description.length > 10000 ||
+            !Array.isArray(p.acceptance_criteria) ||
+            p.acceptance_criteria.length > 50 ||
+            p.acceptance_criteria.some(
+              (v: unknown) => typeof v !== "string" || v.length > 500,
+            ) ||
+            (!p.new && !phases.some((current) => current.id === p.id)),
+        )
+      )
+        throw new Error("Invalid draft");
+      if (
+        new Set(saved.map((p) => p.id)).size !== saved.length ||
+        phases.length +
+          saved.filter((p) => !phases.some((row) => row.id === p.id)).length >
+          100
+      )
+        throw new Error("Invalid draft");
+      setPhases((rows) => [
+        ...rows.map((row) => {
+          const match = saved.find((p) => p.id === row.id);
+          return match
+            ? {
+                ...row,
+                description: match.description,
+                acceptance_criteria: match.acceptance_criteria,
+              }
+            : row;
+        }),
+        ...saved
+          .filter((p) => p.new && !rows.some((row) => row.id === p.id))
+          .map((p) => ({
+            id: p.id as string,
+            title: "",
+            description: p.description as string,
+            acceptance_criteria: p.acceptance_criteria as string[],
+            estimated_minutes: 30,
+            archived: false,
+            removed: false,
+            removal_allowed: true,
+          })),
+      ]);
+    },
+  });
   const save = useMutation({
     mutationFn: () =>
-      workbenchRequest(`${scope}/research/goals/${goal.goal_id}/phases`, {
-        method: "PUT",
-        body: JSON.stringify({
-          expected_version: goal.goal_version,
-          phases: phases.map((p) => ({
-            id: p.id,
-            title: p.title,
-            description: p.description,
-            estimated_minutes: p.estimated_minutes,
-            acceptance_criteria: p.acceptance_criteria,
-            archived: p.archived,
-            removed: p.removed,
-          })),
+      draft.submit((headers) =>
+        workbenchRequest(`${scope}/research/goals/${goal.goal_id}/phases`, {
+          headers,
+          method: "PUT",
+          body: JSON.stringify({
+            expected_version: goal.goal_version,
+            phases: phases.map((p) => ({
+              id: p.id,
+              title: p.title,
+              description: p.description,
+              estimated_minutes: p.estimated_minutes,
+              acceptance_criteria: p.acceptance_criteria,
+              archived: p.archived,
+              removed: p.removed,
+            })),
+          }),
         }),
-      }),
+      ),
     onSuccess: onSaved,
   });
   const removed = phases.some((p) => p.removed);
@@ -428,6 +520,7 @@ function PhaseEditor({
       <p className="wb-muted">
         使用上移、下移调整顺序。已有任务引用的阶段只能归档，归档后可以恢复。
       </p>
+      <DraftNotice draft={draft} />
       {save.error && <p role="alert">{errorMessage(save.error)}</p>}
       {phases.map((phase, index) => (
         <fieldset

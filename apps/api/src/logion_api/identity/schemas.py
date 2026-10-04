@@ -55,6 +55,7 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
     device_name: str = Field(min_length=1, max_length=80)
     platform: Literal["web", "ios_pwa", "android_pwa"] = "web"
+    keep_signed_in: bool = Field(default=True, strict=True)
 
 
 class UserResponse(BaseModel):
@@ -282,6 +283,7 @@ class PasskeyAuthenticationVerifyRequest(BaseModel):
     challenge_id: UUID
     device_name: str = Field(min_length=1, max_length=80)
     platform: Literal["web", "ios_pwa", "android_pwa"] = "web"
+    keep_signed_in: bool = Field(default=True, strict=True)
     credential: AuthenticationCredentialRequest
 
 

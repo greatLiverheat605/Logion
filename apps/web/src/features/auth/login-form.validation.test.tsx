@@ -30,6 +30,35 @@ async function openLogin() {
   return button;
 }
 
+it.each([false, true])(
+  "sends the explicit persistence choice %s, defaulting to unchecked",
+  async (choice) => {
+    vi.mocked(browserApiClient.request).mockResolvedValueOnce({
+      status: "mfa_required",
+      challenge_token: "synthetic-challenge",
+      expires_at: "2030-01-01T00:00:00Z",
+      methods: ["totp"],
+    });
+    const button = await openLogin();
+    const remember = screen.getByRole<HTMLInputElement>("checkbox", {
+      name: "保持登录",
+    });
+    expect(remember.checked).toBe(false);
+    if (choice) fireEvent.click(remember);
+    fireEvent.input(screen.getByLabelText("邮箱"), {
+      target: { value: "synthetic@example.com" },
+    });
+    fireEvent.input(screen.getByLabelText("密码", { exact: true }), {
+      target: { value: "Synthetic-password-42!" },
+    });
+    fireEvent.click(button);
+    expect(await screen.findByLabelText("验证码")).toBeTruthy();
+    const [path, options] = vi.mocked(browserApiClient.request).mock.calls[0]!;
+    expect(path).toBe("/api/v1/auth/login");
+    expect(JSON.parse(String(options?.body)).keep_signed_in).toBe(choice);
+  },
+);
+
 it("shows inline errors, focuses the first invalid field and sends no authentication request", async () => {
   const button = await openLogin();
   fireEvent.click(button);

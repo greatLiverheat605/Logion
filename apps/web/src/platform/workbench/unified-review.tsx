@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -455,14 +456,21 @@ function RecallCard({
     started: Date.now(),
   }));
   useUnsaved(Boolean(text) && !result);
+  const draft = useFormDraft({
+    scope: base,
+    kind: "memory_answer",
+    target: quiz.id,
+    fields: { response_text: text },
+    restore: (fields) => setText(fields.response_text ?? ""),
+  });
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const response = await workbenchRequest<Attempt>(
-        `${base}/quizzes/${quiz.id}/attempts`,
-        {
+      const response = await draft.submit((headers) =>
+        workbenchRequest<Attempt>(`${base}/quizzes/${quiz.id}/attempts`, {
+          headers,
           method: "POST",
           body: JSON.stringify({
             id: identity.id,
@@ -486,7 +494,7 @@ function RecallCard({
                 ? null
                 : cause,
           }),
-        },
+        }),
       );
       setResult(response);
       await changed();
@@ -546,6 +554,7 @@ function RecallCard({
         </div>
       ) : (
         <form onSubmit={(e) => void submit(e)}>
+          <DraftNotice draft={draft} />
           <label>
             我的回答
             <textarea
@@ -717,6 +726,13 @@ function TopicForm({
     [description, setDescription] = useState(topic?.description ?? "");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(null);
+  const draft = useFormDraft({
+    scope: base,
+    kind: topic ? "topic_edit" : "topic_create",
+    target: topic?.id,
+    fields: { description },
+    restore: (fields) => setDescription(fields.description ?? ""),
+  });
   function close() {
     if (
       !busy &&
@@ -731,15 +747,18 @@ function TopicForm({
     setBusy(true);
     setError(null);
     try {
-      await workbenchRequest(base + (topic ? `/topics/${id}` : "/topics"), {
-        method: topic ? "PATCH" : "POST",
-        body: JSON.stringify({
-          id,
-          title,
-          description,
-          ...(topic ? { expected_version: expectedVersion } : {}),
+      await draft.submit((headers) =>
+        workbenchRequest(base + (topic ? `/topics/${id}` : "/topics"), {
+          headers,
+          method: topic ? "PATCH" : "POST",
+          body: JSON.stringify({
+            id,
+            title,
+            description,
+            ...(topic ? { expected_version: expectedVersion } : {}),
+          }),
         }),
-      });
+      );
       onSaved(id);
     } catch (failure) {
       setError(failure);
@@ -757,6 +776,7 @@ function TopicForm({
       }}
     >
       <form className="wb-memory-form" onSubmit={(e) => void submit(e)}>
+        <DraftNotice draft={draft} />
         <label>
           知识点标题
           <input
@@ -806,6 +826,17 @@ function QuizForm({
   const [mode, setMode] = useState(quiz?.evaluation_mode ?? "self_assessed");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(null);
+  const draft = useFormDraft({
+    scope: base,
+    kind: quiz ? "quiz_edit" : "quiz_create",
+    target: quiz?.id ?? topicId,
+    fields: { prompt, answer, explanation },
+    restore: (fields) => {
+      setPrompt(fields.prompt ?? "");
+      setAnswer(fields.answer ?? "");
+      setExplanation(fields.explanation ?? "");
+    },
+  });
   function close() {
     if (
       !busy &&
@@ -822,18 +853,21 @@ function QuizForm({
     setBusy(true);
     setError(null);
     try {
-      await workbenchRequest(base + (quiz ? `/quizzes/${id}` : "/quizzes"), {
-        method: quiz ? "PATCH" : "POST",
-        body: JSON.stringify({
-          id,
-          topic_id: topicId,
-          prompt,
-          answer_key: quiz && !answer ? null : answer,
-          explanation: quiz && !explanation ? null : explanation,
-          evaluation_mode: mode,
-          ...(quiz ? { expected_version: expectedVersion } : {}),
+      await draft.submit((headers) =>
+        workbenchRequest(base + (quiz ? `/quizzes/${id}` : "/quizzes"), {
+          headers,
+          method: quiz ? "PATCH" : "POST",
+          body: JSON.stringify({
+            id,
+            topic_id: topicId,
+            prompt,
+            answer_key: quiz && !answer ? null : answer,
+            explanation: quiz && !explanation ? null : explanation,
+            evaluation_mode: mode,
+            ...(quiz ? { expected_version: expectedVersion } : {}),
+          }),
         }),
-      });
+      );
       onSaved();
     } catch (failure) {
       setError(failure);
@@ -851,6 +885,7 @@ function QuizForm({
       }}
     >
       <form className="wb-memory-form" onSubmit={(e) => void submit(e)}>
+        <DraftNotice draft={draft} />
         <label>
           题目
           <textarea

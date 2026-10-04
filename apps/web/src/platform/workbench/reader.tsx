@@ -12,6 +12,7 @@ import { ThreePanes } from "./panes";
 import { ResourceDetails } from "./library";
 import { PdfPage } from "./pdf-page";
 import { Button } from "./components";
+import { DraftNotice, useFormDraft } from "./form-draft";
 import type { PaneContent, WorkbenchContext } from "./preferences";
 import {
   readPdfSelection,
@@ -63,6 +64,13 @@ function ReaderScope({
   const paletteSelection = useRef<PdfSelection | null>(null);
   const [quote, setQuote] = useState<PdfSelection | null>(null);
   const [question, setQuestion] = useState("");
+  const questionDraft = useFormDraft({
+    scope: `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}`,
+    kind: "reading_question",
+    target: id,
+    fields: { question },
+    restore: (fields) => setQuestion(fields.question ?? ""),
+  });
   const [runId, setRunId] = useState<string | null>(null);
   const [actionStatus, setActionStatus] = useState("");
   const [menuPosition, setMenuPosition] = useState<{
@@ -137,30 +145,34 @@ function ReaderScope({
       if (!sourceText || sourceText.id !== selected.source_text_id)
         throw new Error("Source changed");
       setRunId(null);
-      const result = await workbenchRequest<
-        components["schemas"]["AIRunResponse"]
-      >(
-        `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}/research/ai/runs`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            idempotency_key: crypto.randomUUID(),
-            task_type: kind === "translate" ? "translate" : "explain",
-            target: {
-              entity_type: "source_text",
-              id: sourceText.id,
-              version: sourceText.version,
-              char_start: selected.char_start,
-              char_end: selected.char_end,
-            },
-            context_entities: [],
-            expected_output_fields: ["text"],
-            send_confirmed: true,
-            ...(questionText ? { question: questionText } : {}),
-          }),
-        },
-      );
+      const request = (headers: Record<string, string>) =>
+        workbenchRequest<components["schemas"]["AIRunResponse"]>(
+          `/api/v1/workspaces/${context.workspace_id}/spaces/${context.space_id}/research/ai/runs`,
+          {
+            headers,
+            method: "POST",
+            body: JSON.stringify({
+              id: crypto.randomUUID(),
+              idempotency_key: crypto.randomUUID(),
+              task_type: kind === "translate" ? "translate" : "explain",
+              target: {
+                entity_type: "source_text",
+                id: sourceText.id,
+                version: sourceText.version,
+                char_start: selected.char_start,
+                char_end: selected.char_end,
+              },
+              context_entities: [],
+              expected_output_fields: ["text"],
+              send_confirmed: true,
+              ...(questionText ? { question: questionText } : {}),
+            }),
+          },
+        );
+      const result = questionText
+        ? await questionDraft.submit(request)
+        : await request({});
+      if (questionText) setQuestion("");
       setRunId(result.id);
       setQuote(selected);
       await showPane(questionText ? "chat" : "translate");
@@ -493,10 +505,12 @@ function ReaderScope({
                   });
               }}
             >
+              <DraftNotice draft={questionDraft} />
               <label>
                 关于这段原文的问题
                 <textarea
                   value={question}
+                  disabled={action.isPending}
                   maxLength={2000}
                   onChange={(event) => setQuestion(event.target.value)}
                 />

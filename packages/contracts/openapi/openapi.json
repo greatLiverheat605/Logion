@@ -4716,6 +4716,134 @@
         "title": "DeviceResponse",
         "type": "object"
       },
+      "DraftResponse": {
+        "properties": {
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "draft"
+        ],
+        "title": "DraftResponse",
+        "type": "object"
+      },
+      "DraftView": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "form_kind": {
+            "enum": [
+              "source_create",
+              "source_edit",
+              "idea_create",
+              "idea_edit",
+              "question_create",
+              "question_edit",
+              "question_split",
+              "question_merge",
+              "goal_create",
+              "goal_edit",
+              "phase_edit",
+              "topic_create",
+              "topic_edit",
+              "quiz_create",
+              "quiz_edit",
+              "memory_answer",
+              "reading_answer",
+              "weekly_triage",
+              "edge_create",
+              "reading_question"
+            ],
+            "title": "Form Kind",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "target_key": {
+            "format": "uuid",
+            "title": "Target Key",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "form_kind",
+          "target_key",
+          "fields",
+          "version",
+          "updated_at",
+          "expires_at"
+        ],
+        "title": "DraftView",
+        "type": "object"
+      },
+      "DraftWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Id"
+          },
+          "expected_version": {
+            "minimum": 0.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "fields": {
+            "additionalProperties": {
+              "maxLength": 1000000,
+              "type": "string"
+            },
+            "maxProperties": 8,
+            "title": "Fields",
+            "type": "object"
+          }
+        },
+        "required": [
+          "expected_version",
+          "fields"
+        ],
+        "title": "DraftWrite",
+        "type": "object"
+      },
       "EdgeCreate": {
         "additionalProperties": false,
         "properties": {
@@ -8902,6 +9030,11 @@
             "title": "Email",
             "type": "string"
           },
+          "keep_signed_in": {
+            "default": true,
+            "title": "Keep Signed In",
+            "type": "boolean"
+          },
           "password": {
             "maxLength": 128,
             "minLength": 1,
@@ -11333,6 +11466,11 @@
             "minLength": 1,
             "title": "Device Name",
             "type": "string"
+          },
+          "keep_signed_in": {
+            "default": true,
+            "title": "Keep Signed In",
+            "type": "boolean"
           },
           "platform": {
             "default": "web",
@@ -43070,6 +43208,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -43537,6 +43693,24 @@
               "format": "uuid",
               "title": "Resource Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -44758,6 +44932,24 @@
               "format": "uuid",
               "title": "Item Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -46345,6 +46537,24 @@
               ],
               "title": "X-Csrf-Token"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
           }
         ],
         "requestBody": {
@@ -46603,6 +46813,489 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/form-drafts/{kind}/{target}": {
+      "delete": {
+        "operationId": "form_draft_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "source_create",
+                "source_edit",
+                "idea_create",
+                "idea_edit",
+                "question_create",
+                "question_edit",
+                "question_split",
+                "question_merge",
+                "goal_create",
+                "goal_edit",
+                "phase_edit",
+                "topic_create",
+                "topic_edit",
+                "quiz_create",
+                "quiz_edit",
+                "memory_answer",
+                "reading_answer",
+                "weekly_triage",
+                "edge_create",
+                "reading_question"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_version",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Expected Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Expected Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Delete Draft",
+        "tags": [
+          "form-drafts"
+        ]
+      },
+      "get": {
+        "operationId": "form_draft_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "source_create",
+                "source_edit",
+                "idea_create",
+                "idea_edit",
+                "question_create",
+                "question_edit",
+                "question_split",
+                "question_merge",
+                "goal_create",
+                "goal_edit",
+                "phase_edit",
+                "topic_create",
+                "topic_edit",
+                "quiz_create",
+                "quiz_edit",
+                "memory_answer",
+                "reading_answer",
+                "weekly_triage",
+                "edge_create",
+                "reading_question"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Draft",
+        "tags": [
+          "form-drafts"
+        ]
+      },
+      "put": {
+        "operationId": "form_draft_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "space_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Space Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "source_create",
+                "source_edit",
+                "idea_create",
+                "idea_edit",
+                "question_create",
+                "question_edit",
+                "question_split",
+                "question_merge",
+                "goal_create",
+                "goal_edit",
+                "phase_edit",
+                "topic_create",
+                "topic_edit",
+                "quiz_create",
+                "quiz_edit",
+                "memory_answer",
+                "reading_answer",
+                "weekly_triage",
+                "edge_create",
+                "reading_question"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-csrf-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Put Draft",
+        "tags": [
+          "form-drafts"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/goals": {
       "get": {
         "operationId": "online_goal_list",
@@ -46736,6 +47429,24 @@
               "format": "uuid",
               "title": "Space Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -46889,6 +47600,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -47034,6 +47763,24 @@
               "format": "uuid",
               "title": "Goal Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -47472,6 +48219,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -47868,6 +48633,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -48123,6 +48906,24 @@
               "format": "uuid",
               "title": "Space Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -48917,6 +49718,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -49066,6 +49885,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -49211,6 +50048,24 @@
               "format": "uuid",
               "title": "Space Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -49792,6 +50647,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -50058,6 +50931,24 @@
               "format": "uuid",
               "title": "Space Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -51792,6 +52683,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -51917,6 +52826,24 @@
               "format": "uuid",
               "title": "Space Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -52171,6 +53098,24 @@
           },
           {
             "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
+            }
+          },
+          {
+            "in": "header",
             "name": "x-csrf-token",
             "required": false,
             "schema": {
@@ -52306,6 +53251,24 @@
               "format": "uuid",
               "title": "Question Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {
@@ -53332,6 +54295,24 @@
               "format": "uuid",
               "title": "Space Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-logion-form-draft",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[0-9a-fA-F-]{36}:[1-9][0-9]{0,18}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Logion-Form-Draft"
             }
           },
           {

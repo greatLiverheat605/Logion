@@ -8,9 +8,7 @@ from logion_api.db import Base
 
 class UserSetting(Base):
     __tablename__ = "user_settings"
-    __table_args__ = (
-        CheckConstraint("version >= 1", name="ck_user_settings_version"),
-    )
+    __table_args__ = (CheckConstraint("version >= 1", name="ck_user_settings_version"),)
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),

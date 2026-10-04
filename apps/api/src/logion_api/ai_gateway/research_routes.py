@@ -28,6 +28,8 @@ from logion_api.ai_gateway.run_schemas import (
 )
 from logion_api.content.models import Note, Resource
 from logion_api.errors import APIError, ErrorResponse
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
@@ -201,6 +203,7 @@ async def research_run_result(
     response_model=AIRunResponse,
     status_code=202,
     operation_id="research_ai_run_create",
+    dependencies=[Depends(prepare_submission)],
 )
 async def create_research_run(
     workspace_id: UUID,
@@ -314,6 +317,7 @@ async def create_research_run(
             context_entity_types=tuple(ref.entity_type for ref in entities),
             research_prompt=prompt,
         )
+        await consume_form_draft(db)
         await db.commit()
         return run_response(run)
     except APIError as exc:

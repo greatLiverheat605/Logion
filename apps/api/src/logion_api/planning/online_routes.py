@@ -8,6 +8,8 @@ from uuid6 import uuid7
 from logion_api.db import utc_now
 from logion_api.errors import APIError
 from logion_api.execution.models import Task
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -124,6 +126,7 @@ async def save(
         ),
     )
     result = (await views(db, [aggregate]))[0]
+    await consume_form_draft(db)
     await db.commit()
     return result
 
@@ -143,7 +146,13 @@ async def list_goals(
     return OnlineGoalPage(goals=await views(db, aggregates))
 
 
-@router.post("", response_model=OnlineGoalView, status_code=201, operation_id="online_goal_create")
+@router.post(
+    "",
+    response_model=OnlineGoalView,
+    status_code=201,
+    operation_id="online_goal_create",
+    dependencies=[Depends(prepare_submission)],
+)
 async def create_goal(
     workspace_id: UUID,
     space_id: UUID,
@@ -160,7 +169,12 @@ async def create_goal(
     return await save(db, context, state, aggregate, "create")
 
 
-@router.patch("/{goal_id}", response_model=OnlineGoalView, operation_id="online_goal_update")
+@router.patch(
+    "/{goal_id}",
+    response_model=OnlineGoalView,
+    operation_id="online_goal_update",
+    dependencies=[Depends(prepare_submission)],
+)
 async def update_goal(
     workspace_id: UUID,
     space_id: UUID,
@@ -227,7 +241,10 @@ async def update_goal(
 
 
 @router.put(
-    "/{goal_id}/phases", response_model=OnlineGoalView, operation_id="online_goal_phases_update"
+    "/{goal_id}/phases",
+    response_model=OnlineGoalView,
+    operation_id="online_goal_phases_update",
+    dependencies=[Depends(prepare_submission)],
 )
 async def revise_phases(
     workspace_id: UUID,

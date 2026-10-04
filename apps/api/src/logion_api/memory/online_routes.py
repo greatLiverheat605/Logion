@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.content.online_routes import NoteAccess
 from logion_api.db import utc_now
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
@@ -155,6 +157,7 @@ async def commit(scope: MemoryScope, rows: list[tuple[str, Any, dict[str, object
     assert scope.state is not None
     for kind, row, payload in rows:
         await online.append(scope.db, scope.context, scope.state, kind, row, payload)
+    await consume_form_draft(scope.db)
     await scope.db.commit()
 
 
@@ -255,6 +258,7 @@ async def dependencies(
     response_model=TopicResponse,
     status_code=201,
     operation_id="online_memory_topic_create",
+    dependencies=[Depends(prepare_submission)],
 )
 async def create_topic(payload: TopicCreateRequest, scope: Write) -> TopicResponse:
     row = await scope.memory.create_topic(
@@ -266,7 +270,10 @@ async def create_topic(payload: TopicCreateRequest, scope: Write) -> TopicRespon
 
 
 @router.patch(
-    "/topics/{topic_id}", response_model=TopicResponse, operation_id="online_memory_topic_update"
+    "/topics/{topic_id}",
+    response_model=TopicResponse,
+    operation_id="online_memory_topic_update",
+    dependencies=[Depends(prepare_submission)],
 )
 async def update_topic(topic_id: UUID, payload: OnlineTopicUpdate, scope: Write) -> TopicResponse:
     if payload.id != topic_id:
@@ -342,6 +349,7 @@ async def list_quizzes(
     response_model=QuizItemResponse,
     status_code=201,
     operation_id="online_memory_quiz_create",
+    dependencies=[Depends(prepare_submission)],
 )
 async def create_quiz(payload: QuizItemCreateRequest, scope: Write) -> QuizItemResponse:
     row = await scope.memory.create_quiz_item(
@@ -353,7 +361,10 @@ async def create_quiz(payload: QuizItemCreateRequest, scope: Write) -> QuizItemR
 
 
 @router.patch(
-    "/quizzes/{quiz_id}", response_model=QuizItemResponse, operation_id="online_memory_quiz_update"
+    "/quizzes/{quiz_id}",
+    response_model=QuizItemResponse,
+    operation_id="online_memory_quiz_update",
+    dependencies=[Depends(prepare_submission)],
 )
 async def update_quiz(quiz_id: UUID, payload: OnlineQuizUpdate, scope: Write) -> QuizItemResponse:
     if payload.id != quiz_id:
@@ -378,6 +389,7 @@ async def update_quiz(quiz_id: UUID, payload: OnlineQuizUpdate, scope: Write) ->
     response_model=QuizAttemptResponse,
     status_code=201,
     operation_id="online_memory_attempt_create",
+    dependencies=[Depends(prepare_submission)],
 )
 async def attempt(
     quiz_id: UUID, payload: QuizAttemptCreateRequest, scope: Write

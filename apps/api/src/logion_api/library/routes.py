@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
 from logion_api.db import utc_now
 from logion_api.errors import APIError, ErrorResponse
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
@@ -121,7 +123,7 @@ async def get_resource(
     response_model=LibraryResource,
     status_code=201,
     operation_id="research_library_create",
-    dependencies=[Depends(write_boundary)],
+    dependencies=[Depends(prepare_submission), Depends(write_boundary)],
 )
 async def create_resource(
     workspace_id: UUID,
@@ -137,6 +139,7 @@ async def create_resource(
             db, context, workspace_id, space_id, payload, request_id(request)
         )
         result = LibraryResource.model_validate(item)
+        await consume_form_draft(db)
         await db.commit()
         return result
     except Exception:
@@ -148,7 +151,7 @@ async def create_resource(
     "/{resource_id}",
     response_model=LibraryResource,
     operation_id="research_library_update",
-    dependencies=[Depends(write_boundary)],
+    dependencies=[Depends(prepare_submission), Depends(write_boundary)],
 )
 async def update_resource(
     workspace_id: UUID,
@@ -165,6 +168,7 @@ async def update_resource(
             db, context, workspace_id, space_id, resource_id, payload, request_id(request)
         )
         result = LibraryResource.model_validate(item)
+        await consume_form_draft(db)
         await db.commit()
         return result
     except Exception:

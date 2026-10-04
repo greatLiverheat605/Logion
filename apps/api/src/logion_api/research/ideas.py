@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from logion_api.db import utc_now
 from logion_api.errors import APIError, ErrorResponse
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -189,7 +191,7 @@ async def get_idea(
     "",
     response_model=IdeaResponse,
     status_code=201,
-    dependencies=[Depends(boundary)],
+    dependencies=[Depends(prepare_submission), Depends(boundary)],
     operation_id="research_idea_create",
 )
 async def create_idea(
@@ -220,6 +222,7 @@ async def create_idea(
     await db.flush()
     audit(db, context, request, "created")
     result = IdeaResponse.model_validate(item)
+    await consume_form_draft(db)
     await db.commit()
     return result
 
@@ -227,7 +230,7 @@ async def create_idea(
 @router.put(
     "/{idea_id}",
     response_model=IdeaResponse,
-    dependencies=[Depends(boundary)],
+    dependencies=[Depends(prepare_submission), Depends(boundary)],
     operation_id="research_idea_update",
 )
 async def update_idea(
@@ -246,6 +249,7 @@ async def update_idea(
     item.version += 1
     audit(db, context, request, "updated")
     result = IdeaResponse.model_validate(item)
+    await consume_form_draft(db)
     await db.commit()
     return result
 

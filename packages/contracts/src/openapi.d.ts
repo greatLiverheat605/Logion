@@ -2885,6 +2885,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/form-drafts/{kind}/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft */
+        get: operations["form_draft_get"];
+        /** Put Draft */
+        put: operations["form_draft_put"];
+        post?: never;
+        /** Delete Draft */
+        delete: operations["form_draft_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/goals": {
         parameters: {
             query?: never;
@@ -6176,6 +6195,55 @@ export interface components {
             /** Revoked At */
             revoked_at: string | null;
         };
+        /** DraftResponse */
+        DraftResponse: {
+            draft: components["schemas"]["DraftView"] | null;
+        };
+        /** DraftView */
+        DraftView: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Fields */
+            fields: {
+                [key: string]: string;
+            };
+            /**
+             * Form Kind
+             * @enum {string}
+             */
+            form_kind: "source_create" | "source_edit" | "idea_create" | "idea_edit" | "question_create" | "question_edit" | "question_split" | "question_merge" | "goal_create" | "goal_edit" | "phase_edit" | "topic_create" | "topic_edit" | "quiz_create" | "quiz_edit" | "memory_answer" | "reading_answer" | "weekly_triage" | "edge_create" | "reading_question";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Key
+             * Format: uuid
+             */
+            target_key: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+        };
+        /** DraftWrite */
+        DraftWrite: {
+            /** Expected Id */
+            expected_id?: string | null;
+            /** Expected Version */
+            expected_version: number;
+            /** Fields */
+            fields: {
+                [key: string]: string;
+            };
+        };
         /** EdgeCreate */
         EdgeCreate: {
             /** Evidence Excerpt Id */
@@ -7865,6 +7933,11 @@ export interface components {
              * Format: email
              */
             email: string;
+            /**
+             * Keep Signed In
+             * @default true
+             */
+            keep_signed_in: boolean;
             /** Password */
             password: string;
             /**
@@ -8819,6 +8892,11 @@ export interface components {
             credential: components["schemas"]["AuthenticationCredentialRequest"];
             /** Device Name */
             device_name: string;
+            /**
+             * Keep Signed In
+             * @default true
+             */
+            keep_signed_in: boolean;
             /**
              * Platform
              * @default web
@@ -26598,6 +26676,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -26798,6 +26877,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -27461,6 +27541,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -28450,6 +28531,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-csrf-token"?: string | null;
+                "x-logion-form-draft"?: string | null;
             };
             path: {
                 workspace_id: string;
@@ -28613,6 +28695,252 @@ export interface operations {
             };
         };
     };
+    form_draft_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                space_id: string;
+                kind: "source_create" | "source_edit" | "idea_create" | "idea_edit" | "question_create" | "question_edit" | "question_split" | "question_merge" | "goal_create" | "goal_edit" | "phase_edit" | "topic_create" | "topic_edit" | "quiz_create" | "quiz_edit" | "memory_answer" | "reading_answer" | "weekly_triage" | "edge_create" | "reading_question";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    form_draft_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                kind: "source_create" | "source_edit" | "idea_create" | "idea_edit" | "question_create" | "question_edit" | "question_split" | "question_merge" | "goal_create" | "goal_edit" | "phase_edit" | "topic_create" | "topic_edit" | "quiz_create" | "quiz_edit" | "memory_answer" | "reading_answer" | "weekly_triage" | "edge_create" | "reading_question";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    form_draft_delete: {
+        parameters: {
+            query: {
+                expected_version: number;
+                expected_id: string;
+            };
+            header?: {
+                "x-csrf-token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                space_id: string;
+                kind: "source_create" | "source_edit" | "idea_create" | "idea_edit" | "question_create" | "question_edit" | "question_split" | "question_merge" | "goal_create" | "goal_edit" | "phase_edit" | "topic_create" | "topic_edit" | "quiz_create" | "quiz_edit" | "memory_answer" | "reading_answer" | "weekly_triage" | "edge_create" | "reading_question";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     online_goal_list: {
         parameters: {
             query?: never;
@@ -28703,6 +29031,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -28795,6 +29124,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -28888,6 +29218,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -29156,6 +29487,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -29319,6 +29651,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -29565,6 +29898,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -30039,6 +30373,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -30131,6 +30466,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -30224,6 +30560,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -30585,6 +30922,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -30764,6 +31102,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -31830,6 +32169,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -31913,6 +32253,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -32074,6 +32415,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -32158,6 +32500,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {
@@ -32700,6 +33043,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                "x-logion-form-draft"?: string | null;
                 "x-csrf-token"?: string | null;
             };
             path: {

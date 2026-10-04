@@ -8,7 +8,7 @@
 
 保留 manifest、四镜像 digest、SBOM/provenance、安全与许可摘要、容量硬件及数量/延迟、Nightly 浏览器结果、Release 恢复与同步兼容证据。参考硬件不能冒充生产等价批准；物理 Safari、真实论文及所有者签字单列。
 
-回滚 A 另用 `codex/v03-rollback-a`，基线 `fdadebcfe76a341e3915b3c8cb000f280fbe4fb0`。它不合 main，必须具备自身成功 compatibility/candidate 门、四镜像 manifest、`rollback-compatibility.json` 和 `rollback-schema-check.json`。前者绑定旧补丁 SHA 与实际新 schema 来源 SHA/head；后者证明只读检查通过。V1 加法迁移后更新 schema pin 并重新验收。未经修补的 v0.2.x 不具备安全回滚资格。
+回滚 A 另用 `codex/v03-rollback-a`，基线 `fdadebcfe76a341e3915b3c8cb000f280fbe4fb0`。它不合 main，必须具备自身成功 compatibility/candidate 门、四镜像 manifest、`rollback-compatibility.json` 和 `rollback-schema-check.json`。前者绑定旧补丁 SHA 与实际新 schema 来源 SHA/head；后者证明只读检查通过。每次加法迁移后更新 schema pin 并重新验收；登录持久性与私人草稿补齐后的目标为 `0058_form_drafts`，旧 `0056_agent_inbox` 的证据不适用。回滚补丁还须保留 Cookie 持久性选择及退出清理草稿的行为。未经修补的 v0.2.x 不具备安全回滚资格。
 
 ## 2. 配置清单
 

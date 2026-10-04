@@ -11,6 +11,8 @@ from logion_api.ai_gateway.research_routes import ResearchRunResult
 from logion_api.ai_gateway.run_routes import draft_response, run_response
 from logion_api.db import utc_now
 from logion_api.errors import ErrorResponse
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.dependencies import AuthContextDependency, DatabaseSession, request_id
 from logion_api.library.routes import Service, require_enabled, write_boundary
 from logion_api.library.service import not_found
@@ -162,7 +164,7 @@ async def refresh_review(
     "/reviews/{review_id}/close",
     response_model=WeeklyReviewView,
     operation_id="research_weekly_review_close",
-    dependencies=[Depends(write_boundary)],
+    dependencies=[Depends(prepare_submission), Depends(write_boundary)],
 )
 async def close_review(
     review_id: UUID, payload: WeeklyReviewClose, service: Weekly
@@ -172,6 +174,7 @@ async def close_review(
     await service.close(row, payload)
     service.audit("review_closed")
     result = WeeklyReviewView.model_validate(row)
+    await consume_form_draft(service.db)
     await service.db.commit()
     return result
 

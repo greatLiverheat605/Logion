@@ -107,6 +107,9 @@ class AuthSession(Base):
     access_token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     csrf_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     rotation_counter: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    keep_signed_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     access_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -260,6 +263,9 @@ class MfaChallenge(Base):
         index=True,
     )
     purpose: Mapped[str] = mapped_column(String(16), nullable=False, default="login")
+    keep_signed_in: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     device_name: Mapped[str] = mapped_column(String(80), nullable=False)
     platform: Mapped[str] = mapped_column(String(32), nullable=False)

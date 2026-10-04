@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
 import "./network.css";
 
 import {
@@ -460,19 +461,28 @@ function ManualLink({
   )
     ? relation
     : relations[0];
+  const draft = useFormDraft({
+    scope: path,
+    kind: "edge_create",
+    fields: { reason },
+    restore: (fields) => setReason(fields.reason ?? ""),
+  });
   const mutation = useMutation({
     mutationFn: () =>
-      workbenchRequest(`${path}/edges`, {
-        method: "POST",
-        body: JSON.stringify({
-          from_type: source!.kind,
-          from_id: source!.id,
-          to_type: target!.kind,
-          to_id: target!.id,
-          relation: selectedRelation,
-          reason,
+      draft.submit((headers) =>
+        workbenchRequest(`${path}/edges`, {
+          headers,
+          method: "POST",
+          body: JSON.stringify({
+            from_type: source!.kind,
+            from_id: source!.id,
+            to_type: target!.kind,
+            to_id: target!.id,
+            relation: selectedRelation,
+            reason,
+          }),
         }),
-      }),
+      ),
     onSuccess: onSaved,
   });
   return (
@@ -483,69 +493,75 @@ function ManualLink({
         if (source && target && selectedRelation) mutation.mutate();
       }}
     >
-      <label>
-        起点
-        <select
-          required
-          value={from}
-          onChange={(e) => {
-            setFrom(e.target.value);
-            setTo("");
-          }}
-        >
-          <option value="">请选择</option>
-          {nodes
-            .filter((n) => ["resource", "claim", "idea"].includes(n.kind))
-            .map((n) => (
-              <option value={nodeKey(n)} key={nodeKey(n)}>
-                {NODE_LABELS[n.kind]} · {n.title}
+      <DraftNotice draft={draft} />
+      <fieldset className="wb-draft-fields" disabled={mutation.isPending}>
+        <label>
+          起点
+          <select
+            required
+            value={from}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              setTo("");
+            }}
+          >
+            <option value="">请选择</option>
+            {nodes
+              .filter((n) => ["resource", "claim", "idea"].includes(n.kind))
+              .map((n) => (
+                <option value={nodeKey(n)} key={nodeKey(n)}>
+                  {NODE_LABELS[n.kind]} · {n.title}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          终点
+          <select required value={to} onChange={(e) => setTo(e.target.value)}>
+            <option value="">请选择</option>
+            {nodes
+              .filter(
+                (n) =>
+                  nodeKey(n) !== from && RELATIONS[`${source?.kind}/${n.kind}`],
+              )
+              .map((n) => (
+                <option value={nodeKey(n)} key={nodeKey(n)}>
+                  {NODE_LABELS[n.kind]} · {n.title}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label>
+          关系
+          <select
+            required
+            value={selectedRelation ?? ""}
+            onChange={(e) => setRelation(e.target.value)}
+          >
+            {!relations.length && <option value="">请先选择节点</option>}
+            {relations.map((r) => (
+              <option key={r} value={r}>
+                {RELATION_LABELS[r]} · {r}
               </option>
             ))}
-        </select>
-      </label>
-      <label>
-        终点
-        <select required value={to} onChange={(e) => setTo(e.target.value)}>
-          <option value="">请选择</option>
-          {nodes
-            .filter(
-              (n) =>
-                nodeKey(n) !== from && RELATIONS[`${source?.kind}/${n.kind}`],
-            )
-            .map((n) => (
-              <option value={nodeKey(n)} key={nodeKey(n)}>
-                {NODE_LABELS[n.kind]} · {n.title}
-              </option>
-            ))}
-        </select>
-      </label>
-      <label>
-        关系
-        <select
-          required
-          value={selectedRelation ?? ""}
-          onChange={(e) => setRelation(e.target.value)}
+          </select>
+        </label>
+        <label>
+          理由（可选）
+          <textarea
+            maxLength={1000}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </label>
+        {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
+        <Button
+          type="submit"
+          disabled={mutation.isPending || !selectedRelation}
         >
-          {!relations.length && <option value="">请先选择节点</option>}
-          {relations.map((r) => (
-            <option key={r} value={r}>
-              {RELATION_LABELS[r]} · {r}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        理由（可选）
-        <textarea
-          maxLength={1000}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-      </label>
-      {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
-      <Button type="submit" disabled={mutation.isPending || !selectedRelation}>
-        保存连线
-      </Button>
+          保存连线
+        </Button>
+      </fieldset>
     </form>
   );
 }

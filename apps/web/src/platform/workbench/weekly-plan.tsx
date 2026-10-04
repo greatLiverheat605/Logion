@@ -1,5 +1,7 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
+
 import type { components } from "@logion/contracts";
 import {
   useInfiniteQuery,
@@ -498,6 +500,51 @@ function ReviewPanel({
   const unfinished = review.task_snapshot.filter(
     (task) => task.status !== "done",
   );
+  const draft = useFormDraft({
+    scope,
+    kind: "weekly_triage",
+    target: review.id,
+    enabled: !closed,
+    fields: {
+      triage: JSON.stringify(
+        Object.fromEntries(
+          Object.entries(triage).map(([id, item]) => [id, item.reason ?? ""]),
+        ),
+      ),
+    },
+    restore: (fields) => {
+      const reasons: unknown = JSON.parse(fields.triage ?? "");
+      if (
+        !reasons ||
+        typeof reasons !== "object" ||
+        Array.isArray(reasons) ||
+        Object.entries(reasons).some(
+          ([id, value]) =>
+            !unfinished.some((task) => task.id === id) ||
+            typeof value !== "string" ||
+            value.length > 500,
+        )
+      )
+        throw new Error("Invalid draft");
+      setTriage(
+        (current) =>
+          Object.fromEntries(
+            unfinished.map((task) => [
+              task.id,
+              {
+                ...current[task.id],
+                task_id: task.id,
+                action: current[task.id]?.action ?? "",
+                reason:
+                  (reasons as Record<string, string>)[task.id] ??
+                  current[task.id]?.reason ??
+                  "",
+              },
+            ]),
+          ) as Record<string, Triage>,
+      );
+    },
+  });
   const runsKey = ["workbench", "weekly-ai", path, review.id, review.version];
   const runs = useQuery({
     queryKey: runsKey,
@@ -514,8 +561,15 @@ function ReviewPanel({
           : false,
   });
   const action = useMutation({
-    mutationFn: ({ url, body }: { url: string; body: unknown }) =>
-      workbenchRequest(url, { method: "POST", body: JSON.stringify(body) }),
+    mutationFn: ({ url, body }: { url: string; body: unknown }) => {
+      const request = (headers: Record<string, string>) =>
+        workbenchRequest(url, {
+          headers,
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+      return url.endsWith("/close") ? draft.submit(request) : request({});
+    },
     onSuccess: (_data, variables) => {
       if (variables.url.endsWith("/refresh")) setTriage({});
       onChange();
@@ -610,8 +664,13 @@ function ReviewPanel({
             刷新会重新生成快照，并清除本次未提交的处理选择和已接受的点评。
           </p>
           <h3>未完成项 · {unfinished.length}</h3>
+          <DraftNotice draft={draft} />
           {unfinished.map((task) => (
-            <fieldset className="wb-weekly-triage" key={task.id}>
+            <fieldset
+              className="wb-weekly-triage"
+              key={task.id}
+              disabled={action.isPending}
+            >
               <legend>{task.title}</legend>
               <p className="wb-muted">
                 {modes[task.reading_mode]} · {task.scheduled_on}
@@ -728,7 +787,8 @@ function ReviewPanel({
           <Button
             className="wb-primary"
             disabled={
-              action.isPending || unfinished.some((task) => !triage[task.id])
+              action.isPending ||
+              unfinished.some((task) => !triage[task.id]?.action)
             }
             onClick={() =>
               action.mutate({
