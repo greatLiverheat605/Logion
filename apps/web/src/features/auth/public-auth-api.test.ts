@@ -34,6 +34,7 @@ describe("public authentication API", () => {
         password: "x",
         device_name: "web",
         platform: "web",
+        keep_signed_in: false,
       }),
     ).resolves.toMatchObject({ kind: "authenticated" });
     await expect(
@@ -47,6 +48,7 @@ describe("public authentication API", () => {
         password: "x",
         device_name: "web",
         platform: "web",
+        keep_signed_in: false,
       }),
     ).resolves.toMatchObject({ kind: "mfa_required" });
   });
@@ -58,6 +60,7 @@ describe("public authentication API", () => {
         password: "x",
         device_name: "web",
         platform: "web",
+        keep_signed_in: false,
       }),
     ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
     await expect(
@@ -71,6 +74,7 @@ describe("public authentication API", () => {
         password: "x",
         device_name: "web",
         platform: "web",
+        keep_signed_in: false,
       }),
     ).rejects.toMatchObject({ code: "WEB_API_RESPONSE_INVALID" });
   });

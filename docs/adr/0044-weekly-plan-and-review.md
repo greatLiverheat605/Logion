@@ -28,6 +28,15 @@
   - An absent field keeps its value. Phases follow ADR-0032 unchanged.
   - The existing `LOGION_PLANNING_PHASE_REVISION_ENABLED` flag gates both.
 
+## Inbox statistics
+
+`inbox_items` counts the owner's submissions received in the current Space during
+that review's Monday-to-Monday interval, using the review's time zone. Pending,
+accepted and discarded submissions all count once; revoking a token does not
+remove its historical submissions. Capturing or explicitly refreshing a review
+updates the count; closed reviews retain their snapshot. Only the integer count
+enters weekly AI context, never inbox payloads or private ideas.
+
 ## Rollback
 
 The table and column are new and ignored by v0.2. With the flag off, goals cannot be revised.

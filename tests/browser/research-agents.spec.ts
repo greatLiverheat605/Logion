@@ -256,6 +256,18 @@ test.describe.serial("personal agent inbox", () => {
     ).toBe(0);
   });
 
+  test("weekly review displays the number of submitted inbox items", async () => {
+    await page.goto("/plan");
+    await page.getByRole("button", { name: "开始周回顾", exact: true }).click();
+    await expect(
+      page.locator(".wb-weekly-stats > div").filter({ hasText: "Agent 投稿" }),
+    ).toHaveText("Agent 投稿4");
+    await page.goto("/settings/agents");
+    await expect(
+      page.getByRole("heading", { name: "收件箱", exact: true }),
+    ).toBeVisible();
+  });
+
   test("explicit revocation immediately returns 401 through the bridge", async () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const row = page

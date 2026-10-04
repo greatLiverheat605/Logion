@@ -3,6 +3,12 @@
 依据 ADR-0038、ADR-0045，新路由位于 `apps/web/src/app/(workbench)`，
 共享组件和状态位于 `apps/web/src/platform/workbench`。旧 `/app/*` 继续运行。
 
+登录页提供默认未勾选的“保持登录”，密码、MFA 与 Passkey 登录均保留该选择，
+刷新会话不改变它；服务端期限不变，旧 API 客户端省略字段保持原行为，见
+[ADR-0067](../adr/0067-explicit-session-persistence.md)。非笔记长文本表单使用本人独享的
+服务端草稿，显式恢复、七天到期、提交/丢弃/退出清理、版本冲突保护见
+[ADR-0068](../adr/0068-private-server-form-drafts.md)。笔记与精读笔记继续使用 Yjs。
+
 ## 功能开关
 
 `LOGION_RESEARCH_V3_ENABLED` 在 API 和 Web 运行时均默认为 `false`，Compose
@@ -24,9 +30,10 @@ PR 的 integration 门执行此用例并上传 `pr-research-real-*` 报告；研
 
 关闭开关保留 v0.3 的隐私过滤，不能据此回退到未修补的 v0.2.x。
 一旦存在 `research_owner_id` 非空资源（关旗时旧论文写入也会产生），旧应用会在
-共享 Space 暴露私人文献，且可能拒绝新资源类型。R5 前须由所有者选择
-[ADR-0039 的 A／B 回滚策略](../adr/0039-unified-source-model.md#rollback)；
-Claude 建议 A，本轮仅修正文档。
+共享 Space 暴露私人文献，且可能拒绝新资源类型。所有者已于 2026-10-01 选择
+[ADR-0063 的回滚方案 A](../adr/0063-upgraded-schema-rollback.md)：使用绑定候选 schema、
+通过兼容门禁的旧版补丁；方案 B 为前向修复后备。部署与回滚步骤见
+[v0.3 发布手册](../../infra/runbooks/v03-release.md)。
 
 ## 偏好合同
 
@@ -68,7 +75,8 @@ Claude 建议 A，本轮仅修正文档。
 401 清空内存查询并转登录页。普通保存保持安静，失败在对应界面说明。
 
 指令、导航、外观与预设使用统一注册表。保留键组合的允许列表防止占用浏览器
-标签页快捷键。三栏标题固定 32px；鼠标悬停、键盘焦点或显示工具栏时出现选择器，
+标签页快捷键。顶栏按钮在桌面与手机均保持至少 44px 高、44px 宽的触控目标。
+三栏标题固定 32px；鼠标悬停、键盘焦点或显示工具栏时出现选择器，
 触摸设备始终显示。小于 768px 时一次展示一栏，通过栏目分段控件切换。
 分隔条既支持拖动，也支持方向键以 2 个相对单位调整。
 
@@ -120,7 +128,7 @@ POST 创建；`/{idea_id}` 提供 GET 详情、PUT 全量编辑、DELETE 软删�
 `expected_version`。列表使用 `cursor`、`limit`，返回 `ideas`、`next_cursor`。
 所有操作受研究开关和本人／Space 权限约束，关闭返回 404；写入沿用 CSRF、Origin、
 限流和会员锁。账户最终注销会删除想法；旧同步、导出和 agent 注册表没有想法入口。
-界面在后续知识阶段提供，R1 仅实现 API。
+`/questions` 的私人想法界面支持创建、编辑和归档，并明确标注“仅自己可见，AI 不可读”。
 
 研究 AI 入口为 POST
 `/api/v1/workspaces/{workspace_id}/spaces/{space_id}/research/ai/runs`。
@@ -132,9 +140,9 @@ POST 创建；`/{idea_id}` 提供 GET 详情、PUT 全量编辑、DELETE 软删�
 查看、取消任务和审查草稿；近期认证、预算预留、会话与草稿验收约束保持生效。
 
 `ai_gateway/research_context.py` 集中维护七类实体白名单及每个任务的映射。
-R1 可读 `resource`、`source_excerpt`、`note`、`research_question`、`topic`、
-`research_claim`；`source_text` 预留在批准的白名单中，但 R1 尚无加载器，返回
-`AI_CONTEXT_UNAVAILABLE`。想法完全没有加载器。构建前和 Worker 发送前分别检查；
+可读 `resource`、`source_excerpt`、`source_text`、`note`、`research_question`、
+`topic`、`research_claim`；全文加载器校验当前文件与来源版本，选区请求仅取指定字符范围。
+想法完全没有加载器。构建前和 Worker 发送前分别检查；
 遇到 `idea`／`ideas`／`research_idea`／`research_ideas` 返回
 `AI_PRIVATE_CONTENT_BLOCKED`。旧 AI 入口同样拒绝以想法为目标的请求。
 审计只记录任务类型和实体类型，不含正文、实体 ID 或工作区 ID。
@@ -221,4 +229,4 @@ The real-backend suite includes a serial, six-stage reading journey sharing one 
 
 `PATCH .../library/resources/{id}/reading-status` takes `expected_version` and `status` (`reading` or `close_read`). It reuses the feature flag, owner/Space authorization, resource lock, CSRF, Origin and write rate boundary. Only progress/version/update metadata change; Zotero identity, CSL, tags and file locator are untouched. Completion requires current `reading` state; an already matching state is a no-op at the current version. Archived resources cannot resume through this endpoint. Completing sets `read_at` to server time, reopening retains the previous completion time, and a later completion replaces it. This reuses existing columns without a migration.
 
-Today reuses the paginated library query with `status=reading` and the same query cache as that library filter. Writes invalidate both listings and reader detail. AI processing never calls the progress endpoint. The six-stage real browser journey now verifies resume, explicit completion, offline refusal, completion date, library filters and Today removal. Stored legacy pane values remain accepted; new reading/translation/focus presets use the actual R2 content types. The R2 quiz preset keeps PDF and quiz while the local knowledge graph awaits R3.
+Today reuses the paginated library query with `status=reading` and the same query cache as that library filter. Writes invalidate both listings and reader detail. AI processing never calls the progress endpoint. The six-stage real browser journey now verifies resume, explicit completion, offline refusal, completion date, library filters and Today removal. Stored legacy pane values remain accepted; new reading/translation/focus presets use the actual R2 content types. The quiz preset includes PDF, quiz and the local knowledge graph; on mobile it opens the quiz pane first.

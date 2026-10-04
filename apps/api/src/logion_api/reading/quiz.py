@@ -12,6 +12,8 @@ from logion_api.ai_gateway.run_routes import draft_response, run_response, run_w
 from logion_api.content.models import Resource
 from logion_api.db import utc_now
 from logion_api.errors import APIError
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.dependencies import (
     AuthContextDependency,
     DatabaseSession,
@@ -352,7 +354,7 @@ async def decide_quiz_draft(
     "/items/{item_id}/attempts",
     response_model=ReadingAttempt,
     operation_id="reading_quiz_attempt_create",
-    dependencies=[Depends(write_boundary)],
+    dependencies=[Depends(prepare_submission), Depends(write_boundary)],
 )
 async def create_attempt(
     workspace_id: UUID,
@@ -383,7 +385,10 @@ async def create_attempt(
             and previous.duration_seconds == payload.duration_seconds
             and previous.deleted_at is None
         ):
-            return attempt_response(previous)
+            result = attempt_response(previous)
+            await consume_form_draft(db)
+            await db.commit()
+            return result
         raise APIError(
             code="RESOURCE_VERSION_CONFLICT",
             message="The attempt identifier exists.",
@@ -419,6 +424,7 @@ async def create_attempt(
     service.audit(db, context, request_id(request), "reading_quiz_attempted")
     await db.flush()
     result = attempt_response(attempt)
+    await consume_form_draft(db)
     await db.commit()
     return result
 

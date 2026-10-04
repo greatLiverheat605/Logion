@@ -21,6 +21,7 @@ async def test_scheduler_rotates_busy_queues_without_starvation() -> None:
         "review_reminders",
         "zotero_sync",
         "device_hygiene",
+        "form_drafts",
     ]
     scheduler = RoundRobinScheduler([handler(name, calls) for name in queues])
 

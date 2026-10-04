@@ -33,7 +33,8 @@ afterEach(() => {
 
 it("keeps editing pending until the saved goal version is available for the next editor", async () => {
   const client = createWorkbenchQueryClient();
-  const key = ["workbench", "goals", "scope"];
+  const scope = "/api/v1/workspaces/workspace/spaces/space";
+  const key = ["workbench", "goals", scope];
   const goal = {
     goal_id: "goal",
     goal_version: 1,
@@ -65,6 +66,7 @@ it("keeps editing pending until the saved goal version is available for the next
   });
   mocks.request.mockImplementation(
     async (path: string, options?: { method?: string }) => {
+      if (path.includes("/form-drafts/")) return { draft: null };
       if (path.endsWith("/capabilities"))
         return { phase_revision_enabled: true };
       if (options?.method === "PATCH") return { ...goal, goal_version: 2 };
@@ -79,12 +81,12 @@ it("keeps editing pending until the saved goal version is available for the next
       staleTime: Infinity,
       queryFn: () =>
         workbenchRequest<components["schemas"]["OnlineGoalPage"]>(
-          "scope/research/goals",
+          `${scope}/research/goals`,
         ),
     });
     return (
       <GoalList
-        scope="scope"
+        scope={scope}
         goals={query.data?.goals ?? []}
         pending={query.isPending}
       />

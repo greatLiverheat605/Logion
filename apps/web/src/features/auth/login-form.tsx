@@ -61,6 +61,7 @@ export function LoginForm() {
   const [deviceName, setDeviceName] = useState("此浏览器");
   const [passkeyAvailable, setPasskeyAvailable] = useState(true);
   const [pending, setPending] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const loginInFlight = useRef(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -139,6 +140,7 @@ export function LoginForm() {
         email: String(data.get("email") ?? ""),
         password: String(data.get("password") ?? ""),
         platform: "web",
+        keep_signed_in: keepSignedIn,
       });
       form.reset();
       if (outcome.kind === "mfa_required") {
@@ -223,6 +225,7 @@ export function LoginForm() {
             challenge_id: options.challenge_id,
             device_name: deviceName,
             platform: "web",
+            keep_signed_in: keepSignedIn,
             credential: {
               id: credential.id,
               rawId: encodeBase64url(credential.rawId),
@@ -365,6 +368,20 @@ export function LoginForm() {
               </p>
             ) : null}
           </div>
+          <label className="auth-remember">
+            <input
+              type="checkbox"
+              name="keep_signed_in"
+              checked={keepSignedIn}
+              disabled={pending}
+              onChange={(event) => setKeepSignedIn(event.currentTarget.checked)}
+              aria-describedby="login-persistence-hint"
+            />
+            保持登录
+          </label>
+          <p className="auth-field-hint" id="login-persistence-hint">
+            公共电脑请勿勾选，用完后主动退出。浏览器的会话恢复功能可能保留登录状态。
+          </p>
           {requestId !== null ? (
             <FormError
               message="登录未完成，请核对登录信息或稍后重试；忘记密码可使用下方“找回密码”。"

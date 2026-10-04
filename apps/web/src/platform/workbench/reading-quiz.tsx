@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "@logion/contracts";
 import { errorMessage, workbenchRequest } from "./api";
 import { Button } from "./components";
+import { DraftNotice, useFormDraft } from "./form-draft";
 import { readingAiError } from "./reading-ai";
 import type { WorkbenchContext } from "./preferences";
 import type { SourceText } from "./selection";
@@ -94,6 +95,23 @@ export function useReadingQuiz(
   }, [dirty]);
   const item =
     query.data?.items.find((q) => q.id === selectedId) ?? query.data?.items[0];
+  const answerDraft = useFormDraft({
+    scope: path,
+    kind: "reading_answer",
+    target: item?.id,
+    enabled: !!item,
+    fields: { response_text: item ? (answers[item.id]?.text ?? "") : "" },
+    restore: (fields) => {
+      if (item)
+        setAnswers((values) => ({
+          ...values,
+          [item.id]: {
+            id: values[item.id]?.id ?? crypto.randomUUID(),
+            text: fields.response_text ?? "",
+          },
+        }));
+    },
+  });
   const generating = runs.data?.runs.some(
     ({ run }) =>
       run.task_type === "quiz_generate" &&
@@ -199,7 +217,8 @@ export function useReadingQuiz(
       <p className="wb-muted">
         默认 5 题，接受草稿后才能作答。AI 批改仅供参考，掌握程度由你确认。
       </p>
-      {(error || query.error) && (
+      {(query.error ||
+        (Boolean(error) && answerDraft.state.status !== "error")) && (
         <p role="alert">{errorMessage(error || query.error)}</p>
       )}
       <Button
@@ -266,7 +285,14 @@ export function useReadingQuiz(
             选择题目
             <select
               value={item.id}
-              onChange={(e) => selectItem(e.target.value)}
+              disabled={busy}
+              onChange={(e) => {
+                const id = e.target.value;
+                void perform(async () => {
+                  await answerDraft.controller.flush();
+                  selectItem(id);
+                });
+              }}
             >
               {query.data?.items.map((q, i) => (
                 <option key={q.id} value={q.id}>
@@ -329,16 +355,19 @@ export function useReadingQuiz(
               void perform(async () => {
                 const answer = answers[item.id];
                 if (!answer?.text.trim()) return;
-                const attempt = await workbenchRequest<Attempt>(
-                  `${path}/quiz/items/${item.id}/attempts`,
-                  {
-                    method: "POST",
-                    body: JSON.stringify({
-                      id: answer.id,
-                      expected_item_version: item.version,
-                      response_text: answer.text,
-                    }),
-                  },
+                const attempt = await answerDraft.submit((headers) =>
+                  workbenchRequest<Attempt>(
+                    `${path}/quiz/items/${item.id}/attempts`,
+                    {
+                      headers,
+                      method: "POST",
+                      body: JSON.stringify({
+                        id: answer.id,
+                        expected_item_version: item.version,
+                        response_text: answer.text,
+                      }),
+                    },
+                  ),
                 );
                 setAnswers((values) => ({
                   ...values,
@@ -348,6 +377,7 @@ export function useReadingQuiz(
               });
             }}
           >
+            <DraftNotice draft={answerDraft} />
             <label>
               我的作答
               <textarea

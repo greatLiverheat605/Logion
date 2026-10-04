@@ -14,6 +14,7 @@ from logion_api.engagement.models import CalendarFeed, Notification, Notificatio
 from logion_api.errors import APIError
 from logion_api.exam.models import Exam
 from logion_api.execution.models import StudySession, Task
+from logion_api.form_drafts.models import FormDraft
 from logion_api.growth.models import ShareSnapshot
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.models import (
@@ -351,6 +352,7 @@ class AccountDeletionService:
         await db.execute(delete(WebDAVUsage).where(WebDAVUsage.user_id == user.id))
         await db.execute(delete(KnowledgeEdge).where(KnowledgeEdge.user_id == user.id))
         await db.execute(delete(WeeklyReview).where(WeeklyReview.user_id == user.id))
+        await db.execute(delete(FormDraft).where(FormDraft.user_id == user.id))
         await db.execute(delete(Task).where(Task.research_owner_id == user.id))
         private_resources = select(Resource.id).where(Resource.research_owner_id == user.id)
         private_excerpts = select(SourceExcerpt.id).where(

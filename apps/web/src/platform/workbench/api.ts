@@ -27,6 +27,10 @@ export function errorMessage(error: unknown): string {
     )
       return "AI 服务商或任务路由不可用，请检查设置后重试。";
     const pdfErrors: Record<string, string> = {
+      FORM_DRAFT_CONFLICT:
+        "草稿已在其他页面保存、提交或丢弃。请重新检查草稿，再选择要保留的内容。",
+      FORM_DRAFT_QUOTA: "最多保留 20 份私人草稿，请先丢弃不再需要的草稿。",
+      FORM_DRAFT_INVALID: "草稿字段或正文超过允许范围，请缩短内容后重试。",
       AGENT_INBOX_CONFLICT: "这条投稿已处理或发生变化，请刷新收件箱。",
       AGENT_INBOX_KIND_IMMUTABLE: "可以修改内容，但不能改变投稿类型。",
       AGENT_TOKEN_QUOTA: "有效令牌已达上限，请先撤销不再使用的令牌。",

@@ -12,6 +12,7 @@ from logion_api.engagement import models as engagement_models  # noqa: F401
 from logion_api.exam import models as exam_models  # noqa: F401
 from logion_api.execution import evidence_models as evidence_models  # noqa: F401
 from logion_api.execution import models as execution_models  # noqa: F401
+from logion_api.form_drafts import models as form_draft_models  # noqa: F401
 from logion_api.growth import models as growth_models  # noqa: F401
 from logion_api.identity import models as identity_models  # noqa: F401
 from logion_api.integrations import models as integration_models  # noqa: F401

@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
 import type { components } from "@logion/contracts";
 import {
   useInfiniteQuery,
@@ -123,56 +124,70 @@ function IdeaForm({
   item?: Idea;
   onSaved: (idea: Idea) => Promise<void>;
 }) {
+  const [body, setBody] = useState(item?.body ?? "");
+  const draft = useFormDraft({
+    scope: path,
+    kind: item ? "idea_edit" : "idea_create",
+    target: item?.id,
+    fields: { body },
+    restore: (fields) => setBody(fields.body ?? ""),
+  });
   const mutation = useMutation({
-    mutationFn: (form: HTMLFormElement) => {
-      const data = new FormData(form);
-      return workbenchRequest<Idea>(item ? `${path}/${item.id}` : path, {
-        method: item ? "PUT" : "POST",
-        body: JSON.stringify({
-          title: String(data.get("title") ?? "").trim(),
-          body: String(data.get("body") ?? ""),
-          status: String(data.get("status") ?? "active"),
-          ...(item ? { expected_version: item.version } : {}),
+    mutationFn: (data: FormData) => {
+      return draft.submit((headers) =>
+        workbenchRequest<Idea>(item ? `${path}/${item.id}` : path, {
+          headers,
+          method: item ? "PUT" : "POST",
+          body: JSON.stringify({
+            title: String(data.get("title") ?? "").trim(),
+            body: String(data.get("body") ?? ""),
+            status: String(data.get("status") ?? "active"),
+            ...(item ? { expected_version: item.version } : {}),
+          }),
         }),
-      });
+      );
     },
     onSuccess: onSaved,
   });
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!mutation.isPending) mutation.mutate(event.currentTarget);
+    if (!mutation.isPending) mutation.mutate(new FormData(event.currentTarget));
   }
   return (
     <form className="wb-library-form" onSubmit={submit}>
-      <label>
-        标题
-        <input
-          name="title"
-          required
-          maxLength={300}
-          defaultValue={item?.title}
-        />
-      </label>
-      <label>
-        想法正文
-        <textarea
-          name="body"
-          rows={7}
-          maxLength={100000}
-          defaultValue={item?.body}
-        />
-      </label>
-      <label>
-        状态
-        <select name="status" defaultValue={item?.status ?? "active"}>
-          <option value="active">进行中</option>
-          <option value="archived">已归档</option>
-        </select>
-      </label>
-      {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
-      <Button type="submit" disabled={mutation.isPending}>
-        {mutation.isPending ? "正在保存…" : "保存想法"}
-      </Button>
+      <DraftNotice draft={draft} />
+      <fieldset className="wb-draft-fields" disabled={mutation.isPending}>
+        <label>
+          标题
+          <input
+            name="title"
+            required
+            maxLength={300}
+            defaultValue={item?.title}
+          />
+        </label>
+        <label>
+          想法正文
+          <textarea
+            name="body"
+            rows={7}
+            maxLength={100000}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+        </label>
+        <label>
+          状态
+          <select name="status" defaultValue={item?.status ?? "active"}>
+            <option value="active">进行中</option>
+            <option value="archived">已归档</option>
+          </select>
+        </label>
+        {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
+        <Button type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? "正在保存…" : "保存想法"}
+        </Button>
+      </fieldset>
     </form>
   );
 }

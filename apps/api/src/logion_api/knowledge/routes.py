@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from logion_api.db import utc_now
 from logion_api.errors import APIError, ErrorResponse
+from logion_api.form_drafts.service import consume as consume_form_draft
+from logion_api.form_drafts.service import prepare_submission
 from logion_api.identity.audit import new_audit_event
 from logion_api.identity.dependencies import (
     AuthContextDependency,
@@ -86,7 +88,7 @@ async def list_edges(
     "",
     response_model=EdgeView,
     status_code=201,
-    dependencies=[Depends(write_boundary), Depends(scope)],
+    dependencies=[Depends(prepare_submission), Depends(write_boundary), Depends(scope)],
     operation_id="knowledge_edge_create",
 )
 async def create_edge(
@@ -112,6 +114,7 @@ async def create_edge(
     await db.flush()
     audit(db, request, context.user.id, "created")
     response = EdgeView.model_validate(edge)
+    await consume_form_draft(db)
     await db.commit()
     return response
 

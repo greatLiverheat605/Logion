@@ -34,6 +34,7 @@ from logion_api.errors import (
 from logion_api.exam.routes import router as exam_router
 from logion_api.execution.evidence_routes import router as evidence_router
 from logion_api.execution.routes import router as execution_router
+from logion_api.form_drafts.routes import router as form_drafts_router
 from logion_api.growth.routes import public_router as public_share_router
 from logion_api.growth.routes import router as growth_router
 from logion_api.health import router as health_router
@@ -106,6 +107,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
             "If-Match",
             "If-None-Match",
             "X-CSRF-Token",
+            "X-Logion-Form-Draft",
             "X-Logion-Sync-Capabilities",
             "X-Request-ID",
         ],
@@ -119,6 +121,7 @@ def create_app(*, include_dormant_contracts: bool = False) -> FastAPI:
     )
     application.add_exception_handler(HTTPException, cast(ExceptionHandler, http_error_handler))
     application.include_router(health_router)
+    application.include_router(form_drafts_router)
     application.include_router(agent_inbox_router)
     application.include_router(agent_submit_router)
     application.include_router(agent_read_router)

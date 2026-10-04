@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from logion_api.ai_gateway.execution_service import AIExecutionService
 from logion_api.config import get_settings
+from logion_api.form_drafts.service import cleanup_expired
 from logion_api.identity.device_hygiene import DeviceHygieneService
 from logion_api.integrations.zotero_sync import ZoteroSyncService
 from logion_api.portability.deletion_service import AccountDeletionService
@@ -56,6 +57,7 @@ async def run_worker() -> None:
             QueueHandler("review_reminders", review_reminders.execute_next),
             QueueHandler("zotero_sync", zotero_sync.execute_next),
             QueueHandler("device_hygiene", device_hygiene.execute_next),
+            QueueHandler("form_drafts", cleanup_expired),
         ]
     )
     heartbeat_task = asyncio.create_task(maintain_heartbeat(stop, tracker))
@@ -72,6 +74,7 @@ async def run_worker() -> None:
                     "review_reminders",
                     "zotero_sync",
                     "device_hygiene",
+                    "form_drafts",
                 ],
             }
         )

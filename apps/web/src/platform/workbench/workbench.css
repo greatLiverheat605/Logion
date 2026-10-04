@@ -44,6 +44,23 @@
 .wb-scope *::after {
   box-sizing: border-box;
 }
+.wb-draft-fields {
+  display: contents;
+}
+.wb-form-draft {
+  padding: 12px;
+  border: 1px solid var(--wb-border);
+  border-radius: 8px;
+  background: var(--wb-fill);
+  overflow-wrap: anywhere;
+}
+.wb-scope .wb-form-draft p {
+  margin: 0 0 8px;
+  color: var(--wb-text);
+}
+.wb-scope .wb-form-draft .wb-button {
+  min-height: 44px;
+}
 .wb-scope :is(button, input, select, textarea) {
   font: inherit;
   color: inherit;
@@ -232,13 +249,15 @@
   align-items: center;
   margin-left: auto;
 }
+.wb-scope .wb-titlebar .wb-button {
+  min-height: 44px;
+  min-width: 44px;
+}
 .wb-scope .wb-notification-entry {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
   text-decoration: none;
 }
 .wb-notification-count {
@@ -1200,7 +1219,6 @@ html[data-theme="dark"]
   background: var(--wb-fill);
 }
 @media (max-width: 767px) {
-  .wb-scope .wb-titlebar .wb-button,
   .wb-scope .wb-pane-header .wb-button,
   .wb-mobile-panes .wb-segmented button {
     min-height: 44px;

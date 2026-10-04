@@ -1,5 +1,6 @@
 "use client";
 
+import { DraftNotice, useFormDraft } from "./form-draft";
 import type { components } from "@logion/contracts";
 import {
   useInfiniteQuery,
@@ -272,162 +273,204 @@ function QuestionForm({
   onSaved: (id: string) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [question, setQuestion] = useState(
+    mode === "edit" ? (item?.question ?? "") : "",
+  );
+  const [rationale, setRationale] = useState(
+    mode === "edit" ? (item?.rationale ?? "") : "",
+  );
+  const [children, setChildren] = useState("");
+  const draft = useFormDraft({
+    scope: path,
+    kind:
+      mode === "split"
+        ? "question_split"
+        : mode === "merge"
+          ? "question_merge"
+          : mode === "edit"
+            ? "question_edit"
+            : "question_create",
+    target: mode === "edit" || mode === "split" ? item?.id : undefined,
+    fields: mode === "split" ? { children } : { question, rationale },
+    restore: (fields) => {
+      setQuestion(fields.question ?? "");
+      setRationale(fields.rationale ?? "");
+      setChildren(fields.children ?? "");
+    },
+  });
   const mutation = useMutation({
-    mutationFn: async (form: HTMLFormElement) => {
-      const data = new FormData(form);
+    mutationFn: async (data: FormData) => {
       const text = (name: string) => String(data.get(name) ?? "").trim();
       const fields = {
         question: text("question"),
         rationale: text("rationale"),
         status: text("status") || "active",
       };
-      if (mode === "split" && item) {
-        await workbenchRequest<QuestionPage>(`${path}/${item.id}/split`, {
-          method: "POST",
-          body: JSON.stringify({
-            expected_version: item.version,
-            children: text("children")
-              .split("\n")
-              .map((question) => question.trim())
-              .filter(Boolean)
-              .map((question) => ({ question })),
-          }),
-        });
-        return item.id;
-      }
-      const result = await workbenchRequest<Question>(
-        mode === "merge"
-          ? `${path}/merge`
-          : mode === "edit" && item
-            ? `${path}/${item.id}`
-            : path,
-        {
-          method: mode === "edit" ? "PUT" : "POST",
-          body: JSON.stringify(
-            mode === "merge"
-              ? {
-                  ...fields,
-                  sources: selected.map((id) => ({
-                    id,
-                    expected_version: questions.find((q) => q.id === id)!
-                      .version,
-                  })),
-                }
-              : {
-                  ...fields,
-                  parent_id: text("parent") || null,
-                  ...(mode === "edit" && item
-                    ? { expected_version: item.version }
-                    : {}),
-                },
-          ),
-        },
-      );
-      return result.id;
+      return draft.submit(async (headers) => {
+        if (mode === "split" && item) {
+          await workbenchRequest<QuestionPage>(`${path}/${item.id}/split`, {
+            headers,
+            method: "POST",
+            body: JSON.stringify({
+              expected_version: item.version,
+              children: text("children")
+                .split("\n")
+                .map((question) => question.trim())
+                .filter(Boolean)
+                .map((question) => ({ question })),
+            }),
+          });
+          return item.id;
+        }
+        const result = await workbenchRequest<Question>(
+          mode === "merge"
+            ? `${path}/merge`
+            : mode === "edit" && item
+              ? `${path}/${item.id}`
+              : path,
+          {
+            headers,
+            method: mode === "edit" ? "PUT" : "POST",
+            body: JSON.stringify(
+              mode === "merge"
+                ? {
+                    ...fields,
+                    sources: selected.map((id) => ({
+                      id,
+                      expected_version: questions.find((q) => q.id === id)!
+                        .version,
+                    })),
+                  }
+                : {
+                    ...fields,
+                    parent_id: text("parent") || null,
+                    ...(mode === "edit" && item
+                      ? { expected_version: item.version }
+                      : {}),
+                  },
+            ),
+          },
+        );
+        return result.id;
+      });
     },
     onSuccess: onSaved,
   });
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!mutation.isPending) mutation.mutate(event.currentTarget);
+    if (!mutation.isPending) mutation.mutate(new FormData(event.currentTarget));
   }
   return (
     <form className="wb-library-form" onSubmit={submit}>
-      {mode === "split" ? (
-        <label>
-          子问题（每行一个，2–20 个）
-          <textarea name="children" required rows={5} maxLength={600000} />
-        </label>
-      ) : (
-        <>
+      <DraftNotice draft={draft} />
+      <fieldset className="wb-draft-fields" disabled={mutation.isPending}>
+        {mode === "split" ? (
           <label>
-            {mode === "merge" ? "共同的上级问题" : "问题"}
+            子问题（每行一个，2–20 个）
             <textarea
-              name="question"
+              name="children"
               required
-              maxLength={30000}
-              rows={2}
-              defaultValue={mode === "edit" ? item?.question : ""}
+              rows={5}
+              maxLength={600000}
+              value={children}
+              onChange={(e) => setChildren(e.target.value)}
             />
           </label>
-          <label>
-            研究缘由
-            <textarea
-              name="rationale"
-              maxLength={30000}
-              rows={3}
-              defaultValue={mode === "edit" ? item?.rationale : ""}
-            />
-          </label>
-          <label>
-            状态
-            <select
-              name="status"
-              defaultValue={mode === "edit" ? item?.status : "active"}
-            >
-              {Object.entries(STATUSES).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {mode === "merge" ? (
-            <fieldset className="wb-question-choices">
-              <legend>选择要合并的问题（2–20 个）</legend>
-              {questions.map((q) => (
-                <label key={q.id}>
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(q.id)}
-                    disabled={!selected.includes(q.id) && selected.length >= 20}
-                    onChange={(e) =>
-                      setSelected((old) =>
-                        e.target.checked
-                          ? [...old, q.id]
-                          : old.filter((id) => id !== q.id),
-                      )
-                    }
-                  />
-                  {q.question}
-                </label>
-              ))}
-            </fieldset>
-          ) : (
+        ) : (
+          <>
             <label>
-              上级问题
+              {mode === "merge" ? "共同的上级问题" : "问题"}
+              <textarea
+                name="question"
+                required
+                maxLength={30000}
+                rows={2}
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+              />
+            </label>
+            <label>
+              研究缘由
+              <textarea
+                name="rationale"
+                maxLength={30000}
+                rows={3}
+                value={rationale}
+                onChange={(e) => setRationale(e.target.value)}
+              />
+            </label>
+            <label>
+              状态
               <select
-                name="parent"
-                defaultValue={mode === "edit" ? (item?.parent_id ?? "") : ""}
+                name="status"
+                defaultValue={mode === "edit" ? item?.status : "active"}
               >
-                <option value="">无（根问题）</option>
-                {questions
-                  .filter((q) => q.id !== item?.id || mode !== "edit")
-                  .map((q) => (
-                    <option value={q.id} key={q.id}>
-                      {q.question}
-                    </option>
-                  ))}
+                {Object.entries(STATUSES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </label>
-          )}
-        </>
-      )}
-      {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
-      <Button
-        type="submit"
-        disabled={
-          mutation.isPending || (mode === "merge" && selected.length < 2)
-        }
-      >
-        {mutation.isPending
-          ? "正在保存…"
-          : mode === "split"
-            ? "确认拆分"
-            : mode === "merge"
-              ? "确认合并"
-              : "保存问题"}
-      </Button>
+            {mode === "merge" ? (
+              <fieldset className="wb-question-choices">
+                <legend>选择要合并的问题（2–20 个）</legend>
+                {questions.map((q) => (
+                  <label key={q.id}>
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(q.id)}
+                      disabled={
+                        !selected.includes(q.id) && selected.length >= 20
+                      }
+                      onChange={(e) =>
+                        setSelected((old) =>
+                          e.target.checked
+                            ? [...old, q.id]
+                            : old.filter((id) => id !== q.id),
+                        )
+                      }
+                    />
+                    {q.question}
+                  </label>
+                ))}
+              </fieldset>
+            ) : (
+              <label>
+                上级问题
+                <select
+                  name="parent"
+                  defaultValue={mode === "edit" ? (item?.parent_id ?? "") : ""}
+                >
+                  <option value="">无（根问题）</option>
+                  {questions
+                    .filter((q) => q.id !== item?.id || mode !== "edit")
+                    .map((q) => (
+                      <option value={q.id} key={q.id}>
+                        {q.question}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+          </>
+        )}
+        {mutation.error && <p role="alert">{errorMessage(mutation.error)}</p>}
+        <Button
+          type="submit"
+          disabled={
+            mutation.isPending || (mode === "merge" && selected.length < 2)
+          }
+        >
+          {mutation.isPending
+            ? "正在保存…"
+            : mode === "split"
+              ? "确认拆分"
+              : mode === "merge"
+                ? "确认合并"
+                : "保存问题"}
+        </Button>
+      </fieldset>
     </form>
   );
 }

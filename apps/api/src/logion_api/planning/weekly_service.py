@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Integer, Select, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from logion_api.agents.models import AgentInboxItem
 from logion_api.content.models import Resource
 from logion_api.db import utc_now
 from logion_api.errors import APIError
@@ -235,7 +236,15 @@ class WeeklyService:
                 Topic.research_owner_id.is_(None) | (Topic.research_owner_id == self.user_id),
             )
         )
+        inbox = select(AgentInboxItem).where(
+            AgentInboxItem.workspace_id == self.workspace_id,
+            AgentInboxItem.space_id == self.space_id,
+            AgentInboxItem.user_id == self.user_id,
+            AgentInboxItem.created_at >= start,
+            AgentInboxItem.created_at < end,
+        )
         stats = WeeklyStats(
+            inbox_items=await self.count(inbox),
             planned=len(tasks),
             done=sum(task.status == "done" for task in tasks),
             sources_close_read=await self.count(
