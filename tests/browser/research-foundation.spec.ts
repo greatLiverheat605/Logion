@@ -152,6 +152,31 @@ async function geometry(page: Page) {
 
 async function installLibrary(context: BrowserContext) {
   type Resource = components["schemas"]["LibraryResource"];
+  type Draft = components["schemas"]["DraftView"];
+  const drafts = new Map<string, Draft>();
+  await context.route("**/api/v1/**/research/form-drafts/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const draft = drafts.get(path) ?? null;
+    if (request.method() === "GET") return route.fulfill({ json: { draft } });
+    expect(request.method()).toBe("PUT");
+    expect(request.headers()["x-csrf-token"]).toBeTruthy();
+    const body = request.postDataJSON();
+    expect(body.expected_id).toBe(draft?.id ?? null);
+    expect(body.expected_version).toBe(draft?.version ?? 0);
+    const [form_kind, target_key] = path.split("/").slice(-2);
+    const saved: Draft = {
+      id: draft?.id ?? randomUUID(),
+      form_kind: form_kind as Draft["form_kind"],
+      target_key: target_key!,
+      fields: body.fields,
+      version: (draft?.version ?? 0) + 1,
+      updated_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
+    };
+    drafts.set(path, saved);
+    return route.fulfill({ json: { draft: saved } });
+  });
   const records = new Map<string, Resource>();
   const initial: Resource = {
     id: "00000000-0000-4000-8000-000000000010",
@@ -246,6 +271,14 @@ async function installLibrary(context: BrowserContext) {
       version: id ? records.get(id)!.version + 1 : 1,
     };
     records.set(resource.id, resource);
+    const reference = request.headers()["x-logion-form-draft"];
+    if (reference) {
+      const saved = [...drafts].find(
+        ([, draft]) => `${draft.id}:${draft.version}` === reference,
+      );
+      expect(saved).toBeDefined();
+      drafts.delete(saved![0]);
+    }
     return route.fulfill({ status: id ? 200 : 201, json: resource });
   });
   return { records, initial, state };

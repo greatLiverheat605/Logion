@@ -563,7 +563,7 @@ function ResourceForm({
             onChange={(e) => setAbstract(e.target.value)}
           />
         </label>
-        {failure !== null && (
+        {failure !== null && draft.state.status !== "error" && (
           <div role="alert">
             <p>{errorMessage(failure)}</p>
             {duplicate && (
