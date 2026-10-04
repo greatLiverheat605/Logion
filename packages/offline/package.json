@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@logion/contracts": "workspace:*",
-    "dexie": "4.4.4",
+    "dexie": "4.4.6",
     "json-canonicalize": "2.0.0",
     "uuid": "14.0.2",
     "yjs": "13.6.31"
