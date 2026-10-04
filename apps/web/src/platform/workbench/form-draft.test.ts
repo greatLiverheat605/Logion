@@ -40,11 +40,9 @@ describe("private server form drafts", () => {
     );
     controller.change({ body: "retained" });
     await vi.advanceTimersByTimeAsync(2000);
-    request
-      .mockResolvedValueOnce({ draft: null })
-      .mockResolvedValueOnce({
-        draft: { ...remote, fields: { body: "retained" } },
-      });
+    request.mockResolvedValueOnce({ draft: null }).mockResolvedValueOnce({
+      draft: { ...remote, fields: { body: "retained" } },
+    });
     const action = vi.fn().mockResolvedValue("submitted");
     await expect(controller.submit(action)).resolves.toBe("submitted");
     expect(action).toHaveBeenCalledWith({ "X-Logion-Form-Draft": "draft-1:1" });
