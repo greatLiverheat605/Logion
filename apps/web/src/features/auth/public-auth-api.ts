@@ -5,7 +5,13 @@ import { type ApiClient, LogionApiError } from "@/lib/api/client";
 type AuthResponse = components["schemas"]["AuthResponse"];
 type EmailVerificationRequest =
   components["schemas"]["EmailVerificationConfirmationRequest"];
-type LoginRequest = components["schemas"]["LoginRequest"];
+// The server preserves the legacy default when the old client omits this choice.
+type LoginRequest = Omit<
+  components["schemas"]["LoginRequest"],
+  "keep_signed_in"
+> & {
+  keep_signed_in?: boolean;
+};
 type MfaChallengeResponse = components["schemas"]["MfaChallengeResponse"];
 type MfaLoginRequest = components["schemas"]["MfaLoginVerifyRequest"];
 type PasswordRecoveryCompletionRequest =
