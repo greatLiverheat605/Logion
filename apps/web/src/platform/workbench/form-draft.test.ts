@@ -29,6 +29,43 @@ afterEach(() => {
 });
 
 describe("private server form drafts", () => {
+  it("explicit submission after reconnect rechecks an uncertain save and submits without another click", async () => {
+    const controller = await open();
+    request.mockRejectedValueOnce(
+      new LogionApiError({
+        code: "WEB_NETWORK_UNAVAILABLE",
+        message: "offline",
+        status: 0,
+      }),
+    );
+    controller.change({ body: "retained" });
+    await vi.advanceTimersByTimeAsync(2000);
+    request
+      .mockResolvedValueOnce({ draft: null })
+      .mockResolvedValueOnce({
+        draft: { ...remote, fields: { body: "retained" } },
+      });
+    const action = vi.fn().mockResolvedValue("submitted");
+    await expect(controller.submit(action)).resolves.toBe("submitted");
+    expect(action).toHaveBeenCalledWith({ "X-Logion-Form-Draft": "draft-1:1" });
+  });
+  it("manual submission after a failed connection still refuses to overwrite a different remote draft", async () => {
+    const controller = await open();
+    request.mockRejectedValueOnce(
+      new LogionApiError({
+        code: "WEB_NETWORK_UNAVAILABLE",
+        message: "offline",
+        status: 0,
+      }),
+    );
+    controller.change({ body: "retained" });
+    await vi.advanceTimersByTimeAsync(2000);
+    request.mockResolvedValueOnce({ draft: remote });
+    const action = vi.fn();
+    await expect(controller.submit(action)).rejects.toThrow("处理草稿提示");
+    expect(action).not.toHaveBeenCalled();
+    expect(controller.snapshot().status).toBe("offered");
+  });
   it("requires an explicit restore and does not overwrite edits made during loading", async () => {
     const controller = await open(remote);
     controller.change({ body: "local typing" });

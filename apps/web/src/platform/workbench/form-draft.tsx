@@ -43,6 +43,7 @@ export class FormDraftController {
   private loading: Promise<void> | undefined;
   private submitting = false;
   private submitted = false;
+  private conflicted = false;
   constructor(private path: string | null) {}
   snapshot = () => this.state;
   subscribe = (listener: () => void) => {
@@ -66,6 +67,8 @@ export class FormDraftController {
     this.cancel();
   }
   private failure(error: unknown) {
+    this.conflicted =
+      error instanceof LogionApiError && error.code === "FORM_DRAFT_CONFLICT";
     this.set({
       status: "error",
       error:
@@ -173,6 +176,7 @@ export class FormDraftController {
       apply(remote.fields);
       this.fields = { ...remote.fields };
       this.saved = JSON.stringify(remote.fields);
+      this.conflicted = false;
       this.set({ status: "saved", error: "" });
     } catch {
       this.set({
@@ -181,6 +185,7 @@ export class FormDraftController {
     }
   }
   keepLocal = () => {
+    this.conflicted = false;
     this.saved = JSON.stringify(this.state.remote?.fields ?? {});
     this.set({ status: "idle", error: "" });
     this.schedule();
@@ -234,6 +239,23 @@ export class FormDraftController {
     try {
       await this.loading;
       await this.pending;
+      if (this.state.status === "error" && !this.conflicted) {
+        const known = this.state.remote;
+        await this.load();
+        const latest = this.state.remote;
+        // Explicit submission retries a failed connection, never a newer remote edit.
+        if (
+          this.snapshot().status === "offered" &&
+          latest &&
+          ((known &&
+            latest.id === known.id &&
+            latest.version === known.version) ||
+            JSON.stringify(latest.fields) === JSON.stringify(this.fields))
+        ) {
+          this.saved = JSON.stringify(latest.fields);
+          this.set({ status: "idle" });
+        }
+      }
       if (
         !this.active ||
         !this.loaded ||

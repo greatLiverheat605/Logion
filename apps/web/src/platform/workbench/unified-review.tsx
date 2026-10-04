@@ -615,7 +615,7 @@ function RecallCard({
           <Button type="submit" disabled={busy || !text.trim()}>
             提交回答
           </Button>
-          <Failure error={error} />
+          <Failure error={draft.state.status === "error" ? null : error} />
         </form>
       )}
       {editing && (
