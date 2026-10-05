@@ -223,6 +223,11 @@
   padding: 24px 8px 4px;
   margin-top: auto;
 }
+.wb-sidebar-footer .wb-button {
+  min-height: 44px;
+  color: var(--wb-text);
+  font-size: 13px;
+}
 .wb-body {
   display: flex;
   flex-direction: column;

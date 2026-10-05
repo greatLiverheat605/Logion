@@ -18,6 +18,7 @@ import { WORKBENCH_ROUTES } from "./routes";
 import { livePdfRange } from "./selection";
 import { PaletteSearch } from "./search";
 import { NotificationEntry } from "./notifications";
+import { LogoutButton } from "@/features/auth/logout-button";
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
   const state = useWorkbench();
@@ -185,13 +186,16 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
       <div className="wb-sidebar-footer">
         <span>个人研究 · 在线保存</span>
         <Link href="/app/workspaces">管理工作区</Link>
+        <LogoutButton className="wb-button" />
       </div>
     </>
   );
   return (
     <>
       <div className="wb-shell">
-        <aside className="wb-sidebar">{navigationContent}</aside>
+        <aside className="wb-sidebar" aria-label="研究侧栏">
+          {navigationContent}
+        </aside>
         <div className="wb-body">
           <header className="wb-titlebar">
             <Button

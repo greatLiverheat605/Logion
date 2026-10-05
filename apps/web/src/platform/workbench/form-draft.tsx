@@ -359,12 +359,16 @@ export function DraftNotice({
             pending: "正文已修改，尚未保存草稿。",
             saving: "正在保存私人草稿…",
             saved: "私人草稿已保存。",
-            offered:
-              "发现此表单的私人草稿。恢复会替换本页长文本；其他字段请重新确认。",
+            offered: "发现此表单的私人草稿。恢复会替换本页长文本。",
             error: "草稿未保存，当前输入仍在页面中。",
           }[state.status]
         }
       </p>
+      {state.remote && (
+        <p>
+          恢复仅覆盖长文本；请在提交前重新确认标题、日期、目标选择和处理动作等其他字段。
+        </p>
+      )}
       {state.error && <p role="alert">{state.error}</p>}
       <div className="wb-research-actions">
         {state.status === "offered" && (

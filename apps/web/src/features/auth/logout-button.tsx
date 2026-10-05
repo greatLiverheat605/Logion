@@ -19,7 +19,11 @@ const sessionCoordinator = createSessionCoordinator(
   createWebLockRefreshCoordinator(),
 );
 
-export function LogoutButton() {
+export function LogoutButton({
+  className = "logout-button",
+}: {
+  className?: string;
+}) {
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -49,7 +53,7 @@ export function LogoutButton() {
   return (
     <>
       <button
-        className="logout-button"
+        className={className}
         type="button"
         onClick={logout}
         disabled={pending}
