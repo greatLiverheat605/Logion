@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { PersonaProvider } from "../persona-context";
 import type { PersonaSetting } from "../persona-setting-service";
@@ -26,6 +26,14 @@ const source = {
 };
 
 afterEach(cleanup);
+
+beforeAll(async () => {
+  // Prepare real chunks before DOM assertions; cold transforms vary with CPU load.
+  await Promise.all([
+    import("../dashboard/exam-dashboard"),
+    import("../dashboard/mentor-dashboard"),
+  ]);
+});
 
 describe("PersonaTodayOverview", () => {
   it("shows persona-specific entries and switches through the quick dialog", async () => {

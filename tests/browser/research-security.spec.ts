@@ -185,9 +185,21 @@ test.describe.serial("online device hygiene", () => {
       401,
     );
   });
-  test("normal logout preserves the identity cookie and a fresh login reuses it", async () => {
+  test("normal logout preserves the identity cookie and a fresh login reuses it", async ({}, testInfo) => {
     await page.setViewportSize({ width: 390, height: 1000 });
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await page.goto("/today");
+    await page.getByRole("button", { name: "打开导航", exact: true }).click();
+    const logout = page
+      .getByRole("dialog", { name: "导航", exact: true })
+      .getByRole("button", { name: "退出登录", exact: true });
+    const bounds = await logout.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
+    await page.screenshot({
+      path: testInfo.outputPath("mobile-navigation-logout-390.png"),
+      fullPage: true,
+    });
+    await logout.click();
     await expect(page).toHaveURL(/\/auth\/login/);
     const cookies = await context.cookies();
     expect(cookies.find((c) => c.name === "logion_device")?.value).toBe(
@@ -241,6 +253,9 @@ test.describe.serial("online device hygiene", () => {
       return target.getByRole("dialog");
     }
     let form = await editor(page);
+    await form
+      .getByLabel("标题", { exact: true })
+      .fill("Confirm this title again");
     await form.getByLabel("想法正文").fill("SYNTHETIC_PRIVATE_FORM_DRAFT");
     await expect(form.getByRole("status")).toHaveText("私人草稿已保存。");
     await page.reload();
@@ -250,6 +265,16 @@ test.describe.serial("online device hygiene", () => {
     await expect(form.getByLabel("想法正文")).toHaveValue(
       "SYNTHETIC_PRIVATE_FORM_DRAFT",
     );
+    await expect(form.getByLabel("标题", { exact: true })).toHaveValue("");
+    await expect(
+      form.getByText(
+        "恢复仅覆盖长文本；请在提交前重新确认标题、日期、目标选择和处理动作等其他字段。",
+      ),
+    ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("restored-draft-scope.png"),
+      fullPage: true,
+    });
     const second = await context.newPage();
     try {
       const secondForm = await editor(second);
@@ -326,8 +351,14 @@ test.describe.serial("online device hygiene", () => {
     form = await editor(page);
     await form.getByLabel("想法正文").fill("Delete on explicit sign out");
     await expect(form.getByRole("status")).toHaveText("私人草稿已保存。");
-    await page.goto("/settings/security");
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await page.goto("/questions");
+    const desktopLogout = page
+      .getByRole("complementary", { name: "研究侧栏", exact: true })
+      .getByRole("button", { name: "退出登录", exact: true });
+    const desktopBounds = await desktopLogout.boundingBox();
+    expect(desktopBounds?.height).toBeGreaterThanOrEqual(44);
+    expect(desktopBounds?.width).toBeGreaterThanOrEqual(44);
+    await desktopLogout.click();
     await expect(page).toHaveURL(/\/auth\/login/);
     expect(
       (
@@ -343,7 +374,10 @@ test.describe.serial("online device hygiene", () => {
   test("sign-in choice sets session or persistent cookies and survives refresh", async () => {
     for (const remember of [false, true]) {
       await page.goto("/settings/security");
-      await page.getByRole("button", { name: "退出登录", exact: true }).click();
+      await page
+        .getByRole("main")
+        .getByRole("button", { name: "退出登录", exact: true })
+        .click();
       await expect(page).toHaveURL(/\/auth\/login/);
       await expect(
         page.getByLabel("保持登录", { exact: true }),
