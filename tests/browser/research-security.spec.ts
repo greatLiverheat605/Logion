@@ -185,6 +185,88 @@ test.describe.serial("online device hygiene", () => {
       401,
     );
   });
+  test("expired access preserves an unsaved form until refresh confirms the session", async ({}, testInfo) => {
+    await page.goto("/library");
+    await page.getByRole("button", { name: "新建文献" }).click();
+    const form = page.getByRole("dialog", { name: "新建文献" });
+    const title = "Synthetic session recovery";
+    await form.getByLabel("标题", { exact: true }).fill(title);
+    await context.clearCookies({ name: "logion_access" });
+    let releaseRefresh!: () => void;
+    const refreshHeld = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    await page.route("**/api/v1/auth/refresh", async (route) => {
+      await refreshHeld;
+      await route.continue();
+    });
+    let writes = 0;
+    page.on("request", (request) => {
+      if (
+        request.method() === "POST" &&
+        new URL(request.url()).pathname.endsWith("/library/resources")
+      )
+        writes += 1;
+    });
+    const refreshing = page.waitForRequest("**/api/v1/auth/refresh");
+    const refreshed = page.waitForResponse("**/api/v1/auth/refresh");
+    try {
+      await form.getByRole("button", { name: "保存文献", exact: true }).click();
+      await refreshing;
+      await expect(form.getByRole("alert")).toHaveText(
+        "正在重新确认登录状态，请稍后重试。",
+      );
+      await expect(page).toHaveURL(/\/library$/);
+      await expect(form.getByLabel("标题", { exact: true })).toHaveValue(title);
+      expect(writes).toBe(1);
+    } finally {
+      releaseRefresh();
+    }
+    expect((await refreshed).status()).toBe(200);
+    await page.unroute("**/api/v1/auth/refresh");
+    await expect(form.getByLabel("标题", { exact: true })).toHaveValue(title);
+    expect(writes).toBe(1);
+    await form.getByRole("button", { name: "保存文献", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("list", { name: "个人文献" })
+        .getByRole("button", { name: new RegExp(title) }),
+    ).toBeVisible();
+    expect(writes).toBe(2);
+    await page.screenshot({
+      path: testInfo.outputPath("session-recovery-saved.png"),
+      fullPage: true,
+    });
+
+    await page.getByRole("button", { name: "新建文献" }).click();
+    await form
+      .getByLabel("标题", { exact: true })
+      .fill("Private unsaved input");
+    const csrf = (await context.cookies()).find(
+      (cookie) => cookie.name === "logion_csrf",
+    )!.value;
+    expect(
+      (
+        await context.request.post("/api/v1/auth/logout", {
+          headers: { Origin: baseURL, "X-CSRF-Token": csrf },
+        })
+      ).status(),
+    ).toBe(200);
+    await form.getByRole("button", { name: "保存文献", exact: true }).click();
+    await expect(page).toHaveURL(/\/auth\/login\?next=%2Flibrary$/);
+    await expect(form).toHaveCount(0);
+    expect(
+      (
+        await context.request.post("/api/v1/auth/login", {
+          headers: { Origin: baseURL },
+          data: payload,
+        })
+      ).status(),
+    ).toBe(200);
+    await page.goto("/settings/security");
+    await expect(devices()).toContainText("当前设备");
+  });
   test("normal logout preserves the identity cookie and a fresh login reuses it", async ({}, testInfo) => {
     await page.setViewportSize({ width: 390, height: 1000 });
     await page.goto("/today");
