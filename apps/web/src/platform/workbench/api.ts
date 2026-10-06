@@ -114,6 +114,8 @@ export function errorMessage(error: unknown): string {
       return "请输入 2–120 个可打印字符。";
     if (error.status === 422)
       return "请检查标识符、网址和日期的格式，再试一次。";
+    if (error.code === "AUTH_INVALID_SESSION")
+      return "正在重新确认登录状态，请稍后重试。";
     if (error.status === 401) return "登录已过期，请重新登录。";
     if (error.status === 403)
       return "当前操作未获授权，请检查登录状态和访问权限。";
@@ -137,19 +139,8 @@ export async function workbenchRequest<T>(
       status: 0,
     });
   }
-  try {
-    return await browserApiClient.request<T>(path, {
-      ...options,
-      csrf: !["GET", "HEAD"].includes(options.method ?? "GET"),
-    });
-  } catch (error) {
-    if (
-      error instanceof LogionApiError &&
-      error.status === 401 &&
-      typeof window !== "undefined"
-    ) {
-      window.dispatchEvent(new Event("workbench:authentication-required"));
-    }
-    throw error;
-  }
+  return browserApiClient.request<T>(path, {
+    ...options,
+    csrf: !["GET", "HEAD"].includes(options.method ?? "GET"),
+  });
 }

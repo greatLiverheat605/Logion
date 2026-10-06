@@ -66,14 +66,6 @@ function SessionGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   useEffect(() => {
-    const redirect = () => {
-      router.replace(`/auth/login?next=${encodeURIComponent(path)}`);
-    };
-    window.addEventListener("workbench:authentication-required", redirect);
-    return () =>
-      window.removeEventListener("workbench:authentication-required", redirect);
-  }, [router, path]);
-  useEffect(() => {
     if (state.status === "anonymous") {
       router.replace(`/auth/login?next=${encodeURIComponent(path)}`);
     } else if (
@@ -104,14 +96,7 @@ function SessionGate({ children }: { children: ReactNode }) {
 }
 function AccountQueries({ children }: { children: ReactNode }) {
   const [client] = useState(createWorkbenchQueryClient);
-  useEffect(() => {
-    const clear = () => client.clear();
-    window.addEventListener("workbench:authentication-required", clear);
-    return () => {
-      window.removeEventListener("workbench:authentication-required", clear);
-      client.clear();
-    };
-  }, [client]);
+  useEffect(() => () => client.clear(), [client]);
   return (
     <QueryClientProvider client={client}>
       <PreferenceProvider>{children}</PreferenceProvider>
